@@ -55,7 +55,7 @@ class BIExtractor:
                 openai_api_base=settings.OPENROUTER_BASE_URL,
                 temperature=0.2,
                 max_tokens=4096,
-                timeout=30.0,
+                timeout=90.0,
             )
         else:
             self._llm_client = None
@@ -64,10 +64,13 @@ class BIExtractor:
         """Extracts strategic business insights and constructs a BIProfile using rules or LLM."""
         if settings.USE_LLM_STRUCTURING:
             logger.info(f"[BIExtractor] Starting AI-based extraction for: '{company_data.company_slug}'")
-            return await self._extract_bi_profile_llm(company_data)
-        else:
-            logger.info(f"[BIExtractor] Starting rule-based extraction for: '{company_data.company_slug}'")
-            return self._extract_bi_profile_rules(company_data)
+            profile = await self._extract_bi_profile_llm(company_data)
+            if profile and profile.executive_summary:
+                return profile
+            logger.warning("[BIExtractor] AI-based extraction failed or timed out. Falling back to rule-based.")
+        
+        logger.info(f"[BIExtractor] Starting rule-based extraction for: '{company_data.company_slug}'")
+        return self._extract_bi_profile_rules(company_data)
 
     # ---------------------------------------------------------------------------
     # Method A: AI-Based BI Extraction (LLM)
@@ -166,7 +169,10 @@ Generate a JSON object with these exact keys:
         start_time = time.time()
         for attempt in range(1, max_retries + 1):
             try:
-                response = await self._llm_client.ainvoke(messages)
+                response = await asyncio.wait_for(
+                    self._llm_client.ainvoke(messages),
+                    timeout=90.0
+                )
                 duration = time.time() - start_time
                 logger.info(f"[BIExtractor] LLM call resolved successfully in {duration:.2f}s.")
                 text = response.content.strip()
@@ -214,11 +220,11 @@ Generate a JSON object with these exact keys:
     # ---------------------------------------------------------------------------
 
     def _extract_bi_profile_rules(self, company_data: LinkedInCompanyData) -> BIProfile:
-        name = company_data.identity.company_name if company_data.identity else company_data.company_slug.capitalize()
-        industry = company_data.identity.industry if company_data.identity else "Technology"
-        founded = company_data.identity.founded_year if company_data.identity else 2010
-        hq = company_data.identity.headquarters_location if company_data.identity else "Global"
-        tagline = company_data.identity.tagline if company_data.identity else ""
+        name = (company_data.identity.company_name if company_data.identity else None) or company_data.company_slug.capitalize()
+        industry = (company_data.identity.industry if company_data.identity else None) or "Technology"
+        founded = (company_data.identity.founded_year if company_data.identity else None) or 2010
+        hq = (company_data.identity.headquarters_location if company_data.identity else None) or "Global"
+        tagline = (company_data.identity.tagline if company_data.identity else None) or ""
 
         key_differentiators = [
             f"Global scale and delivery capability in {industry}.",

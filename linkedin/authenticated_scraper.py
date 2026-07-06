@@ -131,6 +131,12 @@ class AuthenticatedLinkedInScraper:
                     browser_context, company_slug
                 )
                 raw_records.append(main_raw)
+                if not main_raw.scrape_success:
+                    logger.warning(
+                        f"[Layer 3] LinkedIn authentication failed or main page failed to load: {main_raw.error_message}. "
+                        f"Skipping authenticated subpages."
+                    )
+                    return raw_records, combined_auth_data
                 if main_data:
                     combined_auth_data.update(main_data)
 

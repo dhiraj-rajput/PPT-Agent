@@ -6,6 +6,7 @@ Post-processing structuring engine.
 Supports both:
   1. Rule-based extraction: default, fast, free, and robust.
   2. LLM-based extraction: activated when USE_LLM_STRUCTURING is True.
+     Automatically falls back to rule-based extraction on any LLM timeouts or failures.
 """
 
 import re
@@ -62,7 +63,7 @@ class LLMStructurer:
                 openai_api_base=settings.OPENROUTER_BASE_URL,
                 temperature=0.0,
                 max_tokens=4096,
-                timeout=30.0,
+                timeout=90.0,
             )
         else:
             self._llm_client = None
@@ -100,7 +101,7 @@ class LLMStructurer:
             )
 
     # ---------------------------------------------------------------------------
-    # Method A: AI-Based Structuring (LLM)
+    # Method A: AI-Based Structuring (LLM) with Rule-Based Fallbacks
     # ---------------------------------------------------------------------------
 
     async def _structure_company_data_llm(
@@ -113,6 +114,15 @@ class LLMStructurer:
         scrape_layers_used: list[str],
         source_urls: list[str],
     ) -> LinkedInCompanyData:
+        # Fetch raw public page text for fallbacks
+        col = get_collection("raw_linkedin")
+        raw_doc = col.find_one(
+            {"company_slug": company_slug, "scrape_layer": "public"},
+            sort=[("scraped_at", -1)]
+        )
+        raw_text = raw_doc.get("raw_text") if raw_doc else ""
+        meta_tags = raw_doc.get("meta_tags") if raw_doc else {}
+
         # Merge all raw data from all layers into one reference dict
         merged_data = {}
         if layer1_partial_identity:
@@ -129,31 +139,61 @@ class LLMStructurer:
             company_slug=company_slug,
             linkedin_url=linkedin_url,
             raw_data=merged_data,
+            raw_text=raw_text,
         )
+        if not structured_identity:
+            logger.warning("[Structurer] AI Identity structuring failed. Falling back to rule-based.")
+            structured_identity = self._structure_company_identity_rules(
+                company_slug=company_slug,
+                linkedin_url=linkedin_url,
+                layer1_partial_identity=layer1_partial_identity,
+                raw_text=raw_text,
+                meta_tags=meta_tags,
+            )
         await asyncio.sleep(delay)
 
         # 2. Description
         structured_description = await self._structure_company_description_llm(
             raw_data=merged_data,
+            raw_text=raw_text,
         )
+        if not structured_description:
+            logger.warning("[Structurer] AI Description structuring failed. Falling back to rule-based.")
+            structured_description = self._structure_company_description_rules(
+                raw_text=raw_text,
+                tagline=structured_identity.tagline if structured_identity else None,
+            )
         await asyncio.sleep(delay)
 
         # 3. Employee Insights
         structured_employee_insights = await self._structure_employee_insights_llm(
             raw_data=merged_data,
+            raw_text=raw_text,
         )
+        if not structured_employee_insights:
+            logger.warning("[Structurer] AI Employee Insights failed. Falling back to rule-based.")
+            structured_employee_insights = self._structure_employee_insights_rules(
+                raw_text=raw_text,
+                specialties=structured_identity.specialties if structured_identity else [],
+            )
         await asyncio.sleep(delay)
 
         # 4. Leadership
         structured_leadership = await self._structure_leadership_team_llm(
             raw_data=merged_data,
         )
+        if not structured_leadership:
+            logger.warning("[Structurer] AI Leadership structuring failed. Falling back to rule-based.")
+            structured_leadership = self._structure_leadership_team_rules(raw_text=raw_text)
         await asyncio.sleep(delay)
 
         # 5. Recent Posts
         structured_posts = await self._structure_recent_posts_llm(
             raw_data=merged_data,
         )
+        if not structured_posts:
+            logger.warning("[Structurer] AI Posts structuring failed. Falling back to rule-based.")
+            structured_posts = self._structure_recent_posts_rules(raw_text=raw_text)
         await asyncio.sleep(delay)
 
         # 6. Jobs
@@ -166,6 +206,14 @@ class LLMStructurer:
         structured_funding = await self._structure_funding_info_llm(
             raw_data=merged_data,
         )
+        if not structured_funding:
+            structured_funding = self._structure_funding_info_rules(
+                raw_text=raw_text,
+                about_text=structured_description.about_text if structured_description else None,
+            )
+
+        # 8. Office Locations
+        structured_locations = self._structure_office_locations_rules(raw_text=raw_text)
 
         confidence_scores = {
             "identity": 0.85 if structured_identity else 0.0,
@@ -185,6 +233,7 @@ class LLMStructurer:
             recent_posts=structured_posts or [],
             job_postings=structured_jobs or [],
             funding_info=structured_funding,
+            office_locations=structured_locations or [],
             scraped_at=get_utc_now(),
             scrape_layers_used=scrape_layers_used,
             source_urls_scraped=source_urls,
@@ -205,7 +254,10 @@ class LLMStructurer:
         start_time = time.time()
         for attempt in range(1, max_retries + 1):
             try:
-                response = await self._llm_client.ainvoke(messages)
+                response = await asyncio.wait_for(
+                    self._llm_client.ainvoke(messages),
+                    timeout=90.0
+                )
                 duration = time.time() - start_time
                 logger.info(f"[Structurer] LLM call resolved successfully in {duration:.2f}s.")
                 text = response.content.strip()
@@ -252,27 +304,42 @@ class LLMStructurer:
             parts.append(json.dumps(raw_data["job_postings"]))
         return "\n".join(parts)
 
-    async def _structure_company_identity_llm(self, company_slug: str, linkedin_url: str, raw_data: dict) -> Optional[CompanyIdentity]:
+    async def _structure_company_identity_llm(self, company_slug: str, linkedin_url: str, raw_data: dict, raw_text: str) -> Optional[CompanyIdentity]:
         ctx = self._get_context_text(raw_data, "identity")
-        prompt = f"Extract identity fields from: {ctx}\nReturn JSON with fields: company_name, linkedin_url, company_slug, website_url, logo_url, tagline, industry, company_type, company_size_range, headquarters_location, founded_year (int), specialties (list), followers_count (int)."
+        prompt = (
+            f"Partial identity data: {ctx}\n\n"
+            f"Raw text scraped from LinkedIn:\n{raw_text[:8000]}\n\n"
+            f"Please extract the following identity fields and return JSON with keys:\n"
+            f"company_name, linkedin_url, company_slug, website_url, logo_url, tagline, industry, company_type, company_size_range, headquarters_location, founded_year (int), specialties (list), followers_count (int)."
+        )
         res = await self._call_llm(prompt)
         try:
             return CompanyIdentity(**json.loads(res)) if res else None
         except Exception:
             return None
 
-    async def _structure_company_description_llm(self, raw_data: dict) -> Optional[CompanyDescription]:
+    async def _structure_company_description_llm(self, raw_data: dict, raw_text: str) -> Optional[CompanyDescription]:
         ctx = self._get_context_text(raw_data, "description")
-        prompt = f"Extract description fields from: {ctx}\nReturn JSON with: about_text, mission_statement, vision_statement, value_proposition, business_model, target_customer_segments (list), geographies_served (list)."
+        prompt = (
+            f"Partial description data: {ctx}\n\n"
+            f"Raw text scraped from LinkedIn:\n{raw_text[:8000]}\n\n"
+            f"Please extract description fields and return JSON with keys:\n"
+            f"about_text, mission_statement, vision_statement, value_proposition, business_model, target_customer_segments (list), geographies_served (list)."
+        )
         res = await self._call_llm(prompt)
         try:
             return CompanyDescription(**json.loads(res)) if res else None
         except Exception:
             return None
 
-    async def _structure_employee_insights_llm(self, raw_data: dict) -> Optional[EmployeeInsights]:
+    async def _structure_employee_insights_llm(self, raw_data: dict, raw_text: str) -> Optional[EmployeeInsights]:
         ctx = self._get_context_text(raw_data, "employees")
-        prompt = f"Extract employee insights from: {ctx}\nReturn JSON with: total_employee_count (int), employees_on_linkedin_count (int), top_skills_listed (list), top_universities_attended (list)."
+        prompt = (
+            f"Partial employee insights: {ctx}\n\n"
+            f"Raw text scraped from LinkedIn:\n{raw_text[:8000]}\n\n"
+            f"Please extract employee insights and return JSON with keys:\n"
+            f"total_employee_count (int), employees_on_linkedin_count (int), top_skills_listed (list), top_universities_attended (list)."
+        )
         res = await self._call_llm(prompt)
         try:
             return EmployeeInsights(**json.loads(res)) if res else None
