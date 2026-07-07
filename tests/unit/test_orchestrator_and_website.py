@@ -11,6 +11,8 @@ from website.classifier import classify_text_by_sections
 from website.extractor import extract_company_intelligence, identify_role_pages
 from website.models import WebsiteData
 from website.urls import normalize_url, is_internal_link, should_ignore_url, get_url_priority
+from typing import Any, cast
+from orchestrator.state import AgentState
 from orchestrator.nodes import classify_input
 from orchestrator.graph import build_graph
 
@@ -135,9 +137,12 @@ def test_website_intelligence_extractor():
 # 4. Orchestrator Input Classification & Graph Routing Tests
 # ===========================================================================
 
+def _state(d: dict) -> AgentState:
+    return cast(AgentState, d)
+
+
 def test_orchestrator_input_classifier():
-    # Test dual URL input (website and linkedin)
-    state_both = {"user_input": "https://infosys.com, https://linkedin.com/company/infosys"}
+    state_both = _state({"user_input": "https://infosys.com, https://linkedin.com/company/infosys"})
     result_both = classify_input(state_both)
     assert result_both["input_type"] == "both_urls"
     assert result_both["website_url"] == "https://infosys.com"
@@ -145,21 +150,21 @@ def test_orchestrator_input_classifier():
     assert result_both["company_slug"] == "infosys"
 
     # Test single website URL
-    state_web = {"user_input": "https://infosys.com"}
+    state_web = _state({"user_input": "https://infosys.com"})
     result_web = classify_input(state_web)
     assert result_web["input_type"] == "website_url"
     assert result_web["website_url"] == "https://infosys.com"
     assert result_web["company_slug"] == "infosys"
 
     # Test single LinkedIn URL
-    state_li = {"user_input": "https://www.linkedin.com/company/infosys"}
+    state_li = _state({"user_input": "https://www.linkedin.com/company/infosys"})
     result_li = classify_input(state_li)
     assert result_li["input_type"] == "linkedin_url"
     assert result_li["linkedin_url"] == "https://www.linkedin.com/company/infosys"
     assert result_li["company_slug"] == "infosys"
 
     # Test company name plain text
-    state_name = {"user_input": "Infosys Technologies"}
+    state_name = _state({"user_input": "Infosys Technologies"})
     result_name = classify_input(state_name)
     assert result_name["input_type"] == "company_name"
     assert result_name["company_name"] == "Infosys Technologies"
@@ -179,7 +184,7 @@ def test_orchestrator_graph_compile():
 
 def test_discover_external_news_node_skips_when_missing():
     from orchestrator.nodes import discover_external_news
-    res = discover_external_news({"company_name": None, "website_url": None})
+    res = discover_external_news(_state({"company_name": None, "website_url": None}))
     assert res == {}
 
 
@@ -191,26 +196,26 @@ from orchestrator.graph import _route_after_classify, _route_after_website_disco
 
 def test_routing_logic():
     # Test routing after classification
-    assert _route_after_classify({"input_type": "both_urls"}) == "trigger_scrapers"
-    assert _route_after_classify({"input_type": "website_url"}) == "discover_from_website"
-    assert _route_after_classify({"input_type": "linkedin_url"}) == "discover_website"
-    assert _route_after_classify({"input_type": "company_name"}) == "discover_website"
+    assert _route_after_classify(_state({"input_type": "both_urls"})) == "trigger_scrapers"
+    assert _route_after_classify(_state({"input_type": "website_url"})) == "discover_from_website"
+    assert _route_after_classify(_state({"input_type": "linkedin_url"})) == "discover_website"
+    assert _route_after_classify(_state({"input_type": "company_name"})) == "discover_website"
 
     # Test routing after website discovery
-    assert _route_after_website_discovery({"linkedin_url": "https://linkedin.com/company/test"}) == "trigger_scrapers"
-    assert _route_after_website_discovery({"linkedin_url": None}) == "discover_linkedin"
+    assert _route_after_website_discovery(_state({"linkedin_url": "https://linkedin.com/company/test"})) == "trigger_scrapers"
+    assert _route_after_website_discovery(_state({"linkedin_url": None})) == "discover_linkedin"
 
 
 def test_classify_input_edge_cases():
     # Test spaces and multi separators
-    state_messy = {"user_input": "   https://infosys.com  ;   https://linkedin.com/company/infosys   "}
+    state_messy = _state({"user_input": "   https://infosys.com  ;   https://linkedin.com/company/infosys   "})
     res = classify_input(state_messy)
     assert res["input_type"] == "both_urls"
     assert res["website_url"] == "https://infosys.com"
     assert res["linkedin_url"] == "https://linkedin.com/company/infosys"
 
     # Test empty or invalid
-    assert classify_input({"user_input": "    "})["input_type"] == "company_name"
+    assert classify_input(_state({"user_input": "    "}))["input_type"] == "company_name"
 
 
 def test_identify_role_pages():

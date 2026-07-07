@@ -46,8 +46,8 @@ def make_large_company_data(
     posts = [
         CompanyPost(
             post_text=f"This is a meaningful LinkedIn post number {i} about AI and digital transformation strategy. " * 5,
-            reactions_count=f"{i * 100}",
-            comments_count=str(i * 10),
+            reactions_count=i * 100,
+            comments_count=i * 10,
         )
         for i in range(num_posts)
     ]

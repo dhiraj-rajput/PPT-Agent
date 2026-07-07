@@ -63,7 +63,7 @@ class TestSaveRawScrapedData:
         mock_get_collection.return_value = mock_collection
 
         fake_object_id = MagicMock()
-        fake_object_id.__str__ = lambda self: "507f1f77bcf86cd799439011"
+        fake_object_id.__str__ = lambda *args, **kwargs: "507f1f77bcf86cd799439011"
         mock_collection.insert_one.return_value = MagicMock(inserted_id=fake_object_id)
 
         result = storage.save_raw_scraped_data(sample_raw_data)
@@ -79,7 +79,7 @@ class TestSaveRawScrapedData:
         mock_get_collection.return_value = mock_collection
 
         fake_id = MagicMock()
-        fake_id.__str__ = lambda self: "abc123"
+        fake_id.__str__ = lambda *args, **kwargs: "abc123"
         mock_collection.insert_one.return_value = MagicMock(inserted_id=fake_id)
 
         storage.save_raw_scraped_data(sample_raw_data)
@@ -101,7 +101,7 @@ class TestSaveStructuredCompanyData:
 
         # Simulate a new insert (upserted_id is not None)
         fake_upserted_id = MagicMock()
-        fake_upserted_id.__str__ = lambda self: "newdoc123"
+        fake_upserted_id.__str__ = lambda *args, **kwargs: "newdoc123"
         mock_collection.update_one.return_value = MagicMock(
             upserted_id=fake_upserted_id,
             modified_count=0,
@@ -141,7 +141,7 @@ class TestSaveStructuredCompanyData:
         mock_get_collection.return_value = mock_collection
 
         fake_upserted_id = MagicMock()
-        fake_upserted_id.__str__ = lambda self: "id123"
+        fake_upserted_id.__str__ = lambda *args, **kwargs: "id123"
         mock_collection.update_one.return_value = MagicMock(upserted_id=fake_upserted_id)
 
         storage.save_structured_company_data(sample_company_data)

@@ -56,7 +56,7 @@ def make_company_data(**overrides) -> LinkedInCompanyData:
 class TestCompanyIdentity:
     def test_required_fields_must_be_provided(self):
         with pytest.raises(ValidationError):
-            CompanyIdentity()  # Missing company_name, linkedin_url, company_slug
+            CompanyIdentity(**{})  # Missing company_name, linkedin_url, company_slug
 
     def test_minimal_valid_identity(self):
         identity = CompanyIdentity(
@@ -146,7 +146,7 @@ class TestCompanyPost:
 class TestJobPosting:
     def test_job_title_required(self):
         with pytest.raises(ValidationError):
-            JobPosting()  # job_title is required
+            JobPosting(**{})  # job_title is required
 
     def test_minimal_valid_job(self):
         job = JobPosting(job_title="Senior Software Engineer")
@@ -174,7 +174,7 @@ class TestJobPosting:
 class TestLeadershipMember:
     def test_required_fields(self):
         with pytest.raises(ValidationError):
-            LeadershipMember()  # full_name and job_title required
+            LeadershipMember(**{})  # full_name and job_title required
 
     def test_minimal_leader(self):
         leader = LeadershipMember(full_name="Salil Parekh", job_title="CEO")
@@ -273,7 +273,7 @@ class TestBIProfile:
 class TestLinkedInCompanyData:
     def test_requires_company_slug_and_scraped_at(self):
         with pytest.raises(ValidationError):
-            LinkedInCompanyData()  # Both required fields missing
+            LinkedInCompanyData(**{})  # Both required fields missing
 
     def test_minimal_valid_company_data(self):
         data = make_company_data()
@@ -303,6 +303,7 @@ class TestLinkedInCompanyData:
         dumped = data.model_dump()
         reparsed = LinkedInCompanyData(**dumped)
         assert reparsed.company_slug == "infosys"
+        assert reparsed.identity is not None
         assert reparsed.identity.company_name == "Infosys"
         assert len(reparsed.job_postings) == 1
         assert reparsed.data_quality_score == 0.75
@@ -353,7 +354,7 @@ class TestRawLinkedInScrapedData:
 class TestGrowthSignal:
     def test_required_fields(self):
         with pytest.raises(ValidationError):
-            GrowthSignal()  # signal_type and description required
+            GrowthSignal(**{})  # signal_type and description required
 
     def test_minimal_signal(self):
         signal = GrowthSignal(
