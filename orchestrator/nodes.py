@@ -414,6 +414,9 @@ def merge_results(state: AgentState) -> dict:
         "ai_adoption_level": linkedin_bi.get("ai_adoption_level"),
         "digital_transformation_status": linkedin_bi.get("digital_transformation_status"),
 
+        # External News
+        "external_news": state.get("external_news") or [],
+
         # Source tracking
         "data_sources": _list_data_sources(linkedin, website),
         "errors": errors,
@@ -477,3 +480,44 @@ def trigger_scrapers(state: AgentState) -> dict:
     """Pass-through node to split the flow into parallel scraping branches."""
     logger.info("[trigger_scrapers] Triggering website and linkedin agents in parallel")
     return {}
+
+
+def discover_external_news(state: AgentState) -> dict:
+    """
+    Search external platforms (TechCrunch, Medium, press releases, etc.)
+    for news and competitor updates about the company.
+    """
+    company_name = state.get("company_name")
+    official_url = state.get("website_url")
+
+    if not company_name or not official_url:
+        logger.warning("[discover_external_news] Missing company_name or website_url; skipping news search.")
+        return {}
+
+    logger.info(f"[discover_external_news] Searching external news for: '{company_name}'")
+
+    from google_search import ExternalSearchClient
+    from config.settings import settings
+
+    search_client = ExternalSearchClient(settings)
+    try:
+        import asyncio
+        results = asyncio.run(search_client.search_company_sources(
+            company_name=company_name,
+            official_url=official_url,
+            max_results=5
+        ))
+
+        external_news = [
+            {
+                "title": r.title,
+                "url": r.url,
+                "snippet": r.snippet
+            }
+            for r in results
+        ]
+        logger.info(f"[discover_external_news] Found {len(external_news)} news items.")
+        return {"external_news": external_news}
+    except Exception as e:
+        logger.error(f"[discover_external_news] Search failed: {e}")
+        return {"errors": state.get("errors", []) + [f"discover_external_news failed: {e}"]}

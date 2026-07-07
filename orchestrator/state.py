@@ -34,6 +34,9 @@ class AgentState(TypedDict):
     linkedin_data: Optional[dict]          # Serialized LinkedInCompanyData
     website_data: Optional[dict]           # Serialized WebsiteData
 
+    # --- Intermediate Search Outputs ---
+    external_news: Optional[List[dict]]    # Snippets from Google/Tavily external search (news, competitors, etc.)
+
     # --- Final Output ---
     combined_profile: Optional[dict]       # Merged profile saved to 'company_profiles' collection
 

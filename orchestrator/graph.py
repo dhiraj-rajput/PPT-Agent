@@ -29,6 +29,7 @@ from orchestrator.nodes import (
     run_linkedin_agent,
     merge_results,
     trigger_scrapers,
+    discover_external_news,
 )
 from utils.helpers import setup_logger
 
@@ -93,6 +94,7 @@ def build_graph() -> StateGraph:
     graph.add_node("trigger_scrapers", trigger_scrapers)
     graph.add_node("run_website_agent", run_website_agent)
     graph.add_node("run_linkedin_agent", run_linkedin_agent)
+    graph.add_node("discover_external_news", discover_external_news)
     graph.add_node("merge_results", merge_results)
 
     # Entry point
@@ -126,15 +128,15 @@ def build_graph() -> StateGraph:
     # Parallel scraping branches from trigger_scrapers
     graph.add_edge("trigger_scrapers", "run_website_agent")
     graph.add_edge("trigger_scrapers", "run_linkedin_agent")
+    graph.add_edge("trigger_scrapers", "discover_external_news")
 
-    # Merge results from both scraping branches
+    # Merge results from all parallel branches
     graph.add_edge("run_website_agent", "merge_results")
     graph.add_edge("run_linkedin_agent", "merge_results")
+    graph.add_edge("discover_external_news", "merge_results")
 
     # merge → END
     graph.add_edge("merge_results", END)
-
-    return graph.compile()
 
     return graph.compile()
 

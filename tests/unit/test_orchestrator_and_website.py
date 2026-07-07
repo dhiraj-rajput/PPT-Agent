@@ -173,7 +173,14 @@ def test_orchestrator_graph_compile():
     assert "trigger_scrapers" in graph.nodes
     assert "run_website_agent" in graph.nodes
     assert "run_linkedin_agent" in graph.nodes
+    assert "discover_external_news" in graph.nodes
     assert "merge_results" in graph.nodes
+
+
+def test_discover_external_news_node_skips_when_missing():
+    from orchestrator.nodes import discover_external_news
+    res = discover_external_news({"company_name": None, "website_url": None})
+    assert res == {}
 
 
 # ===========================================================================

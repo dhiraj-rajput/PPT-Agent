@@ -60,6 +60,15 @@ def print_summary(result: dict) -> None:
         for d in profile["key_differentiators"][:3]:
             print(f"   • {d}")
 
+    if profile.get("external_news"):
+        print("\n📰 External News & RFP Insights:")
+        for n in profile["external_news"][:4]:
+            print(f"   • {n.get('title')} ({n.get('url')})")
+            snippet = n.get('snippet', '')
+            if snippet:
+                truncated = snippet[:110] + "..." if len(snippet) > 110 else snippet
+                print(f"     \"{truncated}\"")
+
     if errors:
         print(f"\n⚠️  Non-fatal errors ({len(errors)}):")
         for e in errors:
