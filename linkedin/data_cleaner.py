@@ -340,15 +340,34 @@ class DataCleaner:
         cleaned = []
         seen_names = set()
 
+        blacklist_names = {
+            "user agreement", "privacy policy", "cookie policy", "linkedin member",
+            "password show", "sign in", "join now", "cookie use", "brand policy",
+            "copyright policy", "about", "help center", "safety center", "mobile",
+            "developers", "language", "upgrade browser", "sign up", "log in",
+            "linkedin", "member", "the phoenix", "mills ltd", "phoenix mills",
+            "security center", "agreement", "policy", "cookies", "terms of use"
+        }
+
         for leader in leaders:
             if not leader.full_name:
                 continue
 
             clean_name = self._normalize_whitespace(self._remove_emojis(leader.full_name))
-            if not clean_name or clean_name.lower() in seen_names:
+            clean_name_lower = clean_name.lower().strip()
+
+            # Filter out blacklisted names or names that are too short/generic
+            if clean_name_lower in blacklist_names or len(clean_name_lower) < 3:
                 continue
 
-            seen_names.add(clean_name.lower())
+            # Filter out names that look like system text or page links
+            if any(term in clean_name_lower for term in ["policy", "agreement", "cookie", "sign in", "sign up", "log in"]):
+                continue
+
+            if clean_name_lower in seen_names:
+                continue
+
+            seen_names.add(clean_name_lower)
             leader.full_name = clean_name
             leader.job_title = self._normalize_whitespace(
                 self._remove_emojis(leader.job_title or "")

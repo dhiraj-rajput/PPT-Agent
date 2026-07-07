@@ -326,6 +326,27 @@ class TestCleanLeadership:
         result = cleaner._clean_leadership(leaders)
         assert len(result) == 1
 
+    def test_filters_blacklisted_names(self, cleaner):
+        leaders = [
+            LeadershipMember(full_name="John Smith", job_title="CEO"),
+            LeadershipMember(full_name="User Agreement", job_title="Executive"),
+            LeadershipMember(full_name="Privacy Policy", job_title="Executive"),
+            LeadershipMember(full_name="LinkedIn Member", job_title="Executive"),
+        ]
+        result = cleaner._clean_leadership(leaders)
+        assert len(result) == 1
+        assert result[0].full_name == "John Smith"
+
+    def test_filters_garbage_links_or_short_names(self, cleaner):
+        leaders = [
+            LeadershipMember(full_name="Ab", job_title="Director"),  # too short
+            LeadershipMember(full_name="About Cookie Policy Page", job_title="Link"),  # contains cookie policy term
+            LeadershipMember(full_name="Jane Doe", job_title="VP"),
+        ]
+        result = cleaner._clean_leadership(leaders)
+        assert len(result) == 1
+        assert result[0].full_name == "Jane Doe"
+
 
 # ---------------------------------------------------------------------------
 # _clean_locations

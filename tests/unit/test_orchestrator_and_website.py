@@ -174,3 +174,47 @@ def test_orchestrator_graph_compile():
     assert "run_website_agent" in graph.nodes
     assert "run_linkedin_agent" in graph.nodes
     assert "merge_results" in graph.nodes
+
+
+# ===========================================================================
+# 5. Routing and Edge-case Tests
+# ===========================================================================
+
+from orchestrator.graph import _route_after_classify, _route_after_website_discovery
+
+def test_routing_logic():
+    # Test routing after classification
+    assert _route_after_classify({"input_type": "both_urls"}) == "trigger_scrapers"
+    assert _route_after_classify({"input_type": "website_url"}) == "discover_from_website"
+    assert _route_after_classify({"input_type": "linkedin_url"}) == "discover_website"
+    assert _route_after_classify({"input_type": "company_name"}) == "discover_website"
+
+    # Test routing after website discovery
+    assert _route_after_website_discovery({"linkedin_url": "https://linkedin.com/company/test"}) == "trigger_scrapers"
+    assert _route_after_website_discovery({"linkedin_url": None}) == "discover_linkedin"
+
+
+def test_classify_input_edge_cases():
+    # Test spaces and multi separators
+    state_messy = {"user_input": "   https://infosys.com  ;   https://linkedin.com/company/infosys   "}
+    res = classify_input(state_messy)
+    assert res["input_type"] == "both_urls"
+    assert res["website_url"] == "https://infosys.com"
+    assert res["linkedin_url"] == "https://linkedin.com/company/infosys"
+
+    # Test empty or invalid
+    assert classify_input({"user_input": "    "})["input_type"] == "company_name"
+
+
+def test_identify_role_pages():
+    pages = {
+        "https://infosys.com/about-us": "About page content",
+        "https://infosys.com/careers/jobs": "Careers content",
+        "https://infosys.com/get-in-touch": "Contact content",
+        "https://infosys.com/blog/article-1": "Blog content",
+    }
+    role_pages = identify_role_pages(list(pages.keys()))
+    assert role_pages["about"] == "https://infosys.com/about-us"
+    assert role_pages["careers"] == "https://infosys.com/careers/jobs"
+    assert role_pages["contact"] == "https://infosys.com/get-in-touch"
+    assert role_pages["blog"] == "https://infosys.com/blog/article-1"
