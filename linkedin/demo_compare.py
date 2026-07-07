@@ -17,7 +17,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Set console encoding to UTF-8
 if hasattr(sys.stdout, 'reconfigure'):
-    sys.stdout.reconfigure(encoding='utf-8')
+    getattr(sys.stdout, 'reconfigure')(encoding='utf-8')
 
 from utils.db_client import get_collection
 

@@ -5,7 +5,7 @@ HTML parsing utilities: metadata extraction, link extraction, and contact info e
 """
 
 import re
-from typing import List, Dict
+from typing import List, Dict, Any
 from bs4 import BeautifulSoup
 
 from utils.helpers import setup_logger

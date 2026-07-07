@@ -220,7 +220,11 @@ Generate a JSON object with these exact keys:
             parts.append(f"Description:\n{company_data.description.about_text}")
         posts = company_data.recent_posts
         if posts is not None:
-            post_texts = [f"Post {i}: {p.post_text[:200]}" for i, p in enumerate(posts[:5], 1)]
+            post_texts = [
+                f"Post {i}: {p.post_text[:200]}"
+                for i, p in enumerate(posts[:5], 1)
+                if p is not None and p.post_text is not None
+            ]
             parts.append("Posts:\n" + "\n".join(post_texts))
         return "\n\n=== SECTION ===\n".join(parts)
 

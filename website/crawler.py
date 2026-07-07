@@ -400,10 +400,10 @@ def crawl_website(
         logger.error(f"Invalid starting URL: {homepage_url}")
         return {}
 
-    max_pages = max_pages or getattr(settings, "MAX_CRAWL_PAGES", 15)
-    timeout_ms = timeout_ms or getattr(settings, "CRAWL_TIMEOUT", 30000)
+    limit_pages: int = max_pages if max_pages is not None else int(getattr(settings, "MAX_CRAWL_PAGES", 15))
+    limit_timeout: float = float(timeout_ms if timeout_ms is not None else int(getattr(settings, "CRAWL_TIMEOUT", 30000)))
 
-    logger.info(f"Starting sync crawl: {homepage_url} (max_pages={max_pages}, timeout={timeout_ms}ms)")
+    logger.info(f"Starting sync crawl: {homepage_url} (max_pages={limit_pages}, timeout={limit_timeout}ms)")
 
     visited_pages: dict[str, dict[str, Any]] = {}
     visited_urls_set: set[str] = set()
@@ -421,14 +421,14 @@ def crawl_website(
                 user_agent=DEFAULT_USER_AGENT,
                 viewport={"width": 1280, "height": 800},
             )
-            context.set_default_timeout(timeout_ms)
+            context.set_default_timeout(limit_timeout)
             page = context.new_page()
         except Exception as e:
             logger.critical(f"Failed to start Playwright: {e}")
             return {}
 
         try:
-            while queue and len(visited_pages) < max_pages:
+            while queue and len(visited_pages) < limit_pages:
                 queue.sort(key=lambda x: x[1], reverse=True)
                 current_url, _ = queue.pop(0)
 
