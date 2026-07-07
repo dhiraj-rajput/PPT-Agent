@@ -471,3 +471,9 @@ def _list_data_sources(linkedin: dict, website: dict) -> list:
     if website:
         sources.append("website")
     return sources
+
+
+def trigger_scrapers(state: AgentState) -> dict:
+    """Pass-through node to split the flow into parallel scraping branches."""
+    logger.info("[trigger_scrapers] Triggering website and linkedin agents in parallel")
+    return {}

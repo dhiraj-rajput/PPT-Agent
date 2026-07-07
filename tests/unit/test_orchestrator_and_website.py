@@ -170,6 +170,7 @@ def test_orchestrator_graph_compile():
     assert graph is not None
     # Verify graph can compile and contains the correct nodes
     assert "classify_input" in graph.nodes
+    assert "trigger_scrapers" in graph.nodes
     assert "run_website_agent" in graph.nodes
     assert "run_linkedin_agent" in graph.nodes
     assert "merge_results" in graph.nodes

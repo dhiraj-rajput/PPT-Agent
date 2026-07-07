@@ -28,6 +28,7 @@ from orchestrator.nodes import (
     run_website_agent,
     run_linkedin_agent,
     merge_results,
+    trigger_scrapers,
 )
 from utils.helpers import setup_logger
 
@@ -42,58 +43,33 @@ def _route_after_classify(state: AgentState) -> str:
     """
     After classification, decide the next node.
 
-    - "both_urls"     → run_website_agent     (directly scrap website & linkedin)
+    - "both_urls"     → trigger_scrapers      (directly scrap website & linkedin in parallel)
     - "website_url"   → discover_from_website (find LinkedIn from the given website)
     - "company_name"  → discover_website      (find the official website first)
-    - "linkedin_url"  → run_linkedin_agent    (already have LinkedIn — go straight to scraping)
+    - "linkedin_url"  → discover_website      (already have LinkedIn — discover website first)
     """
     input_type = state.get("input_type", "company_name")
     logger.info(f"[router] input_type='{input_type}'")
 
     if input_type == "both_urls":
-        return "run_website_agent"
+        return "trigger_scrapers"
     elif input_type == "website_url":
         return "discover_from_website"
     elif input_type == "linkedin_url":
-        return "run_linkedin_agent"
+        return "discover_website"
     else:
         return "discover_website"
 
 
 def _route_after_website_discovery(state: AgentState) -> str:
     """
-    After finding the official website, always try to find LinkedIn too.
+    After finding the official website:
+    - If we already have the linkedin_url (input was linkedin_url), go directly to trigger_scrapers.
+    - Otherwise, find the LinkedIn URL first via discover_linkedin.
     """
+    if state.get("linkedin_url"):
+        return "trigger_scrapers"
     return "discover_linkedin"
-
-
-def _route_after_linkedin_discovery(state: AgentState) -> str:
-    """
-    After finding LinkedIn URL, run the website agent next.
-    (LinkedIn agent runs in parallel as a separate path — see graph construction)
-    """
-    return "run_website_agent"
-
-
-def _route_after_website_agent(state: AgentState) -> str:
-    """
-    After website agent completes, run the LinkedIn agent.
-    """
-    return "run_linkedin_agent"
-
-
-def _route_after_linkedin_agent(state: AgentState) -> str:
-    """
-    After LinkedIn agent completes, merge all results.
-    """
-    return "merge_results"
-
-
-def _route_after_discover_from_website(state: AgentState) -> str:
-    """
-    For website_url inputs: run both agents (website first, then LinkedIn).
-    """
-    return "run_website_agent"
 
 
 # ---------------------------------------------------------------------------
@@ -114,6 +90,7 @@ def build_graph() -> StateGraph:
     graph.add_node("discover_website", discover_website)
     graph.add_node("discover_linkedin", discover_linkedin)
     graph.add_node("discover_from_website", discover_from_website)
+    graph.add_node("trigger_scrapers", trigger_scrapers)
     graph.add_node("run_website_agent", run_website_agent)
     graph.add_node("run_linkedin_agent", run_linkedin_agent)
     graph.add_node("merge_results", merge_results)
@@ -128,22 +105,36 @@ def build_graph() -> StateGraph:
         {
             "discover_from_website": "discover_from_website",
             "discover_website": "discover_website",
-            "run_linkedin_agent": "run_linkedin_agent",
-            "run_website_agent": "run_website_agent",
+            "trigger_scrapers": "trigger_scrapers",
         },
     )
 
-    # company_name path: discover_website → discover_linkedin → run_website_agent → run_linkedin_agent → merge
-    graph.add_edge("discover_website", "discover_linkedin")
-    graph.add_edge("discover_linkedin", "run_website_agent")
-    graph.add_edge("run_website_agent", "run_linkedin_agent")
-    graph.add_edge("run_linkedin_agent", "merge_results")
+    # Conditional routing after website discovery
+    graph.add_conditional_edges(
+        "discover_website",
+        _route_after_website_discovery,
+        {
+            "discover_linkedin": "discover_linkedin",
+            "trigger_scrapers": "trigger_scrapers",
+        },
+    )
 
-    # website_url path: discover_from_website → run_website_agent → run_linkedin_agent → merge
-    graph.add_edge("discover_from_website", "run_website_agent")
+    # Static edges to transition to trigger_scrapers
+    graph.add_edge("discover_linkedin", "trigger_scrapers")
+    graph.add_edge("discover_from_website", "trigger_scrapers")
+
+    # Parallel scraping branches from trigger_scrapers
+    graph.add_edge("trigger_scrapers", "run_website_agent")
+    graph.add_edge("trigger_scrapers", "run_linkedin_agent")
+
+    # Merge results from both scraping branches
+    graph.add_edge("run_website_agent", "merge_results")
+    graph.add_edge("run_linkedin_agent", "merge_results")
 
     # merge → END
     graph.add_edge("merge_results", END)
+
+    return graph.compile()
 
     return graph.compile()
 
