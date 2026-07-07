@@ -93,10 +93,13 @@ class WebsiteStorage:
         collection = get_collection(COLLECTION_SCRAPE_LOGS)
         log_entry = {
             "company_slug": company_slug,
-            "source": source,   # e.g. "website" or "linkedin"
+            "agent_name": "website",
+            "source": source,
+            "status": scrape_status,
             "scrape_status": scrape_status,
             "duration_seconds": round(duration_seconds, 2),
             "error_message": error_message,
+            "timestamp": datetime.now(tz=timezone.utc),
             "scraped_at": datetime.now(tz=timezone.utc),
         }
         collection.insert_one(log_entry)

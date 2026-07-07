@@ -486,9 +486,14 @@ def discover_external_news(state: AgentState) -> dict:
     """
     Search external platforms (TechCrunch, Medium, press releases, etc.)
     for news and competitor updates about the company.
+    Saves raw search results to 'raw_external_search' and structured LLM extraction to 'structured_external_search'.
     """
+    import time
+    import json
+    start_time = time.time()
     company_name = state.get("company_name")
     official_url = state.get("website_url")
+    company_slug = state.get("company_slug") or "unknown"
 
     if not company_name or not official_url:
         logger.warning("[discover_external_news] Missing company_name or website_url; skipping news search.")
@@ -498,8 +503,11 @@ def discover_external_news(state: AgentState) -> dict:
 
     from google_search import ExternalSearchClient
     from config.settings import settings
+    from utils.db_client import get_collection
 
     search_client = ExternalSearchClient(settings)
+
+    # 1. Fetch raw search results
     try:
         import asyncio
         results = asyncio.run(search_client.search_company_sources(
@@ -508,16 +516,136 @@ def discover_external_news(state: AgentState) -> dict:
             max_results=5
         ))
 
-        external_news = [
+        raw_results = [
             {
                 "title": r.title,
                 "url": r.url,
-                "snippet": r.snippet
+                "snippet": r.snippet,
+                "provider": r.provider
             }
             for r in results
         ]
-        logger.info(f"[discover_external_news] Found {len(external_news)} news items.")
-        return {"external_news": external_news}
+
+        # Save raw search results to 'raw_external_search'
+        raw_collection = get_collection("raw_external_search")
+        raw_record = {
+            "company_slug": company_slug,
+            "company_name": company_name,
+            "search_results": raw_results,
+            "scraped_at": datetime.now(tz=timezone.utc)
+        }
+        raw_collection.insert_one(raw_record)
+        logger.info(f"[discover_external_news] Saved raw search data to 'raw_external_search' collection.")
+
+        if not raw_results:
+            logger.info("[discover_external_news] No news results found.")
+            # Log successful but empty operation to scrape_logs
+            logs_collection = get_collection("scrape_logs")
+            logs_collection.insert_one({
+                "company_slug": company_slug,
+                "agent_name": "external_search",
+                "status": "success",
+                "duration_seconds": round(time.time() - start_time, 2),
+                "timestamp": datetime.now(tz=timezone.utc)
+            })
+            return {"external_news": []}
+
+        # 2. Run LLM structuring pass
+        from langchain_openai import ChatOpenAI
+        llm = ChatOpenAI(
+            openai_api_key=settings.openrouter_api_key,
+            openai_api_base="https://openrouter.ai/api/v1",
+            model_name=settings.openrouter_model,
+            temperature=0.0,
+            max_tokens=2000,
+            timeout=120.0
+        )
+
+        prompt = f"""You are a professional business intelligence and research analyst.
+Analyze the following raw search snippets about the company '{company_name}' and extract a structured company research profile.
+This profile is for RFP (Request for Proposal) research.
+
+Search Snippets:
+{json.dumps(raw_results, indent=2)}
+
+Produce a JSON object strictly matching this schema:
+{{
+  "company_name": "{company_name}",
+  "website": "{official_url}",
+  "business_model": "Summarize the company's core business model in one sentence.",
+  "value_proposition": "Summarize the company's value proposition in one sentence.",
+  "products_and_services": [
+    {{
+      "name": "Product or service name",
+      "description": "Short description of what it does",
+      "target_audience": "Target audience or null"
+    }}
+  ],
+  "insights": [
+    {{
+      "category": "E.g., Financial Health, Operational Efficiency, Strategic Pivot, Capital Allocation, Market Growth, etc.",
+      "description": "Factual insight detailing numbers, margins, buybacks, pivots, or performance from the snippets",
+      "source_url": "The exact URL from the snippet supporting this insight",
+      "confidence_score": 1.0
+    }}
+  ]
+}}
+
+Ensure all fields are derived directly from the snippets. If a detail is missing, write a reasonable summary based on the name/industry, but try to be as factual as possible. Do not output anything other than a valid JSON object.
+"""
+
+        logger.info("[discover_external_news] Invoking LLM for structured search profiling...")
+        response = llm.invoke(prompt)
+        content = response.content.strip()
+
+        # Clean potential markdown wrappers
+        if content.startswith("```json"):
+            content = content[7:]
+        if content.endswith("```"):
+            content = content[:-3]
+        content = content.strip()
+
+        structured_profile = json.loads(content)
+        structured_profile["company_slug"] = company_slug
+        structured_profile["scraped_at"] = datetime.now(tz=timezone.utc).isoformat()
+
+        # Save structured profile to 'structured_external_search'
+        struct_collection = get_collection("structured_external_search")
+        struct_collection.update_one(
+            {"company_slug": company_slug},
+            {"$set": structured_profile},
+            upsert=True
+        )
+        logger.info(f"[discover_external_news] Saved structured search data to 'structured_external_search' collection.")
+
+        # Log operation to scrape_logs
+        logs_collection = get_collection("scrape_logs")
+        logs_collection.insert_one({
+            "company_slug": company_slug,
+            "agent_name": "external_search",
+            "status": "success",
+            "duration_seconds": round(time.time() - start_time, 2),
+            "timestamp": datetime.now(tz=timezone.utc)
+        })
+
+        return {
+            "external_news": raw_results,
+            "external_structured_insights": structured_profile
+        }
+
     except Exception as e:
         logger.error(f"[discover_external_news] Search failed: {e}")
+        # Log failure to scrape_logs
+        try:
+            logs_collection = get_collection("scrape_logs")
+            logs_collection.insert_one({
+                "company_slug": company_slug,
+                "agent_name": "external_search",
+                "status": "failed",
+                "duration_seconds": round(time.time() - start_time, 2),
+                "error_message": str(e),
+                "timestamp": datetime.now(tz=timezone.utc)
+            })
+        except Exception:
+            pass
         return {"errors": state.get("errors", []) + [f"discover_external_news failed: {e}"]}

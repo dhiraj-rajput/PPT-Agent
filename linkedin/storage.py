@@ -199,11 +199,15 @@ class LinkedInStorage:
 
         log_entry = {
             "company_slug": company_slug,
+            "agent_name": "linkedin",
+            "status": scrape_status,
             "scrape_status": scrape_status,
             "layers_used": layers_used,
             "duration_seconds": round(duration_seconds, 2),
             "error_message": error_message,
+            "timestamp": get_utc_now(),
             "scraped_at": get_utc_now(),
+            "details": {"layers_used": layers_used}
         }
 
         collection.insert_one(log_entry)

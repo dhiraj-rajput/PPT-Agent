@@ -190,7 +190,21 @@ def ensure_all_indexes() -> None:
         unique=True,
     )
 
-    logger.info("All agent indexes are in place (7 collections).")
+    # --- External News Search agent collections ---
+    raw_external_search = get_collection("raw_external_search")
+    raw_external_search.create_index(
+        [("company_slug", pymongo.ASCENDING), ("scraped_at", pymongo.DESCENDING)],
+        name="idx_raw_external_search_slug_time",
+    )
+
+    structured_external_search = get_collection("structured_external_search")
+    structured_external_search.create_index(
+        [("company_slug", pymongo.ASCENDING)],
+        name="idx_structured_external_search_slug",
+        unique=True,
+    )
+
+    logger.info("All agent indexes are in place (9 collections).")
 
 
 class MongoStorageManager:
