@@ -19,7 +19,7 @@ Design principles:
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 # ---------------------------------------------------------------------------
@@ -378,8 +378,7 @@ class LinkedInCompanyData(BaseModel):
         description="Overall data quality score 0.0-1.0 assigned by the data cleaner."
     )
 
-    class Config:
-        json_encoders = {datetime: lambda dt: dt.isoformat()}
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 # ---------------------------------------------------------------------------

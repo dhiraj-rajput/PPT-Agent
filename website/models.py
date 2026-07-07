@@ -9,7 +9,7 @@ and are stored in the 'raw_website' and 'structured_website' MongoDB collections
 
 from datetime import datetime
 from typing import List, Optional, Dict
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class WebsiteData(BaseModel):
@@ -63,8 +63,7 @@ class WebsiteData(BaseModel):
     pages_crawled: int = Field(default=0, description="Number of pages successfully crawled")
     visited_urls: List[str] = Field(default_factory=list, description="List of all crawled URLs")
 
-    class Config:
-        json_encoders = {datetime: lambda dt: dt.isoformat()}
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class RawWebsiteScrapedData(BaseModel):
@@ -82,8 +81,7 @@ class RawWebsiteScrapedData(BaseModel):
     scrape_success: bool = Field(default=True)
     error_message: Optional[str] = Field(default=None)
 
-    class Config:
-        json_encoders = {datetime: lambda dt: dt.isoformat()}
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class CrawlMetadata(BaseModel):
