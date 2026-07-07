@@ -240,16 +240,16 @@ class PublicLinkedInScraper:
 
         for meta_tag in soup.find_all("meta"):
             # Open Graph properties (e.g., og:title, og:description, og:image)
-            og_property = meta_tag.get("property", "")
+            og_property = str(meta_tag.get("property") or "")
             if og_property.startswith("og:"):
-                content = meta_tag.get("content", "").strip()
+                content = str(meta_tag.get("content") or "").strip()
                 if content:
                     meta_data[og_property] = content
 
             # Standard named meta tags (e.g., name="description")
-            meta_name = meta_tag.get("name", "")
+            meta_name = str(meta_tag.get("name") or "")
             if meta_name in ("description", "keywords", "author"):
-                content = meta_tag.get("content", "").strip()
+                content = str(meta_tag.get("content") or "").strip()
                 if content:
                     meta_data[meta_name] = content
 

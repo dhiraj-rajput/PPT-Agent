@@ -58,11 +58,13 @@ class LLMStructurer:
         if settings.USE_LLM_STRUCTURING:
             from langchain_openai import ChatOpenAI
             self._llm_client = ChatOpenAI(
-                model=settings.OPENROUTER_MODEL,
-                openai_api_key=settings.OPENROUTER_API_KEY,
-                openai_api_base=settings.OPENROUTER_BASE_URL,
+                **{
+                    "openai_api_key": settings.OPENROUTER_API_KEY,
+                    "openai_api_base": settings.OPENROUTER_BASE_URL,
+                    "model_name": settings.OPENROUTER_MODEL,
+                    "max_tokens": 4096,
+                },
                 temperature=0.0,
-                max_tokens=4096,
                 timeout=90.0,
             )
         else:
@@ -252,6 +254,8 @@ class LLMStructurer:
         import time
         logger.info(f"[Structurer] Dispatching LLM request to OpenRouter model='{settings.OPENROUTER_MODEL}'...")
         start_time = time.time()
+        if self._llm_client is None:
+            raise RuntimeError("LLM client is not initialized.")
         for attempt in range(1, max_retries + 1):
             try:
                 response = await asyncio.wait_for(
@@ -260,7 +264,7 @@ class LLMStructurer:
                 )
                 duration = time.time() - start_time
                 logger.info(f"[Structurer] LLM call resolved successfully in {duration:.2f}s.")
-                text = response.content.strip()
+                text = str(response.content).strip()
                 for prefix in ("```json", "```"):
                     if text.startswith(prefix):
                         text = text[len(prefix):]

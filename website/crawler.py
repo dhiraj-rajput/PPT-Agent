@@ -384,8 +384,8 @@ def _score_url(url: str) -> int:
 
 def crawl_website(
     homepage_url: str,
-    max_pages: int = None,
-    timeout_ms: int = None,
+    max_pages: int | None = None,
+    timeout_ms: int | None = None,
 ) -> dict[str, dict[str, Any]]:
     """
     Crawl a company website starting from the homepage (Prasanna crawler integration).

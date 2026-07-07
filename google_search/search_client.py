@@ -71,7 +71,7 @@ class CompanyDiscovery:
             Any key can be None if not found.
         """
         cleaned = user_input.strip()
-        result = {
+        result: dict[str, str | None] = {
             "company_name": None,
             "website_url": None,
             "linkedin_url": None,

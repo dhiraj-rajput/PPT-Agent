@@ -1,4 +1,4 @@
-﻿"""Business intelligence extraction from cleaned website text."""
+"""Business intelligence extraction from cleaned website text."""
 
 from __future__ import annotations
 
@@ -58,7 +58,7 @@ class HuggingFaceCompanyExtractor:
             raise ExtractionError("HF_TOKEN is required for Hugging Face extraction.")
         self._settings = settings
         self._client = AsyncInferenceClient(
-            provider=settings.hf_provider,
+            provider=settings.hf_provider,  # type: ignore
             token=settings.hf_token,
             timeout=timeout_seconds,
         )

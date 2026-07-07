@@ -35,8 +35,10 @@ def parse_html_metadata(html_content: str) -> Dict[str, str]:
             soup.find("meta", attrs={"property": "og:description"}) or
             soup.find("meta", attrs={"name": "twitter:description"})
         )
-        if desc_tag and desc_tag.get("content"):
-            metadata["description"] = desc_tag.get("content").strip()
+        if desc_tag:
+            content = str(desc_tag.get("content") or "").strip()
+            if content:
+                metadata["description"] = content
     except Exception:
         pass
     return metadata
@@ -64,7 +66,7 @@ def extract_contact_info(html_content: str, text_content: str = "") -> Dict[str,
         Dict with keys: 'emails', 'phone_numbers', 'social_links'.
         Also extracts 'linkedin_url' as first found linkedin.com link.
     """
-    contacts: Dict[str, List[str]] = {
+    contacts: dict[str, Any] = {
         "emails": [],
         "phone_numbers": [],
         "social_links": [],
@@ -77,7 +79,7 @@ def extract_contact_info(html_content: str, text_content: str = "") -> Dict[str,
         soup = BeautifulSoup(html_content, "html.parser")
 
         for tag in soup.find_all("a", href=True):
-            href = tag["href"].strip()
+            href = str(tag["href"]).strip()
             if href.startswith("mailto:"):
                 email = href.replace("mailto:", "").split("?")[0].strip()
                 if email:

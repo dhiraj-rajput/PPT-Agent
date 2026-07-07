@@ -17,6 +17,7 @@ Usage:
     result = run_pipeline("https://linkedin.com/company/infosys")
 """
 
+from typing import Any
 from langgraph.graph import StateGraph, END
 
 from orchestrator.state import AgentState
@@ -77,7 +78,7 @@ def _route_after_website_discovery(state: AgentState) -> str:
 # Graph Construction
 # ---------------------------------------------------------------------------
 
-def build_graph() -> StateGraph:
+def build_graph() -> Any:
     """
     Build and compile the LangGraph state machine.
 
@@ -183,6 +184,8 @@ def run_pipeline(user_input: str) -> dict:
         "company_slug": None,
         "linkedin_data": None,
         "website_data": None,
+        "external_news": None,
+        "external_structured_insights": None,
         "combined_profile": None,
         "errors": [],
     }

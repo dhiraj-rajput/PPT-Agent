@@ -57,8 +57,8 @@ class WebsitePipeline:
     def run(
         self,
         website_url: str,
-        max_pages: int = None,
-        timeout_ms: int = None,
+        max_pages: int | None = None,
+        timeout_ms: int | None = None,
         force_rescrape: bool = False,
     ) -> Optional[WebsiteData]:
         """
@@ -173,7 +173,7 @@ class WebsitePipeline:
         )
 
         # Ensure LinkedIn URL found from site is stored
-        if linkedin_url_found and not website_data.linkedin_url:
+        if isinstance(linkedin_url_found, str) and linkedin_url_found and not website_data.linkedin_url:
             website_data.linkedin_url = linkedin_url_found
 
         # Step 5: Save structured data

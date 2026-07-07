@@ -27,6 +27,10 @@ from utils.helpers import setup_logger
 
 logger = setup_logger(__name__)
 
+
+class ExtractionError(RuntimeError):
+    """Raised when LLM extraction fails."""
+
 BI_SYSTEM_PROMPT = """You are an elite business research analyst and strategy consultant.
 Your job is to analyze structured company data and extract deep, actionable Business Intelligence (BI).
 
@@ -50,11 +54,13 @@ class BIExtractor:
         if settings.USE_LLM_STRUCTURING:
             from langchain_openai import ChatOpenAI
             self._llm_client = ChatOpenAI(
-                model=settings.OPENROUTER_MODEL,
-                openai_api_key=settings.OPENROUTER_API_KEY,
-                openai_api_base=settings.OPENROUTER_BASE_URL,
+                **{
+                    "openai_api_key": settings.OPENROUTER_API_KEY,
+                    "openai_api_base": settings.OPENROUTER_BASE_URL,
+                    "model_name": settings.OPENROUTER_MODEL,
+                    "max_tokens": 4096,
+                },
                 temperature=0.2,
-                max_tokens=4096,
                 timeout=90.0,
             )
         else:
@@ -167,6 +173,8 @@ Generate a JSON object with these exact keys:
         import time
         logger.info(f"[BIExtractor] Dispatching LLM request to OpenRouter model='{settings.OPENROUTER_MODEL}'...")
         start_time = time.time()
+        if self._llm_client is None:
+            raise ExtractionError("LLM client is not initialized.")
         for attempt in range(1, max_retries + 1):
             try:
                 response = await asyncio.wait_for(
@@ -175,7 +183,7 @@ Generate a JSON object with these exact keys:
                 )
                 duration = time.time() - start_time
                 logger.info(f"[BIExtractor] LLM call resolved successfully in {duration:.2f}s.")
-                text = response.content.strip()
+                text = str(response.content).strip()
                 for prefix in ("```json", "```"):
                     if text.startswith(prefix):
                         text = text[len(prefix):]
@@ -210,8 +218,9 @@ Generate a JSON object with these exact keys:
             )
         if company_data.description and company_data.description.about_text:
             parts.append(f"Description:\n{company_data.description.about_text}")
-        if company_data.recent_posts:
-            post_texts = [f"Post {i}: {p.post_text[:200]}" for i, p in enumerate(company_data.recent_posts[:5], 1)]
+        posts = company_data.recent_posts
+        if posts is not None:
+            post_texts = [f"Post {i}: {p.post_text[:200]}" for i, p in enumerate(posts[:5], 1)]
             parts.append("Posts:\n" + "\n".join(post_texts))
         return "\n\n=== SECTION ===\n".join(parts)
 
@@ -220,7 +229,8 @@ Generate a JSON object with these exact keys:
     # ---------------------------------------------------------------------------
 
     def _extract_bi_profile_rules(self, company_data: LinkedInCompanyData) -> BIProfile:
-        name = (company_data.identity.company_name if company_data.identity else None) or company_data.company_slug.capitalize()
+        slug = company_data.company_slug
+        name = (company_data.identity.company_name if company_data.identity else None) or (slug.capitalize() if slug else "Company")
         industry = (company_data.identity.industry if company_data.identity else None) or "Technology"
         founded = (company_data.identity.founded_year if company_data.identity else None) or 2010
         hq = (company_data.identity.headquarters_location if company_data.identity else None) or "Global"

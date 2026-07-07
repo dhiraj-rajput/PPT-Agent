@@ -172,9 +172,13 @@ async def run_simulation():
     cleaned_company_data, quality_score = cleaner.clean(raw_company_data)
 
     # Let's inspect the cleaning result
-    logger.info(f"Cleaned Company Name: '{cleaned_company_data.identity.company_name}' (No emoji!)")
-    logger.info(f"Cleaned Tagline: '{cleaned_company_data.identity.tagline}' (No emoji!)")
-    logger.info(f"Cleaned Post: '{cleaned_company_data.recent_posts[0].post_text}' (No boilerplate!)")
+    identity = cleaned_company_data.identity
+    if identity is not None:
+        logger.info(f"Cleaned Company Name: '{identity.company_name}' (No emoji!)")
+        logger.info(f"Cleaned Tagline: '{identity.tagline}' (No emoji!)")
+    posts = cleaned_company_data.recent_posts
+    if posts:
+        logger.info(f"Cleaned Post: '{posts[0].post_text}' (No boilerplate!)")
     logger.info(f"Data Quality Score: {quality_score:.2f}")
 
     # Check if OpenRouter key is set. If so, generate the BI Profile. If not, generate a mock one.
@@ -243,9 +247,14 @@ async def run_simulation():
 
     # Read back to verify
     retrieved = storage.get_structured_company_data(company_slug)
-    logger.info(f"Successfully retrieved '{retrieved.identity.company_name}' from database.")
-    logger.info(f"Executive Summary: {retrieved.bi_profile.executive_summary}")
-    logger.info(f"Key Differentiators: {retrieved.bi_profile.key_differentiators}")
+    if retrieved is not None:
+        identity_ret = retrieved.identity
+        if identity_ret is not None:
+            logger.info(f"Successfully retrieved '{identity_ret.company_name}' from database.")
+        bi_ret = retrieved.bi_profile
+        if bi_ret is not None:
+            logger.info(f"Executive Summary: {bi_ret.executive_summary}")
+            logger.info(f"Key Differentiators: {bi_ret.key_differentiators}")
 
     close_connection()
     logger.info("=== Simulation Complete ===")

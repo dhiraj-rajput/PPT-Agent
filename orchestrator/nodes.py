@@ -418,7 +418,7 @@ def merge_results(state: AgentState) -> dict:
         "external_news": state.get("external_news") or [],
 
         # Source tracking
-        "data_sources": _list_data_sources(linkedin, website),
+        "data_sources": _list_data_sources(linkedin, website, state.get("external_news")),
         "errors": errors,
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
     }
@@ -466,13 +466,15 @@ def _merge_lists(*lists) -> list:
     return result
 
 
-def _list_data_sources(linkedin: dict, website: dict) -> list:
+def _list_data_sources(linkedin: dict, website: dict, external_news: list | None) -> list:
     """Return which agents actually produced data."""
     sources = []
     if linkedin:
         sources.append("linkedin")
     if website:
         sources.append("website")
+    if external_news:
+        sources.append("news")
     return sources
 
 

@@ -52,23 +52,27 @@ def inspect_db():
                 # Clean _id for pretty printing
                 if sample and "_id" in sample:
                     sample["_id"] = str(sample["_id"])
-                
-                # Print key identity or metadata fields
-                if col_name == "structured_linkedin":
-                    print(f"     Slug: {sample.get('company_slug')}")
-                    if 'identity' in sample and sample['identity']:
-                        print(f"     Name: {sample['identity'].get('company_name')}")
-                        print(f"     Industry: {sample['identity'].get('industry')}")
-                    if 'bi_profile' in sample and sample['bi_profile']:
-                        print(f"     Executive Summary: {sample['bi_profile'].get('executive_summary')[:80]}...")
-                elif col_name == "raw_linkedin":
-                    print(f"     Slug: {sample.get('company_slug')}")
-                    print(f"     Layer: {sample.get('scrape_layer')}")
-                    print(f"     Page URL: {sample.get('page_url')}")
-                elif col_name == "scrape_logs":
-                    print(f"     Slug: {sample.get('company_slug')}")
-                    print(f"     Status: {sample.get('scrape_status')}")
-                    print(f"     Duration: {sample.get('duration_seconds')}s")
+                if sample is not None:
+                    # Print key identity or metadata fields
+                    if col_name == "structured_linkedin":
+                        print(f"     Slug: {sample.get('company_slug')}")
+                        identity = sample.get('identity')
+                        if isinstance(identity, dict):
+                            print(f"     Name: {identity.get('company_name')}")
+                            print(f"     Industry: {identity.get('industry')}")
+                        bi_profile = sample.get('bi_profile')
+                        if isinstance(bi_profile, dict):
+                            exec_sum = bi_profile.get('executive_summary')
+                            exec_sum_str = str(exec_sum)[:80] if exec_sum else "N/A"
+                            print(f"     Executive Summary: {exec_sum_str}...")
+                    elif col_name == "raw_linkedin":
+                        print(f"     Slug: {sample.get('company_slug')}")
+                        print(f"     Layer: {sample.get('scrape_layer')}")
+                        print(f"     Page URL: {sample.get('page_url')}")
+                    elif col_name == "scrape_logs":
+                        print(f"     Slug: {sample.get('company_slug')}")
+                        print(f"     Status: {sample.get('scrape_status')}")
+                        print(f"     Duration: {sample.get('duration_seconds')}s")
                 print()
                 
     except Exception as e:

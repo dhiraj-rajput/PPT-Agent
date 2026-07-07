@@ -16,7 +16,8 @@ import re
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Set console encoding to UTF-8
-sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
 
 from utils.db_client import get_collection
 
@@ -107,7 +108,9 @@ def display_comparison(company_slug: str):
     print("\n>>> RAW ABOUT US DESCRIPTION (FIRST 150 CHARS):")
     about_snippet = raw_text[raw_text.find("About us") + 8:raw_text.find("About us") + 250].strip().replace('\n', ' ')
     print(f"  [RAW]: \"{about_snippet[:150]}...\"")
-    print(f"  [STRUCTURED ABOUT]: \"{description.get('about_text')[:150]}...\"")
+    about_text_val = description.get('about_text') if description else None
+    about_text_str = about_text_val[:150] if about_text_val else "N/A"
+    print(f"  [STRUCTURED ABOUT]: \"{about_text_str}...\"")
 
     # -------------------------------------------------------------
     # SECTION 3: Office Locations

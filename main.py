@@ -24,9 +24,9 @@ import sys
 
 # Reconfigure stdout/stderr to use UTF-8 to avoid encoding errors on Windows console
 if hasattr(sys.stdout, 'reconfigure'):
-    sys.stdout.reconfigure(encoding='utf-8')
+    getattr(sys.stdout, 'reconfigure')(encoding='utf-8')
 if hasattr(sys.stderr, 'reconfigure'):
-    sys.stderr.reconfigure(encoding='utf-8')
+    getattr(sys.stderr, 'reconfigure')(encoding='utf-8')
 
 from utils.helpers import setup_logger
 from utils.db_client import ensure_all_indexes, close_connection
