@@ -38,7 +38,11 @@ class AppSettings(BaseSettings):
     # ------------------------------------------------------------------
     MONGO_URI: str = Field(
         default="mongodb://localhost:27017/",
-        description="MongoDB connection string. Use Atlas URI for production.",
+        description=(
+            "MongoDB connection string.\n"
+            "  Local:  mongodb://localhost:27017/\n"
+            "  Atlas:  mongodb+srv://<user>:<pass>@<cluster>.mongodb.net/?retryWrites=true&w=majority"
+        ),
     )
     MONGO_DB_NAME: str = Field(
         default="ppt_agent_db",
@@ -117,6 +121,18 @@ class AppSettings(BaseSettings):
     BROWSER_HEADLESS: bool = Field(
         default=True,
         description="Run Playwright browser in headless mode (set False to debug visually).",
+    )
+
+    # ------------------------------------------------------------------
+    # Website Crawler (prasanna/company-extractor settings)
+    # ------------------------------------------------------------------
+    MAX_CRAWL_PAGES: int = Field(
+        default=15,
+        description="Maximum number of pages to crawl per company website.",
+    )
+    CRAWL_TIMEOUT: int = Field(
+        default=30000,
+        description="Playwright page load timeout in milliseconds.",
     )
 
     # ------------------------------------------------------------------

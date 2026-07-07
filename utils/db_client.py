@@ -142,3 +142,51 @@ def ensure_indexes() -> None:
     )
 
     logger.info("All MongoDB indexes are in place.")
+
+
+def ensure_all_indexes() -> None:
+    """
+    Creates indexes for ALL collections used across all agents:
+      LinkedIn agent: raw_linkedin, structured_linkedin, scrape_logs
+      Website agent:  raw_website, structured_website
+      Discovery:      search_cache
+      Orchestrator:   company_profiles
+
+    Safe to call repeatedly — indexes are created only if they don't already exist.
+    """
+    logger.info("Creating indexes for all agent collections...")
+
+    # --- LinkedIn agent collections (already in ensure_indexes) ---
+    ensure_indexes()
+
+    # --- Website agent collections ---
+    raw_website = get_collection("raw_website")
+    raw_website.create_index(
+        [("company_slug", pymongo.ASCENDING), ("scraped_at", pymongo.DESCENDING)],
+        name="idx_raw_website_slug_time",
+    )
+
+    structured_website = get_collection("structured_website")
+    structured_website.create_index(
+        [("company_slug", pymongo.ASCENDING)],
+        name="idx_structured_website_slug",
+        unique=True,
+    )
+
+    # --- Search cache ---
+    search_cache = get_collection("search_cache")
+    search_cache.create_index(
+        [("query", pymongo.ASCENDING)],
+        name="idx_search_cache_query",
+        unique=True,
+    )
+
+    # --- Unified company profiles ---
+    company_profiles = get_collection("company_profiles")
+    company_profiles.create_index(
+        [("company_slug", pymongo.ASCENDING)],
+        name="idx_company_profiles_slug",
+        unique=True,
+    )
+
+    logger.info("All agent indexes are in place (7 collections).")

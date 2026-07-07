@@ -12,17 +12,23 @@ requests>=2.31.0
 beautifulsoup4>=4.12.0
 lxml>=5.0.0
 
-# LangChain + LLM (OpenRouter via OpenAI-compatible API)
+# LangChain + LangGraph + LLM (OpenRouter via OpenAI-compatible API)
 langchain>=0.3.0
 langchain-core>=0.3.0
 langchain-openai>=0.3.0
+langgraph>=0.2.0
 
 # Web crawling & browser automation
 crawl4ai>=0.4.0
 playwright>=1.40.0
 
-# Company name → LinkedIn URL resolution
+# Website content cleaning (prasanna/company-extractor)
+trafilatura>=1.6.0
+readability-lxml>=0.8.1
+
+# Company name / URL discovery
 tavily-python>=0.3.0
 
 # Utilities
 tenacity>=8.2.0
+typing-extensions>=4.0.0
