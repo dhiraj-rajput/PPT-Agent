@@ -17,15 +17,21 @@ redundant API calls.
 
 import re
 import time
+import asyncio
+import requests
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Optional
-from urllib.parse import urlparse
+from typing import Optional, Any
+from urllib.parse import urlparse, urlsplit, urlunsplit
 
-from config.settings import settings
+from config.settings import settings, ConfigurationError, Settings
 from utils.db_client import get_collection
 from utils.helpers import is_valid_url, setup_logger
 
 logger = setup_logger(__name__)
+
+LINKEDIN_HOSTS = {"linkedin.com", "www.linkedin.com", "in.linkedin.com"}
+DEFAULT_TIMEOUT_SECONDS = 30
 
 COLLECTION_SEARCH_CACHE = "search_cache"
 TAVILY_MAX_RESULTS = 5
@@ -284,3 +290,187 @@ class CompanyDiscovery:
             )
         except Exception as e:
             logger.warning(f"Failed to cache search result: {e}")
+
+
+@dataclass(frozen=True, slots=True)
+class SearchResult:
+    """A third-party web search result after source filtering."""
+
+    title: str
+    url: str
+    snippet: str
+    provider: str
+
+
+class ExternalSearchClient:
+    """Find non-official, non-LinkedIn sources for a company."""
+
+    def __init__(self, settings: Settings, timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS) -> None:
+        self._settings = settings
+        self._timeout_seconds = timeout_seconds
+
+    async def search_company_sources(
+        self,
+        *,
+        company_name: str,
+        official_url: str,
+        max_results: int = 8,
+    ) -> list[SearchResult]:
+        """Return external sources only: no LinkedIn and no official company host."""
+
+        provider = self._choose_provider()
+        official_host = _host_without_www(official_url)
+        excluded_hosts = {official_host, f"www.{official_host}", *LINKEDIN_HOSTS}
+        query = _build_company_query(company_name=company_name, official_host=official_host)
+
+        if provider == "tavily":
+            raw_results = await asyncio.to_thread(
+                self._search_tavily,
+                query,
+                max_results * 2,
+                sorted(excluded_hosts),
+            )
+        elif provider == "serpapi":
+            raw_results = await asyncio.to_thread(self._search_serpapi, query, max_results * 2)
+        else:
+            raise ConfigurationError(f"Unsupported SEARCH_PROVIDER: {provider}")
+
+        filtered = _filter_results(
+            raw_results,
+            official_host=official_host,
+            provider=provider,
+            max_results=max_results,
+        )
+        logger.info(
+            "external_search_completed",
+            extra={"provider": provider, "company_name": company_name, "result_count": len(filtered)},
+        )
+        return filtered
+
+    def _choose_provider(self) -> str:
+        requested = self._settings.search_provider
+        if requested in {"tavily", "serpapi"}:
+            self._validate_provider_key(requested)
+            return requested
+        if requested != "auto":
+            raise ConfigurationError("SEARCH_PROVIDER must be one of: auto, tavily, serpapi")
+        if self._settings.tavily_api_key:
+            return "tavily"
+        if self._settings.serpapi_api_key:
+            return "serpapi"
+        raise ConfigurationError("External discovery requires TAVILY_API_KEY or SERPAPI_API_KEY.")
+
+    def _validate_provider_key(self, provider: str) -> None:
+        if provider == "tavily" and not self._settings.tavily_api_key:
+            raise ConfigurationError("SEARCH_PROVIDER=tavily requires TAVILY_API_KEY.")
+        if provider == "serpapi" and not self._settings.serpapi_api_key:
+            raise ConfigurationError("SEARCH_PROVIDER=serpapi requires SERPAPI_API_KEY.")
+
+    def _search_tavily(self, query: str, max_results: int, excluded_domains: list[str]) -> list[dict[str, Any]]:
+        response = requests.post(
+            "https://api.tavily.com/search",
+            json={
+                "api_key": self._settings.tavily_api_key,
+                "query": query,
+                "search_depth": "advanced",
+                "include_answer": False,
+                "include_raw_content": False,
+                "max_results": max_results,
+                "exclude_domains": excluded_domains,
+            },
+            timeout=self._timeout_seconds,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        return [
+            {
+                "title": item.get("title", ""),
+                "url": item.get("url", ""),
+                "snippet": item.get("content", ""),
+            }
+            for item in payload.get("results", [])
+        ]
+
+    def _search_serpapi(self, query: str, max_results: int) -> list[dict[str, Any]]:
+        response = requests.get(
+            "https://serpapi.com/search.json",
+            params={
+                "engine": "google",
+                "q": query,
+                "num": max_results,
+                "api_key": self._settings.serpapi_api_key,
+            },
+            timeout=self._timeout_seconds,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        return [
+            {
+                "title": item.get("title", ""),
+                "url": item.get("link", ""),
+                "snippet": item.get("snippet", ""),
+            }
+            for item in payload.get("organic_results", [])
+        ]
+
+
+def _build_company_query(*, company_name: str, official_host: str) -> str:
+    exclusions = [
+        "-site:linkedin.com",
+        "-site:www.linkedin.com",
+        f"-site:{official_host}",
+        f"-site:www.{official_host}",
+    ]
+    intent = "company business profile news financial results analysis competitors"
+    return f'"{company_name}" {intent} {" ".join(exclusions)}'
+
+
+def _filter_results(
+    raw_results: list[dict[str, Any]],
+    *,
+    official_host: str,
+    provider: str,
+    max_results: int,
+) -> list[SearchResult]:
+    output: list[SearchResult] = []
+    seen_urls: set[str] = set()
+    for item in raw_results:
+        normalized_url = _normalize_result_url(str(item.get("url", "")))
+        if not normalized_url or normalized_url in seen_urls:
+            continue
+        host = _host_without_www(normalized_url)
+        if _is_same_or_subdomain(host, official_host) or _is_linkedin_host(host):
+            continue
+        output.append(
+            SearchResult(
+                title=str(item.get("title", "")).strip(),
+                url=normalized_url,
+                snippet=str(item.get("snippet", "")).strip(),
+                provider=provider,
+            )
+        )
+        seen_urls.add(normalized_url)
+        if len(output) >= max_results:
+            break
+    return output
+
+
+def _normalize_result_url(url: str) -> str:
+    parsed = urlsplit(url.strip())
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
+        return ""
+    return urlunsplit((parsed.scheme.lower(), parsed.netloc.lower(), parsed.path or "/", parsed.query, ""))
+
+
+def _host_without_www(url_or_host: str) -> str:
+    parsed = urlsplit(url_or_host if "://" in url_or_host else f"https://{url_or_host}")
+    host = (parsed.hostname or "").lower()
+    return host[4:] if host.startswith("www.") else host
+
+
+def _is_same_or_subdomain(host: str, root_host: str) -> bool:
+    return host == root_host or host.endswith(f".{root_host}")
+
+
+def _is_linkedin_host(host: str) -> bool:
+    return host in LINKEDIN_HOSTS or host.endswith(".linkedin.com")

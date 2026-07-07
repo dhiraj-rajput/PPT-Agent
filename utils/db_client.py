@@ -14,14 +14,15 @@ Usage:
     scrape_logs_collection    = get_collection("scrape_logs")
 """
 
-from typing import Optional
+from typing import Optional, Any
+from motor.motor_asyncio import AsyncIOMotorClient
 
 import pymongo
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
 
-from config.settings import settings
+from config.settings import settings, Settings
 from utils.helpers import setup_logger
 
 logger = setup_logger(__name__)
@@ -190,3 +191,58 @@ def ensure_all_indexes() -> None:
     )
 
     logger.info("All agent indexes are in place (7 collections).")
+
+
+class MongoStorageManager:
+    """Persist raw pages, cleaned pages, and final profiles into MongoDB using Motor (Async)."""
+
+    def __init__(self, settings: Settings) -> None:
+        self._client: AsyncIOMotorClient[Any] = AsyncIOMotorClient(settings.mongodb_uri)
+        self._db = self._client[settings.mongodb_db_name]
+        self.raw_collection = self._db[settings.raw_collection]
+        self.cleaned_collection = self._db[settings.cleaned_collection]
+        self.profile_collection = self._db[settings.profile_collection]
+        self._indexes_ready = False
+
+    async def ensure_indexes(self) -> None:
+        if self._indexes_ready:
+            return
+        await self.raw_collection.create_index([("url", pymongo.ASCENDING)], unique=True, name="unique_raw_url")
+        await self.cleaned_collection.create_index([("url", pymongo.ASCENDING)], unique=True, name="unique_cleaned_url")
+        await self.profile_collection.create_index([("website", pymongo.ASCENDING)], unique=True, name="unique_profile_website")
+        await self.profile_collection.create_index([("company_name", pymongo.ASCENDING)], name="profile_company_name_idx")
+        self._indexes_ready = True
+        logger.info("mongo_indexes_ready")
+
+    async def upsert_raw_page(self, document: dict[str, Any]) -> str:
+        await self.ensure_indexes()
+        await self.raw_collection.update_one(
+            {"url": document["url"]},
+            {"$set": document},
+            upsert=True,
+        )
+        stored = await self.raw_collection.find_one({"url": document["url"]}, {"_id": 1})
+        return str(stored["_id"]) if stored else ""
+
+    async def upsert_cleaned_page(self, document: dict[str, Any]) -> str:
+        await self.ensure_indexes()
+        await self.cleaned_collection.update_one(
+            {"url": document["url"]},
+            {"$set": document},
+            upsert=True,
+        )
+        stored = await self.cleaned_collection.find_one({"url": document["url"]}, {"_id": 1})
+        return str(stored["_id"]) if stored else ""
+
+    async def upsert_company_profile(self, document: dict[str, Any]) -> str:
+        await self.ensure_indexes()
+        await self.profile_collection.update_one(
+            {"website": document["website"]},
+            {"$set": document},
+            upsert=True,
+        )
+        stored = await self.profile_collection.find_one({"website": document["website"]}, {"_id": 1})
+        return str(stored["_id"]) if stored else ""
+
+    def close(self) -> None:
+        self._client.close()

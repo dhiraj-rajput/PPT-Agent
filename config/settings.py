@@ -147,6 +147,18 @@ class AppSettings(BaseSettings):
     SERPAPI_API_KEY: str = Field(default="", description="SerpAPI key (fallback search).")
     FIRECRAWL_API_KEY: str = Field(default="", description="Firecrawl API key.")
 
+    # ------------------------------------------------------------------
+    # Hugging Face & Extra Search / Collection Settings (Nitin branch)
+    # ------------------------------------------------------------------
+    MONGODB_RAW_COLLECTION: str = Field(default="raw_data")
+    MONGODB_CLEANED_COLLECTION: str = Field(default="cleaned_data")
+    MONGODB_PROFILE_COLLECTION: str = Field(default="company_profiles")
+    LLM_PROVIDER: str = Field(default="huggingface")
+    HF_TOKEN: str = Field(default="")
+    HF_MODEL_ID: str = Field(default="google/gemma-4-31B-it")
+    HF_INFERENCE_PROVIDER: str = Field(default="auto")
+    SEARCH_PROVIDER: str = Field(default="auto")
+
     @property
     def is_authenticated_linkedin_scraping_enabled(self) -> bool:
         """Returns True if the LinkedIn li_at cookie is configured."""
@@ -157,6 +169,68 @@ class AppSettings(BaseSettings):
         """Returns True if the Tavily API key is configured."""
         return bool(self.TAVILY_API_KEY)
 
+    # --- Case-insensitive property mappings for Nitin's codebase compatibility ---
+    @property
+    def mongodb_uri(self) -> str:
+        return self.MONGO_URI
+
+    @property
+    def mongodb_db_name(self) -> str:
+        return self.MONGO_DB_NAME
+
+    @property
+    def raw_collection(self) -> str:
+        return self.MONGODB_RAW_COLLECTION
+
+    @property
+    def cleaned_collection(self) -> str:
+        return self.MONGODB_CLEANED_COLLECTION
+
+    @property
+    def profile_collection(self) -> str:
+        return self.MONGODB_PROFILE_COLLECTION
+
+    @property
+    def llm_provider(self) -> str:
+        return self.LLM_PROVIDER.strip().lower()
+
+    @property
+    def hf_token(self) -> str:
+        return self.HF_TOKEN
+
+    @property
+    def hf_model_id(self) -> str:
+        return self.HF_MODEL_ID
+
+    @property
+    def hf_provider(self) -> str:
+        return self.HF_INFERENCE_PROVIDER
+
+    @property
+    def search_provider(self) -> str:
+        return self.SEARCH_PROVIDER.strip().lower()
+
+    @property
+    def tavily_api_key(self) -> str:
+        return self.TAVILY_API_KEY
+
+    @property
+    def serpapi_api_key(self) -> str:
+        return self.SERPAPI_API_KEY
+
+
+class ConfigurationError(RuntimeError):
+    """Raised when required configuration is missing."""
+
+
+# Type alias for external modules
+Settings = AppSettings
+
 
 # Module-level singleton — import this everywhere
 settings = AppSettings()
+
+
+def load_settings(env_path=None) -> AppSettings:
+    """Return the global Settings instance."""
+    return settings
