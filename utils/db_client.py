@@ -209,7 +209,7 @@ class MongoStorageManager:
             return
         await self.raw_collection.create_index([("url", pymongo.ASCENDING)], unique=True, name="unique_raw_url")
         await self.cleaned_collection.create_index([("url", pymongo.ASCENDING)], unique=True, name="unique_cleaned_url")
-        await self.profile_collection.create_index([("website", pymongo.ASCENDING)], unique=True, name="unique_profile_website")
+        await self.profile_collection.create_index([("website", pymongo.ASCENDING)], unique=True, sparse=True, name="unique_profile_website")
         await self.profile_collection.create_index([("company_name", pymongo.ASCENDING)], name="profile_company_name_idx")
         self._indexes_ready = True
         logger.info("mongo_indexes_ready")
