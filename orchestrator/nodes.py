@@ -485,7 +485,7 @@ def trigger_scrapers(state: AgentState) -> dict:
 def discover_external_news(state: AgentState) -> dict:
     """
     Search external platforms (TechCrunch, Medium, press releases, etc.)
-    for news and competitor updates about the company.
+    for news, financials, and competitor updates about the company in parallel.
     Saves raw search results to 'raw_external_search' and structured LLM extraction to 'structured_external_search'.
     """
     import time
@@ -499,7 +499,7 @@ def discover_external_news(state: AgentState) -> dict:
         logger.warning("[discover_external_news] Missing company_name or website_url; skipping news search.")
         return {}
 
-    logger.info(f"[discover_external_news] Searching external news for: '{company_name}'")
+    logger.info(f"[discover_external_news] Searching detailed external news and financials for: '{company_name}'")
 
     from google_search import ExternalSearchClient
     from config.settings import settings
@@ -507,14 +507,43 @@ def discover_external_news(state: AgentState) -> dict:
 
     search_client = ExternalSearchClient(settings)
 
-    # 1. Fetch raw search results
+    # 1. Fetch raw search results across multiple targeted queries in parallel
     try:
         import asyncio
-        results = asyncio.run(search_client.search_company_sources(
-            company_name=company_name,
-            official_url=official_url,
-            max_results=5
-        ))
+
+        async def fetch_all_searches():
+            tasks = [
+                search_client.search_company_sources(
+                    company_name=company_name,
+                    official_url=official_url,
+                    max_results=5,
+                    custom_query=f'"{company_name}" latest news press release OR announcement 2026'
+                ),
+                search_client.search_company_sources(
+                    company_name=company_name,
+                    official_url=official_url,
+                    max_results=5,
+                    custom_query=f'"{company_name}" revenue growth profit financial results 2025 OR 2026'
+                ),
+                search_client.search_company_sources(
+                    company_name=company_name,
+                    official_url=official_url,
+                    max_results=5,
+                    custom_query=f'"{company_name}" key competitors market share SWOT analysis'
+                )
+            ]
+            return await asyncio.gather(*tasks)
+
+        results_lists = asyncio.run(fetch_all_searches())
+
+        # Merge and deduplicate by URL
+        seen_urls = set()
+        deduped_results = []
+        for lst in results_lists:
+            for r in lst:
+                if r.url not in seen_urls:
+                    seen_urls.add(r.url)
+                    deduped_results.append(r)
 
         raw_results = [
             {
@@ -523,7 +552,7 @@ def discover_external_news(state: AgentState) -> dict:
                 "snippet": r.snippet,
                 "provider": r.provider
             }
-            for r in results
+            for r in deduped_results
         ]
 
         # Save raw search results to 'raw_external_search'
@@ -550,14 +579,16 @@ def discover_external_news(state: AgentState) -> dict:
             })
             return {"external_news": []}
 
-        # 2. Run LLM structuring pass
+        # 2. Run LLM structuring pass (using dict config to resolve Pylance parameter warnings)
         from langchain_openai import ChatOpenAI
         llm = ChatOpenAI(
-            openai_api_key=settings.openrouter_api_key,
-            openai_api_base="https://openrouter.ai/api/v1",
-            model_name=settings.openrouter_model,
+            **{
+                "openai_api_key": settings.OPENROUTER_API_KEY,
+                "openai_api_base": settings.OPENROUTER_BASE_URL,
+                "model_name": settings.OPENROUTER_MODEL,
+                "max_tokens": 2000,
+            },
             temperature=0.0,
-            max_tokens=2000,
             timeout=120.0
         )
 
@@ -591,12 +622,12 @@ Produce a JSON object strictly matching this schema:
   ]
 }}
 
-Ensure all fields are derived directly from the snippets. If a detail is missing, write a reasonable summary based on the name/industry, but try to be as factual as possible. Do not output anything other than a valid JSON object.
+Ensure all fields are derived directly from the snippets. Provide a minimum of 4-6 detailed insights covering financial metrics, competitor comparisons, strategic pivots, and latest announcements. The insights must contain specific numbers, growth rates, dates, or competitor names from the snippets where possible. Do not output anything other than a valid JSON object.
 """
 
         logger.info("[discover_external_news] Invoking LLM for structured search profiling...")
         response = llm.invoke(prompt)
-        content = response.content.strip()
+        content = str(response.content).strip()
 
         # Clean potential markdown wrappers
         if content.startswith("```json"):

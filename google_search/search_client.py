@@ -315,13 +315,28 @@ class ExternalSearchClient:
         company_name: str,
         official_url: str,
         max_results: int = 8,
+        custom_query: str | None = None,
     ) -> list[SearchResult]:
         """Return external sources only: no LinkedIn and no official company host."""
 
         provider = self._choose_provider()
         official_host = _host_without_www(official_url)
         excluded_hosts = {official_host, f"www.{official_host}", *LINKEDIN_HOSTS}
-        query = _build_company_query(company_name=company_name, official_host=official_host)
+        
+        if custom_query:
+            # Append exclusions if they aren't already in the query
+            query = custom_query
+            exclusions = [
+                "-site:linkedin.com",
+                "-site:www.linkedin.com",
+                f"-site:{official_host}",
+                f"-site:www.{official_host}",
+            ]
+            for excl in exclusions:
+                if excl not in query:
+                    query += f" {excl}"
+        else:
+            query = _build_company_query(company_name=company_name, official_host=official_host)
 
         if provider == "tavily":
             raw_results = await asyncio.to_thread(
