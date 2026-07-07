@@ -14,11 +14,11 @@ SECTION_KEYWORDS: Dict[str, List[str]] = {
         "history", "founded", "profile", "about us", "background", "purpose", "value"
     ],
     "Products": [
-        "product", "software", "hardware", "feature", "platform", "solution", "tool", "saas",
+        "product", "products", "software", "hardware", "feature", "platform", "solution", "tool", "saas",
         "pricing", "subscription", "offering", "release", "app", "application"
     ],
     "Services": [
-        "service", "consulting", "support", "training", "implementation", "maintenance",
+        "service", "services", "consulting", "support", "training", "implementation", "maintenance",
         "custom development", "professional service", "advisor", "managed service", "enablement"
     ],
     "Industries": [
@@ -30,7 +30,7 @@ SECTION_KEYWORDS: Dict[str, List[str]] = {
         "cfo", "team", "president", "vp", "officer", "people", "advisor"
     ],
     "Locations": [
-        "location", "headquarter", "office", "address", "branch", "global office",
+        "location", "locations", "headquarter", "office", "address", "branch", "global office",
         "where we are", "map", "contact info"
     ],
     "Contact": [
@@ -42,11 +42,11 @@ SECTION_KEYWORDS: Dict[str, List[str]] = {
         "api", "developer", "open source", "compliance", "data security", "framework"
     ],
     "Partners": [
-        "partner", "alliance", "ecosystem", "reseller", "integrator", "channel partner",
+        "partner", "partners", "alliance", "ecosystem", "reseller", "integrator", "channel partner",
         "collaborator", "network", "channel"
     ],
     "Clients": [
-        "client", "customer", "case study", "testimonial", "success story", "trusted by",
+        "client", "clients", "customer", "case study", "testimonial", "success story", "trusted by",
         "our user", "patron", "reference"
     ],
     "Careers": [

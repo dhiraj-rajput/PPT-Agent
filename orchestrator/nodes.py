@@ -36,6 +36,7 @@ logger = setup_logger(__name__)
 def classify_input(state: AgentState) -> dict:
     """
     Determine whether the user_input is a:
+      - "both_urls"     → contains both a website URL and a LinkedIn URL
       - "linkedin_url"  → looks like linkedin.com/company/...
       - "website_url"   → any other valid http/https URL
       - "company_name"  → plain text (no URL pattern)
@@ -45,6 +46,33 @@ def classify_input(state: AgentState) -> dict:
     raw = state["user_input"].strip()
     logger.info(f"[classify_input] Input: '{raw}'")
 
+    # Split by whitespace, comma, or semicolon
+    parts = [p.strip() for p in re.split(r'[\s,;]+', raw) if p.strip()]
+    website_candidates = []
+    linkedin_candidates = []
+
+    for part in parts:
+        if is_valid_url(part):
+            if "linkedin.com/company" in part.lower():
+                linkedin_candidates.append(part)
+            else:
+                website_candidates.append(part)
+
+    # Case 1: Both URLs provided
+    if website_candidates and linkedin_candidates:
+        web_url = website_candidates[0]
+        li_url = linkedin_candidates[0]
+        slug = _slug_from_linkedin_url(li_url)
+        logger.info(f"[classify_input] → both_urls (web={web_url}, linkedin={li_url}, slug={slug})")
+        return {
+            "input_type": "both_urls",
+            "website_url": web_url,
+            "linkedin_url": li_url,
+            "company_slug": slug,
+            "errors": [],
+        }
+
+    # Case 2: Direct URL inputs
     if is_valid_url(raw):
         netloc = urlparse(raw).netloc.lower()
         if "linkedin.com" in netloc:

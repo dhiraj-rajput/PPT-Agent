@@ -275,10 +275,17 @@ class AuthenticatedLinkedInScraper:
             return extracted_data if extracted_data else None, raw_record
 
         except Exception as scrape_error:
-            logger.error(
-                f"[Layer 3] Error scraping main page for '{company_slug}': {scrape_error}",
-                exc_info=True,
-            )
+            if "ERR_TOO_MANY_REDIRECTS" in str(scrape_error) or "redirect" in str(scrape_error).lower():
+                logger.error(
+                    f"[Layer 3] LinkedIn authentication failed (Too Many Redirects). "
+                    f"Your LINKEDIN_LI_AT session cookie is likely invalid, expired, or blocked. "
+                    f"Skipping Layer 3."
+                )
+            else:
+                logger.error(
+                    f"[Layer 3] Error scraping main page for '{company_slug}': {scrape_error}",
+                    exc_info=True,
+                )
             return None, RawLinkedInScrapedData(
                 company_slug=company_slug,
                 scrape_layer=SCRAPE_LAYER_AUTHENTICATED,

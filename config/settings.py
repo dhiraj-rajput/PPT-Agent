@@ -161,8 +161,11 @@ class AppSettings(BaseSettings):
 
     @property
     def is_authenticated_linkedin_scraping_enabled(self) -> bool:
-        """Returns True if the LinkedIn li_at cookie is configured."""
-        return bool(self.LINKEDIN_LI_AT)
+        """Returns True if the LinkedIn li_at cookie is configured and not a placeholder."""
+        val = getattr(self, "LINKEDIN_LI_AT", "").strip()
+        if not val or "your_" in val or "placeholder" in val or val == "li_at":
+            return False
+        return True
 
     @property
     def is_tavily_search_enabled(self) -> bool:

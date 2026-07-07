@@ -42,6 +42,7 @@ def _route_after_classify(state: AgentState) -> str:
     """
     After classification, decide the next node.
 
+    - "both_urls"     → run_website_agent     (directly scrap website & linkedin)
     - "website_url"   → discover_from_website (find LinkedIn from the given website)
     - "company_name"  → discover_website      (find the official website first)
     - "linkedin_url"  → run_linkedin_agent    (already have LinkedIn — go straight to scraping)
@@ -49,7 +50,9 @@ def _route_after_classify(state: AgentState) -> str:
     input_type = state.get("input_type", "company_name")
     logger.info(f"[router] input_type='{input_type}'")
 
-    if input_type == "website_url":
+    if input_type == "both_urls":
+        return "run_website_agent"
+    elif input_type == "website_url":
         return "discover_from_website"
     elif input_type == "linkedin_url":
         return "run_linkedin_agent"
@@ -126,6 +129,7 @@ def build_graph() -> StateGraph:
             "discover_from_website": "discover_from_website",
             "discover_website": "discover_website",
             "run_linkedin_agent": "run_linkedin_agent",
+            "run_website_agent": "run_website_agent",
         },
     )
 
