@@ -31,6 +31,7 @@ from orchestrator.nodes import (
     merge_results,
     trigger_scrapers,
     discover_external_news,
+    run_compactor,
 )
 from utils.helpers import setup_logger
 
@@ -97,6 +98,7 @@ def build_graph() -> Any:
     graph.add_node("run_linkedin_agent", run_linkedin_agent)
     graph.add_node("discover_external_news", discover_external_news)
     graph.add_node("merge_results", merge_results)
+    graph.add_node("run_compactor", run_compactor)
 
     # Entry point
     graph.set_entry_point("classify_input")
@@ -136,8 +138,9 @@ def build_graph() -> Any:
     graph.add_edge("run_linkedin_agent", "merge_results")
     graph.add_edge("discover_external_news", "merge_results")
 
-    # merge → END
-    graph.add_edge("merge_results", END)
+    # merge → run_compactor → END
+    graph.add_edge("merge_results", "run_compactor")
+    graph.add_edge("run_compactor", END)
 
     return graph.compile()
 
@@ -187,6 +190,7 @@ def run_pipeline(user_input: str) -> dict:
         "external_news": None,
         "external_structured_insights": None,
         "combined_profile": None,
+        "optimized_profile": None,
         "errors": [],
     }
 

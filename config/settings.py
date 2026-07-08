@@ -148,15 +148,12 @@ class AppSettings(BaseSettings):
     FIRECRAWL_API_KEY: str = Field(default="", description="Firecrawl API key.")
 
     # ------------------------------------------------------------------
-    # Hugging Face & Extra Search / Collection Settings (Nitin branch)
+    # MongoDB Collections & LLM Settings
     # ------------------------------------------------------------------
     MONGODB_RAW_COLLECTION: str = Field(default="raw_data")
     MONGODB_CLEANED_COLLECTION: str = Field(default="cleaned_data")
     MONGODB_PROFILE_COLLECTION: str = Field(default="company_profiles")
-    LLM_PROVIDER: str = Field(default="huggingface")
-    HF_TOKEN: str = Field(default="")
-    HF_MODEL_ID: str = Field(default="google/gemma-4-31B-it")
-    HF_INFERENCE_PROVIDER: str = Field(default="auto")
+    LLM_PROVIDER: str = Field(default="openrouter")
     SEARCH_PROVIDER: str = Field(default="auto")
 
     @property
@@ -172,7 +169,7 @@ class AppSettings(BaseSettings):
         """Returns True if the Tavily API key is configured."""
         return bool(self.TAVILY_API_KEY)
 
-    # --- Case-insensitive property mappings for Nitin's codebase compatibility ---
+    # --- Case-insensitive property mappings for codebase compatibility ---
     @property
     def mongodb_uri(self) -> str:
         return self.MONGO_URI
@@ -196,18 +193,6 @@ class AppSettings(BaseSettings):
     @property
     def llm_provider(self) -> str:
         return self.LLM_PROVIDER.strip().lower()
-
-    @property
-    def hf_token(self) -> str:
-        return self.HF_TOKEN
-
-    @property
-    def hf_model_id(self) -> str:
-        return self.HF_MODEL_ID
-
-    @property
-    def hf_provider(self) -> str:
-        return self.HF_INFERENCE_PROVIDER
 
     @property
     def search_provider(self) -> str:

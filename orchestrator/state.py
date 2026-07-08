@@ -8,8 +8,20 @@ LangGraph passes a copy of the state to each node; nodes return only the
 keys they want to update.
 """
 
-from typing import Optional, List
+from typing import Optional, List, Annotated
 from typing_extensions import TypedDict
+
+
+def merge_optional_str(left: Optional[str], right: Optional[str]) -> Optional[str]:
+    """Reducer that keeps the right-hand value if it's not None, otherwise keeps left."""
+    if right is not None:
+        return right
+    return left
+
+
+def merge_errors(left: List[str], right: List[str]) -> List[str]:
+    """Reducer that combines concurrent errors."""
+    return (left or []) + (right or [])
 
 
 class AgentState(TypedDict):
@@ -24,22 +36,26 @@ class AgentState(TypedDict):
     user_input: str                        # Raw string from the user
     input_type: str                        # Classified: "website_url" | "company_name" | "linkedin_url"
 
-    # --- Discovered URLs ---
-    company_name: Optional[str]            # Human-readable company name
-    website_url: Optional[str]             # Official company website URL
-    linkedin_url: Optional[str]            # LinkedIn company page URL
-    company_slug: Optional[str]            # Unified slug used across MongoDB collections
+    # --- Discovered URLs (Annotated with reducers for concurrent safety) ---
+    company_name: Annotated[Optional[str], merge_optional_str]            # Human-readable company name
+    website_url: Annotated[Optional[str], merge_optional_str]             # Official company website URL
+    linkedin_url: Annotated[Optional[str], merge_optional_str]            # LinkedIn company page URL
+    company_slug: Annotated[Optional[str], merge_optional_str]            # Unified slug used across MongoDB collections
 
     # --- Agent Outputs ---
     linkedin_data: Optional[dict]          # Serialized LinkedInCompanyData
     website_data: Optional[dict]           # Serialized WebsiteData
 
     # --- Intermediate Search Outputs ---
-    external_news: Optional[List[dict]]                 # Snippets from Google/Tavily external search (news, competitors, etc.)
-    external_structured_insights: Optional[dict]        # Structured LLM news profile (insights, value prop, etc.)
+    external_news: Optional[List[dict]]               # Snippets from Google/Tavily external search
+    external_structured_insights: Optional[dict]      # LLM-structured BI profile (insights, value prop, competitors, etc.)
 
-    # --- Final Output ---
+    # --- Merged Profile (raw, pre-compaction) ---
     combined_profile: Optional[dict]       # Merged profile saved to 'company_profiles' collection
 
-    # --- Errors (non-fatal) ---
-    errors: List[str]                      # Accumulated error messages from any node
+    # --- Final Compacted Profile (post-compaction) ---
+    optimized_profile: Optional[dict]      # OptimizedCompanyProfile — output of run_compactor node
+
+    # --- Errors (Annotated with reducer for concurrent safety) ---
+    errors: Annotated[List[str], merge_errors]                      # Accumulated error messages from any node
+

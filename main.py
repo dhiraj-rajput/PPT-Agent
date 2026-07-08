@@ -36,38 +36,98 @@ logger = setup_logger("main")
 
 def print_summary(result: dict) -> None:
     """Print a clean summary of the pipeline result."""
+    # Prefer the rich optimized_profile; fall back to combined_profile if compactor failed
+    optimized = result.get("optimized_profile") or {}
     profile = result.get("combined_profile") or {}
     errors = result.get("errors", [])
 
-    print("\n" + "=" * 60)
-    print("  PPT-Agent — Company Intelligence Profile")
-    print("=" * 60)
-    print(f"  Company     : {profile.get('company_name', 'N/A')}")
-    print(f"  Slug        : {profile.get('company_slug', 'N/A')}")
-    print(f"  Website     : {profile.get('website_url', 'N/A')}")
-    print(f"  LinkedIn    : {profile.get('linkedin_url', 'N/A')}")
-    print(f"  Industry    : {profile.get('industry', 'N/A')}")
-    print(f"  HQ          : {profile.get('headquarters', 'N/A')}")
-    print(f"  Data sources: {', '.join(profile.get('data_sources', []))}")
-    print(f"  Errors      : {len(errors)}")
-    print("=" * 60)
+    # Use optimized fields where available, combined as fallback
+    company_name = optimized.get("company_name") or profile.get("company_name", "N/A")
+    website = optimized.get("website") or profile.get("website_url", "N/A")
+    industry = optimized.get("industry") or profile.get("industry", "N/A")
+    hq = optimized.get("headquarters") or profile.get("headquarters", "N/A")
+    employee_count = optimized.get("employee_count") or profile.get("company_size", "N/A")
+    founded = optimized.get("founded_year") or profile.get("founded_year", "N/A")
+    sources = optimized.get("sources_used") or profile.get("data_sources", [])
 
-    if profile.get("executive_summary"):
-        print(f"\n📋 Executive Summary:\n{profile['executive_summary']}\n")
+    print("\n" + "=" * 70)
+    print("  PPT-Agent — Competitor Intelligence Profile")
+    print("=" * 70)
+    print(f"  Company       : {company_name}")
+    print(f"  Website       : {website}")
+    print(f"  Industry      : {industry}")
+    print(f"  HQ            : {hq}")
+    print(f"  Employees     : {employee_count}")
+    print(f"  Founded       : {founded}")
+    print(f"  Data sources  : {', '.join(sources) if sources else 'N/A'}")
+    print(f"  Errors        : {len(errors)}")
+    print("=" * 70)
 
-    if profile.get("key_differentiators"):
-        print("🎯 Key Differentiators:")
-        for d in profile["key_differentiators"][:3]:
-            print(f"   • {d}")
+    # Business description
+    description = optimized.get("description") or profile.get("about_text") or ""
+    if description:
+        truncated = description[:250] + "..." if len(description) > 250 else description
+        print(f"\n📋 About:\n   {truncated}\n")
 
-    if profile.get("external_news"):
+    # Business model
+    business_model = optimized.get("business_model") or ""
+    if business_model:
+        print(f"💼 Business Model:\n   {business_model}\n")
+
+    # Products & Services
+    products = optimized.get("products") or profile.get("products", [])
+    services = optimized.get("services") or profile.get("services", [])
+    if products:
+        print("🛍️  Products:")
+        for p in products[:6]:
+            print(f"   • {p}")
+    if services:
+        print("⚙️  Services:")
+        for s in services[:6]:
+            print(f"   • {s}")
+
+    # Competitors — the key competitive intelligence
+    competitors = optimized.get("competitors") or profile.get("competitors", [])
+    if competitors:
+        print("\n⚔️  Competitors:")
+        for c in competitors[:6]:
+            print(f"   • {c}")
+
+    # RFP Strengths
+    rfp_strengths = optimized.get("rfp_strengths") or profile.get("key_differentiators", [])
+    if rfp_strengths:
+        print("\n🎯 RFP Strengths:")
+        for s in rfp_strengths[:5]:
+            print(f"   • {s}")
+
+    # Financial Highlights
+    financial = optimized.get("financial_highlights") or []
+    if financial:
+        print("\n💰 Financial Highlights:")
+        for f in financial[:4]:
+            print(f"   • {f}")
+
+    # Recent News
+    recent_news = optimized.get("recent_news") or []
+    external_news = profile.get("external_news") or result.get("external_news") or []
+    if recent_news:
+        print("\n📰 Recent News:")
+        for n in recent_news[:4]:
+            print(f"   • {n}")
+    elif external_news:
         print("\n📰 External News & RFP Insights:")
-        for n in profile["external_news"][:4]:
-            print(f"   • {n.get('title')} ({n.get('url')})")
-            snippet = n.get('snippet', '')
+        for n in external_news[:4]:
+            print(f"   • {n.get('title')} ({n.get('url', '')})")
+            snippet = n.get("snippet", "")
             if snippet:
-                truncated = snippet[:110] + "..." if len(snippet) > 110 else snippet
+                truncated = snippet[:100] + "..." if len(snippet) > 100 else snippet
                 print(f"     \"{truncated}\"")
+
+    # Value proposition
+    vp = optimized.get("value_proposition") or profile.get("executive_summary") or ""
+    if vp:
+        truncated = vp[:200] + "..." if len(vp) > 200 else vp
+        print(f"\n✨ Value Proposition:\n   {truncated}")
 
     if errors:
         print(f"\n⚠️  Non-fatal errors ({len(errors)}):")
@@ -137,7 +197,9 @@ def main():
 
     # --- Output ---
     if args.output_json:
-        print(json.dumps(result.get("combined_profile", {}), indent=2, default=str))
+        # Prefer the rich optimized_profile; fall back to combined_profile
+        output_data = result.get("optimized_profile") or result.get("combined_profile") or {}
+        print(json.dumps(output_data, indent=2, default=str))
     else:
         print_summary(result)
 

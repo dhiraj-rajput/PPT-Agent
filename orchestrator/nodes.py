@@ -417,6 +417,14 @@ def merge_results(state: AgentState) -> dict:
         # External News
         "external_news": state.get("external_news") or [],
 
+        # External structured insights (LLM-processed competitor/financial profile)
+        "external_structured_insights": state.get("external_structured_insights") or {},
+
+        # Competitors surfaced from external search
+        "competitors": (
+            (state.get("external_structured_insights") or {}).get("competitors", [])
+        ),
+
         # Source tracking
         "data_sources": _list_data_sources(linkedin, website, state.get("external_news")),
         "errors": errors,
@@ -489,6 +497,9 @@ def discover_external_news(state: AgentState) -> dict:
     Search external platforms (TechCrunch, Medium, press releases, etc.)
     for news, financials, and competitor updates about the company in parallel.
     Saves raw search results to 'raw_external_search' and structured LLM extraction to 'structured_external_search'.
+
+    Fix: Falls back to domain name when company_name is None (e.g. for website_url inputs
+    that run this node in parallel with run_website_agent, before the name is known).
     """
     import time
     import json
@@ -497,8 +508,16 @@ def discover_external_news(state: AgentState) -> dict:
     official_url = state.get("website_url")
     company_slug = state.get("company_slug") or "unknown"
 
+    # Fall back to domain name if company_name is not yet resolved (parallel execution)
+    if not company_name and official_url:
+        from urllib.parse import urlparse
+        netloc = urlparse(official_url).netloc.replace("www.", "")
+        company_name = netloc.split(".")[0].capitalize() if netloc else None
+        if company_name:
+            logger.info(f"[discover_external_news] company_name not set — using domain fallback: '{company_name}'")
+
     if not company_name or not official_url:
-        logger.warning("[discover_external_news] Missing company_name or website_url; skipping news search.")
+        logger.warning("[discover_external_news] Missing company_name and website_url; skipping news search.")
         return {}
 
     logger.info(f"[discover_external_news] Searching detailed external news and financials for: '{company_name}'")
@@ -532,7 +551,13 @@ def discover_external_news(state: AgentState) -> dict:
                     official_url=official_url,
                     max_results=5,
                     custom_query=f'"{company_name}" key competitors market share SWOT analysis'
-                )
+                ),
+                search_client.search_company_sources(
+                    company_name=company_name,
+                    official_url=official_url,
+                    max_results=5,
+                    custom_query=f'"{company_name}" RFP tender government contract win 2024 OR 2025 OR 2026'
+                ),
             ]
             return await asyncio.gather(*tasks)
 
@@ -581,20 +606,53 @@ def discover_external_news(state: AgentState) -> dict:
             })
             return {"external_news": []}
 
-        # 2. Run LLM structuring pass (using dict config to resolve Pylance parameter warnings)
-        from langchain_openai import ChatOpenAI
-        llm = ChatOpenAI(
-            **{
-                "openai_api_key": settings.OPENROUTER_API_KEY,
-                "openai_api_base": settings.OPENROUTER_BASE_URL,
-                "model_name": settings.OPENROUTER_MODEL,
-                "max_tokens": 2000,
-            },
-            temperature=0.0,
-            timeout=120.0
-        )
+        if not settings.USE_LLM_STRUCTURING:
+            logger.info("[discover_external_news] USE_LLM_STRUCTURING is False. Running rule-based structured search profiling.")
+            insights = []
+            for r in raw_results[:6]:
+                snippet_lower = r["snippet"].lower()
+                category = "General News"
+                if any(x in snippet_lower for x in ["revenue", "profit", "growth", "funding", "valuation", "financial"]):
+                    category = "Financial Health"
+                elif any(x in snippet_lower for x in ["competitor", "market share", "beat", "swot", "rival"]):
+                    category = "Competitor Intelligence"
+                elif any(x in snippet_lower for x in ["rfp", "tender", "contract", "win"]):
+                    category = "RFP / Contract Win"
+                elif any(x in snippet_lower for x in ["product", "launch", "feature", "release"]):
+                    category = "Product Release"
 
-        prompt = f"""You are a professional business intelligence and research analyst.
+                insights.append({
+                    "category": category,
+                    "description": r["snippet"],
+                    "source_url": r["url"],
+                    "confidence_score": 0.8
+                })
+
+            structured_profile = {
+                "company_name": company_name,
+                "website": official_url,
+                "business_model": f"Core business model for {company_name} extracted from search snippets.",
+                "value_proposition": f"Value proposition for {company_name} extracted from search snippets.",
+                "products_and_services": [],
+                "insights": insights,
+                "company_slug": company_slug,
+                "scraped_at": datetime.now(tz=timezone.utc).isoformat()
+            }
+        else:
+            # 2. Run LLM structuring pass (using dict config to resolve Pylance parameter warnings)
+            from langchain_openai import ChatOpenAI
+            llm = ChatOpenAI(
+                **{
+                    "openai_api_key": settings.OPENROUTER_API_KEY,
+                    "openai_api_base": settings.OPENROUTER_BASE_URL,
+                    "model_name": settings.OPENROUTER_MODEL,
+                    "max_tokens": 2000,
+                },
+                temperature=0.0,
+                timeout=45.0
+            )
+
+            prompt = f"""You are a professional business intelligence and research analyst.
 Analyze the following raw search snippets about the company '{company_name}' and extract a structured company research profile.
 This profile is for RFP (Request for Proposal) research.
 
@@ -627,20 +685,20 @@ Produce a JSON object strictly matching this schema:
 Ensure all fields are derived directly from the snippets. Provide a minimum of 4-6 detailed insights covering financial metrics, competitor comparisons, strategic pivots, and latest announcements. The insights must contain specific numbers, growth rates, dates, or competitor names from the snippets where possible. Do not output anything other than a valid JSON object.
 """
 
-        logger.info("[discover_external_news] Invoking LLM for structured search profiling...")
-        response = llm.invoke(prompt)
-        content = str(response.content).strip()
+            logger.info("[discover_external_news] Invoking LLM for structured search profiling...")
+            response = llm.invoke(prompt)
+            content = str(response.content).strip()
 
-        # Clean potential markdown wrappers
-        if content.startswith("```json"):
-            content = content[7:]
-        if content.endswith("```"):
-            content = content[:-3]
-        content = content.strip()
+            # Clean potential markdown wrappers
+            if content.startswith("```json"):
+                content = content[7:]
+            if content.endswith("```"):
+                content = content[:-3]
+            content = content.strip()
 
-        structured_profile = json.loads(content)
-        structured_profile["company_slug"] = company_slug
-        structured_profile["scraped_at"] = datetime.now(tz=timezone.utc).isoformat()
+            structured_profile = json.loads(content)
+            structured_profile["company_slug"] = company_slug
+            structured_profile["scraped_at"] = datetime.now(tz=timezone.utc).isoformat()
 
         # Save structured profile to 'structured_external_search'
         struct_collection = get_collection("structured_external_search")
@@ -682,3 +740,73 @@ Ensure all fields are derived directly from the snippets. Provide a minimum of 4
         except Exception:
             pass
         return {"errors": state.get("errors", []) + [f"discover_external_news failed: {e}"]}
+
+
+# ---------------------------------------------------------------------------
+# 10. Compactor Node — Final RFP / Competitor Intelligence Profile
+# ---------------------------------------------------------------------------
+
+def run_compactor(state: AgentState) -> dict:
+    """
+    Final pipeline step: compact outputs from all three agents into a single
+    OptimizedCompanyProfile using the LLM-powered BusinessIntelligenceCompactor.
+
+    Inputs consumed:
+        - website_data              (from run_website_agent)
+        - linkedin_data             (from run_linkedin_agent)
+        - external_news             (raw search snippets from discover_external_news)
+        - external_structured_insights  (LLM-structured profile from discover_external_news)
+
+    Outputs:
+        - optimized_profile         (dict matching OptimizedCompanyProfile schema)
+
+    The profile is also persisted to:
+        - MongoDB: company_profiles collection (upsert by website)
+        - Disk:    output/company_profile.json
+                   output/json/<domain>_profile.json
+    """
+    logger.info("[run_compactor] Building OptimizedCompanyProfile from all agent outputs")
+
+    website_data = state.get("website_data") or {}
+    linkedin_data = state.get("linkedin_data") or {}
+    external_insights = state.get("external_structured_insights") or {}
+
+    # Build google_data from raw external news snippets + business model summary
+    google_data: dict = {"results": state.get("external_news") or []}
+    if external_insights.get("business_model"):
+        google_data["summary"] = external_insights["business_model"]
+
+    try:
+        from models.compactor import BusinessIntelligenceCompactor
+        compactor = BusinessIntelligenceCompactor()
+        result = compactor.compact_from_dicts(
+            website_data=website_data,
+            linkedin_data=linkedin_data,
+            google_data=google_data,
+            external_insights=external_insights,
+        )
+        profile = result.get("profile") or {}
+
+        # Smart fallback: if the compactor failed validation (lacks required fields like company_name),
+        # merge the raw combined_profile from state to ensure we don't return an empty profile.
+        combined = state.get("combined_profile") or {}
+        if (not profile.get("company_name") or not profile.get("website")) and combined.get("company_name"):
+            logger.warning("[run_compactor] Compacted profile failed validation or was empty. Overlaying combined_profile.")
+            # Merge combined_profile into profile to keep the uncompacted data as fallback
+            for k, v in combined.items():
+                if v and not profile.get(k):
+                    profile[k] = v
+
+        logger.info(
+            f"[run_compactor] Profile compiled for '{profile.get('company_name', 'unknown')}' "
+            f"| MongoDB={'saved' if result.get('mongodb_stored') else 'skipped'}"
+        )
+        return {"optimized_profile": profile}
+
+    except Exception as exc:
+        msg = f"run_compactor failed: {exc}"
+        logger.error(f"[run_compactor] {msg}", exc_info=True)
+        return {
+            "optimized_profile": None,
+            "errors": state.get("errors", []) + [msg],
+        }

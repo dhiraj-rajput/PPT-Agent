@@ -18,6 +18,76 @@ from website.models import WebsiteData
 
 logger = setup_logger(__name__)
 
+# ---------------------------------------------------------------------------
+# Garbage filter — patterns that indicate UI/nav text, not real content
+# ---------------------------------------------------------------------------
+_GARBAGE_PATTERNS = re.compile(
+    r"^(privacy|cookie|terms|disclaimer|all rights|please fill|required field|"
+    r"strictly necessary|always active|performance cookies|functional cookies|"
+    r"targeting cookies|your privacy|preference centre|press release template|"
+    r"copyright|sign up|log in|register|subscribe|download|click here|"
+    r"read more|learn more|get started|find out|explore|view all|"
+    r"we use|we collect|our website|this site|this page|this document)",
+    re.IGNORECASE,
+)
+
+_GARBAGE_EXACT = {
+    "true", "false", "null", "undefined", "yes", "no",
+    "submit", "cancel", "close", "back", "next", "menu",
+    "home", "search", "contact", "about", "services", "products",
+    "solutions", "platform", "pricing", "blog", "news", "careers",
+    "login", "logout", "help", "support", "faq",
+}
+
+
+def _is_garbage(text: str) -> bool:
+    """Return True if the text looks like a UI element, not real business content."""
+    stripped = text.strip().lower()
+    if stripped in _GARBAGE_EXACT:
+        return True
+    if _GARBAGE_PATTERNS.match(text.strip()):
+        return True
+    # Single word with no spaces is likely a nav label
+    if len(stripped.split()) == 1 and len(stripped) < 10:
+        return True
+    # Starts with an article/lowercase word — likely mid-sentence fragment
+    if re.match(r'^(and|or|but|the|a |an |to |of |in |on |at |by |for |with |from |that |this |which |when |where |how |what |who )', stripped):
+        return True
+    return False
+
+
+def _filter_business_items(items: List[str], max_len: int = 120) -> List[str]:
+    """Filter a list to keep only real business content items."""
+    seen: set = set()
+    result: List[str] = []
+    for item in items:
+        item = item.strip()
+        if not item or len(item) > max_len or len(item) < 3:
+            continue
+        if _is_garbage(item):
+            continue
+        lower = item.lower()
+        if lower not in seen:
+            seen.add(lower)
+            result.append(item)
+    return result
+
+
+def _is_valid_phone(value: str) -> bool:
+    """Return True only for strings that look like real phone numbers."""
+    stripped = re.sub(r"[\s\-\(\)\+\.]", "", value)
+    # Must have at least 6 consecutive digits
+    if not re.search(r"\d{6}", stripped):
+        return False
+    # Reject year ranges like "2021-2022" or "2021-2025"
+    if re.fullmatch(r"(19|20)\d{2}[\-/](19|20)\d{2}", value.strip()):
+        return False
+    # Reject lone 4-digit years
+    if re.fullmatch(r"(19|20)\d{2}", stripped):
+        return False
+    return True
+
+
 # Technology keywords to detect from page text
 TECH_KEYWORDS = [
     "Python", "Java", "JavaScript", "TypeScript", "C++", "C#", "Go", "Rust", "Kotlin", "Swift",
@@ -94,9 +164,15 @@ def extract_company_intelligence(
     # 3. Headquarters & Locations
     headquarters, locations = _extract_locations(classified_sections)
 
-    # 4. Products & Services
-    products = [p for p in classified_sections.get("Products", []) if len(p) < 150][:15]
-    services = [p for p in classified_sections.get("Services", []) if len(p) < 150][:15]
+    # 4. Products & Services — apply garbage filter to remove UI/nav text fragments
+    products = _filter_business_items(
+        classified_sections.get("Products", []) + classified_sections.get("Technology", []),
+        max_len=100,
+    )[:15]
+    services = _filter_business_items(
+        classified_sections.get("Services", []),
+        max_len=100,
+    )[:15]
 
     # 5. Technology stack
     technology_stack = _detect_tech_stack(combined_clean_text)
@@ -104,10 +180,10 @@ def extract_company_intelligence(
     # 6. Leadership names
     leadership = _extract_leadership(classified_sections)
 
-    # 7. Clients & Partners
-    clients = [p for p in classified_sections.get("Clients", []) if len(p) < 100][:15]
-    partners = [p for p in classified_sections.get("Partners", []) if len(p) < 100][:15]
-    industries_served = [p for p in classified_sections.get("Industries", []) if len(p) < 100][:10]
+    # 7. Clients & Partners — apply garbage filter
+    clients = _filter_business_items(classified_sections.get("Clients", []), max_len=80)[:15]
+    partners = _filter_business_items(classified_sections.get("Partners", []), max_len=80)[:15]
+    industries_served = _filter_business_items(classified_sections.get("Industries", []), max_len=80)[:10]
 
     # 8. LinkedIn URL — extract from social links
     linkedin_url = next(
@@ -132,7 +208,11 @@ def extract_company_intelligence(
         clients=clients,
         partners=partners,
         emails=aggregated_contacts.get("emails", []),
-        phone_numbers=aggregated_contacts.get("phone_numbers", []),
+        # Validate phone numbers — filter out year ranges and non-phone strings
+        phone_numbers=[
+            p for p in aggregated_contacts.get("phone_numbers", [])
+            if _is_valid_phone(p)
+        ],
         social_links=list(set(aggregated_contacts.get("social_links", []) + social_links)),
         linkedin_url=linkedin_url,
         careers_page=discovered_pages.get("careers", ""),

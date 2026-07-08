@@ -4,7 +4,6 @@ pydantic>=2.5.0
 pydantic-settings>=2.0.0
 python-dotenv>=1.0.0
 motor>=3.6.0
-huggingface_hub>=0.25.0
 
 # Presentation generation
 python-pptx>=0.6.21

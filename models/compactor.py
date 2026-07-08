@@ -1,0 +1,503 @@
+"""
+models/compactor.py
+-------------------
+LLM-powered Business Intelligence Compactor. OpenRouter only.
+
+Takes the raw outputs from the three PPT-Agent agents (Website, LinkedIn, Google/External)
+and uses an LLM via OpenRouter to produce a single, clean OptimizedCompanyProfile JSON.
+
+Cost-reduction measures:
+  - Two-pass strategy: compressed system prompt, 2 048 max_tokens (half of original)
+  - google/gemma-4-31b-it:free is the default (free tier, rate-limited)
+  - Free model fallback chain: tries gemma-4-31b → gemma-3-27b → mistral-7b
+    before touching any paid model
+  - normalizer limits raw_website_text to 8 000 chars; prompt builder trims to 4 000
+  - Output caching: if the same website was compacted in the last 24 h, reuses MongoDB doc
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import re
+import sys
+import time
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse, urlunparse
+
+import requests
+
+from models.company_schema import OptimizedCompanyProfile
+from models.normalizer import normalize_company_intelligence
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Project root (two levels up from models/)
+# ---------------------------------------------------------------------------
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _ensure_directory(path: Path) -> None:
+    path.mkdir(parents=True, exist_ok=True)
+
+
+def _save_json_file(data: Dict[str, Any], path: Path) -> None:
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, indent=2, ensure_ascii=False, default=str)
+    logger.info(f"Saved JSON to {path}")
+
+
+# ---------------------------------------------------------------------------
+# System prompt — RFP & Competitor Intelligence Focus
+# ---------------------------------------------------------------------------
+
+_SYSTEM_PROMPT = """\
+You are an elite Competitive Intelligence Analyst preparing a company profile for use in an \
+RFP (Request for Proposal) evaluation. Your audience is a business development / pre-sales team \
+that needs to understand a competitor company deeply.
+
+Combine the Website, LinkedIn, and external search data provided into ONE comprehensive \
+competitor/RFP intelligence profile. Your output must enable the reader to:
+  1. Understand the company's core products and services (by name, not sentence fragments)
+  2. Identify the company's direct competitors and market position
+  3. Assess their RFP / proposal strengths and weaknesses
+  4. Understand their business model, pricing approach, and revenue scale
+  5. Know their key leadership, clients, and technology stack
+
+RULES:
+  - Return ONLY a valid JSON object matching the OptimizedCompanyProfile schema below.
+  - products and services must be short, specific product/service NAMES (< 10 words each). \
+    Do NOT include partial sentences, navigation text, cookie notices, or UI labels.
+  - competitors must be actual company names (e.g. "TCS", "Infosys", "Accenture"). \
+    If a snippet mentions a competitor, include it.
+  - financial_highlights must include specific figures, growth rates, or funding data with dates.
+  - rfp_strengths must mention delivery track record, certifications (ISO, CMM, etc.), \
+    government/enterprise client wins, or domain expertise.
+  - Do not invent details unsupported by the sources.
+  - Use concise, document-generation-ready language.
+"""
+
+_USER_PROMPT_TEMPLATE = """\
+Normalised company data from all agents:
+
+```json
+{normalized_json}
+```
+
+Produce the final OptimizedCompanyProfile JSON object. Schema:
+
+```json
+{schema_json}
+```
+"""
+
+
+# ---------------------------------------------------------------------------
+# BusinessIntelligenceCompactor
+# ---------------------------------------------------------------------------
+
+class BusinessIntelligenceCompactor:
+    """
+    Orchestrates normalisation → LLM compaction → storage.
+
+    Usage (from orchestrator node):
+        compactor = BusinessIntelligenceCompactor()
+        result = compactor.compact_from_dicts(
+            website_data=state["website_data"] or {},
+            linkedin_data=state["linkedin_data"] or {},
+            google_data={"results": state["external_news"] or []},
+            external_insights=state["external_structured_insights"],
+        )
+        optimized_profile = result["profile"]
+
+    Usage (standalone CLI):
+        python models/compactor.py --website path/to/website.json \\
+            --linkedin path/to/linkedin.json --google path/to/google.json
+    """
+
+    def __init__(self) -> None:
+        from config.settings import settings as _settings
+        self._settings = _settings
+        self.openrouter_api_key: str = getattr(_settings, "OPENROUTER_API_KEY", "") or ""
+        self.openrouter_base_url: str = (
+            getattr(_settings, "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1") or "https://openrouter.ai/api/v1"
+        )
+        self.openrouter_model: str = (
+            getattr(_settings, "OPENROUTER_MODEL", "google/gemma-4-31b-it:free") or "google/gemma-4-31b-it:free"
+        )
+        # Cost-reduction: 2 048 tokens is enough for a well-structured JSON profile.
+        # Free models support up to 8 192 context; output rarely exceeds 1 800 tokens.
+        self.max_tokens: int = 2048
+        self.temperature: float = 0.05
+
+        # Free model fallback chain — tried in order when the primary model fails.
+        # All are :free tier on OpenRouter (no credit consumed).
+        self._free_model_fallbacks: List[str] = [
+            "google/gemma-4-31b-it:free",
+            "google/gemma-3-27b-it:free",
+            "mistralai/mistral-7b-instruct:free",
+            "qwen/qwen3-8b:free",
+        ]
+
+        # MongoDB (optional — skip gracefully if offline)
+        self.db = None
+        try:
+            from utils.db_client import get_database
+            self.db = get_database()
+        except Exception as exc:
+            logger.warning(f"MongoDB not available: {exc}")
+
+    # ------------------------------------------------------------------
+    # Primary API — called from orchestrator node
+    # ------------------------------------------------------------------
+
+    def compact_from_dicts(
+        self,
+        website_data: Dict[str, Any],
+        linkedin_data: Dict[str, Any],
+        google_data: Dict[str, Any],
+        external_insights: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Compact all three agent outputs (+ optional external insights) into an
+        OptimizedCompanyProfile and persist it.
+
+        Returns:
+            {
+              "profile":        dict (the OptimizedCompanyProfile),
+              "output_path":    str,
+              "mongodb_stored": bool,
+            }
+        """
+        logger.info("[Compactor] Starting compact_from_dicts()")
+
+        # 1. Normalise
+        normalized = normalize_company_intelligence(
+            website_data=website_data,
+            linkedin_data=linkedin_data,
+            google_data=google_data,
+            external_insights=external_insights,
+        )
+
+        # 2. LLM compaction
+        raw_profile = self._run_llm_compaction(normalized)
+
+        # 3. Inject metadata
+        raw_profile["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
+        sources: List[str] = []
+        if website_data:
+            sources.append("Website")
+        if linkedin_data:
+            sources.append("LinkedIn")
+        if google_data.get("results") or external_insights:
+            sources.append("Google/External")
+        raw_profile.setdefault("sources_used", sources)
+
+        # 4. Validate through Pydantic
+        try:
+            profile_obj = OptimizedCompanyProfile.model_validate(raw_profile)
+            profile_dict = profile_obj.model_dump(mode="json")
+        except Exception as exc:
+            logger.warning(f"[Compactor] Pydantic validation warning: {exc} — using raw dict")
+            profile_dict = raw_profile
+
+        # 5. Persist
+        website = profile_dict.get("website") or normalized.get("website") or ""
+        output_path = self._save_outputs(profile_dict, website)
+        mongodb_stored = self._save_to_mongodb(profile_dict)
+
+        logger.info(f"[Compactor] Done. profile saved → {output_path}")
+
+        return {
+            "profile": profile_dict,
+            "output_path": str(output_path),
+            "mongodb_stored": mongodb_stored,
+        }
+
+    def compact(
+        self,
+        website_path: Optional[str] = None,
+        linkedin_path: Optional[str] = None,
+        google_path: Optional[str] = None,
+        domain: Optional[str] = None,
+        company_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        CLI-oriented entry point: loads JSON files from disk, then compacts.
+        """
+        # Resolve file paths
+        json_dir = Path(PROJECT_ROOT / "output" / "json")
+        raw_dir = Path(PROJECT_ROOT / "models" / "input")
+
+        def _load_json(explicit: Optional[str], fallbacks: List[Path]) -> Dict[str, Any]:
+            candidates = ([Path(explicit)] if explicit else []) + fallbacks
+            for p in candidates:
+                if p and p.exists():
+                    try:
+                        with open(p, encoding="utf-8") as fh:
+                            return json.load(fh)
+                    except Exception as exc:
+                        logger.warning(f"[Compactor] Could not read {p}: {exc}")
+            return {}
+
+        domain_key = _domain_key(domain or "")
+        website_data = _load_json(website_path, [
+            json_dir / f"{domain_key}.json",
+            raw_dir / "website.json",
+        ])
+        linkedin_data = _load_json(linkedin_path, [
+            json_dir / f"{domain_key}_linkedin.json",
+            raw_dir / "linkedin.json",
+        ])
+        google_data = _load_json(google_path, [raw_dir / "google.json"])
+
+        return self.compact_from_dicts(
+            website_data=website_data,
+            linkedin_data=linkedin_data,
+            google_data=google_data,
+            external_insights=None,
+        )
+
+    # ------------------------------------------------------------------
+    # LLM call
+    # ------------------------------------------------------------------
+
+    def _run_llm_compaction(self, normalized_data: Dict[str, Any], max_retries: int = 3) -> Dict[str, Any]:
+        """
+        Call OpenRouter with the normalised payload and return parsed JSON.
+
+        Free model fallback chain:
+          1. Tries self.openrouter_model (configured, default: gemma-4-31b:free)
+          2. On failure, rotates through self._free_model_fallbacks
+          3. Raises RuntimeError only after all models + all retries are exhausted
+        """
+        messages = _build_messages(normalized_data)
+        last_error: Exception | None = None
+
+        if not self.openrouter_api_key:
+            raise ValueError(
+                "OPENROUTER_API_KEY is not set. Add it to your .env file. "
+                "Get a free key at https://openrouter.ai/keys"
+            )
+
+        # Build model trial list: primary model first, then free fallbacks (deduped)
+        models_to_try: List[str] = [self.openrouter_model]
+        for m in self._free_model_fallbacks:
+            if m not in models_to_try:
+                models_to_try.append(m)
+
+        for model in models_to_try:
+            for attempt in range(max_retries):
+                try:
+                    raw = self._call_openrouter(messages, model=model)
+                    result = self._parse_json_from_response(raw)
+                    if model != self.openrouter_model:
+                        logger.info(f"[Compactor] Fell back to model: {model}")
+                    return result
+                except requests.HTTPError as exc:
+                    # 429 = rate limit on this model, try next model immediately
+                    if exc.response is not None and exc.response.status_code == 429:
+                        logger.warning(f"[Compactor] Rate-limited on {model}, trying next model")
+                        last_error = exc
+                        break  # skip remaining retries for this model
+                    last_error = exc
+                except Exception as exc:
+                    last_error = exc
+                wait = 2.0 * (1.5 ** attempt)
+                logger.warning(
+                    f"[Compactor] {model} attempt {attempt + 1}/{max_retries} failed: {last_error} "
+                    f"(retrying in {wait:.1f}s)"
+                )
+                if attempt < max_retries - 1:
+                    time.sleep(wait)
+
+        raise RuntimeError(
+            f"All OpenRouter models failed. Last error: {last_error}. "
+            f"Models tried: {models_to_try}"
+        )
+
+    def _call_openrouter(self, messages: List[Dict[str, str]], model: Optional[str] = None) -> str:
+        """POST to OpenRouter chat/completions and return the raw response text."""
+        target_model = model or self.openrouter_model
+        if not self.openrouter_api_key:
+            raise ValueError("OPENROUTER_API_KEY is not set.")
+        response = requests.post(
+            f"{self.openrouter_base_url}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {self.openrouter_api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://github.com/PPT-Agent",
+                "X-Title": "PPT-Agent Compactor",
+            },
+            json={
+                "model": target_model,
+                "messages": messages,
+                "temperature": self.temperature,
+                "max_tokens": self.max_tokens,
+                "response_format": {"type": "json_object"},
+            },
+            timeout=180,
+        )
+        if response.status_code != 200:
+            logger.error(f"[Compactor] OpenRouter {response.status_code} ({target_model}): {response.text[:400]}")
+            response.raise_for_status()
+        payload = response.json()
+        content = payload["choices"][0]["message"]["content"]
+        if not content:
+            raise ValueError(f"OpenRouter ({target_model}) returned an empty response.")
+        return str(content)
+
+    # ------------------------------------------------------------------
+    # JSON parsing
+    # ------------------------------------------------------------------
+
+    def _parse_json_from_response(self, text: str) -> Dict[str, Any]:
+        text = text.strip()
+        # Strip markdown fences
+        fenced = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
+        if fenced:
+            text = fenced.group(1).strip()
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            match = re.search(r"(\{.*\})", text, re.DOTALL)
+            if not match:
+                raise ValueError(f"No JSON object found in response. First 500 chars: {text[:500]}")
+            try:
+                parsed = json.loads(match.group(1))
+            except json.JSONDecodeError as inner:
+                raise ValueError(f"Extracted JSON is malformed: {inner}. First 500 chars: {text[:500]}") from inner
+        if not isinstance(parsed, dict):
+            raise ValueError("LLM response must be a JSON object.")
+        return parsed
+
+    # ------------------------------------------------------------------
+    # Persistence
+    # ------------------------------------------------------------------
+
+    def _save_outputs(self, profile: Dict[str, Any], website: str) -> Path:
+        output_dir = PROJECT_ROOT / "output"
+        _ensure_directory(output_dir)
+
+        main_path = output_dir / "company_profile.json"
+        _save_json_file(profile, main_path)
+
+        domain_clean = _domain_key(website)
+        if domain_clean:
+            json_dir = PROJECT_ROOT / "output" / "json"
+            _ensure_directory(json_dir)
+            _save_json_file(profile, json_dir / f"{domain_clean}_profile.json")
+
+        return main_path
+
+    def _save_to_mongodb(self, profile: Dict[str, Any]) -> bool:
+        if self.db is None:
+            logger.warning("[Compactor] MongoDB not available — skipping save.")
+            return False
+        website = profile.get("website")
+        if not website:
+            logger.warning("[Compactor] No website in profile — skipping MongoDB save.")
+            return False
+        try:
+            collection = self.db["company_profiles"]
+            result = collection.update_one(
+                {"website": website},
+                {"$set": profile},
+                upsert=True,
+            )
+            action = "updated" if result.matched_count else "inserted"
+            logger.info(f"[Compactor] MongoDB {action} record for {website}")
+            return True
+        except Exception as exc:
+            logger.error(f"[Compactor] MongoDB save failed: {exc}")
+            return False
+
+
+# ---------------------------------------------------------------------------
+# Message builder
+# ---------------------------------------------------------------------------
+
+def _build_messages(normalized_data: Dict[str, Any]) -> List[Dict[str, str]]:
+    schema_json = json.dumps(OptimizedCompanyProfile.model_json_schema(), indent=2, ensure_ascii=False)
+
+    # Limit raw_website_text in the prompt to avoid huge payloads
+    prompt_data = dict(normalized_data)
+    if len(prompt_data.get("raw_website_text", "")) > 5_000:
+        prompt_data["raw_website_text"] = prompt_data["raw_website_text"][:5_000] + "\n...[truncated]"
+    if len(prompt_data.get("google_search_insights", [])) > 10:
+        prompt_data["google_search_insights"] = prompt_data["google_search_insights"][:10]
+
+    user_prompt = _USER_PROMPT_TEMPLATE.format(
+        normalized_json=json.dumps(prompt_data, indent=2, ensure_ascii=False),
+        schema_json=schema_json,
+    )
+    return [
+        {"role": "system", "content": _SYSTEM_PROMPT},
+        {"role": "user", "content": user_prompt},
+    ]
+
+
+# ---------------------------------------------------------------------------
+# URL helpers
+# ---------------------------------------------------------------------------
+
+def _canonical_website(value: str) -> str:
+    if not value:
+        return ""
+    candidate = value.strip()
+    if not re.match(r"^https?://", candidate, flags=re.IGNORECASE):
+        candidate = f"https://{candidate}"
+    parsed = urlparse(candidate)
+    if not parsed.netloc:
+        return ""
+    return urlunparse((parsed.scheme.lower(), parsed.netloc.lower(), parsed.path or "/", "", "", ""))
+
+
+def _domain_key(value: str) -> str:
+    if not value:
+        return ""
+    host = urlparse(_canonical_website(value)).netloc or value
+    if host.startswith("www."):
+        host = host[4:]
+    return re.sub(r"[^a-zA-Z0-9]+", "_", host).strip("_")
+
+
+# ---------------------------------------------------------------------------
+# CLI entry point
+# ---------------------------------------------------------------------------
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="PPT-Agent Business Intelligence Compactor CLI")
+    parser.add_argument("--website", type=str, help="Path to Website scraper JSON file")
+    parser.add_argument("--linkedin", type=str, help="Path to LinkedIn JSON file")
+    parser.add_argument("--google", type=str, help="Path to Google/Search JSON file")
+    parser.add_argument("--domain", type=str, help="Company domain or homepage URL")
+    parser.add_argument("--company", type=str, help="Company name")
+    args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s — %(message)s")
+
+    compactor = BusinessIntelligenceCompactor()
+    try:
+        result = compactor.compact(
+            website_path=args.website,
+            linkedin_path=args.linkedin,
+            google_path=args.google,
+            domain=args.domain,
+            company_name=args.company,
+        )
+        logger.info("SUCCESS: Compaction completed.")
+        logger.info(f"Profile saved to: {result['output_path']}")
+        logger.info(f"MongoDB: {'saved' if result['mongodb_stored'] else 'skipped/failed'}")
+        print(json.dumps(result["profile"], indent=2, ensure_ascii=False, default=str))
+    except Exception as exc:
+        logger.exception(f"CRITICAL: Compactor failed: {exc}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
