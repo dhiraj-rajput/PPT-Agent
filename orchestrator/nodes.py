@@ -784,6 +784,7 @@ def run_compactor(state: AgentState) -> dict:
             linkedin_data=linkedin_data,
             google_data=google_data,
             external_insights=external_insights,
+            company_slug=state.get("company_slug"),
         )
         profile = result.get("profile") or {}
 

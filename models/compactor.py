@@ -161,6 +161,7 @@ class BusinessIntelligenceCompactor:
         linkedin_data: Dict[str, Any],
         google_data: Dict[str, Any],
         external_insights: Optional[Dict[str, Any]] = None,
+        company_slug: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Compact all three agent outputs (+ optional external insights) into an
@@ -208,7 +209,7 @@ class BusinessIntelligenceCompactor:
         # 5. Persist
         website = profile_dict.get("website") or normalized.get("website") or ""
         output_path = self._save_outputs(profile_dict, website)
-        mongodb_stored = self._save_to_mongodb(profile_dict)
+        mongodb_stored = self._save_to_mongodb(profile_dict, company_slug=company_slug)
 
         logger.info(f"[Compactor] Done. profile saved → {output_path}")
 
@@ -394,23 +395,32 @@ class BusinessIntelligenceCompactor:
 
         return main_path
 
-    def _save_to_mongodb(self, profile: Dict[str, Any]) -> bool:
+    def _save_to_mongodb(self, profile: Dict[str, Any], company_slug: Optional[str] = None) -> bool:
         if self.db is None:
             logger.warning("[Compactor] MongoDB not available — skipping save.")
             return False
-        website = profile.get("website")
-        if not website:
-            logger.warning("[Compactor] No website in profile — skipping MongoDB save.")
+        
+        # Resolve company_slug from website if not passed
+        if not company_slug:
+            website = profile.get("website")
+            if website:
+                company_slug = _domain_key(website)
+                
+        if not company_slug:
+            logger.warning("[Compactor] No company_slug resolved — skipping MongoDB save.")
             return False
+            
         try:
             collection = self.db["company_profiles"]
+            # Inject company_slug so it's persisted in the final document
+            profile["company_slug"] = company_slug
             result = collection.update_one(
-                {"website": website},
+                {"company_slug": company_slug},
                 {"$set": profile},
                 upsert=True,
             )
             action = "updated" if result.matched_count else "inserted"
-            logger.info(f"[Compactor] MongoDB {action} record for {website}")
+            logger.info(f"[Compactor] MongoDB {action} record for slug='{company_slug}'")
             return True
         except Exception as exc:
             logger.error(f"[Compactor] MongoDB save failed: {exc}")
