@@ -31,6 +31,7 @@ class AppSettings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=True,
+        extra="ignore",
     )
 
     # ------------------------------------------------------------------
@@ -49,43 +50,7 @@ class AppSettings(BaseSettings):
         description="Name of the MongoDB database to use.",
     )
 
-    # ------------------------------------------------------------------
-    # LLM Provider — OpenRouter
-    # ------------------------------------------------------------------
-    OPENROUTER_API_KEY: str = Field(
-        default="",
-        description="OpenRouter API key. Get one at https://openrouter.ai/keys",
-    )
-    OPENROUTER_MODEL: str = Field(
-        default="google/gemma-4-31b-it:free",
-        description=(
-            "OpenRouter model ID. Set in .env to override.\n"
-            "Confirmed FREE models (check https://openrouter.ai/models?q=free):\n"
-            "  google/gemma-4-31b-it:free   ← default, confirmed working (16 req/min limit)\n"
-            "  google/gemma-3-27b-it:free   ← Gemma 3, higher limits\n"
-            "  mistralai/mistral-7b-instruct:free\n"
-            "  qwen/qwen3-8b:free\n"
-            "NOTE: Meta Llama 3.1 :free no longer exists — use paid slug without :free suffix."
-        ),
-    )
-    OPENROUTER_BASE_URL: str = Field(
-        default="https://openrouter.ai/api/v1",
-        description="OpenRouter API base URL (OpenAI-compatible).",
-    )
-    USE_LLM_STRUCTURING: bool = Field(
-        default=False,
-        description=(
-            "If True, the system will use LLM/AI (via OpenRouter) to structure raw data and extract BI.\n"
-            "If False, the system uses high-performance, cost-free, deterministic rule-based regex parsing."
-        ),
-    )
-    LLM_INTER_CALL_DELAY_SECONDS: float = Field(
-        default=4.0,
-        description=(
-            "Seconds to wait between consecutive LLM calls inside the structurer. "
-            "Free models allow ~16 req/min. 4s keeps us safely under that limit."
-        ),
-    )
+
 
     # ------------------------------------------------------------------
     # Search — Tavily (company name → LinkedIn URL resolution)
@@ -135,11 +100,9 @@ class AppSettings(BaseSettings):
         description="Playwright page load timeout in milliseconds.",
     )
 
-    # ------------------------------------------------------------------
-    # Optional / Future LLM Providers
-    # ------------------------------------------------------------------
-    GEMINI_API_KEY: str = Field(default="", description="Google Gemini API key.")
-    OPENAI_API_KEY: str = Field(default="", description="OpenAI API key.")
+
+    SAM_GOV_API_KEY: str = Field(default="", description="SAM.gov API key.")
+    FORCE_MOCK_SAM_GOV: bool = Field(default=False, description="Force SAM.gov to use mock data instead of live queries.")
 
     # ------------------------------------------------------------------
     # Optional / Other Search & Scraping Services
@@ -148,12 +111,11 @@ class AppSettings(BaseSettings):
     FIRECRAWL_API_KEY: str = Field(default="", description="Firecrawl API key.")
 
     # ------------------------------------------------------------------
-    # MongoDB Collections & LLM Settings
+    # MongoDB Collections & Search Settings
     # ------------------------------------------------------------------
     MONGODB_RAW_COLLECTION: str = Field(default="raw_data")
     MONGODB_CLEANED_COLLECTION: str = Field(default="cleaned_data")
     MONGODB_PROFILE_COLLECTION: str = Field(default="company_profiles")
-    LLM_PROVIDER: str = Field(default="openrouter")
     SEARCH_PROVIDER: str = Field(default="auto")
 
     @property
@@ -190,9 +152,7 @@ class AppSettings(BaseSettings):
     def profile_collection(self) -> str:
         return self.MONGODB_PROFILE_COLLECTION
 
-    @property
-    def llm_provider(self) -> str:
-        return self.LLM_PROVIDER.strip().lower()
+
 
     @property
     def search_provider(self) -> str:

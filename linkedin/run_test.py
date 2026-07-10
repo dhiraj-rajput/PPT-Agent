@@ -181,12 +181,10 @@ async def run_simulation():
         logger.info(f"Cleaned Post: '{posts[0].post_text}' (No boilerplate!)")
     logger.info(f"Data Quality Score: {quality_score:.2f}")
 
-    # Check if OpenRouter key is set. If so, generate the BI Profile. If not, generate a mock one.
-    bi_profile = None
-    if settings.OPENROUTER_API_KEY and settings.OPENROUTER_API_KEY != "your_openrouter_api_key_here":
-        logger.info("Step 2: OpenRouter API key detected. Extracting BI Profile using LLM...")
-        bi_extractor = BIExtractor()
-        bi_profile = await bi_extractor.extract_bi_profile(cleaned_company_data)
+    # Extract the BI Profile using the rule-based extractor
+    logger.info("Step 2: Extracting BI Profile...")
+    bi_extractor = BIExtractor()
+    bi_profile = await bi_extractor.extract_bi_profile(cleaned_company_data)
 
     from linkedin.models import BIProfile, TechStackProfile, BusinessChallenge, CompetitorMention, StrategicInitiative, GrowthSignal
     mock_bi = BIProfile(
@@ -232,12 +230,9 @@ async def run_simulation():
 
     if bi_profile and bi_profile.executive_summary:
         cleaned_company_data.bi_profile = bi_profile
-        logger.info("BI Profile successfully generated using OpenRouter!")
+        logger.info("BI Profile successfully generated!")
     else:
-        if settings.OPENROUTER_API_KEY and settings.OPENROUTER_API_KEY != "your_openrouter_api_key_here":
-            logger.warning("OpenRouter extraction failed or rate-limited. Falling back to simulated offline BI Profile...")
-        else:
-            logger.info("Step 2: OPENROUTER_API_KEY is not set. Generating mock BI Profile offline...")
+        logger.info("BI Profile was empty. Attaching mock BI Profile offline...")
         cleaned_company_data.bi_profile = mock_bi
         logger.info("Mock BI Profile attached!")
 
@@ -267,10 +262,7 @@ async def run_live(company_input: str):
     if not verify_mongodb_connection():
         return
 
-    # Check that keys are configured
-    if not settings.OPENROUTER_API_KEY or settings.OPENROUTER_API_KEY == "your_openrouter_api_key_here":
-        logger.error("OPENROUTER_API_KEY is not set. Please add it to your .env file to run a live scrape.")
-        return
+
 
     if not settings.TAVILY_API_KEY or settings.TAVILY_API_KEY == "your_tavily_api_key_here":
         logger.warning(
@@ -286,7 +278,7 @@ async def run_live(company_input: str):
 
         logger.info("\n--- Live Data Scraped and Enriched ---")
 
-        # Safely access identity fields — LLM may have failed if rate-limited
+        # Safely access identity fields
         if company_data.identity:
             logger.info(f"Company Name : {company_data.identity.company_name}")
             logger.info(f"Industry     : {company_data.identity.industry}")
@@ -294,8 +286,8 @@ async def run_live(company_input: str):
             logger.info(f"HQ           : {company_data.identity.headquarters_location}")
         else:
             logger.warning(
-                "Identity data is empty — LLM structuring was likely rate-limited. "
-                "Raw data has been saved to MongoDB. Re-run when rate limits clear."
+                "Identity data is empty. "
+                "Raw data has been saved to MongoDB."
             )
 
         logger.info(f"Quality Score: {company_data.data_quality_score}")
@@ -315,8 +307,8 @@ async def run_live(company_input: str):
             logger.info(f"Sales Talking Points: {company_data.bi_profile.sales_talking_points}")
         else:
             logger.warning(
-                "BI Profile is empty — LLM was rate-limited. "
-                "Raw data is in MongoDB. Re-run later to trigger BI extraction."
+                "BI Profile is empty. "
+                "Raw data is in MongoDB."
             )
 
     except Exception as e:

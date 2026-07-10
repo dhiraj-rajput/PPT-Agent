@@ -6,7 +6,7 @@ Shared Pydantic models and data transformation utilities for the PPT-Agent pipel
 Modules:
     company_schema  — Pydantic models for raw agent outputs and the final OptimizedCompanyProfile
     normalizer      — Merges/normalises outputs from all three agents into a single dict
-    compactor       — LLM-powered compactor that produces the final OptimizedCompanyProfile
+    compactor       — Rule-based compactor that produces the final OptimizedCompanyProfile
 """
 
 from models.company_schema import (

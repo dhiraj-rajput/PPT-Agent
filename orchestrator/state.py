@@ -56,6 +56,10 @@ class AgentState(TypedDict):
     # --- Final Compacted Profile (post-compaction) ---
     optimized_profile: Optional[dict]      # OptimizedCompanyProfile — output of run_compactor node
 
+    # --- Teaming Proposal & PDF Outreach Path ---
+    solicitation_number: Optional[str]     # Target solicitation number to compile teaming proposal for
+    pdf_proposal_path: Optional[str]       # Path to the generated B2B teaming proposal PDF
+
     # --- Errors (Annotated with reducer for concurrent safety) ---
     errors: Annotated[List[str], merge_errors]                      # Accumulated error messages from any node
 

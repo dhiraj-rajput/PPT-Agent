@@ -3,9 +3,7 @@ linkedin/bi_extractor.py
 ------------------------
 Business Intelligence (BI) extraction engine.
 
-Supports both:
-  1. Rule-based extraction: default, fast, free, and robust.
-  2. LLM-based extraction: activated when USE_LLM_STRUCTURING is True.
+Uses high-performance, cost-free, deterministic rule-based regex parsing.
 """
 
 import json
@@ -28,314 +26,337 @@ from utils.helpers import setup_logger
 logger = setup_logger(__name__)
 
 
-class ExtractionError(RuntimeError):
-    """Raised when LLM extraction fails."""
-
-BI_SYSTEM_PROMPT = """You are an elite business research analyst and strategy consultant.
-Your job is to analyze structured company data and extract deep, actionable Business Intelligence (BI).
-
-Your analysis must:
-1. Be highly realistic, practical, and grounded ONLY in the provided company data.
-2. Avoid generic corporate buzzwords where possible; be specific to the company's domain.
-3. Explicitly connect the insights (e.g. challenges, initiatives) to the raw data (e.g. job postings, posts, description) as evidence.
-4. Format the output strictly as a JSON object matching the requested schema.
-5. Return ONLY valid JSON — no markdown block wrappers, no notes, no extra text.
-"""
-
-
 class BIExtractor:
     """
-    Extracts high-level business intelligence from structured LinkedIn company data.
-    Supports both rule-based heuristics and AI-based detailed extraction.
+    Extracts high-level business intelligence from structured LinkedIn company data
+    using high-performance, cost-free, deterministic rule-based regex parsing.
     """
 
     def __init__(self):
-        """Initializes the BI extractor. LLM client is initialized lazily if toggle is set."""
-        if settings.USE_LLM_STRUCTURING:
-            from langchain_openai import ChatOpenAI
-            self._llm_client = ChatOpenAI(
-                **{
-                    "openai_api_key": settings.OPENROUTER_API_KEY,
-                    "openai_api_base": settings.OPENROUTER_BASE_URL,
-                    "model_name": settings.OPENROUTER_MODEL,
-                    "max_tokens": 4096,
-                },
-                temperature=0.2,
-                timeout=90.0,
-            )
-        else:
-            self._llm_client = None
+        """Initializes the BI extractor."""
+        pass
 
     async def extract_bi_profile(self, company_data: LinkedInCompanyData) -> BIProfile:
-        """Extracts strategic business insights and constructs a BIProfile using rules or LLM."""
-        if settings.USE_LLM_STRUCTURING:
-            logger.info(f"[BIExtractor] Starting AI-based extraction for: '{company_data.company_slug}'")
-            profile = await self._extract_bi_profile_llm(company_data)
-            if profile and profile.executive_summary:
-                return profile
-            logger.warning("[BIExtractor] AI-based extraction failed or timed out. Falling back to rule-based.")
-        
+        """Extracts strategic business insights and constructs a BIProfile using rules."""
         logger.info(f"[BIExtractor] Starting rule-based extraction for: '{company_data.company_slug}'")
         return self._extract_bi_profile_rules(company_data)
-
-    # ---------------------------------------------------------------------------
-    # Method A: AI-Based BI Extraction (LLM)
-    # ---------------------------------------------------------------------------
-
-    async def _extract_bi_profile_llm(self, company_data: LinkedInCompanyData) -> BIProfile:
-        company_context = self._build_company_context_block(company_data)
-        prompt = f"""
-Perform a comprehensive business intelligence analysis on the following company profile.
-
---- COMPANY PROFILE DATA ---
-{company_context}
----------------------------
-
-Generate a JSON object with these exact keys:
-{{
-  "key_differentiators": ["3-5 differentiators"],
-  "competitive_advantages": ["2-4 advantages"],
-  "identified_competitors": [
-    {{"competitor_name": "Name", "relationship_type": "Direct Competitor OR Indirect Competitor", "source": "Mention source"}}
-  ],
-  "strategic_initiatives": [
-    {{"initiative_name": "Name", "description": "Desc", "evidence": "Evidence from data", "timeline": "Timeline or null", "priority_level": "Critical/High/Medium"}}
-  ],
-  "growth_signals": [
-    {{"signal_type": "Partnership/Launch/Hiring", "description": "Details", "date_mentioned": "Date or null", "source": "Source", "significance": "High/Medium/Low"}}
-  ],
-  "business_challenges": [
-    {{"challenge_area": "Talent/Transformation", "description": "Details", "evidence": "Evidence", "opportunity_for_us": "Our Pitch"}}
-  ],
-  "digital_transformation_status": "Not Started/Early/In Progress/Advanced/Complete",
-  "ai_adoption_level": "None/Exploring/Pilot/Scaled/AI-Native",
-  "products_and_services": [
-    {{"name": "Product", "category": "Category", "description": "Desc", "target_audience": "Audience"}}
-  ],
-  "tech_stack": {{
-    "cloud_providers_used": ["AWS", "Azure"],
-    "ai_ml_technologies": ["TensorFlow"],
-    "programming_languages": ["Python"],
-    "frameworks_and_tools": ["React"],
-    "security_certifications": ["SOC2"],
-    "data_technologies": ["Snowflake"],
-    "digital_maturity_level": "Early/Developing/Advanced/Leader"
-  }},
-  "company_maturity_stage": "Startup/Growth/Scale-up/Mature Enterprise/Declining",
-  "executive_summary": "A 2-3 sentence strategic executive summary.",
-  "sales_talking_points": ["3-5 talking points"],
-  "recommended_approach": "State approach strategy."
-}}
-"""
-        llm_response = await self._call_llm(prompt)
-        if not llm_response:
-            return BIProfile()
-
-        try:
-            parsed = json.loads(llm_response)
-            tech_data = parsed.get("tech_stack")
-            tech_profile = TechStackProfile(**tech_data) if tech_data else None
-            competitors = [CompetitorMention(**c) for c in parsed.get("identified_competitors", [])]
-            initiatives = [StrategicInitiative(**i) for i in parsed.get("strategic_initiatives", [])]
-            growth = [GrowthSignal(**g) for g in parsed.get("growth_signals", [])]
-            challenges = [BusinessChallenge(**c) for c in parsed.get("business_challenges", [])]
-            products = [ProductOrService(**p) for p in parsed.get("products_and_services", [])]
-
-            return BIProfile(
-                key_differentiators=parsed.get("key_differentiators", []),
-                competitive_advantages=parsed.get("competitive_advantages", []),
-                identified_competitors=competitors,
-                strategic_initiatives=initiatives,
-                growth_signals=growth,
-                business_challenges=challenges,
-                digital_transformation_status=parsed.get("digital_transformation_status"),
-                ai_adoption_level=parsed.get("ai_adoption_level"),
-                products_and_services=products,
-                tech_stack=tech_profile,
-                company_maturity_stage=parsed.get("company_maturity_stage"),
-                executive_summary=parsed.get("executive_summary"),
-                sales_talking_points=parsed.get("sales_talking_points", []),
-                recommended_approach=parsed.get("recommended_approach"),
-            )
-        except Exception as parse_error:
-            logger.error(f"[BIExtractor] Failed to parse BI JSON: {parse_error}")
-            return BIProfile()
-
-    async def _call_llm(self, user_prompt: str) -> Optional[str]:
-        from openai import NotFoundError, RateLimitError
-        from langchain_core.messages import SystemMessage, HumanMessage
-        messages = [
-            SystemMessage(content=BI_SYSTEM_PROMPT),
-            HumanMessage(content=user_prompt),
-        ]
-        max_retries = 3
-        backoff_delay = 5.0
-        import time
-        logger.info(f"[BIExtractor] Dispatching LLM request to OpenRouter model='{settings.OPENROUTER_MODEL}'...")
-        start_time = time.time()
-        if self._llm_client is None:
-            raise ExtractionError("LLM client is not initialized.")
-        for attempt in range(1, max_retries + 1):
-            try:
-                response = await asyncio.wait_for(
-                    self._llm_client.ainvoke(messages),
-                    timeout=90.0
-                )
-                duration = time.time() - start_time
-                logger.info(f"[BIExtractor] LLM call resolved successfully in {duration:.2f}s.")
-                text = str(response.content).strip()
-                for prefix in ("```json", "```"):
-                    if text.startswith(prefix):
-                        text = text[len(prefix):]
-                if text.endswith("```"):
-                    text = text[:-3]
-                return text.strip()
-            except NotFoundError as err:
-                logger.error(f"[BIExtractor] Model not found (404). Check OPENROUTER_MODEL. Error: {err}")
-                return None
-            except RateLimitError as err:
-                logger.warning(f"[BIExtractor] Rate limit (attempt {attempt}/{max_retries}). Retrying in {backoff_delay}s... Error: {err}")
-                if attempt == max_retries:
-                    return None
-                await asyncio.sleep(backoff_delay)
-                backoff_delay *= 2.0
-            except Exception as err:
-                logger.error(f"[BIExtractor] LLM call failed (attempt {attempt}/{max_retries}): {err}")
-                if attempt == max_retries:
-                    return None
-                await asyncio.sleep(2.0)
-        return None
-
-    def _build_company_context_block(self, company_data: LinkedInCompanyData) -> str:
-        parts = []
-        if company_data.identity:
-            parts.append(
-                f"Company Name: {company_data.identity.company_name}\n"
-                f"Industry: {company_data.identity.industry}\n"
-                f"Website: {company_data.identity.website_url}\n"
-                f"Tagline: {company_data.identity.tagline}\n"
-                f"Specialties: {', '.join(company_data.identity.specialties)}"
-            )
-        if company_data.description and company_data.description.about_text:
-            parts.append(f"Description:\n{company_data.description.about_text}")
-        posts = company_data.recent_posts
-        if posts is not None:
-            post_texts = [
-                f"Post {i}: {p.post_text[:200]}"
-                for i, p in enumerate(posts[:5], 1)
-                if p is not None and p.post_text is not None
-            ]
-            parts.append("Posts:\n" + "\n".join(post_texts))
-        return "\n\n=== SECTION ===\n".join(parts)
 
     # ---------------------------------------------------------------------------
     # Method B: Rule-Based BI Extraction (Heuristics)
     # ---------------------------------------------------------------------------
 
     def _extract_bi_profile_rules(self, company_data: LinkedInCompanyData) -> BIProfile:
+        import re
         slug = company_data.company_slug
-        name = (company_data.identity.company_name if company_data.identity else None) or (slug.capitalize() if slug else "Company")
-        industry = (company_data.identity.industry if company_data.identity else None) or "Technology"
-        founded = (company_data.identity.founded_year if company_data.identity else None) or 2010
-        hq = (company_data.identity.headquarters_location if company_data.identity else None) or "Global"
-        tagline = (company_data.identity.tagline if company_data.identity else None) or ""
-
-        key_differentiators = [
-            f"Global scale and delivery capability in {industry}.",
-            "Deep expertise in digital transformation and enterprise solutions.",
-            "Strong focus on AI-first capabilities (e.g. Next-gen automation)."
-        ]
         
-        competitive_advantages = [
-            "Extensive partnership network with major technology vendors.",
-            "Highly skilled global workforce with continuous upskilling.",
-            "Established brand reputation as a trusted digital partner."
-        ]
+        # 1. Resolve basic metadata
+        identity = company_data.identity
+        description = company_data.description
+        
+        name = (identity.company_name if identity else None) or (slug.replace('_', ' ').title() if slug else "Company")
+        industry = (identity.industry if identity else None) or "Technology"
+        founded = (identity.founded_year if identity else None) or 2010
+        hq = (identity.headquarters_location if identity else None) or "Global"
+        tagline = (identity.tagline if identity else None) or ""
+        specialties = identity.specialties if (identity and identity.specialties) else []
+        employee_size = (identity.company_size_range if identity else None) or ""
+        
+        # 2. Gather text inputs to extract insights from
+        about_text = (description.about_text if description else None) or ""
+        mission_text = (description.mission_statement if description else None) or ""
+        vision_text = (description.vision_statement if description else None) or ""
+        
+        posts_text = ""
+        if company_data.recent_posts:
+            posts_text = "\n".join([p.post_text for p in company_data.recent_posts if p.post_text])
+            
+        jobs_text = ""
+        if company_data.job_postings:
+            jobs_text = "\n".join([f"{j.job_title} - {', '.join(j.key_skills_required)}" for j in company_data.job_postings])
+            
+        combined_text = f"{about_text}\n{mission_text}\n{vision_text}\n{posts_text}\n{jobs_text}"
+        
+        # Helper to split text into clean sentences
+        def get_sentences(text: str) -> list[str]:
+            if not text:
+                return []
+            raw_sents = re.split(r'(?<=[.!?])\s+', text)
+            sents = []
+            for s in raw_sents:
+                s = re.sub(r'\s+', ' ', s).strip()
+                # Ignore garbage or very short/long lines
+                if 15 < len(s) < 250 and not s.startswith("http") and not s.startswith("www."):
+                    # Ignore common cookie or navigation phrases
+                    if not any(x in s.lower() for x in ["cookies", "all rights reserved", "privacy policy", "terms of service"]):
+                        sents.append(s)
+            return sents
 
+        sentences = get_sentences(combined_text)
+        
+        # Helper to score sentences by keywords
+        def find_top_sentences(keywords: list[str], max_count: int = 3, threshold: int = 1) -> list[str]:
+            scored = []
+            seen = set()
+            for s in sentences:
+                score = sum(1 for kw in keywords if re.search(r'\b' + re.escape(kw) + r'\b', s.lower()))
+                if score >= threshold:
+                    lower_s = s.lower()
+                    # Deduplicate semantically simple lines
+                    if lower_s not in seen:
+                        seen.add(lower_s)
+                        scored.append((score, s))
+            scored.sort(key=lambda x: x[0], reverse=True)
+            return [x[1] for x in scored[:max_count]]
+
+        # 3. Key Differentiators
+        diff_kws = ["differentiator", "unique", "innovative", "pioneer", "leader", "first", "premier", "specialized", "only", "excellence", "expert", "best-in-class", "redefine", "transform"]
+        key_differentiators = find_top_sentences(diff_kws, max_count=4)
+        if len(key_differentiators) < 3:
+            fallbacks = [
+                f"Global scale and delivery capability in the {industry} domain.",
+                "Deep expertise in digital transformation and innovative enterprise solutions.",
+                "Commitment to cutting-edge technologies and client satisfaction.",
+                "Flexible and highly responsive delivery models tailored to customer needs."
+            ]
+            for f in fallbacks:
+                if len(key_differentiators) < 4 and f not in key_differentiators:
+                    key_differentiators.append(f)
+
+        # 4. Competitive Advantages
+        adv_kws = ["advantage", "competitive", "reputation", "trusted", "track record", "scale", "ip", "proprietary", "patented", "cost", "efficiency", "strategic partner", "ecosystem"]
+        competitive_advantages = find_top_sentences(adv_kws, max_count=3)
+        if len(competitive_advantages) < 2:
+            fallbacks = [
+                f"Established market presence and trusted brand reputation in the {industry} sector.",
+                "Strong strategic partnerships with leading global technology vendors.",
+                "Highly skilled global workforce with continuous learning and enablement."
+            ]
+            for f in fallbacks:
+                if len(competitive_advantages) < 3 and f not in competitive_advantages:
+                    competitive_advantages.append(f)
+
+        # 5. Competitors
+        competitor_keywords = [
+            ("Booz Allen Hamilton", "Booz Allen Hamilton Inc.", "Direct Competitor"),
+            ("Deloitte", "Deloitte Consulting LLP", "Direct Competitor"),
+            ("Guidehouse", "Guidehouse LLP", "Direct Competitor"),
+            ("Palantir", "Palantir Technologies", "Direct Competitor"),
+            ("SAIC", "Science Applications International Corp (SAIC)", "Direct Competitor"),
+            ("Accenture", "Accenture", "Direct Competitor"),
+            ("TCS", "Tata Consultancy Services (TCS)", "Direct Competitor"),
+            ("Infosys", "Infosys Limited", "Direct Competitor"),
+            ("Wipro", "Wipro Limited", "Direct Competitor"),
+            ("Capgemini", "Capgemini", "Direct Competitor"),
+            ("Cognizant", "Cognizant", "Direct Competitor"),
+            ("Microsoft", "Microsoft Corp.", "Indirect Competitor"),
+            ("Salesforce", "Salesforce Inc.", "Indirect Competitor"),
+            ("Oracle", "Oracle Corp.", "Indirect Competitor"),
+        ]
         competitors = []
-        if "IT" in industry or "Consulting" in industry:
-            competitors = [
-                CompetitorMention(competitor_name="Tata Consultancy Services (TCS)", relationship_type="Direct Competitor", source="Industry mapping"),
-                CompetitorMention(competitor_name="Accenture", relationship_type="Direct Competitor", source="Industry mapping"),
-                CompetitorMention(competitor_name="Wipro", relationship_type="Direct Competitor", source="Industry mapping")
+        for kw, full_name, rel in competitor_keywords:
+            if kw.lower() in combined_text.lower():
+                competitors.append(CompetitorMention(competitor_name=full_name, relationship_type=rel, source="Mentioned in raw LinkedIn text"))
+        
+        # If no competitors mentioned, guess based on industry
+        if not competitors:
+            if "it" in industry.lower() or "consult" in industry.lower() or "service" in industry.lower():
+                competitors = [
+                    CompetitorMention(competitor_name="Tata Consultancy Services (TCS)", relationship_type="Direct Competitor", source="Industry classification mapping"),
+                    CompetitorMention(competitor_name="Accenture", relationship_type="Direct Competitor", source="Industry classification mapping"),
+                    CompetitorMention(competitor_name="Infosys Limited", relationship_type="Direct Competitor", source="Industry classification mapping")
+                ]
+            else:
+                competitors = [
+                    CompetitorMention(competitor_name="Industry Peers", relationship_type="Direct Competitor", source="General competition")
+                ]
+
+        # 6. Strategic Initiatives
+        init_kws = ["initiative", "strategy", "pivot", "investing in", "expanding", "expansion", "partnership", "collaboration", "acquiring", "launching", "commit", "focusing on"]
+        init_sentences = find_top_sentences(init_kws, max_count=3, threshold=2)
+        
+        initiatives = []
+        if init_sentences:
+            for idx, sent in enumerate(init_sentences):
+                words = [w for w in re.sub(r'[^a-zA-Z\s]', '', sent).split() if len(w) > 3]
+                name_words = [w.capitalize() for w in words[:4] if w.lower() not in ["we", "our", "the", "company", "their"]]
+                init_name = " ".join(name_words) or "Strategic Transformation"
+                initiatives.append(StrategicInitiative(
+                    initiative_name=init_name,
+                    description=sent,
+                    evidence="Derived from description or posts",
+                    priority_level="High" if idx == 0 else "Medium"
+                ))
+        
+        if not initiatives:
+            initiatives = [
+                StrategicInitiative(
+                    initiative_name="AI and Automation Integration",
+                    description="Embedding Generative AI capabilities and intelligent automation tools into core client solutions.",
+                    evidence="General strategic positioning and market shifts",
+                    priority_level="Critical"
+                ),
+                StrategicInitiative(
+                    initiative_name="Digital Agility & Cloud Migration",
+                    description="Assisting clients in transitioning to modern, secure, hybrid cloud setups and platforms.",
+                    evidence="Service listings and technical specialties",
+                    priority_level="High"
+                ),
+                StrategicInitiative(
+                    initiative_name="Global Operations Expansion",
+                    description="Expanding delivery hubs and regional offices to support international enterprise clients.",
+                    evidence="Locations and corporate growth patterns",
+                    priority_level="Medium"
+                )
             ]
-        else:
-            competitors = [
-                CompetitorMention(competitor_name="Industry Peers", relationship_type="Direct Competitor", source="General competition")
+
+        # 7. Growth Signals
+        growth_kws = ["growth", "revenue", "funding", "acquired", "acquisition", "hiring", "surge", "expansion", "office", "award", "partnership"]
+        growth_sentences = find_top_sentences(growth_kws, max_count=2, threshold=1)
+        growth = []
+        if growth_sentences:
+            for sent in growth_sentences:
+                sig_type = "Partnership"
+                if any(x in sent.lower() for x in ["funding", "round", "raised"]):
+                    sig_type = "Funding"
+                elif any(x in sent.lower() for x in ["acquired", "acquisition"]):
+                    sig_type = "Acquisition"
+                elif any(x in sent.lower() for x in ["hiring", "recruit", "talent"]):
+                    sig_type = "Hiring Surge"
+                elif any(x in sent.lower() for x in ["office", "location", "facility"]):
+                    sig_type = "New Office"
+                elif any(x in sent.lower() for x in ["award", "winning", "recognized"]):
+                    sig_type = "Award"
+                
+                growth.append(GrowthSignal(
+                    signal_type=sig_type,
+                    description=sent,
+                    significance="High"
+                ))
+        if not growth:
+            growth = [
+                GrowthSignal(signal_type="Partnership", description=f"Collaboration with key industry platforms to drive business model innovation.", significance="High"),
+                GrowthSignal(signal_type="Market Expansion", description=f"Expanding business development teams across operational hubs.", significance="Medium")
             ]
 
-        initiatives = [
-            StrategicInitiative(
-                initiative_name="AI and Automation Integration",
-                description="Embedding generative and agentic AI models into core client offerings.",
-                evidence="Mentions of AI-powered solutions and Topaz framework in posts.",
-                priority_level="Critical"
-            ),
-            StrategicInitiative(
-                initiative_name="Digital Agility & Cloud Migration",
-                description="Assisting legacy enterprise clients in migrating to modern hybrid cloud setups.",
-                evidence="Cloud service specialties and Cobalt framework references.",
-                priority_level="High"
-            ),
-            StrategicInitiative(
-                initiative_name="Sustainability & ESG Compliance",
-                description="Promoting sustainable development, green initiatives, and carbon footprint reduction.",
-                evidence="Foundation work, Guinness world record for tree plantation.",
-                priority_level="Medium"
-            )
-        ]
+        # 8. Business Challenges
+        challenge_kws = ["challenge", "risk", "threat", "headwind", "barrier", "shortage", "complexity", "bottleneck"]
+        challenge_sentences = find_top_sentences(challenge_kws, max_count=2, threshold=1)
+        challenges = []
+        if challenge_sentences:
+            for sent in challenge_sentences:
+                area = "Digital Transformation"
+                if any(x in sent.lower() for x in ["hiring", "talent", "retention", "recruitment"]):
+                    area = "Talent Acquisition"
+                elif any(x in sent.lower() for x in ["scale", "growth", "volume"]):
+                    area = "Scalability"
+                elif any(x in sent.lower() for x in ["security", "breach", "cyber"]):
+                    area = "Security"
+                elif any(x in sent.lower() for x in ["competitor", "market share", "rival"]):
+                    area = "Competition"
+                elif any(x in sent.lower() for x in ["cost", "spend", "margin"]):
+                    area = "Cost Optimization"
+                
+                challenges.append(BusinessChallenge(
+                    challenge_area=area,
+                    description=sent,
+                    evidence="Derived from description text",
+                    opportunity_for_us=f"Offer specialized analytics, data integration, and strategy consulting to mitigate this challenge."
+                ))
+        if not challenges:
+            challenges = [
+                BusinessChallenge(
+                    challenge_area="Talent Acquisition",
+                    description="Upskilling and retaining top technical and domain talent in a highly competitive global market.",
+                    evidence="General industry trends",
+                    opportunity_for_us="Offer comprehensive workforce enablement, training acceleration, and professional staffing support."
+                ),
+                BusinessChallenge(
+                    challenge_area="AI Adoption",
+                    description="Integrating Generative AI and automation technologies securely while demonstrating ROI.",
+                    evidence="Emergence of AI-first demand",
+                    opportunity_for_us="Pitch custom AI/ML model deployment, automated reporting dashboards, and LLM optimization workshops."
+                )
+            ]
 
-        growth = [
-            GrowthSignal(signal_type="Partnership", description="Collaboration with Dell Technologies to accelerate hybrid cloud and AI transformations.", significance="High"),
-            GrowthSignal(signal_type="Product Launch", description="Expanding ASCM supply chain maturity diagnostics to target enterprise supply chain volatility.", significance="High")
-        ]
-
-        challenges = [
-            BusinessChallenge(
-                challenge_area="AI Adoption",
-                description="Upskilling the workforce to adapt to rapidly evolving Generative AI client demands.",
-                evidence="Emphasis on 'always-on learning' and AI-first retail/supply chain diagnostics.",
-                opportunity_for_us="Offer comprehensive training programs, co-innovation labs, and AI acceleration workshops."
-            ),
-            BusinessChallenge(
-                challenge_area="Market Competition",
-                description="Standing out in a highly saturated global IT consulting and services market.",
-                evidence="Aggressive competitive positioning in retail and supply chain sectors.",
-                opportunity_for_us="Pitch specialized co-sell or joint go-to-market solutions that bundle products and services."
-            )
-        ]
-
+        # 9. Tech Stack Profile
+        tech_kws = {
+            "cloud_providers_used": ["AWS", "Azure", "Google Cloud", "GCP", "Oracle Cloud"],
+            "ai_ml_technologies": ["TensorFlow", "PyTorch", "OpenAI", "Keras", "scikit-learn", "LangChain", "Hugging Face", "Vertex AI", "Agentic AI", "Generative AI"],
+            "programming_languages": ["Python", "Java", "C++", "Go", "Rust", "TypeScript", "JavaScript", "C#", "SQL"],
+            "frameworks_and_tools": ["React", "Angular", "Vue", "Kubernetes", "Docker", "Node.js", "Spring Boot", "Django", "FastAPI"],
+            "security_certifications": ["SOC 2", "ISO 27001", "GDPR Compliant", "HIPAA", "PCI DSS"],
+            "data_technologies": ["Snowflake", "Databricks", "PostgreSQL", "MongoDB", "MySQL", "Redis", "Oracle", "Tableau", "Power BI", "BigQuery", "Spark", "Kafka"]
+        }
+        
+        detected_tech = {}
+        for category, terms in tech_kws.items():
+            detected_tech[category] = []
+            for term in terms:
+                if re.search(r'\b' + re.escape(term) + r'\b', combined_text, re.IGNORECASE):
+                    detected_tech[category].append(term)
+        
+        if not detected_tech["cloud_providers_used"]:
+            detected_tech["cloud_providers_used"] = ["AWS", "Azure"]
+        if not detected_tech["programming_languages"]:
+            detected_tech["programming_languages"] = ["Python", "Java", "SQL"]
+        if not detected_tech["data_technologies"]:
+            detected_tech["data_technologies"] = ["PostgreSQL", "Tableau"]
+            
         tech_profile = TechStackProfile(
-            cloud_providers_used=["AWS", "Azure", "Google Cloud"],
-            ai_ml_technologies=["TensorFlow", "PyTorch", "OpenAI", "Agentic AI"],
-            programming_languages=["Python", "Java", "TypeScript", "SQL"],
-            frameworks_and_tools=["React", "Kubernetes", "Docker", "SD-WAN"],
-            security_certifications=["SOC 2", "ISO 27001", "GDPR Compliant"],
-            data_technologies=["Snowflake", "Databricks", "Tableau"],
-            digital_maturity_level="Leader"
+            cloud_providers_used=detected_tech["cloud_providers_used"],
+            ai_ml_technologies=detected_tech["ai_ml_technologies"],
+            programming_languages=detected_tech["programming_languages"],
+            frameworks_and_tools=detected_tech["frameworks_and_tools"],
+            security_certifications=detected_tech["security_certifications"],
+            data_technologies=detected_tech["data_technologies"],
+            digital_maturity_level="Leader" if len(detected_tech["ai_ml_technologies"]) > 1 else "Advanced"
         )
 
-        products = [
-            ProductOrService(name="Finacle", category="Core Banking Systems", description="Industry-leading core banking platform used globally.", target_audience="Financial Institutions & Banks"),
-            ProductOrService(name="Infosys McCamish", category="Insurance Solutions", description="Comprehensive insurance agency management platform.", target_audience="Insurance Providers & Agencies")
-        ]
+        # 10. Products & Services
+        products = []
+        for spec in specialties[:4]:
+            products.append(ProductOrService(
+                name=spec,
+                category=f"{industry} Solution",
+                description=f"Specialized {spec} capability offered as part of {name}'s portfolio.",
+                target_audience="Enterprise Clients"
+            ))
+            
+        if not products:
+            products = [
+                ProductOrService(name="Enterprise Digital Consulting", category="Professional Services", description="Strategic advisory to modernize enterprise workflows.", target_audience="Enterprise and Mid-Market Clients"),
+                ProductOrService(name="Custom Technical Delivery", category="Solutions Delivery", description="End-to-end design and engineering of software and data systems.", target_audience="Corporate IT Departments")
+            ]
 
-        maturity_stage = "Mature Enterprise" if founded < 2005 else "Growth Stage"
+        # 11. Maturity stage
+        if founded < 2000:
+            maturity_stage = "Mature Enterprise"
+        elif founded < 2012:
+            maturity_stage = "Scale-up"
+        else:
+            maturity_stage = "Growth Stage"
+
+        # 12. Executive Summary
+        tagline_part = f" under the tagline '{tagline}'" if tagline else ""
+        specs_part = f", with core specialties including {', '.join(specialties[:3])}" if specialties else ""
         executive_summary = (
-            f"{name} is a leading {industry} company founded in {founded} and headquartered in {hq}. "
-            f"With a global scale and tagline '{tagline}', the company is heavily focused on AI-first "
-            f"transformations, cloud migration, and sustainable enterprise systems."
+            f"{name} is a leading player in the {industry} sector, founded in {founded} and headquartered in {hq}. "
+            f"The company operates{tagline_part}{specs_part}. "
+            f"They deliver enterprise-grade services globally and focus on driving technological evolution for their clients."
         )
 
+        # 13. Sales Talking Points
         sales_talking_points = [
-            f"Highlight how we can complement {name}'s AI-first (Topaz) and Cloud (Cobalt) offerings.",
-            f"Pitch joint solutions for hybrid cloud adoption using partner ecosystems like Dell.",
-            "Reference their recent ASCM collaboration to discuss supply chain modernization."
+            f"Discuss how our analytics and data warehousing services can accelerate {name}'s capabilities in {specialties[0] if specialties else industry}.",
+            f"Highlight our compatibility with their core tech stack tools (like {', '.join(tech_profile.data_technologies[:2])}).",
+            f"Reference their strategic focus on growth and international markets to explore collaborative co-selling."
         ]
 
+        # 14. Recommended Approach
         recommended_approach = (
-            f"Approach {name} as a strategic partner to accelerate their Generative AI offerings, "
-            "focusing on scalability, safety, and rapid deployment for their enterprise clients."
+            f"Approach {name} as a technology enabler and co-innovation partner. "
+            f"Frame our value proposition around cost optimization, secure cloud data scaling, "
+            f"and accelerating their Generative AI capabilities for their end enterprise clients."
         )
 
         return BIProfile(
@@ -346,7 +367,7 @@ Generate a JSON object with these exact keys:
             growth_signals=growth,
             business_challenges=challenges,
             digital_transformation_status="Advanced",
-            ai_adoption_level="Scaled",
+            ai_adoption_level="Scaled" if tech_profile.ai_ml_technologies else "Exploring",
             products_and_services=products,
             tech_stack=tech_profile,
             company_maturity_stage=maturity_stage,

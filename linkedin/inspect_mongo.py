@@ -71,8 +71,33 @@ def inspect_db():
                         print(f"     Page URL: {sample.get('page_url')}")
                     elif col_name == "scrape_logs":
                         print(f"     Slug: {sample.get('company_slug')}")
-                        print(f"     Status: {sample.get('scrape_status')}")
+                        print(f"     Status: {sample.get('scrape_status') or sample.get('status')}")
                         print(f"     Duration: {sample.get('duration_seconds')}s")
+                    elif col_name == "company_profiles":
+                        print(f"     Name: {sample.get('company_name')}")
+                        print(f"     Website: {sample.get('website')}")
+                        print(f"     Industry: {sample.get('industry')}")
+                        print(f"     HQ: {sample.get('headquarters')}")
+                    elif col_name == "structured_website":
+                        print(f"     Name: {sample.get('company_name')}")
+                        print(f"     Website: {sample.get('website_url')}")
+                        print(f"     Industry: {sample.get('industry')}")
+                    elif col_name == "raw_website":
+                        print(f"     Slug: {sample.get('company_slug')}")
+                        print(f"     URL: {sample.get('page_url')}")
+                    elif col_name == "structured_external_search":
+                        print(f"     Name: {sample.get('company_name')}")
+                        print(f"     Website: {sample.get('website')}")
+                    elif col_name == "raw_external_search":
+                        print(f"     Name: {sample.get('company_name')}")
+                        print(f"     Slug: {sample.get('company_slug')}")
+                    elif col_name == "rfps":
+                        print(f"     Solicitation #: {sample.get('solicitation_number')}")
+                        print(f"     Competitors: {[c.get('company_name') for c in sample.get('competitors', [])]}")
+                    elif col_name == "search_cache":
+                        print(f"     Query: {sample.get('query')}")
+                    else:
+                        print(f"     Keys: {list(sample.keys())}")
                 print()
                 
     except Exception as e:

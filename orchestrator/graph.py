@@ -17,7 +17,7 @@ Usage:
     result = run_pipeline("https://linkedin.com/company/infosys")
 """
 
-from typing import Any
+from typing import Any, Optional
 from langgraph.graph import StateGraph, END
 
 from orchestrator.state import AgentState
@@ -32,6 +32,7 @@ from orchestrator.nodes import (
     trigger_scrapers,
     discover_external_news,
     run_compactor,
+    generate_pitch_proposal,
 )
 from utils.helpers import setup_logger
 
@@ -99,6 +100,7 @@ def build_graph() -> Any:
     graph.add_node("discover_external_news", discover_external_news)
     graph.add_node("merge_results", merge_results)
     graph.add_node("run_compactor", run_compactor)
+    graph.add_node("generate_pitch_proposal", generate_pitch_proposal)
 
     # Entry point
     graph.set_entry_point("classify_input")
@@ -138,9 +140,10 @@ def build_graph() -> Any:
     graph.add_edge("run_linkedin_agent", "merge_results")
     graph.add_edge("discover_external_news", "merge_results")
 
-    # merge → run_compactor → END
+    # merge → run_compactor → generate_pitch_proposal → END
     graph.add_edge("merge_results", "run_compactor")
-    graph.add_edge("run_compactor", END)
+    graph.add_edge("run_compactor", "generate_pitch_proposal")
+    graph.add_edge("generate_pitch_proposal", END)
 
     return graph.compile()
 
@@ -160,12 +163,13 @@ def _get_app():
     return _app
 
 
-def run_pipeline(user_input: str) -> dict:
+def run_pipeline(user_input: str, solicitation_number: Optional[str] = None) -> dict:
     """
     Run the full agent pipeline for any user input.
 
     Args:
         user_input: Company name, official website URL, or LinkedIn URL.
+        solicitation_number: Optional target solicitation number to compile teaming proposal for.
 
     Returns:
         The final AgentState dict with combined_profile, linkedin_data,
@@ -191,6 +195,8 @@ def run_pipeline(user_input: str) -> dict:
         "external_structured_insights": None,
         "combined_profile": None,
         "optimized_profile": None,
+        "solicitation_number": solicitation_number,
+        "pdf_proposal_path": None,
         "errors": [],
     }
 

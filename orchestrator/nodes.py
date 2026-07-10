@@ -606,99 +606,37 @@ def discover_external_news(state: AgentState) -> dict:
             })
             return {"external_news": []}
 
-        if not settings.USE_LLM_STRUCTURING:
-            logger.info("[discover_external_news] USE_LLM_STRUCTURING is False. Running rule-based structured search profiling.")
-            insights = []
-            for r in raw_results[:6]:
-                snippet_lower = r["snippet"].lower()
-                category = "General News"
-                if any(x in snippet_lower for x in ["revenue", "profit", "growth", "funding", "valuation", "financial"]):
-                    category = "Financial Health"
-                elif any(x in snippet_lower for x in ["competitor", "market share", "beat", "swot", "rival"]):
-                    category = "Competitor Intelligence"
-                elif any(x in snippet_lower for x in ["rfp", "tender", "contract", "win"]):
-                    category = "RFP / Contract Win"
-                elif any(x in snippet_lower for x in ["product", "launch", "feature", "release"]):
-                    category = "Product Release"
+        logger.info("[discover_external_news] Running rule-based structured search profiling.")
+        insights = []
+        for r in raw_results[:6]:
+            snippet_lower = r["snippet"].lower()
+            category = "General News"
+            if any(x in snippet_lower for x in ["revenue", "profit", "growth", "funding", "valuation", "financial"]):
+                category = "Financial Health"
+            elif any(x in snippet_lower for x in ["competitor", "market share", "beat", "swot", "rival"]):
+                category = "Competitor Intelligence"
+            elif any(x in snippet_lower for x in ["rfp", "tender", "contract", "win"]):
+                category = "RFP / Contract Win"
+            elif any(x in snippet_lower for x in ["product", "launch", "feature", "release"]):
+                category = "Product Release"
 
-                insights.append({
-                    "category": category,
-                    "description": r["snippet"],
-                    "source_url": r["url"],
-                    "confidence_score": 0.8
-                })
+            insights.append({
+                "category": category,
+                "description": r["snippet"],
+                "source_url": r["url"],
+                "confidence_score": 0.8
+            })
 
-            structured_profile = {
-                "company_name": company_name,
-                "website": official_url,
-                "business_model": f"Core business model for {company_name} extracted from search snippets.",
-                "value_proposition": f"Value proposition for {company_name} extracted from search snippets.",
-                "products_and_services": [],
-                "insights": insights,
-                "company_slug": company_slug,
-                "scraped_at": datetime.now(tz=timezone.utc).isoformat()
-            }
-        else:
-            # 2. Run LLM structuring pass (using dict config to resolve Pylance parameter warnings)
-            from langchain_openai import ChatOpenAI
-            llm = ChatOpenAI(
-                **{
-                    "openai_api_key": settings.OPENROUTER_API_KEY,
-                    "openai_api_base": settings.OPENROUTER_BASE_URL,
-                    "model_name": settings.OPENROUTER_MODEL,
-                    "max_tokens": 2000,
-                },
-                temperature=0.0,
-                timeout=45.0
-            )
-
-            prompt = f"""You are a professional business intelligence and research analyst.
-Analyze the following raw search snippets about the company '{company_name}' and extract a structured company research profile.
-This profile is for RFP (Request for Proposal) research.
-
-Search Snippets:
-{json.dumps(raw_results, indent=2)}
-
-Produce a JSON object strictly matching this schema:
-{{
-  "company_name": "{company_name}",
-  "website": "{official_url}",
-  "business_model": "Summarize the company's core business model in one sentence.",
-  "value_proposition": "Summarize the company's value proposition in one sentence.",
-  "products_and_services": [
-    {{
-      "name": "Product or service name",
-      "description": "Short description of what it does",
-      "target_audience": "Target audience or null"
-    }}
-  ],
-  "insights": [
-    {{
-      "category": "E.g., Financial Health, Operational Efficiency, Strategic Pivot, Capital Allocation, Market Growth, etc.",
-      "description": "Factual insight detailing numbers, margins, buybacks, pivots, or performance from the snippets",
-      "source_url": "The exact URL from the snippet supporting this insight",
-      "confidence_score": 1.0
-    }}
-  ]
-}}
-
-Ensure all fields are derived directly from the snippets. Provide a minimum of 4-6 detailed insights covering financial metrics, competitor comparisons, strategic pivots, and latest announcements. The insights must contain specific numbers, growth rates, dates, or competitor names from the snippets where possible. Do not output anything other than a valid JSON object.
-"""
-
-            logger.info("[discover_external_news] Invoking LLM for structured search profiling...")
-            response = llm.invoke(prompt)
-            content = str(response.content).strip()
-
-            # Clean potential markdown wrappers
-            if content.startswith("```json"):
-                content = content[7:]
-            if content.endswith("```"):
-                content = content[:-3]
-            content = content.strip()
-
-            structured_profile = json.loads(content)
-            structured_profile["company_slug"] = company_slug
-            structured_profile["scraped_at"] = datetime.now(tz=timezone.utc).isoformat()
+        structured_profile = {
+            "company_name": company_name,
+            "website": official_url,
+            "business_model": f"Core business model for {company_name} extracted from search snippets.",
+            "value_proposition": f"Value proposition for {company_name} extracted from search snippets.",
+            "products_and_services": [],
+            "insights": insights,
+            "company_slug": company_slug,
+            "scraped_at": datetime.now(tz=timezone.utc).isoformat()
+        }
 
         # Save structured profile to 'structured_external_search'
         struct_collection = get_collection("structured_external_search")
@@ -809,5 +747,67 @@ def run_compactor(state: AgentState) -> dict:
         logger.error(f"[run_compactor] {msg}", exc_info=True)
         return {
             "optimized_profile": None,
+            "errors": state.get("errors", []) + [msg],
+        }
+
+
+# ---------------------------------------------------------------------------
+# 11. Teaming Proposal & PDF Generator Node
+# ---------------------------------------------------------------------------
+
+def generate_pitch_proposal(state: AgentState) -> dict:
+    """
+    LangGraph Node that compiles the teaming pitch JSON and generates
+    the final B2B subcontracting proposal PDF if a solicitation_number is provided in the state.
+    """
+    sol_num = state.get("solicitation_number")
+    if not sol_num:
+        logger.info("[generate_pitch_proposal] No solicitation_number provided in state — skipping proposal generation.")
+        return {}
+
+    logger.info(f"[generate_pitch_proposal] Starting proposal compilation for solicitation: {sol_num}")
+
+    try:
+        from pathlib import Path
+        PROJECT_ROOT = Path(__file__).resolve().parent.parent
+        
+        from utils.rfp_parser import RFPParser
+        from utils.pitch_compiler import PitchCompiler
+        from utils.pdf_generator import PDFGenerator
+
+        # 1. Parse RFP PDFs
+        rfp_parser = RFPParser(sol_num, project_root=str(PROJECT_ROOT))
+        pdf_texts = rfp_parser.extract_text_from_pdfs()
+        
+        if not pdf_texts:
+            raise ValueError(f"No text could be extracted from solicitation PDFs under opportunity {sol_num}")
+            
+        rfp_data = rfp_parser.parse_requirements(pdf_texts)
+
+        # 2. Compile Teaming Proposal JSON
+        winner_name = state.get("company_name") or "Unknown"
+        compiler = PitchCompiler(project_root=str(PROJECT_ROOT))
+        proposal = compiler.compile_teaming_proposal(
+            rfp_data=rfp_data,
+            winner_name=winner_name,
+            workshare_pct=15.0
+        )
+
+        # 3. Generate Proposal PDF & Product Match Report
+        pdf_gen = PDFGenerator(project_root=str(PROJECT_ROOT))
+        pdf_path = pdf_gen.generate_pdf(sol_num)
+        match_pdf_path = pdf_gen.generate_product_match_report(sol_num)
+
+        logger.info(f"[generate_pitch_proposal] Proposal PDF successfully saved to: {pdf_path}")
+        logger.info(f"[generate_pitch_proposal] Product Match Report PDF successfully saved to: {match_pdf_path}")
+        return {
+            "pdf_proposal_path": str(pdf_path)
+        }
+
+    except Exception as exc:
+        msg = f"generate_pitch_proposal failed: {exc}"
+        logger.error(f"[generate_pitch_proposal] {msg}", exc_info=True)
+        return {
+            "pdf_proposal_path": None,
             "errors": state.get("errors", []) + [msg],
         }

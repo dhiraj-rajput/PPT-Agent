@@ -120,3 +120,4 @@ cython_debug/
 
 # Local data files
 data/
+output/

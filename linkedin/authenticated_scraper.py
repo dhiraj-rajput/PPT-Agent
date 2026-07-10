@@ -395,7 +395,7 @@ class AuthenticatedLinkedInScraper:
                 f"raw_text_length={len(page_text)}"
             )
 
-            # Raw text is returned here — LLM structurer will extract posts from it
+            # Raw text is returned here — Rules structurer will extract posts from it
             return [{"raw_posts_page_text": page_text[:15_000]}], raw_record
 
         except Exception as scrape_error:
@@ -444,7 +444,7 @@ class AuthenticatedLinkedInScraper:
                 scrape_success=True,
             )
 
-            # Pass raw text to LLM structurer for funding/affiliated extraction
+            # Pass raw text to Rules structurer for funding/affiliated extraction
             about_data = {"raw_about_page_text": page_text[:15_000]}
 
             logger.info(

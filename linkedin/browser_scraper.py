@@ -1,9 +1,9 @@
 """
-linkedin/crawl4ai_scraper.py
+linkedin/browser_scraper.py
 ----------------------------
 Layer 2: Browser-based scraping using Crawl4AI.
 
-Updated to perform browser crawls without using LLMExtractionStrategy.
+Performs browser crawls without using LLMExtractionStrategy.
 This removes all AI API calls during scraping, preventing rate limits (429)
 and 404 errors completely. The raw text/markdown is still collected and saved.
 """
@@ -13,7 +13,7 @@ from typing import Optional
 from crawl4ai import AsyncWebCrawler, CacheMode, CrawlerRunConfig, BrowserConfig
 
 from linkedin.constants import (
-    SCRAPE_LAYER_CRAWL4AI,
+    SCRAPE_LAYER_BROWSER,
     build_company_about_url,
     build_company_jobs_url,
     build_company_page_url,
@@ -26,7 +26,7 @@ from utils.helpers import get_utc_now, setup_logger
 logger = setup_logger(__name__)
 
 
-class Crawl4AILinkedInScraper:
+class BrowserLinkedInScraper:
     """
     Layer 2 scraper: visits the company's LinkedIn pages using a browser
     via Crawl4AI. Fetches raw markdown/text to feed the parser.
@@ -42,12 +42,12 @@ class Crawl4AILinkedInScraper:
         company_slug: str,
     ) -> tuple[list[RawLinkedInScrapedData], dict]:
         """
-        Runs the full Crawl4AI scraping sequence for a company.
+        Runs the full browser scraping sequence for a company.
 
         Visits the main page, About, Posts, Jobs, and People sub-pages.
         Extracts raw markdown and saves it. No LLM extraction is performed.
         """
-        logger.info(f"[Layer 2 - Crawl4AI] Starting crawl for: '{company_slug}'")
+        logger.info(f"[Layer 2 - Browser] Starting crawl for: '{company_slug}'")
 
         browser_config = self._build_browser_config()
         combined_extracted_data: dict = {}
@@ -212,7 +212,7 @@ class Crawl4AILinkedInScraper:
 
             raw_record = RawLinkedInScrapedData(
                 company_slug=company_slug,
-                scrape_layer=SCRAPE_LAYER_CRAWL4AI,
+                scrape_layer=SCRAPE_LAYER_BROWSER,
                 page_url=page_url,
                 raw_text=crawl_result.markdown[:20_000] if crawl_result.markdown else None,
                 scraped_at=get_utc_now(),
@@ -230,7 +230,7 @@ class Crawl4AILinkedInScraper:
             )
             raw_record = RawLinkedInScrapedData(
                 company_slug=company_slug,
-                scrape_layer=SCRAPE_LAYER_CRAWL4AI,
+                scrape_layer=SCRAPE_LAYER_BROWSER,
                 page_url=page_url,
                 scraped_at=get_utc_now(),
                 scrape_success=False,
@@ -268,4 +268,3 @@ class Crawl4AILinkedInScraper:
         except json.JSONDecodeError as decode_error:
             logger.warning(f"[Layer 2] Failed to parse JSON for '{page_label}': {decode_error}")
             return None
-

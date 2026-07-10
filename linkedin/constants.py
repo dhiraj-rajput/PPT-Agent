@@ -122,7 +122,7 @@ COMPANY_SIZE_LABEL_TO_CODE = {v: k for k, v in COMPANY_SIZE_CODE_TO_LABEL.items(
 # Used to tag raw scraped documents with the layer that produced them.
 
 SCRAPE_LAYER_PUBLIC = "public"           # Layer 1: No login, basic HTML
-SCRAPE_LAYER_CRAWL4AI = "crawl4ai"       # Layer 2: Playwright + LLM extraction
+SCRAPE_LAYER_BROWSER = "browser"           # Layer 2: Playwright browser scraping
 SCRAPE_LAYER_AUTHENTICATED = "authenticated"  # Layer 3: li_at session cookie
 
 

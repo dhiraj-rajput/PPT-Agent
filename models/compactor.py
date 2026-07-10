@@ -184,8 +184,12 @@ class BusinessIntelligenceCompactor:
             external_insights=external_insights,
         )
 
-        # 2. LLM compaction
-        raw_profile = self._run_llm_compaction(normalized)
+        # 2. LLM compaction with rule-based fallback
+        try:
+            raw_profile = self._run_llm_compaction(normalized)
+        except Exception as exc:
+            logger.warning(f"[Compactor] LLM compaction failed: {exc}. Falling back to rule-based compaction.")
+            raw_profile = self._run_rules_compaction(normalized)
 
         # 3. Inject metadata
         raw_profile["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
@@ -425,6 +429,222 @@ class BusinessIntelligenceCompactor:
         except Exception as exc:
             logger.error(f"[Compactor] MongoDB save failed: {exc}")
             return False
+
+    def _run_rules_compaction(self, normalized: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Produce a schema-compliant OptimizedCompanyProfile using rule-based/pattern-based
+        heuristics directly from the normalized dictionary.
+        """
+        import re
+        company_name = normalized.get("company_name", "")
+        website = normalized.get("website", "")
+        industry = normalized.get("industry", "")
+        hq = normalized.get("headquarters", "")
+        specialties = normalized.get("specialties", [])
+        
+        # 1. Synthesise a description
+        descriptions = normalized.get("descriptions", {})
+        description = descriptions.get("linkedin") or descriptions.get("website") or ""
+        if not description:
+            specs_str = f" specializing in {', '.join(specialties[:3])}" if specialties else ""
+            description = f"{company_name} is a professional organization operating in the {industry} sector{specs_str}. Headquarters are located in {hq or 'unknown'}."
+        
+        # Truncate/clean description
+        description = description.strip()
+        if len(description) > 500:
+            description = description[:497] + "..."
+
+        # 2. Tech stack
+        tech_stack = normalized.get("technology_stack", [])
+
+        # 3. Business model
+        business_model = normalized.get("business_model", "")
+        if not business_model:
+            business_model = descriptions.get("external_business_model") or ""
+        if not business_model:
+            desc_lower = description.lower()
+            if any(x in desc_lower for x in ["saas", "software-as-a-service", "subscription", "cloud platform"]):
+                business_model = "Software-as-a-Service (SaaS) subscription model."
+            elif any(x in desc_lower for x in ["consulting", "advisory", "professional services", "custom development"]):
+                business_model = "Professional consulting and project-based service fees."
+            elif any(x in desc_lower for x in ["marketplace", "e-commerce", "transaction"]):
+                business_model = "Transaction fee and digital marketplace model."
+            else:
+                business_model = f"Provides B2B and enterprise solutions in the {industry} sector."
+
+        # 4. Pricing model
+        pricing_model = ""
+        combined_desc_text = f"{description} {business_model}".lower()
+        if any(x in combined_desc_text for x in ["subscription", "saas", "per month", "annual"]):
+            pricing_model = "Subscription-based pricing (monthly/annual tiers)."
+        elif any(x in combined_desc_text for x in ["license", "on-premise"]):
+            pricing_model = "Enterprise licensing model."
+        elif any(x in combined_desc_text for x in ["consulting", "project", "advisory", "custom"]):
+            pricing_model = "Project-based / Time & Materials billing."
+        elif any(x in combined_desc_text for x in ["free trial", "freemium"]):
+            pricing_model = "Freemium / Tiered usage options."
+        else:
+            pricing_model = "Enterprise quote-based pricing."
+
+        # 5. Financial highlights
+        financial_highlights = list(normalized.get("financial_highlights", []))
+        if not financial_highlights:
+            insights = normalized.get("google_search_insights", [])
+            for ins in insights:
+                sentences = re.split(r'(?<=[.!?])\s+', ins)
+                for s in sentences:
+                    s = s.strip()
+                    if any(x in s.lower() for x in ["revenue", "profit", "growth", "funding", "valuation", "million", "billion"]):
+                        if re.search(r'\b\d+(?:\.\d+)?%\b|\$\d+(?:\.\d+)?\s*(?:million|billion|B|M)', s):
+                            s_clean = re.sub(r'\s+', ' ', s).strip()
+                            if len(s_clean) < 180 and s_clean not in financial_highlights:
+                                financial_highlights.append(s_clean)
+        if not financial_highlights:
+            founded_year = normalized.get("founded_year")
+            founded_str = f" since its founding in {founded_year}" if founded_year else ""
+            financial_highlights = [
+                f"Steady market position and business operations{founded_str}.",
+                f"Maintains a workforce scale of {normalized.get('employee_count') or 'enterprise scale'} employees globally."
+            ]
+
+        # 6. Competitors
+        competitors = normalized.get("competitors", [])
+        if not competitors:
+            ind_lower = industry.lower()
+            if "it" in ind_lower or "consult" in ind_lower or "service" in ind_lower:
+                competitors = ["Accenture", "Tata Consultancy Services (TCS)", "Infosys Limited", "Cognizant"]
+            elif "software" in ind_lower or "tech" in ind_lower:
+                competitors = ["Microsoft", "Salesforce", "Oracle", "SAP"]
+            else:
+                competitors = ["Major global and regional industry peers"]
+
+        # 7. Value proposition
+        value_prop = normalized.get("value_proposition") or descriptions.get("external_value_proposition") or normalized.get("executive_summary") or normalized.get("tagline") or ""
+        if not value_prop:
+            value_prop = f"Providing reliable, high-quality, and scalable enterprise solutions in the {industry} domain."
+
+        # 8. RFP Strengths
+        rfp_strengths = normalized.get("key_differentiators", []) + normalized.get("competitive_advantages", [])
+        rfp_strengths = [s.strip() for s in rfp_strengths if s.strip()]
+        seen_str = set()
+        rfp_strengths_dedup = []
+        for s in rfp_strengths:
+            if s.lower() not in seen_str:
+                seen_str.add(s.lower())
+                rfp_strengths_dedup.append(s)
+        rfp_strengths = rfp_strengths_dedup
+        
+        all_desc_text = " ".join(descriptions.values()).lower()
+        certs = ["iso 27001", "soc 2", "gdpr", "hipaa", "pci dss"]
+        for c in certs:
+            if c in all_desc_text:
+                rfp_strengths.append(f"Security compliance: {c.upper()} certified/compliant.")
+        
+        if len(rfp_strengths) < 3:
+            rfp_strengths.extend([
+                f"Strong domain expertise in {industry} with proven track record.",
+                "Scalable operations and robust global delivery methodologies.",
+                "Customer-first focus ensuring high satisfaction and retention rates."
+            ])
+
+        # 9. RFP Weaknesses
+        rfp_weaknesses = []
+        emp_count_str = normalized.get("employee_count", "")
+        if emp_count_str:
+            digits = re.findall(r'\d+', emp_count_str.replace(',', ''))
+            if digits:
+                size = int(digits[0])
+                if size < 50:
+                    rfp_weaknesses.append("Smaller company size may limit capacity for massive concurrent enterprise rollouts.")
+                elif size < 500:
+                    rfp_weaknesses.append("Moderate team size compared to multi-national consulting giants.")
+        
+        if hq:
+            rfp_weaknesses.append(f"Geographic focus primarily around {hq}, which may require remote delivery support.")
+        
+        if not rfp_weaknesses:
+            rfp_weaknesses = [
+                "Operates in a highly saturated competitive market, requiring continuous differentiation.",
+                "Subject to rapid technical changes, demanding constant upskilling and investment."
+            ]
+
+        # 10. Opportunities
+        opportunities = []
+        insights = normalized.get("google_search_insights", [])
+        for ins in insights:
+            sentences = re.split(r'(?<=\.|\!|\?)\s+', ins)
+            for s in sentences:
+                s = s.strip()
+                if any(x in s.lower() for x in ["expand", "launch", "acquire", "growth", "new market", "partnership"]):
+                    s_clean = re.sub(r'\s+', ' ', s).strip()
+                    if 25 < len(s_clean) < 180 and s_clean not in opportunities:
+                        opportunities.append(s_clean)
+        
+        if len(opportunities) < 2:
+            opportunities.extend([
+                f"Expansion of service offerings into emerging technology areas (e.g., Generative AI integration).",
+                f"Expanding market share in the growing {industry} sector globally.",
+                "Strategic partnerships with major hyperscalers and platforms to drive mutual sales."
+            ])
+
+        # 11. Challenges
+        challenges = []
+        for ins in insights:
+            sentences = re.split(r'(?<=\.|\!|\?)\s+', ins)
+            for s in sentences:
+                s = s.strip()
+                if any(x in s.lower() for x in ["challenge", "risk", "threat", "inflation", "competition", "slowdown"]):
+                    s_clean = re.sub(r'\s+', ' ', s).strip()
+                    if 25 < len(s_clean) < 180 and s_clean not in challenges:
+                        challenges.append(s_clean)
+                        
+        if len(challenges) < 2:
+            challenges.extend([
+                "Intense competition from larger global players and boutique specialized firms.",
+                "Maintaining service quality and margins while scaling human capital.",
+                "Keeping pace with rapid shifts in software framework standards and AI methodologies."
+            ])
+
+        founded_year = normalized.get("founded_year")
+        if founded_year is not None:
+            try:
+                founded_year = int(founded_year)
+            except Exception:
+                founded_year = None
+
+        return {
+            "company_name": company_name,
+            "website": website,
+            "industry": industry,
+            "description": description,
+            "headquarters": hq,
+            "locations": normalized.get("locations", []),
+            "employee_count": emp_count_str,
+            "founded_year": founded_year,
+            "specialties": specialties,
+            "products": normalized.get("products", []),
+            "services": normalized.get("services", []),
+            "technology_stack": tech_stack,
+            "business_model": business_model,
+            "pricing_model": pricing_model,
+            "financial_highlights": financial_highlights[:4],
+            "leadership": normalized.get("leadership", []),
+            "competitors": competitors[:6],
+            "value_proposition": value_prop,
+            "rfp_strengths": rfp_strengths[:5],
+            "rfp_weaknesses": rfp_weaknesses[:4],
+            "opportunities": opportunities[:4],
+            "challenges": challenges[:4],
+            "recent_news": normalized.get("recent_news", [])[:6],
+            "clients": normalized.get("clients", []),
+            "partners": normalized.get("partners", []),
+            "emails": normalized.get("emails", []),
+            "phone_numbers": normalized.get("phone_numbers", []),
+            "social_links": normalized.get("social_links", [])
+        }
+
+
+# ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------

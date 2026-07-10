@@ -4,16 +4,16 @@ linkedin/scraper.py
 Main orchestrator for LinkedIn data collection.
 
 This is the single public entry point for the entire LinkedIn module.
-All other modules (input_resolver, public_scraper, crawl4ai_scraper,
-authenticated_scraper, llm_structurer, storage) are called from here.
+All other modules (input_resolver, public_scraper, browser_scraper,
+authenticated_scraper, rules_structurer, storage) are called from here.
 
 The orchestration flow:
   1. Resolve input → canonical LinkedIn URL + company slug
   2. Check MongoDB cache (skip scraping if fresh data exists)
   3. Run Layer 1: Public scraper (always runs, fast baseline)
-  4. Run Layer 2: Crawl4AI scraper (deep browser-based extraction)
+  4. Run Layer 2: Browser-based scraper (deep browser-based extraction)
   5. Run Layer 3: Authenticated scraper (only if li_at is configured)
-  6. Run LLM Structurer (post-process and normalize all raw data)
+  6. Run Rules Structurer (post-process and normalize all raw data)
   7. Save raw + structured data to MongoDB
   8. Return the final LinkedInCompanyData object
 
@@ -30,7 +30,7 @@ from typing import Optional
 from linkedin.authenticated_scraper import AuthenticatedLinkedInScraper
 from linkedin.constants import (
     SCRAPE_LAYER_AUTHENTICATED,
-    SCRAPE_LAYER_CRAWL4AI,
+    SCRAPE_LAYER_BROWSER,
     SCRAPE_LAYER_PUBLIC,
     build_company_page_url,
     build_company_about_url,
@@ -38,11 +38,11 @@ from linkedin.constants import (
     build_company_people_url,
     build_company_posts_url,
 )
-from linkedin.crawl4ai_scraper import Crawl4AILinkedInScraper
+from linkedin.browser_scraper import BrowserLinkedInScraper
 from linkedin.data_cleaner import DataCleaner
 from linkedin.bi_extractor import BIExtractor
 from linkedin.input_resolver import InputResolver
-from linkedin.llm_structurer import LLMStructurer
+from linkedin.rules_structurer import RulesStructurer
 from linkedin.models import LinkedInCompanyData
 from linkedin.public_scraper import PublicLinkedInScraper
 from linkedin.storage import LinkedInStorage
@@ -125,13 +125,13 @@ async def scrape_company(
         all_raw_records.append(layer1_raw_record)
         layers_used.append(SCRAPE_LAYER_PUBLIC)
 
-    # Step 4: Layer 2 — Crawl4AI scraper
-    layer2_raw_records, layer2_extracted_data = await _run_layer2_crawl4ai_scraper(
+    # Step 4: Layer 2 — Browser-based scraper
+    layer2_raw_records, layer2_extracted_data = await _run_layer2_browser_scraper(
         company_slug=company_slug,
     )
     all_raw_records.extend(layer2_raw_records)
     if layer2_raw_records:
-        layers_used.append(SCRAPE_LAYER_CRAWL4AI)
+        layers_used.append(SCRAPE_LAYER_BROWSER)
 
     # Step 5: Layer 3 — Authenticated scraper (only if li_at is configured)
     layer3_raw_records, layer3_extracted_data = await _run_layer3_authenticated_scraper(
@@ -155,9 +155,9 @@ async def scrape_company(
         f"layers={layers_used}"
     )
 
-    # Step 7: LLM Structuring — convert all raw data to clean structured data
-    llm_structurer = LLMStructurer()
-    final_company_data = await llm_structurer.structure_company_data(
+    # Step 7: Rules-based Structuring — convert all raw data to clean structured data
+    rules_structurer = RulesStructurer()
+    final_company_data = await rules_structurer.structure_company_data(
         company_slug=company_slug,
         linkedin_url=linkedin_url,
         layer1_partial_identity=layer1_partial_identity,
@@ -233,16 +233,16 @@ def _run_layer1_public_scraper(
         return None, None
 
 
-async def _run_layer2_crawl4ai_scraper(
+async def _run_layer2_browser_scraper(
     company_slug: str,
 ) -> tuple[list, dict]:
     """
-    Runs Layer 2 (Crawl4AI) and returns its raw records and extracted data.
+    Runs Layer 2 (Browser-based) and returns its raw records and extracted data.
     Returns ([], {}) if the layer fails.
     """
     try:
-        crawl4ai_scraper = Crawl4AILinkedInScraper()
-        raw_records, extracted_data = await crawl4ai_scraper.scrape(company_slug)
+        browser_scraper = BrowserLinkedInScraper()
+        raw_records, extracted_data = await browser_scraper.scrape(company_slug)
         logger.info(
             f"[Orchestrator] Layer 2 complete | "
             f"pages_scraped={len(raw_records)} | "

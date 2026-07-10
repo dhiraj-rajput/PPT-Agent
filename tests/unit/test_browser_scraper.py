@@ -1,7 +1,7 @@
 """
-tests/unit/test_crawl4ai_scraper.py
+tests/unit/test_browser_scraper.py
 ------------------------------------
-Unit tests for linkedin/crawl4ai_scraper.py.
+Unit tests for linkedin/browser_scraper.py.
 
 Focuses on:
   1. _parse_extracted_content — JSON parsing and list-unwrapping logic
@@ -12,7 +12,7 @@ Focuses on:
 import json
 import pytest
 
-from linkedin.crawl4ai_scraper import Crawl4AILinkedInScraper
+from linkedin.browser_scraper import BrowserLinkedInScraper
 
 
 # ---------------------------------------------------------------------------
@@ -20,9 +20,9 @@ from linkedin.crawl4ai_scraper import Crawl4AILinkedInScraper
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
-def scraper() -> Crawl4AILinkedInScraper:
-    """Crawl4AI scraper instance — browser and LLM are NOT initialized here."""
-    return Crawl4AILinkedInScraper()
+def scraper() -> BrowserLinkedInScraper:
+    """Browser scraper instance — browser is NOT initialized here."""
+    return BrowserLinkedInScraper()
 
 
 # ---------------------------------------------------------------------------

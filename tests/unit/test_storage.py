@@ -36,7 +36,7 @@ def sample_company_data() -> LinkedInCompanyData:
         company_slug="infosys",
         identity=identity,
         scraped_at=datetime.now(tz=timezone.utc),
-        scrape_layers_used=["public", "crawl4ai"],
+        scrape_layers_used=["public", "browser"],
         data_quality_score=0.75,
     )
 
@@ -243,7 +243,7 @@ class TestLogScrapeOperation:
         storage.log_scrape_operation(
             company_slug="infosys",
             scrape_status="success",
-            layers_used=["public", "crawl4ai"],
+            layers_used=["public", "browser"],
             duration_seconds=45.6,
         )
 
@@ -252,7 +252,7 @@ class TestLogScrapeOperation:
 
         assert log_doc["company_slug"] == "infosys"
         assert log_doc["scrape_status"] == "success"
-        assert log_doc["layers_used"] == ["public", "crawl4ai"]
+        assert log_doc["layers_used"] == ["public", "browser"]
         assert log_doc["duration_seconds"] == 45.6
         assert log_doc["error_message"] is None
 

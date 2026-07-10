@@ -297,7 +297,7 @@ class TestLinkedInCompanyData:
             company_slug="infosys",
             identity=identity,
             job_postings=[JobPosting(job_title="Engineer")],
-            scrape_layers_used=["public", "crawl4ai"],
+            scrape_layers_used=["public", "browser"],
             data_quality_score=0.75,
         )
         dumped = data.model_dump()
@@ -337,7 +337,7 @@ class TestRawLinkedInScrapedData:
     def test_failed_raw_data(self):
         raw = RawLinkedInScrapedData(
             company_slug="test-co",
-            scrape_layer="crawl4ai",
+            scrape_layer="browser",
             page_url="https://www.linkedin.com/company/test-co/about",
             scraped_at=datetime.now(tz=timezone.utc),
             scrape_success=False,
