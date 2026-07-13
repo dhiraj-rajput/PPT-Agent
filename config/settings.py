@@ -118,6 +118,34 @@ class AppSettings(BaseSettings):
     MONGODB_PROFILE_COLLECTION: str = Field(default="company_profiles")
     SEARCH_PROVIDER: str = Field(default="auto")
 
+    # ------------------------------------------------------------------
+    # Ollama LLM Configuration (free cloud model)
+    # ------------------------------------------------------------------
+    OLLAMA_HOST: str = Field(
+        default="",
+        description="Ollama host URL. Leave empty to use local Ollama (http://localhost:11434).",
+    )
+    OLLAMA_MODEL: str = Field(
+        default="gemma4:31b-cloud",
+        description="Ollama model to use for LLM compaction and RFP response generation.",
+    )
+    OLLAMA_API_KEY: str = Field(
+        default="",
+        description="Optional API key for authenticated hosted Ollama cloud endpoints.",
+    )
+    OPENROUTER_API_KEY: str = Field(
+        default="",
+        description="[Deprecated] OpenRouter API key. Use Ollama instead.",
+    )
+    OPENROUTER_BASE_URL: str = Field(
+        default="https://openrouter.ai/api/v1",
+        description="[Deprecated] OpenRouter base URL.",
+    )
+    OPENROUTER_MODEL: str = Field(
+        default="google/gemma-4-31b-it:free",
+        description="[Deprecated] OpenRouter model name.",
+    )
+
     @property
     def is_authenticated_linkedin_scraping_enabled(self) -> bool:
         """Returns True if the LinkedIn li_at cookie is configured and not a placeholder."""
@@ -165,6 +193,20 @@ class AppSettings(BaseSettings):
     @property
     def serpapi_api_key(self) -> str:
         return self.SERPAPI_API_KEY
+
+    @property
+    def ollama_host(self) -> str:
+        if not self.OLLAMA_HOST and self.OLLAMA_API_KEY:
+            return "https://ollama.com"
+        return self.OLLAMA_HOST
+
+    @property
+    def ollama_model(self) -> str:
+        return self.OLLAMA_MODEL
+
+    @property
+    def ollama_api_key(self) -> str:
+        return self.OLLAMA_API_KEY
 
 
 class ConfigurationError(RuntimeError):

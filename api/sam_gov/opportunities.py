@@ -272,8 +272,10 @@ class SAMOpportunitiesClient:
             raw_notices = self._filter_mock_notices(query, naics_code)
         else:
             # Live REST API Call
+            # GSA API limits date range to 365 days; use 360 to prevent timezone/leap year range errors
+            actual_days = min(posted_days, 360)
             end_date = datetime.now(tz=timezone.utc)
-            start_date = end_date - timedelta(days=posted_days)
+            start_date = end_date - timedelta(days=actual_days)
             posted_from = start_date.strftime("%m/%d/%Y")
             posted_to = end_date.strftime("%m/%d/%Y")
 

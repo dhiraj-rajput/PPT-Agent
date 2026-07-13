@@ -33,6 +33,7 @@ from orchestrator.nodes import (
     discover_external_news,
     run_compactor,
     generate_pitch_proposal,
+    generate_rfp_response,
 )
 from utils.helpers import setup_logger
 
@@ -101,6 +102,7 @@ def build_graph() -> Any:
     graph.add_node("merge_results", merge_results)
     graph.add_node("run_compactor", run_compactor)
     graph.add_node("generate_pitch_proposal", generate_pitch_proposal)
+    graph.add_node("generate_rfp_response", generate_rfp_response)
 
     # Entry point
     graph.set_entry_point("classify_input")
@@ -140,10 +142,11 @@ def build_graph() -> Any:
     graph.add_edge("run_linkedin_agent", "merge_results")
     graph.add_edge("discover_external_news", "merge_results")
 
-    # merge → run_compactor → generate_pitch_proposal → END
+    # merge → run_compactor → generate_pitch_proposal → generate_rfp_response → END
     graph.add_edge("merge_results", "run_compactor")
     graph.add_edge("run_compactor", "generate_pitch_proposal")
-    graph.add_edge("generate_pitch_proposal", END)
+    graph.add_edge("generate_pitch_proposal", "generate_rfp_response")
+    graph.add_edge("generate_rfp_response", END)
 
     return graph.compile()
 
@@ -163,13 +166,16 @@ def _get_app():
     return _app
 
 
-def run_pipeline(user_input: str, solicitation_number: Optional[str] = None) -> dict:
+def run_pipeline(user_input: str, solicitation_number: Optional[str] = None,
+                 rfp_response_mode: Optional[str] = None) -> dict:
     """
     Run the full agent pipeline for any user input.
 
     Args:
         user_input: Company name, official website URL, or LinkedIn URL.
         solicitation_number: Optional target solicitation number to compile teaming proposal for.
+        rfp_response_mode: Optional RFP response mode ("prime" or "subcontract") to generate
+                           a full DOCX-styled RFP response PDF after the pipeline completes.
 
     Returns:
         The final AgentState dict with combined_profile, linkedin_data,
@@ -177,8 +183,9 @@ def run_pipeline(user_input: str, solicitation_number: Optional[str] = None) -> 
 
     Example:
         result = run_pipeline("https://infosys.com")
-        print(result["combined_profile"]["company_name"])
-        print(result["combined_profile"]["linkedin_url"])
+        result = run_pipeline("Guidehouse LLP",
+                              solicitation_number="N00178-26-R-3001",
+                              rfp_response_mode="prime")
     """
     app = _get_app()
 
@@ -197,6 +204,8 @@ def run_pipeline(user_input: str, solicitation_number: Optional[str] = None) -> 
         "optimized_profile": None,
         "solicitation_number": solicitation_number,
         "pdf_proposal_path": None,
+        "rfp_response_mode": rfp_response_mode,
+        "rfp_response_pdf_path": None,
         "errors": [],
     }
 

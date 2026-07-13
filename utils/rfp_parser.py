@@ -48,7 +48,7 @@ class RFPParser:
     Extracts text from RFP PDF files and parses requirements using rule-based/pattern-based matching.
     """
 
-    def __init__(self, solicitation_number: str, project_root: str = "E:/MIT WPU/MIT WPU Subjects/7th_Sem/Orbit/PPT-Agent"):
+    def __init__(self, solicitation_number: str, project_root: str = str(Path(__file__).resolve().parent.parent)):
         self.solicitation_number = solicitation_number
         self.project_root = Path(project_root)
         self.rfp_docs_dir = self.project_root / "downloads" / "opportunities" / solicitation_number / "rfp_docs"
@@ -96,6 +96,14 @@ class RFPParser:
         """Scans extracted text for patterns and classifies findings into a structured dict."""
         parsed_data = {
             "solicitation_number": self.solicitation_number,
+            "metadata": {
+                "solicitation_number": self.solicitation_number,
+                "issuing_agency": "Federal Agency",
+                "project_title": "Enterprise Software Engagement",
+                "naics_code": "541511",
+                "deadline": "N/A",
+                "set_aside": "N/A"
+            },
             "security_requirements": [],
             "technical_requirements": [],
             "facility_requirements": [],
@@ -193,6 +201,18 @@ class RFPParser:
             summary += f"Security compliance mandates: {', '.join(sec_list)}."
             
         parsed_data["summary"] = summary.strip()
+        
+        # Populate metadata dynamically
+        agency = "Federal Agency"
+        if "veteran" in all_text or "department of veterans" in all_text:
+            agency = "Department of Veterans Affairs"
+        elif "homeland" in all_text or "dhs" in all_text:
+            agency = "Department of Homeland Security"
+        elif "defense" in all_text or "navy" in all_text or "dod" in all_text or "military" in all_text:
+            agency = "Department of Defense"
+            
+        parsed_data["metadata"]["issuing_agency"] = agency
+        parsed_data["metadata"]["project_title"] = subject_title
         
         return parsed_data
 

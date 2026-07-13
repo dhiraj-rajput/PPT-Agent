@@ -60,6 +60,10 @@ class AgentState(TypedDict):
     solicitation_number: Optional[str]     # Target solicitation number to compile teaming proposal for
     pdf_proposal_path: Optional[str]       # Path to the generated B2B teaming proposal PDF
 
+    # --- RFP Response Generator (respond_to_rfp pipeline) ---
+    rfp_response_mode: Optional[str]       # "prime" | "subcontract" — which response mode to use
+    rfp_response_pdf_path: Optional[str]   # Path to the DOCX-styled RFP response PDF
+
     # --- Errors (Annotated with reducer for concurrent safety) ---
     errors: Annotated[List[str], merge_errors]                      # Accumulated error messages from any node
 
