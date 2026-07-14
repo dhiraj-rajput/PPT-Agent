@@ -119,6 +119,7 @@ cython_debug/
 *.swo
 
 # Local data files
-data/
-output/
-private/
+/data/
+/output/
+/private/
+
