@@ -16,7 +16,7 @@ class PitchCompiler:
     to formulate a highly detailed structured teaming agreement proposal JSON.
     """
 
-    def __init__(self, project_root: str = "E:/MIT WPU/MIT WPU Subjects/7th_Sem/Orbit/PPT-Agent"):
+    def __init__(self, project_root: str = str(Path(__file__).resolve().parent.parent)):
         self.project_root = Path(project_root)
 
     def load_winner_profile(self, winner_name: str) -> Dict[str, Any]:
@@ -137,6 +137,9 @@ class PitchCompiler:
         sol_num = rfp_data.get("solicitation_number", "Unknown")
         rfp_title = rfp_data.get("summary", "").split(" is for ")[-1].split(".")[0] or "Professional IT Support Services"
         
+        if not (10.0 <= workshare_pct <= 20.0):
+            raise ValueError(f"workshare_pct must be between 10.0 and 20.0, got {workshare_pct}")
+
         logger.info(f"Compiling teaming proposal for RFP {sol_num} with Winner '{winner_name}'")
 
         # 1. Load profiles

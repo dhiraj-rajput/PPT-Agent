@@ -274,7 +274,16 @@ def run_linkedin_agent(state: AgentState) -> dict:
 
     try:
         from linkedin.scraper import scrape_company
-        data = asyncio.run(scrape_company(linkedin_input))
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop and loop.is_running():
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                data = pool.submit(asyncio.run, scrape_company(linkedin_input)).result()
+        else:
+            data = asyncio.run(scrape_company(linkedin_input))
 
         serialized = data.model_dump(mode="json")
 
@@ -590,6 +599,7 @@ def discover_external_news(state: AgentState) -> dict:
             "search_results": raw_results,
             "scraped_at": datetime.now(tz=timezone.utc)
         }
+        raw_record.pop('_id', None)  # Remove _id if re-used from a previous insert
         raw_collection.insert_one(raw_record)
         logger.info(f"[discover_external_news] Saved raw search data to 'raw_external_search' collection.")
 
@@ -809,5 +819,113 @@ def generate_pitch_proposal(state: AgentState) -> dict:
         logger.error(f"[generate_pitch_proposal] {msg}", exc_info=True)
         return {
             "pdf_proposal_path": None,
+            "errors": state.get("errors", []) + [msg],
+        }
+
+
+# ---------------------------------------------------------------------------
+# 12. RFP Response Generator Node
+# ---------------------------------------------------------------------------
+
+def generate_rfp_response(state: AgentState) -> dict:
+    """
+    LangGraph Node that generates a full DOCX-styled RFP response PDF.
+
+    Fires only when rfp_response_mode is set in state ("prime" or "subcontract").
+
+    Mode "prime":
+        - Uses Ollama LLM (gemma4:31b-cloud) to generate all proposal sections
+        - Uses optimized_profile as the competitor/winner intelligence input
+        - Generates a full prime contractor RFP response to the agency
+
+    Mode "subcontract":
+        - Rule-based: uses pitch_compiler output + winner profile
+        - No LLM calls — fast and deterministic
+        - Generates a formal subcontracting teaming proposal to the prime winner
+
+    Updates:
+        rfp_response_pdf_path: str — path to the generated PDF
+    """
+    mode = state.get("rfp_response_mode")
+    if not mode:
+        logger.info("[generate_rfp_response] rfp_response_mode not set — skipping.")
+        return {}
+
+    sol_num = state.get("solicitation_number")
+    if not sol_num:
+        logger.warning("[generate_rfp_response] No solicitation_number in state — skipping.")
+        return {}
+
+    logger.info(f"[generate_rfp_response] Generating {mode.upper()} RFP response for: {sol_num}")
+
+    try:
+        from pathlib import Path as _Path
+        _PROJECT_ROOT = _Path(__file__).resolve().parent.parent
+
+        from utils.rfp_parser import RFPParser
+        from utils.rfp_response_generator import RFPResponseGenerator
+        from utils.rfp_response_pdf import generate_rfp_response_pdf
+
+        # Parse RFP documents
+        rfp_parser = RFPParser(sol_num, project_root=str(_PROJECT_ROOT))
+        pdf_texts  = rfp_parser.extract_text_from_pdfs()
+        rfp_data   = rfp_parser.parse_requirements(pdf_texts) if pdf_texts else {
+            "metadata": {
+                "solicitation_number": sol_num,
+                "issuing_agency": state.get("company_name") or "Issuing Agency",
+            },
+            "identified_components": {"technical": [], "security": []},
+        }
+
+        meta          = rfp_data.get("metadata", {})
+        agency_name   = meta.get("issuing_agency", "Issuing Agency")
+        project_title = meta.get("project_title", "Technical & Management Proposal")
+        winner_name   = state.get("company_name") or "Prime Contractor"
+        optimized     = state.get("optimized_profile") or {}
+
+        gen = RFPResponseGenerator(project_root=str(_PROJECT_ROOT))
+
+        if mode == "prime":
+            sections = gen.generate_prime_sections(
+                rfp_data=rfp_data,
+                optimized_profile=optimized,
+                solicitation_number=sol_num,
+            )
+        else:
+            # subcontract — load pitch_data from disk if available
+            import json
+            proposals_dir = _PROJECT_ROOT / "output" / "proposals"
+            pitch_path    = proposals_dir / f"{sol_num}_pitch_data.json"
+            pitch_data    = {}
+            if pitch_path.exists():
+                try:
+                    with open(pitch_path, encoding="utf-8") as fh:
+                        pitch_data = json.load(fh)
+                except Exception:
+                    pass
+            sections = gen.generate_subcontract_sections(
+                rfp_data=rfp_data,
+                pitch_data=pitch_data,
+                winner_profile=optimized,
+            )
+
+        pdf_path = generate_rfp_response_pdf(
+            solicitation_number=sol_num,
+            mode=mode,
+            sections=sections,
+            agency_name=agency_name,
+            proposal_title=project_title,
+            winner_name=winner_name if mode == "subcontract" else None,
+            project_root=str(_PROJECT_ROOT),
+        )
+
+        logger.info(f"[generate_rfp_response] PDF saved to: {pdf_path}")
+        return {"rfp_response_pdf_path": pdf_path}
+
+    except Exception as exc:
+        msg = f"generate_rfp_response failed: {exc}"
+        logger.error(f"[generate_rfp_response] {msg}", exc_info=True)
+        return {
+            "rfp_response_pdf_path": None,
             "errors": state.get("errors", []) + [msg],
         }

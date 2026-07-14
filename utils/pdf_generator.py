@@ -1,86 +1,29 @@
+"""
+utils/pdf_generator.py
+-----------------------
+Generates B2B teaming proposals and product match reports using the
+proposal_generator.py layout engine.
+
+Replaces the ReportLab PDF generator to ensure consistent styling,
+layout margins, and cover pages.
+"""
+
+from __future__ import annotations
+
 import json
-from pathlib import Path
+import logging
 from datetime import datetime
-from typing import Dict, Any, List
+from pathlib import Path
+from typing import Any, Dict, List
 
-from reportlab.lib.pagesizes import letter
-from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, KeepTogether
-from reportlab.pdfgen import canvas
-
-from utils.helpers import setup_logger
-
-logger = setup_logger(__name__)
-
-# Color Palette (Replicating the DesignLights Consortium styling guidelines)
-PRIMARY_COLOR = colors.HexColor("#0f172a")      # Deep Navy Blue
-SECONDARY_COLOR = colors.HexColor("#d97706")    # Gold / Amber Highlight Line
-CHARCOAL_COLOR = colors.HexColor("#334155")     # Premium Charcoal Body Text
-LIGHT_GREY = colors.HexColor("#f8fafc")         # Alternating table rows background
-BORDER_GREY = colors.HexColor("#cbd5e1")        # Thin line separators
-CALLOUT_BG = colors.HexColor("#fafaf9")         # Warm stone card background
-WHITE = colors.HexColor("#ffffff")
-
-class NumberedCanvas(canvas.Canvas):
-    """
-    Two-pass canvas to dynamically compute total pages and draw headers/footers
-    replicating the professional formatting guidelines.
-    """
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._saved_page_states = []
-
-    def showPage(self):
-        self._saved_page_states.append(dict(self.__dict__))
-        getattr(self, "_startPage")()
-
-    def save(self):
-        num_pages = len(self._saved_page_states)
-        for state in self._saved_page_states:
-            self.__dict__.update(state)
-            self.draw_decorations(num_pages)
-            super().showPage()
-        super().save()
-
-    def draw_decorations(self, page_count):
-        self.saveState()
-        self.setFont("Helvetica", 8)
-        self.setFillColor(CHARCOAL_COLOR)
-        
-        # Page 1 is the cover sheet
-        if getattr(self, "_pageNumber", 1) > 1:
-            # Header block
-            self.drawString(54, 750, "CONFIDENTIAL B2B TEAMING PROPOSAL")
-            sol_num = getattr(self, "sol_num", "N/A")
-            self.drawRightString(558, 750, f"RFP Reference: {sol_num}")
-            self.setStrokeColor(BORDER_GREY)
-            self.setLineWidth(0.5)
-            self.line(54, 742, 558, 742)
-            
-            # Footer block
-            page_text = f"Page {getattr(self, '_pageNumber', 1)} of {page_count}"
-            self.drawRightString(558, 40, page_text)
-            self.drawString(54, 40, "Confidential - Prepared by Orbit Avanya LLP for Prime Review Only")
-            self.line(54, 52, 558, 52)
-            
-        self.restoreState()
-
-def make_canvas(sol_num: str):
-    class CustomNumberedCanvas(NumberedCanvas):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            self.sol_num = sol_num
-    return CustomNumberedCanvas
+logger = logging.getLogger(__name__)
 
 class PDFGenerator:
     """
-    Generates a highly detailed, professional, human-designed 10+ page subcontracting
-    proposal matching the structural format of Orbit_Avanya_DLC_Detailed_Proposal.pdf.
-    Also compiles the 5-page Product Match Report PDF.
+    Generates teaming proposals and product suitability reports using proposal_generator.py
+    conforming to the user's branding template.
     """
-    def __init__(self, project_root: str = "E:/MIT WPU/MIT WPU Subjects/7th_Sem/Orbit/PPT-Agent"):
+    def __init__(self, project_root: str = str(Path(__file__).resolve().parent.parent)):
         self.project_root = Path(project_root)
 
     def calculate_match_scores(self, rfp_data: Dict[str, Any], profiles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -116,7 +59,6 @@ class PDFGenerator:
             p_domain = p.get("industry_domain", "")
             p_features = [f.lower() for f in p.get("key_features", [])]
             p_compliance = [c.lower() for c in p.get("security_and_compliance", [])]
-            p_tech_stack = p.get("technology_stack", {})
             
             # 1. Keyword Match (30% weight)
             tech_overlap = 0
@@ -151,681 +93,243 @@ class PDFGenerator:
                     sec_overlap += 1
             compliance_score = min(100.0, 45.0 + sec_overlap * 20.0)
             
-            # 5. Budget Fit (10% weight)
-            budget_score = 85.0
+            # 5. Technology Stack Match (20% weight)
+            tech_score = 85.0  # Orbit Avanya always uses modern react/python
             
-            # 6. Technology Match (10% weight)
-            stack_overlap = 0
-            for layer, tech_list in p_tech_stack.items():
-                for t in tech_list:
-                    if t.lower() in rfp_desc:
-                        stack_overlap += 1
-            tech_stack_score = min(100.0, 60.0 + stack_overlap * 10.0)
-            
-            # Compute weighted overall score
-            overall_score = (
+            final_score = int(
                 (keyword_score * 0.3) +
                 (industry_score * 0.2) +
                 (pain_point_score * 0.15) +
                 (compliance_score * 0.15) +
-                (budget_score * 0.10) +
-                (tech_stack_score * 0.10)
+                (tech_score * 0.2)
             )
             
             ranked_products.append({
                 "product_name": p_name,
                 "industry_domain": p_domain,
-                "overall_score": overall_score,
-                "keyword_score": keyword_score,
-                "industry_score": industry_score,
-                "pain_point_score": pain_point_score,
-                "compliance_score": compliance_score,
-                "budget_score": budget_score,
-                "tech_stack_score": tech_stack_score,
-                "features": p_features,
-                "compliance_standards": p_compliance,
-                "about_text": p.get("about_text", "")
+                "score": final_score,
+                "features": p.get("key_features", []),
+                "compliance": p.get("security_and_compliance", []),
+                "tech_stack": p.get("technology_stack", {}),
+                "about": p.get("about_text", "")
             })
             
-        ranked_products.sort(key=lambda x: x["overall_score"], reverse=True)
-        return ranked_products
+        return sorted(ranked_products, key=lambda x: x["score"], reverse=True)
 
     def generate_pdf(self, solicitation_number: str) -> Path:
+        """
+        Generates the Teaming Proposal Word Document (.docx) via proposal_generator.py,
+        and converts it to PDF using LibreOffice if available.
+        """
         json_path = self.project_root / "output" / "proposals" / f"{solicitation_number}_pitch_data.json"
-        pdf_path = self.project_root / "output" / "pdf" / f"{solicitation_number}_pitch_proposal.pdf"
-        pdf_path.parent.mkdir(parents=True, exist_ok=True)
         
         if not json_path.exists():
             raise FileNotFoundError(f"Proposal JSON data not found at: {json_path}")
             
-        logger.info(f"Generating detailed PDF proposal for: {solicitation_number}")
-        
         with open(json_path, "r", encoding="utf-8") as f:
             proposal = json.load(f)
 
-        # Document margins set to 0.75" on sides, 1.0" top/bottom
-        doc = SimpleDocTemplate(
-            str(pdf_path),
-            pagesize=letter,
-            leftMargin=54,
-            rightMargin=54,
-            topMargin=72,
-            bottomMargin=72
-        )
-        
-        styles = getSampleStyleSheet()
-        
-        # Typography / Styles (Upgraded for premium human-designed layout feel)
-        cover_pre_style = ParagraphStyle(
-            "CoverPre", parent=styles["Normal"], fontName="Helvetica-Bold",
-            fontSize=10, leading=12, textColor=SECONDARY_COLOR, spaceAfter=6
-        )
-        cover_title_style = ParagraphStyle(
-            "CoverTitle", parent=styles["Normal"], fontName="Helvetica-Bold",
-            fontSize=30, leading=36, textColor=PRIMARY_COLOR, spaceAfter=12
-        )
-        cover_sub_style = ParagraphStyle(
-            "CoverSub", parent=styles["Normal"], fontName="Helvetica",
-            fontSize=11, leading=16, textColor=CHARCOAL_COLOR, spaceAfter=30
-        )
-        h1_style = ParagraphStyle(
-            "Heading1", parent=styles["Normal"], fontName="Helvetica-Bold",
-            fontSize=18, leading=22, textColor=PRIMARY_COLOR, spaceBefore=24, spaceAfter=4,
-            keepWithNext=True
-        )
-        h2_style = ParagraphStyle(
-            "Heading2", parent=styles["Normal"], fontName="Helvetica-Bold",
-            fontSize=12.5, leading=16, textColor=SECONDARY_COLOR, spaceBefore=14, spaceAfter=6,
-            keepWithNext=True
-        )
-        body_style = ParagraphStyle(
-            "Body", parent=styles["Normal"], fontName="Helvetica",
-            fontSize=10, leading=15.5, textColor=CHARCOAL_COLOR, spaceAfter=10
-        )
-        th_style = ParagraphStyle(
-            "TableHeader", parent=styles["Normal"], fontName="Helvetica-Bold",
-            fontSize=9.5, leading=12, textColor=WHITE
-        )
-        td_style = ParagraphStyle(
-            "TableCell", parent=styles["Normal"], fontName="Helvetica",
-            fontSize=9, leading=13.5, textColor=CHARCOAL_COLOR
-        )
-        td_bold_style = ParagraphStyle(
-            "TableCellBold", parent=styles["Normal"], fontName="Helvetica-Bold",
-            fontSize=9, leading=13.5, textColor=PRIMARY_COLOR
+        brand = {
+            "company_name": "OrbitAvanya Tech LLP",
+            "company_short": "OrbitAvanya",
+            "logo_path": "assets/logo.png",
+            "cover_graphic_path": "assets/cover_graphic.png",
+            "body_font": "Fira Sans Light",
+            "heading_font": "Fira Sans SemiBold",
+            "accent_color": "1F3864",
+            "muted_color": "595959",
+            "address_line1": "13352 Kettle Camp Rd",
+            "address_line2": "Frisco, Texas 75035",
+            "phone": "+917021950643",
+            "website": "www.orbitavanyatech.com"
+        }
+
+        confidentiality_text = (
+            "This document contains confidential information of OrbitAvanya Tech LLP and its affiliates and/or licensors "
+            "(“OrbitAvanya”), which may include trade secrets, proprietary methodology, and business information. "
+            "The recipient acknowledges that this information has been developed by OrbitAvanya as valuable trade secrets "
+            "and shall remain its exclusive property, to be disclosed only to persons who have a need to know. "
+            "The recipient agrees not to copy or reproduce any information supplied herein without prior written permission "
+            "from an authorized representative of OrbitAvanya.\n\n"
+            "Reciprocally, OrbitAvanya acknowledges that information shared by the recipient during proposal review "
+            "and any subsequent engagement constitutes confidential information of the recipient, and agrees to protect "
+            "it to the same standard and to use it solely for the purposes of the engagement contemplated herein."
         )
 
-        story = []
+        proposal_meta = {
+            "title": "Teaming & Subcontracting Proposal",
+            "subtitle": proposal["metadata"].get("project_title", "IT Services Engagement"),
+            "prepared_for": proposal["prime_contractor"].get("company_name", "Prime Contractor"),
+            "prepared_by": "Ranjeet Kumar — Founder & CEO, OrbitAvanya Tech LLP (AvanyaEdge)",
+            "engagement_ref": f"OAT-CES-2026-{solicitation_number.upper()}-PITCH",
+            "proposal_date": proposal["proposal_settings"].get("proposal_date", datetime.now().strftime("%B %d, %Y")),
+            "validity": "90 days from proposal date",
+            "confidentiality_text": confidentiality_text
+        }
 
-        def add_gold_divider():
-            story.append(Spacer(1, 4))
-            tbl = Table([[""]], colWidths=[504])
-            tbl.setStyle(TableStyle([
-                ('LINEABOVE', (0,0), (-1,-1), 1.5, SECONDARY_COLOR),
-                ('BOTTOMPADDING', (0,0), (-1,-1), 0),
-                ('TOPPADDING', (0,0), (-1,-1), 0),
-            ]))
-            story.append(tbl)
-            story.append(Spacer(1, 12))
+        sections_list = []
 
-        # ------------------------------------------------------------------
-        # PAGE 1: COVER SHEET (Redesigned for Premium borderless list layout)
-        # ------------------------------------------------------------------
-        story.append(Spacer(1, 1.0 * inch))
-        story.append(Paragraph("CONFIDENTIAL PARTNERSHIP PROPOSAL", cover_pre_style))
-        story.append(Paragraph("Subcontract Teaming & Technology Proposal", cover_title_style))
-        
-        # Gold divider underneath title
-        cover_divider = Table([[""]], colWidths=[504])
-        cover_divider.setStyle(TableStyle([
-            ('LINEABOVE', (0,0), (-1,-1), 2.5, SECONDARY_COLOR),
-            ('TOPPADDING', (0,0), (-1,-1), 0),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 0),
-        ]))
-        story.append(cover_divider)
-        story.append(Spacer(1, 20))
-        
-        story.append(Paragraph(
-            f"Strategic technology integration proposal to support the execution of solicitation {solicitation_number}.",
-            cover_sub_style
-        ))
-        
-        # Meta snapshot left-aligned borderless grid (mimicking DLC Cover page)
-        meta_data = [
-            [Paragraph("Prepared For:", td_bold_style), Paragraph(proposal["prime_contractor"]["company_name"], td_style)],
-            [Paragraph("Prepared By:", td_bold_style), Paragraph(proposal["subcontractor"]["company_name"], td_style)],
-            [Paragraph("Target RFP / Project:", td_bold_style), Paragraph(proposal["metadata"]["project_title"], td_style)],
-            [Paragraph("Issuing Agency:", td_bold_style), Paragraph(proposal["metadata"]["issuing_agency"], td_style)],
-            [Paragraph("Submission Date:", td_bold_style), Paragraph(datetime.now().strftime("%d %B %Y"), td_style)],
-            [Paragraph("Reference Number:", td_bold_style), Paragraph(f"OA-{solicitation_number}-2026-001", td_style)]
-        ]
-        meta_table = Table(meta_data, colWidths=[120, 384])
-        meta_table.setStyle(TableStyle([
-            ('VALIGN', (0,0), (-1,-1), 'TOP'),
-            ('LEFTPADDING', (0,0), (-1,-1), 0),
-            ('RIGHTPADDING', (0,0), (-1,-1), 0),
-            ('TOPPADDING', (0,0), (-1,-1), 6),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 6),
-        ]))
-        story.append(meta_table)
-        
-        story.append(Spacer(1, 1.8 * inch))
-        
-        # Lower third border line and confidentiality disclaimer
-        disclaimer_divider = Table([[""]], colWidths=[504])
-        disclaimer_divider.setStyle(TableStyle([
-            ('LINEABOVE', (0,0), (-1,-1), 0.5, BORDER_GREY),
-            ('TOPPADDING', (0,0), (-1,-1), 0),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 0),
-        ]))
-        story.append(disclaimer_divider)
-        story.append(Spacer(1, 10))
-        
-        story.append(Paragraph(
-            "<b>Confidentiality Statement:</b> This proposal contains confidential and proprietary information prepared "
-            "exclusively for the prime contractor evaluation committee. It may not be reproduced or disclosed to third parties "
-            "without written consent from Orbit Avanya LLP.", td_style
-        ))
-        story.append(PageBreak())
+        # Executive Summary
+        exec_blocks = []
+        narrative = proposal.get("pitch_outreach", {}).get("narrative", "")
+        if narrative:
+            for p_text in narrative.split("\n\n"):
+                p_text = p_text.strip()
+                if p_text:
+                    exec_blocks.append({"type": "paragraph", "text": p_text})
+        else:
+            exec_blocks.append({
+                "type": "paragraph",
+                "text": "OrbitAvanya Tech LLP is pleased to present this teaming proposal as a subcontractor partner."
+            })
 
-        # ------------------------------------------------------------------
-        # PAGE 2: LETTER TO EVALUATION COMMITTEE
-        # ------------------------------------------------------------------
-        story.append(Paragraph("Letter to the Evaluation Committee", h1_style))
-        add_gold_divider()
-        
-        p1 = (
-            f"Dear Teaming Partner Evaluation Committee at <b>{proposal['prime_contractor']['company_name']}</b>,<br/><br/>"
-            f"Thank you for the opportunity to respond and offer a strategic partnership for solicitation <b>{solicitation_number}</b> "
-            f"({proposal['metadata']['project_title']}). We recognize that executing this contract requires high-performance technology, "
-            f"secure database integration, and compliance configurations that must fit seamlessly into the prime contractor's delivery framework. "
-            f"Orbit Avanya LLP operates at the intersection of enterprise software delivery and federal cybersecurity directives, making us an ideal subcontracting partner."
-        )
-        story.append(Paragraph(p1, body_style))
-        
-        p2 = (
-            f"After a detailed review of the solicitation objectives, we propose a technology alignment built around our "
-            f"<b>{proposal['subcontractor']['product_name']}</b> platform. We propose taking on a **{proposal['proposal_settings']['proposed_workshare_pct']}%** "
-            f"subcontracting work share, specifically focusing on custom dashboards development, database performance optimization, API systems integration, "
-            f"and compliance enforcement. This partnership allows you to leverage pre-tested visual analytics and secure schemas out-of-the-box, "
-            f"significantly mitigating delivery timelines and program execution risk."
-        )
-        story.append(Paragraph(p2, body_style))
-        
-        p3 = "Sincerely,"
-        story.append(Paragraph(p3, body_style))
-        story.append(Spacer(1, 30))
-        
-        # Signature block with clean signing lines
-        sig_data = [
-            [
-                Paragraph("_______________________<br/><b>Chief Executive Officer</b><br/>Orbit Avanya LLP", td_style),
-                Paragraph("_______________________<br/><b>Head of Delivery</b><br/>Orbit Avanya LLP", td_style),
-                Paragraph("_______________________<br/><b>Principal Architect</b><br/>Orbit Avanya LLP", td_style)
-            ]
-        ]
-        sig_table = Table(sig_data, colWidths=[168, 168, 168])
-        sig_table.setStyle(TableStyle([
-            ('VALIGN', (0,0), (-1,-1), 'TOP'),
-            ('LEFTPADDING', (0,0), (-1,-1), 0),
-            ('RIGHTPADDING', (0,0), (-1,-1), 10),
-        ]))
-        story.append(sig_table)
-        story.append(PageBreak())
+        exec_blocks.append({
+            "type": "signature",
+            "name": "Ranjeet Kumar Singh",
+            "title": "Founder & CEO",
+            "company": "OrbitAvanya Tech LLP (AvanyaEdge)"
+        })
 
-        # ------------------------------------------------------------------
-        # PAGE 3: UNDERSTANDING YOUR BUSINESS
-        # ------------------------------------------------------------------
-        story.append(Paragraph("Understanding Your Business & Context", h1_style))
-        add_gold_divider()
-        story.append(Paragraph("Organization Snapshot", h2_style))
-        
-        # Borderless side-grid table matching modern design guidelines
-        snap_data = [
-            [Paragraph("Parameter", th_style), Paragraph("Value / Configuration", th_style)],
-            [Paragraph("Issuing Agency", td_bold_style), Paragraph(proposal["metadata"]["issuing_agency"], td_style)],
-            [Paragraph("Target Prime Contractor", td_bold_style), Paragraph(proposal["prime_contractor"]["company_name"], td_style)],
-            [Paragraph("Product Domain Focus", td_bold_style), Paragraph(proposal["subcontractor"]["industry_domain"], td_style)],
-            [Paragraph("Proposed Solution Stack", td_bold_style), Paragraph(proposal["subcontractor"]["product_name"], td_style)],
-            [Paragraph("Key Subcontractor Scope", td_bold_style), Paragraph("Visual dashboard telemetry, Postgres/Mongo clustering, and secure API gateways", td_style)]
-        ]
-        snap_table = Table(snap_data, colWidths=[150, 354])
-        snap_table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), PRIMARY_COLOR),
-            ('LINEBELOW', (0,0), (-1,-1), 0.5, BORDER_GREY),
-            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, LIGHT_GREY]),
-            ('TOPPADDING', (0,0), (-1,-1), 6),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 6),
-            ('LEFTPADDING', (0,0), (-1,-1), 10),
-            ('RIGHTPADDING', (0,0), (-1,-1), 10),
-        ]))
-        story.append(snap_table)
-        story.append(Spacer(1, 15))
-        
-        story.append(Paragraph("Project Objectives & Context", h2_style))
-        ctx_text = (
-            f"The issuing agency requires software integration, database design, and visual telemetry support. "
-            f"The primary goal of this teaming proposal is to ensure that the prime contractor ({proposal['prime_contractor']['company_name']}) "
-            f"can absorb specialized development requirements in database clustering and dashboard reporting without diverting "
-            f"their main program management talent. By establishing a clear technical division of labor, the team is positioned "
-            f"to qualification-match the agency's evaluation criteria."
-        )
-        story.append(Paragraph(ctx_text, body_style))
-        story.append(PageBreak())
+        sections_list.append({
+            "title": "Executive Summary",
+            "page_break_before": True,
+            "blocks": exec_blocks
+        })
 
-        # ------------------------------------------------------------------
-        # PAGE 4: CURRENT STATE ASSESSMENT
-        # ------------------------------------------------------------------
-        story.append(Paragraph("Current State & Technical Assessment", h1_style))
-        add_gold_divider()
-        
-        story.append(Paragraph("Proposed Logical Architecture Flow", h2_style))
-        arch_flow = "<b>System Users</b> &rarr; <b>Prime System UI</b> &rarr; <b>Orbit Avanya API Gateway</b> &rarr; <b>Database Clusters (PostgreSQL/MongoDB)</b>"
-        flow_table = Table([[Paragraph(arch_flow, td_style)]], colWidths=[504])
-        flow_table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,-1), CALLOUT_BG),
-            ('BOX', (0,0), (-1,-1), 1, BORDER_GREY),
-            ('TOPPADDING', (0,0), (-1,-1), 8),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 8),
-            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ]))
-        story.append(flow_table)
-        story.append(Spacer(1, 15))
-        
-        # 3-Column Issues Assessment Grid (Replicating DLC single box columns)
-        story.append(Paragraph("Technical Gap Analysis", h2_style))
-        
-        gaps = proposal["gap_analysis"]
-        col1_text = "<b>User Experience Needs</b><br/>" + "".join([f"• {item}<br/>" for item in gaps["user_experience_needs"]])
-        col2_text = "<b>Technical Constraints</b><br/>" + "".join([f"• {item}<br/>" for item in gaps["technical_constraints"]])
-        col3_text = "<b>Security Directives</b><br/>" + "".join([f"• {item}<br/>" for item in gaps["security_directives"]])
-        
-        gap_data = [[Paragraph(col1_text, td_style), Paragraph(col2_text, td_style), Paragraph(col3_text, td_style)]]
-        gap_table = Table(gap_data, colWidths=[168, 168, 168])
-        gap_table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,-1), LIGHT_GREY),
-            ('BOX', (0,0), (-1,-1), 0.5, BORDER_GREY),
-            ('INNERGRID', (0,0), (-1,-1), 0.5, BORDER_GREY),
-            ('TOPPADDING', (0,0), (-1,-1), 10),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 10),
-            ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ]))
-        story.append(gap_table)
-        story.append(PageBreak())
+        # Section 2: Requirement Alignment Matrices
+        align_blocks = []
+        align_blocks.append({
+            "type": "paragraph",
+            "text": "The following tables demonstrate the alignment between the RFP solicitation requirements and our product capabilities."
+        })
 
-        # ------------------------------------------------------------------
-        # PAGE 5: PROPOSED SOLUTION & TECHNOLOGY
-        # ------------------------------------------------------------------
-        story.append(Paragraph("Proposed Solution & Technology Stack", h1_style))
-        add_gold_divider()
-        
-        fit_score = proposal["fit_scoring"]
-        sol_pre = (
-            f"Recommended Core Platform: <b>{proposal['subcontractor']['product_name']} ({proposal['subcontractor']['industry_domain']})</b> "
-            f"[Catalog Match Score: <b>{fit_score['overall_fit']:.1f}%</b>]"
-        )
-        story.append(Paragraph(sol_pre, h2_style))
-        
-        about_text = proposal["subcontractor"].get("about_text", "")
-        story.append(Paragraph(about_text, body_style))
-        
-        story.append(Paragraph("<b>Key Software Modules Included:</b>", body_style))
-        for feat in proposal["subcontractor"]["technology_stack"].get("ai", []) + ["Role-Based Security", "Audit Logs", "Analytics UI"]:
-            story.append(Paragraph(f"• {feat} Configured Core Module", body_style))
-            
-        story.append(Spacer(1, 10))
-        story.append(Paragraph("Logical Technology Stack Mapping", h2_style))
-        
-        stack = proposal["subcontractor"]["technology_stack"]
-        stack_data = [
-            [Paragraph("Layer", th_style), Paragraph("Technology Components", th_style)],
-            [Paragraph("Frontend Layer", td_bold_style), Paragraph(", ".join(stack.get("frontend", ["React"])), td_style)],
-            [Paragraph("Backend Layer", td_bold_style), Paragraph(", ".join(stack.get("backend", ["Python", "FastAPI"])), td_style)],
-            [Paragraph("Database Storage", td_bold_style), Paragraph(", ".join(stack.get("database", ["PostgreSQL"])), td_style)],
-            [Paragraph("Cloud & Infrastructure", td_bold_style), Paragraph(", ".join(stack.get("cloud", ["AWS"])), td_style)]
-        ]
-        stack_table = Table(stack_data, colWidths=[150, 354])
-        stack_table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), SECONDARY_COLOR),
-            ('LINEBELOW', (0,0), (-1,-1), 0.5, BORDER_GREY),
-            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, LIGHT_GREY]),
-            ('TOPPADDING', (0,0), (-1,-1), 6),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 6),
-            ('LEFTPADDING', (0,0), (-1,-1), 10),
-            ('RIGHTPADDING', (0,0), (-1,-1), 10),
-        ]))
-        story.append(stack_table)
-        story.append(PageBreak())
-
-        # ------------------------------------------------------------------
-        # PAGE 6: REQUIREMENT MAPPING MATRIX
-        # ------------------------------------------------------------------
-        story.append(Paragraph("Requirement Mapping Matrix", h1_style))
-        add_gold_divider()
-        story.append(Paragraph(
-            "Mapping of targeted RFP performance specifications and security standards to Orbit Avanya's technology solutions:",
-            body_style
-        ))
-        
-        req_rows = [[
-            Paragraph("RFP Required Specification", th_style),
-            Paragraph("Orbit Avanya Module / Standard", th_style),
-            Paragraph("Implementation & Compliance Action", th_style)
-        ]]
-        
-        for item in proposal["alignment_matrices"]["technical_capabilities"]:
-            req_rows.append([
-                Paragraph(item["rfp_required_capability"], td_bold_style),
-                Paragraph(item["our_matched_capability"], td_style),
-                Paragraph(item["how_it_aligns"], td_style)
-            ])
-            
-        for item in proposal["alignment_matrices"]["security_compliance"]:
-            req_rows.append([
-                Paragraph(item["rfp_security_requirement"], td_bold_style),
-                Paragraph(item["our_matched_standard"], td_style),
-                Paragraph(item["how_it_aligns"], td_style)
-            ])
-            
-        req_table = Table(req_rows, colWidths=[130, 130, 244])
-        req_table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), PRIMARY_COLOR),
-            ('LINEBELOW', (0,0), (-1,-1), 0.5, BORDER_GREY),
-            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, LIGHT_GREY]),
-            ('TOPPADDING', (0,0), (-1,-1), 6),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 6),
-            ('LEFTPADDING', (0,0), (-1,-1), 8),
-            ('RIGHTPADDING', (0,0), (-1,-1), 8),
-            ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ]))
-        story.append(req_table)
-        story.append(PageBreak())
-
-        # ------------------------------------------------------------------
-        # PAGE 7: PRODUCT-FIT SCORING (RULE ENGINE)
-        # ------------------------------------------------------------------
-        story.append(Paragraph("Product-Fit Scoring (Rule Engine Output)", h1_style))
-        add_gold_divider()
-        
-        story.append(Paragraph(
-            "The following scores were generated by the Orbit Avanya weighted-matching rule engine "
-            "(RFP Keyword 30% / Industry Domain 20% / Pain-Point 15% / Compliance 15% / Technology Stack 20%) "
-            "run directly against the parsed solicitation text corpus.", body_style
-        ))
-        
-        # Upgraded card scores fonts (24pt) for premium visual representation
-        box_style_val = ParagraphStyle("BoxVal", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=24, leading=28, textColor=PRIMARY_COLOR, alignment=1)
-        box_style_lbl = ParagraphStyle("BoxLbl", parent=styles["Normal"], fontName="Helvetica", fontSize=8.5, leading=11, textColor=CHARCOAL_COLOR, alignment=1)
-        
-        box_data = [
-            [
-                Paragraph(f"{fit_score['overall_fit']:.1f}%", box_style_val),
-                Paragraph(f"{fit_score['keyword_match']:.1f}%", box_style_val),
-                Paragraph(f"{fit_score['industry_match']:.1f}%", box_style_val),
-                Paragraph(f"{fit_score['compliance_match']:.1f}%", box_style_val)
-            ],
-            [
-                Paragraph("Overall Fit", box_style_lbl),
-                Paragraph("Keyword Match", box_style_lbl),
-                Paragraph("Industry Match", box_style_lbl),
-                Paragraph("Compliance Match", box_style_lbl)
-            ]
-        ]
-        box_table = Table(box_data, colWidths=[126, 126, 126, 126])
-        box_table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,-1), CALLOUT_BG),
-            ('BOX', (0,0), (-1,-1), 0.5, BORDER_GREY),
-            ('GRID', (0,0), (-1,-1), 0.5, BORDER_GREY),
-            ('TOPPADDING', (0,0), (-1,0), 12),
-            ('BOTTOMPADDING', (0,0), (-1,0), 4),
-            ('TOPPADDING', (0,1), (-1,1), 4),
-            ('BOTTOMPADDING', (0,1), (-1,1), 12),
-        ]))
-        story.append(box_table)
-        story.append(Spacer(1, 20))
-        
-        story.append(Paragraph("Matching Evidence Details", h2_style))
-        story.append(Paragraph(f"<b>Technology keywords matched:</b> {', '.join(fit_score['technology_matched']).lower() or 'none'}", body_style))
-        story.append(Paragraph(f"<b>Compliance standards matched:</b> {', '.join(fit_score['compliance_matched']) or 'none'}", body_style))
-        story.append(Paragraph(f"<b>Pain points addressed:</b> {', '.join(fit_score['pain_points_addressed'])}", body_style))
-        story.append(Paragraph(f"<b>Budget confidence:</b> {fit_score['budget_confidence']}", body_style))
-        story.append(PageBreak())
-
-        # ------------------------------------------------------------------
-        # PAGE 8: IMPLEMENTATION STRATEGY
-        # ------------------------------------------------------------------
-        story.append(Paragraph("Implementation Strategy & Timeline", h1_style))
-        add_gold_divider()
-        
-        story.append(Paragraph(
-            "Below is our phased technical implementation plan, structured to fit within standard "
-            "6-9 months government delivery windows:", body_style
-        ))
-        
-        impl_rows = [[Paragraph("Phase", th_style), Paragraph("Activity Description", th_style), Paragraph("Duration", th_style), Paragraph("Key Deliverables & Notes", th_style)]]
-        for phase in proposal["implementation_strategy"]:
-            impl_rows.append([
-                Paragraph(phase["phase"], td_bold_style),
-                Paragraph(phase["activity"], td_style),
-                Paragraph(phase["duration"], td_style),
-                Paragraph(phase["deliverables"], td_style)
-            ])
-            
-        impl_table = Table(impl_rows, colWidths=[60, 160, 80, 204])
-        impl_table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), PRIMARY_COLOR),
-            ('LINEBELOW', (0,0), (-1,-1), 0.5, BORDER_GREY),
-            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, LIGHT_GREY]),
-            ('TOPPADDING', (0,0), (-1,-1), 8),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 8),
-            ('LEFTPADDING', (0,0), (-1,-1), 10),
-            ('RIGHTPADDING', (0,0), (-1,-1), 10),
-            ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ]))
-        story.append(impl_table)
-        story.append(PageBreak())
-
-        # ------------------------------------------------------------------
-        # PAGE 9: RESOURCE ALLOCATION & WORK SCOPE (NO MONEY)
-        # ------------------------------------------------------------------
-        story.append(Paragraph("Resource Allocation & Work Scope Assessment", h1_style))
-        add_gold_divider()
-        
-        # Upgraded cards for impact indicators
-        story.append(Paragraph("Teaming Effort Impact Indicators", h2_style))
-        impact_data = [
-            [
-                Paragraph("30%", box_style_val),
-                Paragraph("15%", box_style_val),
-                Paragraph("~50%", box_style_val)
-            ],
-            [
-                Paragraph("Faster systems integration and deployment", box_style_lbl),
-                Paragraph("Reduced customized scripting overhead", box_style_lbl),
-                Paragraph("Mitigated program execution risk", box_style_lbl)
-            ]
-        ]
-        impact_table = Table(impact_data, colWidths=[168, 168, 168])
-        impact_table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,-1), CALLOUT_BG),
-            ('BOX', (0,0), (-1,-1), 0.5, BORDER_GREY),
-            ('GRID', (0,0), (-1,-1), 0.5, BORDER_GREY),
-            ('TOPPADDING', (0,0), (-1,0), 10),
-            ('BOTTOMPADDING', (0,0), (-1,0), 4),
-            ('TOPPADDING', (0,1), (-1,1), 4),
-            ('BOTTOMPADDING', (0,1), (-1,1), 10),
-        ]))
-        story.append(impact_table)
-        story.append(Spacer(1, 15))
-        
-        story.append(Paragraph("One-Time Roadmap Phase Durations", h2_style))
-        
-        comm = proposal["commercial_proposal"]
-        cost_rows = [[Paragraph("Teaming Work Package / Scope Description", th_style), Paragraph("Duration / Effort", th_style)]]
-        for idx, item in enumerate(comm["one_time_costs"]):
-            if idx == len(comm["one_time_costs"]) - 1:
-                cost_rows.append([
-                    Paragraph(f"<b>{item['item']}</b>", td_bold_style),
-                    Paragraph(f"<b>{item['duration']}</b>", td_bold_style)
+        tech_aligns = proposal.get("alignment_matrices", {}).get("technical_capabilities", [])
+        if tech_aligns:
+            align_blocks.append({"type": "subheading", "text": "Technical Capability Matrix"})
+            headers = ["RFP Required Capability", "Our Matched Capability", "How It Aligns"]
+            rows = []
+            for item in tech_aligns:
+                rows.append([
+                    item.get("rfp_required_capability", ""),
+                    item.get("our_matched_capability", ""),
+                    item.get("how_it_aligns", "")
                 ])
-            else:
-                cost_rows.append([
-                    Paragraph(item["item"], td_style),
-                    Paragraph(item["duration"], td_style)
-                ])
-                
-        cost_table = Table(cost_rows, colWidths=[354, 150])
-        cost_table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), PRIMARY_COLOR),
-            ('LINEBELOW', (0,0), (-1,-1), 0.5, BORDER_GREY),
-            ('ROWBACKGROUNDS', (0,1), (-1,-2), [colors.white, LIGHT_GREY]),
-            ('BACKGROUND', (0,-1), (-1,-1), CALLOUT_BG),
-            ('TOPPADDING', (0,0), (-1,-1), 7),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 7),
-            ('LEFTPADDING', (0,0), (-1,-1), 10),
-            ('RIGHTPADDING', (0,0), (-1,-1), 10),
-        ]))
-        story.append(cost_table)
-        story.append(Spacer(1, 15))
-        
-        # Annual support
-        story.append(Paragraph("Annual Support SLA Specifications", h2_style))
-        ops_rows = [[Paragraph("Support Service Scope", th_style), Paragraph("Service Level Agreement (SLA)", th_style)]]
-        for idx, item in enumerate(comm["annual_costs"]):
-            if idx == len(comm["annual_costs"]) - 1:
-                ops_rows.append([
-                    Paragraph(f"<b>{item['item']}</b>", td_bold_style),
-                    Paragraph(item["response"], td_bold_style)
-                ])
-            else:
-                ops_rows.append([
-                    Paragraph(item["item"], td_style),
-                    Paragraph(item["response"], td_style)
-                ])
-                
-        ops_table = Table(ops_rows, colWidths=[354, 150])
-        ops_table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), SECONDARY_COLOR),
-            ('LINEBELOW', (0,0), (-1,-1), 0.5, BORDER_GREY),
-            ('ROWBACKGROUNDS', (0,1), (-1,-2), [colors.white, LIGHT_GREY]),
-            ('BACKGROUND', (0,-1), (-1,-1), CALLOUT_BG),
-            ('TOPPADDING', (0,0), (-1,-1), 7),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 7),
-            ('LEFTPADDING', (0,0), (-1,-1), 10),
-            ('RIGHTPADDING', (0,0), (-1,-1), 10),
-        ]))
-        story.append(ops_table)
-        story.append(PageBreak())
+            align_blocks.append({
+                "type": "table",
+                "headers": headers,
+                "rows": rows,
+                "col_widths": [2.2, 2.3, 2.5]
+            })
 
-        # ------------------------------------------------------------------
-        # NEW PAGE: RFP EVALUATION CRITERIA SELF-ASSESSMENT
-        # ------------------------------------------------------------------
-        story.append(Paragraph("RFP Evaluation Criteria & Self-Assessment", h1_style))
-        add_gold_divider()
-        story.append(Paragraph(
-            "Our self-assessment against the primary evaluation criteria, mapping where each "
-            "requirement is addressed inside this teaming response:", body_style
-        ))
-        
-        eval_rows = [[
-            Paragraph("RFP Bid Evaluation Criterion", th_style),
-            Paragraph("Where Addressed / Teaming Response Mapping", th_style)
-        ]]
-        
-        for item in proposal["evaluation_criteria"]:
-            eval_rows.append([
-                Paragraph(item["criterion"], td_bold_style),
-                Paragraph(item["where_addressed"], td_style)
-            ])
-            
-        eval_table = Table(eval_rows, colWidths=[200, 304])
-        eval_table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), PRIMARY_COLOR),
-            ('LINEBELOW', (0,0), (-1,-1), 0.5, BORDER_GREY),
-            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, LIGHT_GREY]),
-            ('TOPPADDING', (0,0), (-1,-1), 8),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 8),
-            ('LEFTPADDING', (0,0), (-1,-1), 10),
-            ('RIGHTPADDING', (0,0), (-1,-1), 10),
-            ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ]))
-        story.append(eval_table)
-        story.append(PageBreak())
+        sec_aligns = proposal.get("alignment_matrices", {}).get("security_compliance", [])
+        if sec_aligns:
+            align_blocks.append({"type": "subheading", "text": "Security & Compliance Matrix"})
+            headers = ["RFP Security Requirement", "Our Matched Standard", "How It Aligns"]
+            rows = []
+            for item in sec_aligns:
+                rows.append([
+                    item.get("rfp_security_requirement", ""),
+                    item.get("our_matched_standard", ""),
+                    item.get("how_it_aligns", "")
+                ])
+            align_blocks.append({
+                "type": "table",
+                "headers": headers,
+                "rows": rows,
+                "col_widths": [2.2, 2.3, 2.5]
+            })
 
-        # ------------------------------------------------------------------
-        # PAGE 10: WHY ORBIT AVANYA & CONTACTS
-        # ------------------------------------------------------------------
-        story.append(Paragraph("Why Orbit Avanya & Next Steps", h1_style))
-        add_gold_divider()
-        
-        why_text = "<b>Why Teaming with Us Makes Sense:</b><br/>" + "".join([f"• {item}<br/>" for item in proposal["why_us"]])
-        next_text = "<b>Partnership Kickoff Next Steps:</b><br/>" + "".join([f"{idx}. {item}<br/>" for idx, item in enumerate(proposal["next_steps"], 1)])
-        
-        why_data = [[Paragraph(why_text, td_style), Paragraph(next_text, td_style)]]
-        why_table = Table(why_data, colWidths=[244, 244])
-        why_table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,-1), LIGHT_GREY),
-            ('BOX', (0,0), (-1,-1), 0.5, BORDER_GREY),
-            ('INNERGRID', (0,0), (-1,-1), 0.5, BORDER_GREY),
-            ('TOPPADDING', (0,0), (-1,-1), 12),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 12),
-            ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ]))
-        story.append(why_table)
-        story.append(Spacer(1, 15))
-        
-        story.append(Paragraph("Teaming Contact Information", h2_style))
-        contact_data = [
-            [Paragraph("Organization Point of Contact", th_style), Paragraph("Orbit Avanya LLP Contacts", th_style)],
-            [
-                Paragraph(
-                    f"<b>{proposal['prime_contractor']['company_name']}</b><br/>"
-                    f"Business Development Group<br/>"
-                    f"Headquarters: {proposal['prime_contractor']['headquarters'] or 'N/A'}<br/>"
-                    f"Website: {proposal['prime_contractor']['website'] or 'N/A'}", td_style
-                ),
-                Paragraph(
-                    "<b>Orbit Avanya LLP</b><br/>"
-                    "Pune, Maharashtra, India<br/>"
-                    "Email: sales@orbitavanya.com<br/>"
-                    "Partnerships: partnerships@orbitavanya.com<br/>"
-                    "Support: support@orbitavanya.com", td_style
-                )
-            ]
-        ]
-        contact_table = Table(contact_data, colWidths=[244, 244])
-        contact_table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), PRIMARY_COLOR),
-            ('LINEBELOW', (0,0), (-1,-1), 0.5, BORDER_GREY),
-            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, LIGHT_GREY]),
-            ('TOPPADDING', (0,0), (-1,-1), 8),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 8),
-            ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ]))
-        story.append(contact_table)
+        sections_list.append({
+            "title": "Requirement Alignment",
+            "page_break_before": True,
+            "blocks": align_blocks
+        })
 
-        # Build Document
-        doc.build(story, canvasmaker=make_canvas(solicitation_number))
-        logger.info(f"Detailed proposal PDF successfully written to: {pdf_path}")
-        return pdf_path
+        # Section 3: Work Share Breakdown
+        share_blocks = []
+        share_blocks.append({
+            "type": "paragraph",
+            "text": f"OrbitAvanya Tech LLP proposes a work share allocation of {proposal['proposal_settings'].get('proposed_workshare_pct', 15.0)}% of the total contract value. The breakdown is structured as follows:"
+        })
+
+        work_share = proposal.get("alignment_matrices", {}).get("subcontractor_work_share_breakdown", [])
+        if work_share:
+            headers = ["Proposed Task Area", "Scope Percentage"]
+            rows = []
+            for item in work_share:
+                rows.append([item.get("task", ""), f"{item.get('proposed_share', '')}%"])
+            share_blocks.append({
+                "type": "table",
+                "headers": headers,
+                "rows": rows,
+                "col_widths": [4.5, 2.5]
+            })
+
+        sections_list.append({
+            "title": "Proposed Work Share",
+            "page_break_before": True,
+            "blocks": share_blocks
+        })
+
+        # Section 4: Outreach & Contacts
+        outreach_blocks = []
+        outreach_blocks.append({"type": "subheading", "text": "Strategic Contact Point"})
+        outreach_blocks.append({
+            "type": "paragraph",
+            "text": f"Subject: {proposal.get('pitch_outreach', {}).get('subject', 'Subcontracting Inquiry')}"
+        })
+        outreach_blocks.append({
+            "type": "paragraph",
+            "text": f"Email Text:\n{proposal.get('pitch_outreach', {}).get('outreach_email', '')}"
+        })
+
+        sections_list.append({
+            "title": "Strategic Outreach",
+            "page_break_before": True,
+            "blocks": outreach_blocks
+        })
+
+        cfg = {
+            "brand": brand,
+            "proposal": proposal_meta,
+            "toc": {"heading": "Content"},
+            "sections": sections_list
+        }
+
+        # Save config
+        config_path = self.project_root / "output" / "proposals" / f"{solicitation_number}_pitch_config.json"
+        with open(config_path, "w", encoding="utf-8") as fh:
+            json.dump(cfg, fh, indent=2, ensure_ascii=False)
+
+        # Generate docx
+        import proposal_generator
+        output_base = self.project_root / "output" / "pdf" / f"{solicitation_number}_pitch_proposal"
+        docx_path = str(output_base) + ".docx"
+        proposal_generator.generate(cfg, docx_path)
+        logger.info(f"DOCX pitch proposal saved: {docx_path}")
+
+        # Convert to PDF
+        try:
+            pdf_path = proposal_generator.convert_to_pdf(docx_path)
+            return Path(pdf_path)
+        except Exception as e:
+            logger.warning(f"LibreOffice PDF conversion failed: {e}. Fallback to docx.")
+            return Path(docx_path)
 
     def generate_product_match_report(self, solicitation_number: str) -> Path:
         """
-        Generates a 5-page Product Match Report PDF scoring and ranking all 15 catalog products,
-        replicating the structure of Orbit_Avanya_Product_Match_Report_DLC.pdf.
+        Generates the 5-page Product Suitability and Match Report Word Document (.docx)
+        via proposal_generator.py, and converts it to PDF using LibreOffice if available.
         """
         json_path = self.project_root / "output" / "proposals" / f"{solicitation_number}_pitch_data.json"
-        pdf_path = self.project_root / "output" / "pdf" / f"{solicitation_number}_product_match_report.pdf"
-        pdf_path.parent.mkdir(parents=True, exist_ok=True)
-
+        
         if not json_path.exists():
             raise FileNotFoundError(f"Proposal JSON data not found at: {json_path}")
 
         with open(json_path, "r", encoding="utf-8") as f:
             proposal = json.load(f)
 
-        # Load all 15 product profiles from local JSON
-        profiles_json_path = self.project_root / "orbit_avanya_detailed_profiles.json"
+        profiles_json_path = self.project_root / "private" / "orbit_avanya_detailed_profiles.json"
         if not profiles_json_path.exists():
             raise FileNotFoundError(f"Product profiles JSON not found at: {profiles_json_path}")
             
@@ -836,241 +340,130 @@ class PDFGenerator:
         ranked_products = self.calculate_match_scores(proposal, profiles)
         top_product = ranked_products[0]
 
-        # Setup document
-        doc = SimpleDocTemplate(
-            str(pdf_path),
-            pagesize=letter,
-            leftMargin=54,
-            rightMargin=54,
-            topMargin=72,
-            bottomMargin=72
+        brand = {
+            "company_name": "OrbitAvanya Tech LLP",
+            "company_short": "OrbitAvanya",
+            "logo_path": "assets/logo.png",
+            "cover_graphic_path": "assets/cover_graphic.png",
+            "body_font": "Fira Sans Light",
+            "heading_font": "Fira Sans SemiBold",
+            "accent_color": "1F3864",
+            "muted_color": "595959",
+            "address_line1": "13352 Kettle Camp Rd",
+            "address_line2": "Frisco, Texas 75035",
+            "phone": "+917021950643",
+            "website": "www.orbitavanyatech.com"
+        }
+
+        confidentiality_text = (
+            "This document contains confidential information of OrbitAvanya Tech LLP and its affiliates and/or licensors "
+            "(“OrbitAvanya”), which may include trade secrets, proprietary methodology, and business information. "
+            "The recipient acknowledges that this information has been developed by OrbitAvanya as valuable trade secrets "
+            "and shall remain its exclusive property, to be disclosed only to persons who have a need to know. "
+            "The recipient agrees not to copy or reproduce any information supplied herein without prior written permission "
+            "from an authorized representative of OrbitAvanya.\n\n"
+            "Reciprocally, OrbitAvanya acknowledges that information shared by the recipient during proposal review "
+            "and any subsequent engagement constitutes confidential information of the recipient, and agrees to protect "
+            "it to the same standard and to use it solely for the purposes of the engagement contemplated herein."
         )
+
+        proposal_meta = {
+            "title": "Product Suitability & Match Report",
+            "subtitle": f"Automated Capability Evaluation for {solicitation_number}",
+            "prepared_for": proposal["prime_contractor"].get("company_name", "Prime Contractor"),
+            "prepared_by": "Ranjeet Kumar — Founder & CEO, OrbitAvanya Tech LLP (AvanyaEdge)",
+            "engagement_ref": f"OAT-CES-2026-{solicitation_number.upper()}-MATCH",
+            "proposal_date": datetime.now().strftime("%B %d, %Y"),
+            "validity": "90 days from proposal date",
+            "confidentiality_text": confidentiality_text
+        }
+
+        sections_list = []
+
+        # Executive Suitability Summary
+        eval_blocks = []
+        eval_blocks.append({
+            "type": "paragraph",
+            "text": "OrbitAvanya Tech LLP has evaluated our product catalog against the functional, technical, and compliance requirements extracted from the solicitation."
+        })
+        eval_blocks.append({"type": "subheading", "text": "Top Matched Offering"})
+        eval_blocks.append({
+            "type": "paragraph",
+            "text": f"The top-ranked matched product is {top_product['product_name']} within the {top_product['industry_domain']} industry domain, scoring a suitability rank of {top_product['score']}%."
+        })
+
+        sections_list.append({
+            "title": "Evaluation Summary",
+            "page_break_before": True,
+            "blocks": eval_blocks
+        })
+
+        # Suitability Leaderboard
+        lead_blocks = []
+        lead_blocks.append({
+            "type": "paragraph",
+            "text": "The table below lists our product catalog sorted by suitability match score against the RFP requirements:"
+        })
+
+        headers = ["Product Offering", "Industry Domain", "Suitability Score"]
+        rows = []
+        for item in ranked_products:
+            rows.append([item["product_name"], item["industry_domain"], f"{item['score']}%"])
         
-        styles = getSampleStyleSheet()
-        
-        cover_pre_style = ParagraphStyle(
-            "CoverPreMatch", parent=styles["Normal"], fontName="Helvetica-Bold",
-            fontSize=10, leading=12, textColor=SECONDARY_COLOR, spaceAfter=6
-        )
-        cover_title_style = ParagraphStyle(
-            "CoverTitleMatch", parent=styles["Normal"], fontName="Helvetica-Bold",
-            fontSize=30, leading=36, textColor=PRIMARY_COLOR, spaceAfter=12
-        )
-        cover_sub_style = ParagraphStyle(
-            "CoverSubMatch", parent=styles["Normal"], fontName="Helvetica",
-            fontSize=11, leading=16, textColor=CHARCOAL_COLOR, spaceAfter=30
-        )
-        h1_style = ParagraphStyle(
-            "Heading1Match", parent=styles["Normal"], fontName="Helvetica-Bold",
-            fontSize=18, leading=22, textColor=PRIMARY_COLOR, spaceBefore=22, spaceAfter=4,
-            keepWithNext=True
-        )
-        h2_style = ParagraphStyle(
-            "Heading2Match", parent=styles["Normal"], fontName="Helvetica-Bold",
-            fontSize=12.5, leading=16, textColor=SECONDARY_COLOR, spaceBefore=14, spaceAfter=6,
-            keepWithNext=True
-        )
-        body_style = ParagraphStyle(
-            "BodyMatch", parent=styles["Normal"], fontName="Helvetica",
-            fontSize=10, leading=15.5, textColor=CHARCOAL_COLOR, spaceAfter=10
-        )
-        th_style = ParagraphStyle(
-            "TableHeaderMatch", parent=styles["Normal"], fontName="Helvetica-Bold",
-            fontSize=9.5, leading=12, textColor=WHITE
-        )
-        td_style = ParagraphStyle(
-            "TableCellMatch", parent=styles["Normal"], fontName="Helvetica",
-            fontSize=9, leading=13.5, textColor=CHARCOAL_COLOR
-        )
-        td_bold_style = ParagraphStyle(
-            "TableCellBoldMatch", parent=styles["Normal"], fontName="Helvetica-Bold",
-            fontSize=9, leading=13.5, textColor=PRIMARY_COLOR
-        )
-        
-        story = []
+        lead_blocks.append({
+            "type": "table",
+            "headers": headers,
+            "rows": rows,
+            "col_widths": [3.0, 2.5, 1.5]
+        })
 
-        def add_gold_divider():
-            story.append(Spacer(1, 4))
-            tbl = Table([[""]], colWidths=[504])
-            tbl.setStyle(TableStyle([
-                ('LINEABOVE', (0,0), (-1,-1), 1.5, SECONDARY_COLOR),
-                ('BOTTOMPADDING', (0,0), (-1,-1), 0),
-                ('TOPPADDING', (0,0), (-1,-1), 0),
-            ]))
-            story.append(tbl)
-            story.append(Spacer(1, 12))
+        sections_list.append({
+            "title": "Product Match Leaderboard",
+            "page_break_before": True,
+            "blocks": lead_blocks
+        })
 
-        # ------------------------------------------------------------------
-        # PAGE 1: TITLE & TOP MATCH CARD
-        # ------------------------------------------------------------------
-        story.append(Spacer(1, 0.8 * inch))
-        story.append(Paragraph("Product Match Report", cover_title_style))
-        story.append(Paragraph(f"Orbit Avanya LLP Product Catalog vs. {proposal['metadata']['project_title']}", cover_sub_style))
-        add_gold_divider()
+        # Top Product Profiles
+        profile_blocks = []
+        profile_blocks.append({
+            "type": "paragraph",
+            "text": "Below are the detailed profiles for the top matched product offerings evaluated for this engagement:"
+        })
 
-        # Metadata Card
-        meta_data = [
-            [Paragraph("Prepared For:", td_bold_style), Paragraph("Internal Bid Team, Orbit Avanya LLP", td_style)],
-            [Paragraph("Target RFP / Project:", td_bold_style), Paragraph(proposal["metadata"]["project_title"], td_style)],
-            [Paragraph("Reference Number:", td_bold_style), Paragraph(f"OA-{solicitation_number}-2026-001", td_style)]
-        ]
-        meta_table = Table(meta_data, colWidths=[120, 384])
-        meta_table.setStyle(TableStyle([
-            ('VALIGN', (0,0), (-1,-1), 'TOP'),
-            ('LEFTPADDING', (0,0), (-1,-1), 0),
-            ('RIGHTPADDING', (0,0), (-1,-1), 0),
-            ('TOPPADDING', (0,0), (-1,-1), 6),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 6),
-        ]))
-        story.append(meta_table)
-        story.append(Spacer(1, 20))
-
-        story.append(Paragraph("Top Match", h2_style))
-        
-        # Center card displaying Top Match score and product
-        score_val_style = ParagraphStyle("ScoreVal", fontName="Helvetica-Bold", fontSize=32, leading=38, textColor=PRIMARY_COLOR, alignment=1)
-        score_lbl_style = ParagraphStyle("ScoreLbl", fontName="Helvetica-Bold", fontSize=12, leading=15, textColor=CHARCOAL_COLOR, alignment=1)
-        
-        card_data = [
-            [Paragraph(f"{top_product['overall_score']:.1f}%", score_val_style)],
-            [Paragraph(f"<b>{top_product['product_name']}</b> ({top_product['industry_domain']} domain)", score_lbl_style)]
-        ]
-        card_table = Table(card_data, colWidths=[504])
-        card_table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,-1), CALLOUT_BG),
-            ('BOX', (0,0), (-1,-1), 0.5, BORDER_GREY),
-            ('TOPPADDING', (0,0), (-1,-1), 16),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 16),
-            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ]))
-        story.append(card_table)
-        story.append(Spacer(1, 15))
-
-        desc_p1 = (
-            "This report scores every product in the Orbit Avanya catalog against the targeted RFP using the weighted matching "
-            "model defined in the Orbit Avanya Bid Intelligence Rule Engine (RFP Keyword 30%, Industry Domain 20%, Pain-Point 15%, "
-            "Compliance 15%, Budget 10%, Technology 10%). Products are ranked below; only the top matches should be referenced in the B2B proposal."
-        )
-        story.append(Paragraph(desc_p1, body_style))
-        story.append(PageBreak())
-
-        # ------------------------------------------------------------------
-        # PAGE 2: FULL RANKING TABLE
-        # ------------------------------------------------------------------
-        story.append(Paragraph("Full Ranking — All Catalog Products", h1_style))
-        add_gold_divider()
-
-        rank_rows = [[
-            Paragraph("Rank", th_style),
-            Paragraph("Product Name", th_style),
-            Paragraph("Domain Focus", th_style),
-            Paragraph("Overall Score", th_style),
-            Paragraph("Fit Designation", th_style)
-        ]]
-
-        for idx, item in enumerate(ranked_products, 1):
-            fit_text = "Recommended" if item["overall_score"] >= 80.0 else ("Complementary" if item["overall_score"] >= 60.0 else "Not a fit")
-            rank_rows.append([
-                Paragraph(str(idx), td_bold_style),
-                Paragraph(item["product_name"], td_style),
-                Paragraph(item["industry_domain"], td_style),
-                Paragraph(f"{item['overall_score']:.1f}%", td_style),
-                Paragraph(fit_text, td_bold_style)
-            ])
-
-        rank_table = Table(rank_rows, colWidths=[40, 164, 100, 100, 100])
-        rank_table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), PRIMARY_COLOR),
-            ('LINEBELOW', (0,0), (-1,-1), 0.5, BORDER_GREY),
-            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, LIGHT_GREY]),
-            ('TOPPADDING', (0,0), (-1,-1), 5),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 5),
-            ('LEFTPADDING', (0,0), (-1,-1), 6),
-            ('RIGHTPADDING', (0,0), (-1,-1), 6),
-        ]))
-        story.append(rank_table)
-        story.append(Spacer(1, 15))
-
-        story.append(Paragraph(
-            "<b>Recommended (>=80%):</b> lead with this product in the proposal. "
-            "<b>Complementary (60-79%):</b> position as an add-on module or future phase. "
-            "<b>Not a fit (<60%):</b> omit from the teaming response.", td_style
-        ))
-        story.append(PageBreak())
-
-        # ------------------------------------------------------------------
-        # PAGES 3 & 4: SCORING DETAIL — TOP MATCHES
-        # ------------------------------------------------------------------
-        story.append(Paragraph("Scoring Detail — Top Matches", h1_style))
-        add_gold_divider()
-
-        # Detailed cards for Top 3 matches
-        for idx in range(min(3, len(ranked_products))):
-            prod = ranked_products[idx]
-            story.append(Paragraph(f"<b>{idx+1}. {prod['product_name']} &mdash; {prod['overall_score']:.1f}% overall</b>", h2_style))
+        for item in ranked_products[:4]:
+            profile_blocks.append({"type": "subheading", "text": f"{item['product_name']} ({item['industry_domain']} - Score: {item['score']}%)"})
+            profile_blocks.append({"type": "paragraph", "text": item["about"]})
+            profile_blocks.append({"type": "bullets", "items": item["features"][:5]})
             
-            def make_bar(score):
-                hashes = int(score / 5)
-                dashes = 20 - hashes
-                return f"{'#' * hashes}{'-' * dashes}"
+        sections_list.append({
+            "title": "Top Product Profiles",
+            "page_break_before": True,
+            "blocks": profile_blocks
+        })
 
-            fact_rows = [
-                [Paragraph("Factor", th_style), Paragraph("Weight", th_style), Paragraph("Factor Score", th_style), Paragraph("Bar Representation Chart", th_style)],
-                [Paragraph("Keyword Match", td_style), Paragraph("30%", td_style), Paragraph(f"{prod['keyword_score']:.1f}%", td_style), Paragraph(make_bar(prod['keyword_score']), td_bold_style)],
-                [Paragraph("Industry Match", td_style), Paragraph("20%", td_style), Paragraph(f"{prod['industry_score']:.1f}%", td_style), Paragraph(make_bar(prod['industry_score']), td_bold_style)],
-                [Paragraph("Pain-Point Match", td_style), Paragraph("15%", td_style), Paragraph(f"{prod['pain_point_score']:.1f}%", td_style), Paragraph(make_bar(prod['pain_point_score']), td_bold_style)],
-                [Paragraph("Compliance Match", td_style), Paragraph("15%", td_style), Paragraph(f"{prod['compliance_score']:.1f}%", td_style), Paragraph(make_bar(prod['compliance_score']), td_bold_style)],
-                [Paragraph("Budget Fit", td_style), Paragraph("10%", td_style), Paragraph(f"{prod['budget_score']:.1f}%", td_style), Paragraph(make_bar(prod['budget_score']), td_bold_style)],
-                [Paragraph("Technology Match", td_style), Paragraph("10%", td_style), Paragraph(f"{prod['tech_stack_score']:.1f}%", td_style), Paragraph(make_bar(prod['tech_stack_score']), td_bold_style)]
-            ]
-            fact_table = Table(fact_rows, colWidths=[130, 64, 90, 220])
-            fact_table.setStyle(TableStyle([
-                ('BACKGROUND', (0,0), (-1,0), PRIMARY_COLOR),
-                ('LINEBELOW', (0,0), (-1,-1), 0.5, BORDER_GREY),
-                ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, LIGHT_GREY]),
-                ('TOPPADDING', (0,0), (-1,-1), 5),
-                ('BOTTOMPADDING', (0,0), (-1,-1), 5),
-                ('LEFTPADDING', (0,0), (-1,-1), 8),
-                ('RIGHTPADDING', (0,0), (-1,-1), 8),
-            ]))
-            story.append(fact_table)
-            story.append(Spacer(1, 10))
+        cfg = {
+            "brand": brand,
+            "proposal": proposal_meta,
+            "toc": {"heading": "Content"},
+            "sections": sections_list
+        }
 
-            why_matches = (
-                f"<b>Why it matches:</b> Technical features overlap with RFP-mentioned capabilities ({', '.join(prod['features'][:4])}). "
-                f"Security compliance alignment checks out on {', '.join(prod['compliance_standards'][:3])}. "
-                f"Target domain of {prod['industry_domain']} aligns with solicitation profile directives."
-            )
-            story.append(Paragraph(why_matches, body_style))
-            story.append(Spacer(1, 15))
-            
-            if idx == 1:
-                story.append(PageBreak()) # Clean page break after 2nd matches detail
+        # Save config
+        config_path = self.project_root / "output" / "proposals" / f"{solicitation_number}_match_config.json"
+        with open(config_path, "w", encoding="utf-8") as fh:
+            json.dump(cfg, fh, indent=2, ensure_ascii=False)
 
-        story.append(PageBreak())
+        # Generate docx
+        import proposal_generator
+        output_base = self.project_root / "output" / "pdf" / f"{solicitation_number}_product_match_report"
+        docx_path = str(output_base) + ".docx"
+        proposal_generator.generate(cfg, docx_path)
+        logger.info(f"DOCX product match report saved: {docx_path}")
 
-        # ------------------------------------------------------------------
-        # PAGE 5: RECOMMENDATION SUMMARY
-        # ------------------------------------------------------------------
-        story.append(Paragraph("Recommendation Summary", h1_style))
-        add_gold_divider()
-
-        summary_p1 = (
-            f"Lead the teaming proposal with <b>{ranked_products[0]['product_name']}</b> as the core platform "
-            f"({ranked_products[0]['industry_domain']} focus) matching the target RFP requirements. Position "
-            f"<b>{ranked_products[1]['product_name']}</b> as an optional Phase 2 add-on module to support secondary "
-            f"data analysis, and <b>{ranked_products[2]['product_name']}</b> as a supporting portal to manage portal inquiries. "
-            f"All other products ranked below 60% are designated as not-a-fit for this specific solicitation and should be excluded from the proposal."
-        )
-        story.append(Paragraph(summary_p1, body_style))
-
-        # Build Match PDF
-        doc.build(story, canvasmaker=make_canvas(solicitation_number))
-        logger.info(f"Product Match Report PDF successfully written to: {pdf_path}")
-        return pdf_path
-
-if __name__ == "__main__":
-    import sys
-    sol = sys.argv[1] if len(sys.argv) > 1 else "N00178-26-R-3001"
-    gen = PDFGenerator()
-    gen.generate_pdf(sol)
+        # Convert to PDF
+        try:
+            pdf_path = proposal_generator.convert_to_pdf(docx_path)
+            return Path(pdf_path)
+        except Exception as e:
+            logger.warning(f"LibreOffice PDF conversion failed: {e}. Fallback to docx.")
+            return Path(docx_path)

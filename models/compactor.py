@@ -1,16 +1,15 @@
 """
 models/compactor.py
 -------------------
-LLM-powered Business Intelligence Compactor. OpenRouter only.
+LLM-powered Business Intelligence Compactor. Ollama (free cloud model).
 
 Takes the raw outputs from the three PPT-Agent agents (Website, LinkedIn, Google/External)
-and uses an LLM via OpenRouter to produce a single, clean OptimizedCompanyProfile JSON.
+and uses an LLM via Ollama (gemma4:31b-cloud) to produce a single, clean OptimizedCompanyProfile JSON.
 
 Cost-reduction measures:
-  - Two-pass strategy: compressed system prompt, 2 048 max_tokens (half of original)
-  - google/gemma-4-31b-it:free is the default (free tier, rate-limited)
-  - Free model fallback chain: tries gemma-4-31b → gemma-3-27b → mistral-7b
-    before touching any paid model
+  - Two-pass strategy: compressed system prompt
+  - gemma4:31b-cloud is the default (free Ollama cloud model, no API key needed)
+  - Fallback chain: tries primary model → gemma3:27b → llama3.1:8b → rule-based
   - normalizer limits raw_website_text to 8 000 chars; prompt builder trims to 4 000
   - Output caching: if the same website was compacted in the last 24 h, reuses MongoDB doc
 """
@@ -28,10 +27,15 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse, urlunparse
 
-import requests
-
 from models.company_schema import OptimizedCompanyProfile
 from models.normalizer import normalize_company_intelligence
+
+try:
+    import ollama as _ollama_lib
+    _OLLAMA_AVAILABLE = True
+except ImportError:
+    _ollama_lib = None
+    _OLLAMA_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -122,25 +126,17 @@ class BusinessIntelligenceCompactor:
     def __init__(self) -> None:
         from config.settings import settings as _settings
         self._settings = _settings
-        self.openrouter_api_key: str = getattr(_settings, "OPENROUTER_API_KEY", "") or ""
-        self.openrouter_base_url: str = (
-            getattr(_settings, "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1") or "https://openrouter.ai/api/v1"
-        )
-        self.openrouter_model: str = (
-            getattr(_settings, "OPENROUTER_MODEL", "google/gemma-4-31b-it:free") or "google/gemma-4-31b-it:free"
-        )
-        # Cost-reduction: 2 048 tokens is enough for a well-structured JSON profile.
-        # Free models support up to 8 192 context; output rarely exceeds 1 800 tokens.
-        self.max_tokens: int = 2048
+        # Ollama configuration (free cloud model)
+        self.ollama_model: str = getattr(_settings, "OLLAMA_MODEL", "gemma4:31b-cloud") or "gemma4:31b-cloud"
+        self.ollama_host: str = getattr(_settings, "OLLAMA_HOST", "") or ""
+        self.ollama_api_key: str = getattr(_settings, "OLLAMA_API_KEY", "") or ""
         self.temperature: float = 0.05
 
-        # Free model fallback chain — tried in order when the primary model fails.
-        # All are :free tier on OpenRouter (no credit consumed).
-        self._free_model_fallbacks: List[str] = [
-            "google/gemma-4-31b-it:free",
-            "google/gemma-3-27b-it:free",
-            "mistralai/mistral-7b-instruct:free",
-            "qwen/qwen3-8b:free",
+        # Ollama model fallback chain — tried in order when the primary model fails.
+        self._ollama_model_fallbacks: List[str] = [
+            "gemma4:31b-cloud",
+            "gemma3:27b",
+            "llama3.1:8b",
         ]
 
         # MongoDB (optional — skip gracefully if offline)
@@ -273,87 +269,89 @@ class BusinessIntelligenceCompactor:
 
     def _run_llm_compaction(self, normalized_data: Dict[str, Any], max_retries: int = 3) -> Dict[str, Any]:
         """
-        Call OpenRouter with the normalised payload and return parsed JSON.
+        Call Ollama with the normalised payload and return parsed JSON.
 
-        Free model fallback chain:
-          1. Tries self.openrouter_model (configured, default: gemma-4-31b:free)
-          2. On failure, rotates through self._free_model_fallbacks
+        Model fallback chain:
+          1. Tries self.ollama_model (default: gemma4:31b-cloud)
+          2. On failure, rotates through self._ollama_model_fallbacks
           3. Raises RuntimeError only after all models + all retries are exhausted
         """
+        if not _OLLAMA_AVAILABLE:
+            raise RuntimeError(
+                "ollama package not installed. Run: pip install ollama>=0.4.0"
+            )
+
         messages = _build_messages(normalized_data)
         last_error: Exception | None = None
 
-        if not self.openrouter_api_key:
-            raise ValueError(
-                "OPENROUTER_API_KEY is not set. Add it to your .env file. "
-                "Get a free key at https://openrouter.ai/keys"
-            )
-
-        # Build model trial list: primary model first, then free fallbacks (deduped)
-        models_to_try: List[str] = [self.openrouter_model]
-        for m in self._free_model_fallbacks:
+        # Build model trial list: primary model first, then fallbacks (deduped)
+        models_to_try: List[str] = [self.ollama_model]
+        for m in self._ollama_model_fallbacks:
             if m not in models_to_try:
                 models_to_try.append(m)
 
         for model in models_to_try:
             for attempt in range(max_retries):
                 try:
-                    raw = self._call_openrouter(messages, model=model)
+                    raw = self._call_ollama(messages, model=model)
                     result = self._parse_json_from_response(raw)
-                    if model != self.openrouter_model:
-                        logger.info(f"[Compactor] Fell back to model: {model}")
+                    if model != self.ollama_model:
+                        logger.info(f"[Compactor] Fell back to Ollama model: {model}")
                     return result
-                except requests.HTTPError as exc:
-                    # 429 = rate limit on this model, try next model immediately
-                    if exc.response is not None and exc.response.status_code == 429:
-                        logger.warning(f"[Compactor] Rate-limited on {model}, trying next model")
-                        last_error = exc
-                        break  # skip remaining retries for this model
-                    last_error = exc
                 except Exception as exc:
                     last_error = exc
-                wait = 2.0 * (1.5 ** attempt)
-                logger.warning(
-                    f"[Compactor] {model} attempt {attempt + 1}/{max_retries} failed: {last_error} "
-                    f"(retrying in {wait:.1f}s)"
-                )
-                if attempt < max_retries - 1:
-                    time.sleep(wait)
+                    wait = 2.0 * (1.5 ** attempt)
+                    logger.warning(
+                        f"[Compactor] Ollama {model} attempt {attempt + 1}/{max_retries} failed: {exc} "
+                        f"(retrying in {wait:.1f}s)"
+                    )
+                    if attempt < max_retries - 1:
+                        time.sleep(wait)
+                    else:
+                        break  # try next model
 
         raise RuntimeError(
-            f"All OpenRouter models failed. Last error: {last_error}. "
+            f"All Ollama models failed. Last error: {last_error}. "
             f"Models tried: {models_to_try}"
         )
 
-    def _call_openrouter(self, messages: List[Dict[str, str]], model: Optional[str] = None) -> str:
-        """POST to OpenRouter chat/completions and return the raw response text."""
-        target_model = model or self.openrouter_model
-        if not self.openrouter_api_key:
-            raise ValueError("OPENROUTER_API_KEY is not set.")
-        response = requests.post(
-            f"{self.openrouter_base_url}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {self.openrouter_api_key}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://github.com/PPT-Agent",
-                "X-Title": "PPT-Agent Compactor",
-            },
-            json={
-                "model": target_model,
-                "messages": messages,
-                "temperature": self.temperature,
-                "max_tokens": self.max_tokens,
-                "response_format": {"type": "json_object"},
-            },
-            timeout=180,
-        )
-        if response.status_code != 200:
-            logger.error(f"[Compactor] OpenRouter {response.status_code} ({target_model}): {response.text[:400]}")
-            response.raise_for_status()
-        payload = response.json()
-        content = payload["choices"][0]["message"]["content"]
+    def _call_ollama(self, messages: List[Dict[str, str]], model: Optional[str] = None) -> str:
+        """Call Ollama chat API and return the response text."""
+        if not _OLLAMA_AVAILABLE:
+            raise RuntimeError("ollama package not installed. Run: pip install ollama>=0.4.0")
+        target_model = model or self.ollama_model
+
+        # Build Ollama client (optionally with custom host & api key)
+        client_kwargs: Dict[str, Any] = {}
+        if self.ollama_host:
+            client_kwargs["host"] = self.ollama_host
+        
+        headers = {}
+        if self.ollama_api_key:
+            headers["Authorization"] = f"Bearer {self.ollama_api_key}"
+            client_kwargs["headers"] = headers
+
+        if client_kwargs or headers:
+            # If headers are provided, we must use Client. If host is empty, Client uses default localhost.
+            client = _ollama_lib.Client(**client_kwargs)
+            response = client.chat(
+                model=target_model,
+                messages=messages,
+                options={"temperature": self.temperature},
+                format="json",
+            )
+        else:
+            response = _ollama_lib.chat(
+                model=target_model,
+                messages=messages,
+                options={"temperature": self.temperature},
+                format="json",
+            )
+
+        content = response.message.content
         if not content:
-            raise ValueError(f"OpenRouter ({target_model}) returned an empty response.")
+            raise ValueError(f"Ollama ({target_model}) returned an empty response.")
+        logger.info(f"[Compactor] Ollama ({target_model}) responded successfully.")
         return str(content)
 
     # ------------------------------------------------------------------
