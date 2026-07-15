@@ -1,7 +1,12 @@
 import { Routes, Route } from 'react-router-dom';
 import DashboardLayout from './layouts/DashboardLayout.jsx';
+import ProtectedRoute from './components/ProtectedRoute.jsx';
 
 import Login from './pages/Login.jsx';
+import Register from './pages/Register.jsx';
+import VerifyOtp from './pages/VerifyOtp.jsx';
+import ForgotPassword from './pages/ForgotPassword.jsx';
+import ForceChangePassword from './pages/ForceChangePassword.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Companies from './pages/Companies.jsx';
 import CompanyDetail from './pages/CompanyDetail.jsx';
@@ -24,7 +29,12 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+      <Route path="/verify-otp" element={<VerifyOtp />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
 
+      <Route element={<ProtectedRoute />}>
+      <Route path="/force-change-password" element={<ForceChangePassword />} />
       <Route element={<DashboardLayout />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/companies" element={<Companies />} />
@@ -42,6 +52,7 @@ export default function App() {
         <Route path="/settings" element={<Settings />} />
         <Route path="/settings/users" element={<UsersRoles />} />
         <Route path="/settings/integrations" element={<Integrations />} />
+      </Route>
       </Route>
 
       <Route path="*" element={<NotFound />} />

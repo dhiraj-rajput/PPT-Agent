@@ -1,15 +1,29 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Sparkles, Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { api } from '../lib/api.js';
 
 export default function Login() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  async function handleSubmit(e) {
     e.preventDefault();
-    navigate('/');
-  };
+    setError('');
+    setLoading(true);
+    try {
+      await api.login(email, password);
+      navigate('/verify-otp', { state: { email, purpose: 'login' } });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <div className="flex min-h-screen bg-[#F6F7FB]">
@@ -65,6 +79,10 @@ export default function Login() {
           <h1 className="text-2xl font-extrabold text-navy-900">Welcome back</h1>
           <p className="mt-1 text-sm text-slate-500">Sign in to your account to continue.</p>
 
+          {error && (
+            <div className="mt-4 rounded-lg bg-tomato-50 px-3.5 py-2.5 text-sm text-tomato-700">{error}</div>
+          )}
+
           <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-4">
             <div>
               <label className="mb-1.5 block text-sm font-semibold text-navy-900">Email address</label>
@@ -73,7 +91,8 @@ export default function Login() {
                 <input
                   type="email"
                   required
-                  defaultValue="john.doe@orbitavanya.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   className="w-full border-0 bg-transparent text-sm outline-none placeholder:text-slate-400"
                   placeholder="you@company.com"
                 />
@@ -83,14 +102,15 @@ export default function Login() {
             <div>
               <div className="mb-1.5 flex items-center justify-between">
                 <label className="block text-sm font-semibold text-navy-900">Password</label>
-                <a href="#forgot" className="text-xs font-semibold text-brand-600">Forgot password?</a>
+                <Link to="/forgot-password" className="text-xs font-semibold text-brand-600">Forgot password?</Link>
               </div>
               <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 focus-within:border-brand-500">
                 <Lock size={16} className="text-slate-400" />
                 <input
                   type={showPw ? 'text' : 'password'}
                   required
-                  defaultValue="••••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   className="w-full border-0 bg-transparent text-sm outline-none"
                 />
                 <button type="button" onClick={() => setShowPw((s) => !s)} className="text-slate-400">
@@ -106,17 +126,16 @@ export default function Login() {
 
             <button
               type="submit"
-              className="mt-2 w-full rounded-xl bg-brand-500 py-3 text-sm font-bold text-white shadow-soft transition-colors hover:bg-brand-600"
+              disabled={loading}
+              className="mt-2 w-full rounded-xl bg-brand-500 py-3 text-sm font-bold text-white shadow-soft transition-colors hover:bg-brand-600 disabled:opacity-60"
             >
-              Sign In
+              {loading ? 'Signing in…' : 'Sign In'}
             </button>
           </form>
 
           <p className="mt-6 text-center text-sm text-slate-500">
-            Don't have an account? <a href="#signup" className="font-semibold text-brand-600">Request access</a>
+            Don't have an account? <Link to="/register" className="font-semibold text-brand-600">Request access</Link>
           </p>
-
-          <p className="mt-8 text-center text-xs text-slate-400">This is a frontend demo — sign-in uses dummy data only.</p>
         </div>
       </div>
     </div>

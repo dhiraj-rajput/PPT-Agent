@@ -1,13 +1,35 @@
-import { useState, useEffect } from 'react';
-import { Menu, Search, Bell, HelpCircle, Sun, Moon } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Menu, Search, Bell, HelpCircle, Sun, Moon, LogOut, ChevronDown } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext.jsx';
 
 export default function Topbar({ onMenuClick }) {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+
   const [theme, setTheme] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('theme') || 'light';
     }
     return 'light';
   });
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  function handleLogout() {
+    logout();
+    navigate('/login', { replace: true });
+  }
 
   useEffect(() => {
     if (theme === 'dark') {
@@ -54,16 +76,38 @@ export default function Topbar({ onMenuClick }) {
           <span className="absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-bold text-white">6</span>
         </button>
 
-        <div className="ml-1 flex items-center gap-2.5 border-l border-slate-200 pl-3 dark:border-navy-800">
-          <img
-            src="https://api.dicebear.com/7.x/avataaars/svg?seed=JohnDoe"
-            alt="John Doe"
-            className="h-9 w-9 rounded-full border border-slate-200 bg-slate-100 dark:border-navy-700 dark:bg-navy-800"
-          />
-          <div className="hidden leading-tight sm:block">
-            <p className="text-sm font-semibold text-navy-900 dark:text-white">John Doe</p>
-            <p className="text-xs text-slate-400">Admin</p>
-          </div>
+        <div className="relative ml-1 border-l border-slate-200 pl-3 dark:border-navy-800" ref={menuRef}>
+          <button
+            onClick={() => setMenuOpen((o) => !o)}
+            className="flex items-center gap-2.5 rounded-lg py-1 pr-1 hover:bg-slate-100 dark:hover:bg-navy-800"
+          >
+            <img
+              src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user?.name || user?.email || 'User')}`}
+              alt={user?.name || 'User'}
+              className="h-9 w-9 rounded-full border border-slate-200 bg-slate-100 dark:border-navy-700 dark:bg-navy-800"
+            />
+            <div className="hidden text-left leading-tight sm:block">
+              <p className="text-sm font-semibold text-navy-900 dark:text-white">{user?.name || 'Account'}</p>
+              <p className="max-w-[160px] truncate text-xs text-slate-400">{user?.email || ''}</p>
+            </div>
+            <ChevronDown size={16} className="hidden text-slate-400 sm:block" />
+          </button>
+
+          {menuOpen && (
+            <div className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-slate-200 bg-white py-1.5 shadow-soft dark:border-navy-700 dark:bg-navy-800">
+              <div className="border-b border-slate-100 px-3.5 py-2 dark:border-navy-700 sm:hidden">
+                <p className="text-sm font-semibold text-navy-900 dark:text-white">{user?.name || 'Account'}</p>
+                <p className="truncate text-xs text-slate-400">{user?.email || ''}</p>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="flex w-full items-center gap-2 px-3.5 py-2 text-sm font-medium text-tomato-600 hover:bg-slate-50 dark:hover:bg-navy-700"
+              >
+                <LogOut size={16} />
+                Log out
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </header>
