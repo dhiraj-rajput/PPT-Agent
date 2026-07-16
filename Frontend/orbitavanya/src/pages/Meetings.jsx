@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Plus, Calendar, Clock, Video, MapPin, X, Mail, Loader2, ExternalLink, Ban, Search, Check } from 'lucide-react';
 import { PageHeader, Card, StatusBadge } from '../components/ui/Common.jsx';
-import { api } from '../lib/api.js';
+import { api } from '../lib/api.jsx';
 
 const PROVIDERS = [
   { value: 'jitsi', label: 'Jitsi (instant, no account needed)' },

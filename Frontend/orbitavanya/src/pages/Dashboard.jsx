@@ -7,9 +7,9 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts';
 import { Card, ClosingAlertBadge } from '../components/ui/Common.jsx';
-import { companies } from '../data/companies.js';
-import { tenders, daysUntilClosing } from '../data/tenders.js';
-import { pipelineStages, emailPerformance, matchDistribution } from '../data/misc.js';
+import { companies } from '../data/companies.jsx';
+import { tenders, daysUntilClosing } from '../data/tenders.jsx';
+import { pipelineStages, emailPerformance, matchDistribution } from '../data/misc.jsx';
 
 const stats = [
   { label: 'Total Companies', value: '18,245', change: '+12.5%', period: 'vs last 7 days', icon: Building2, bg: 'bg-sky-50', fg: 'text-sky-600' },

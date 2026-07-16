@@ -1,6 +1,6 @@
 import { Plus, MoreHorizontal } from 'lucide-react';
 import { PageHeader, Card } from '../components/ui/Common.jsx';
-import { companies } from '../data/companies.js';
+import { companies } from '../data/companies.jsx';
 
 const columns = [
   { key: 'leads', label: 'New Leads', color: 'border-t-sky-400', items: companies.slice(0, 3) },

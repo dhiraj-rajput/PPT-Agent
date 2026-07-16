@@ -1,7 +1,7 @@
 import { ResponsiveContainer, AreaChart, Area, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { DollarSign, TrendingUp, Target, Brain } from 'lucide-react';
 import { PageHeader, Card } from '../components/ui/Common.jsx';
-import { revenueTrend, aiAccuracy, conversionFunnel } from '../data/misc.js';
+import { revenueTrend, aiAccuracy, conversionFunnel } from '../data/misc.jsx';
 
 const kpis = [
   { label: 'Total Revenue Pipeline', value: '$2.45M', icon: DollarSign, bg: 'bg-emerald-50', fg: 'text-emerald-600' },

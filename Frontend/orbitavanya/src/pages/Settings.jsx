@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Check, X, Loader2, ShieldCheck, KeyRound } from 'lucide-react';
 import { PageHeader, Card } from '../components/ui/Common.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
-import { api } from '../lib/api.js';
-import { checkPasswordRules } from '../lib/passwordStrength.js';
+import { api } from '../lib/api.jsx';
+import { checkPasswordRules } from '../lib/passwordStrength.jsx';
 
 const TIMEZONES = [
   'America/Chicago',

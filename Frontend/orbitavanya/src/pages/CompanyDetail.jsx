@@ -6,7 +6,7 @@ import {
   Eye, X, ShieldAlert, Cpu, RefreshCw, ExternalLink
 } from 'lucide-react';
 import { Card, MatchBadge, StatusBadge, ProgressBar } from '../components/ui/Common.jsx';
-import { tenders } from '../data/tenders.js';
+import { tenders } from '../data/tenders.jsx';
 
 const cleanDescriptionText = (text) => {
   if (!text) return '';

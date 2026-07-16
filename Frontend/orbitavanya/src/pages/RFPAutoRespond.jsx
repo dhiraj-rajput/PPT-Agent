@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Upload, FileText, Loader2, CheckCircle, AlertCircle, Download, X, Zap, FileCheck } from 'lucide-react';
-import { api } from '../lib/api.js';
+import { api } from '../lib/api.jsx';
 
 /**
  * RFPAutoRespond.jsx

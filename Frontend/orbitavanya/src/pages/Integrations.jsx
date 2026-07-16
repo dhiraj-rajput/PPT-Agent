@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { PageHeader, Card } from '../components/ui/Common.jsx';
-import { api } from '../lib/api.js';
+import { api } from '../lib/api.jsx';
 
 const integrations = [
   { name: 'SAM.gov', desc: 'Auto-import federal tenders and opportunities', connected: true, color: 'bg-sky-50 text-sky-600' },

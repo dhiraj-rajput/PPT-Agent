@@ -7,8 +7,8 @@ import {
   ShieldCheck, BookTemplate, ChevronDown, ChevronUp, FileText, FileDown
 } from 'lucide-react';
 import { Card, MatchBadge, StatusBadge } from '../components/ui/Common.jsx';
-import { tenders as staticTenders, daysUntilClosing } from '../data/tenders.js';
-import { companies as staticCompanies } from '../data/companies.js';
+import { tenders as staticTenders, daysUntilClosing } from '../data/tenders.jsx';
+import { companies as staticCompanies } from '../data/companies.jsx';
 
 // ---------------------------------------------------------------------------
 // Mode config — drives button appearance + backend payload for every status

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Plus, MoreHorizontal, X, Loader2 } from 'lucide-react';
 import { PageHeader, Card, StatusBadge } from '../components/ui/Common.jsx';
-import { api } from '../lib/api.js';
+import { api } from '../lib/api.jsx';
 
 const ROLES = ['Administrator', 'Proposal Writer', 'Contract Specialist', 'Business Development', 'Team Member'];
 

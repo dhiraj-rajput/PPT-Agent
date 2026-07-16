@@ -6,7 +6,7 @@ import {
   ChevronLeft, ChevronRight, X, Filter, Trophy, Clock, AlertOctagon
 } from 'lucide-react';
 import { PageHeader, Card, MatchBadge, StatusBadge } from '../components/ui/Common.jsx';
-import { tenders as staticTenders, daysUntilClosing } from '../data/tenders.js';
+import { tenders as staticTenders, daysUntilClosing } from '../data/tenders.jsx';
 
 const SET_ASIDE_OPTIONS = [
   { value: '', label: 'All Set-Asides' },

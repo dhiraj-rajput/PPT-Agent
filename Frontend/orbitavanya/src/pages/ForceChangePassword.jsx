@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles, Lock, Eye, EyeOff, Check, X, ShieldAlert } from 'lucide-react';
-import { api } from '../lib/api.js';
+import { api } from '../lib/api.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
-import { checkPasswordRules } from '../lib/passwordStrength.js';
+import { checkPasswordRules } from '../lib/passwordStrength.jsx';
 
 const STRENGTH_BAR_COLORS = {
   'Very weak': 'bg-tomato-500',

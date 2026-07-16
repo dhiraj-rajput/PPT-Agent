@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Plus, X, Loader2 } from 'lucide-react';
 import { PageHeader, Card, StatusBadge } from '../components/ui/Common.jsx';
-import { api } from '../lib/api.js';
+import { api } from '../lib/api.jsx';
 
 export default function Tasks() {
   const [tasks, setTasks] = useState([]);

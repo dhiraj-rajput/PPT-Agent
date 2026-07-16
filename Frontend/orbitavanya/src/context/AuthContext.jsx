@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { api } from '../lib/api.js';
+import { api } from '../lib/api.jsx';
 
 const AuthContext = createContext(null);
 const TOKEN_KEY = 'orbitavanya_token';

@@ -1,7 +1,7 @@
 import { Plus, Send, MousePointerClick, MailOpen, Reply, Clock, Globe } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { PageHeader, Card, StatusBadge } from '../components/ui/Common.jsx';
-import { campaigns, emailPerformance, websiteEngagement } from '../data/misc.js';
+import { campaigns, emailPerformance, websiteEngagement } from '../data/misc.jsx';
 
 const summary = [
   { label: 'Total Sent', value: '4,200', icon: Send, bg: 'bg-sky-50', fg: 'text-sky-600' },

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { Sparkles, ShieldCheck } from 'lucide-react';
-import { api } from '../lib/api.js';
+import { api } from '../lib/api.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 
 export default function VerifyOtp() {
