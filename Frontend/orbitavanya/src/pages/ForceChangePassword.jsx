@@ -36,7 +36,7 @@ function PasswordStrengthMeter({ password }) {
           />
         ))}
       </div>
-      <p className="mt-1 text-xs font-semibold text-slate-500">{label}</p>
+      <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">{label}</p>
       <ul className="mt-2 grid grid-cols-1 gap-1 sm:grid-cols-2">
         {rules.map((rule) => (
           <li key={rule.key} className="flex items-center gap-1.5 text-xs">
@@ -82,21 +82,21 @@ export default function ForceChangePassword() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#F6F7FB] px-6 py-12">
+    <div className="flex min-h-screen items-center justify-center bg-[#F6F7FB] dark:bg-navy-950 px-6 py-12">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex items-center justify-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-brand-500 to-accent-orange">
             <Sparkles size={20} className="text-white" />
           </div>
-          <p className="text-sm font-extrabold tracking-wide text-navy-900">ORBITAVANYA TECH</p>
+          <p className="text-sm font-extrabold tracking-wide text-navy-900 dark:text-white">ORBITAVANYA TECH</p>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-card">
+        <div className="rounded-2xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 p-8 shadow-card">
           <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-tomato-50">
             <ShieldAlert size={20} className="text-tomato-600" />
           </div>
-          <h1 className="text-xl font-extrabold text-navy-900">Set a permanent password</h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <h1 className="text-xl font-extrabold text-navy-900 dark:text-white">Set a permanent password</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             You signed in with a temporary password. Choose a new one now to finish setting up your account —
             you won't be able to use the rest of OrbitAvanya until this is done.
           </p>
@@ -107,9 +107,9 @@ export default function ForceChangePassword() {
 
           <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
             <div>
-              <label className="mb-1.5 block text-sm font-semibold text-navy-900">New password</label>
-              <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 focus-within:border-brand-500">
-                <Lock size={16} className="text-slate-400" />
+              <label className="mb-1.5 block text-sm font-semibold text-navy-900 dark:text-white">New password</label>
+              <div className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-3.5 py-2.5 focus-within:border-brand-500">
+                <Lock size={16} className="text-slate-400 dark:text-slate-500" />
                 <input
                   type={showPw ? 'text' : 'password'}
                   required
@@ -117,7 +117,7 @@ export default function ForceChangePassword() {
                   onChange={(e) => setNewPassword(e.target.value)}
                   className="w-full border-0 bg-transparent text-sm outline-none"
                 />
-                <button type="button" onClick={() => setShowPw((s) => !s)} className="text-slate-400">
+                <button type="button" onClick={() => setShowPw((s) => !s)} className="text-slate-400 dark:text-slate-500">
                   {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
@@ -125,9 +125,9 @@ export default function ForceChangePassword() {
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-semibold text-navy-900">Confirm new password</label>
-              <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 focus-within:border-brand-500">
-                <Lock size={16} className="text-slate-400" />
+              <label className="mb-1.5 block text-sm font-semibold text-navy-900 dark:text-white">Confirm new password</label>
+              <div className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-3.5 py-2.5 focus-within:border-brand-500">
+                <Lock size={16} className="text-slate-400 dark:text-slate-500" />
                 <input
                   type={showPw ? 'text' : 'password'}
                   required

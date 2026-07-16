@@ -29,14 +29,14 @@ export default function EmailCampaign() {
             <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${s.bg} ${s.fg}`}>
               <s.icon size={17} />
             </div>
-            <p className="mt-3 text-xs text-slate-500">{s.label}</p>
-            <p className="text-xl font-extrabold text-navy-900">{s.value}</p>
+            <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">{s.label}</p>
+            <p className="text-xl font-extrabold text-navy-900 dark:text-white">{s.value}</p>
           </Card>
         ))}
       </div>
 
       <Card className="mt-5">
-        <h3 className="text-sm font-bold text-navy-900">Performance Trend</h3>
+        <h3 className="text-sm font-bold text-navy-900 dark:text-white">Performance Trend</h3>
         <div className="mt-3 h-64">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={emailPerformance}>
@@ -56,11 +56,11 @@ export default function EmailCampaign() {
 
       <Card className="mt-5 !p-0">
         <div className="flex items-center justify-between p-5 pb-0">
-          <h3 className="text-sm font-bold text-navy-900">Campaigns</h3>
+          <h3 className="text-sm font-bold text-navy-900 dark:text-white">Campaigns</h3>
         </div>
         <table className="mt-3 w-full text-sm">
           <thead>
-            <tr className="border-b border-slate-100 text-left text-[11px] uppercase tracking-wide text-slate-400">
+            <tr className="border-b border-slate-100 dark:border-navy-800 text-left text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">
               <th className="px-5 py-3 font-semibold">Campaign</th>
               <th className="px-5 py-3 font-semibold">Status</th>
               <th className="px-5 py-3 font-semibold">Sent</th>
@@ -72,14 +72,14 @@ export default function EmailCampaign() {
           </thead>
           <tbody>
             {campaigns.map((c) => (
-              <tr key={c.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60">
-                <td className="px-5 py-3.5 font-semibold text-navy-900">{c.name}</td>
+              <tr key={c.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 dark:border-navy-800/40 dark:hover:bg-navy-800/40">
+                <td className="px-5 py-3.5 font-semibold text-navy-900 dark:text-white">{c.name}</td>
                 <td className="px-5 py-3.5"><StatusBadge status={c.status} /></td>
-                <td className="px-5 py-3.5 text-slate-500">{c.sent.toLocaleString()}</td>
-                <td className="px-5 py-3.5 text-slate-500">{c.opened.toLocaleString()}</td>
-                <td className="px-5 py-3.5 text-slate-500">{c.clicked.toLocaleString()}</td>
-                <td className="px-5 py-3.5 text-slate-500">{c.replied.toLocaleString()}</td>
-                <td className="px-5 py-3.5 text-right text-slate-500">{c.created}</td>
+                <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{c.sent.toLocaleString()}</td>
+                <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{c.opened.toLocaleString()}</td>
+                <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{c.clicked.toLocaleString()}</td>
+                <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{c.replied.toLocaleString()}</td>
+                <td className="px-5 py-3.5 text-right text-slate-500 dark:text-slate-400">{c.created}</td>
               </tr>
             ))}
           </tbody>
@@ -89,15 +89,15 @@ export default function EmailCampaign() {
       <Card className="mt-5 !p-0">
         <div className="flex items-center justify-between p-5 pb-0">
           <div>
-            <h3 className="flex items-center gap-2 text-sm font-bold text-navy-900">
+            <h3 className="flex items-center gap-2 text-sm font-bold text-navy-900 dark:text-white">
               <Globe size={15} className="text-brand-500" /> Website Engagement Tracking
             </h3>
-            <p className="mt-1 text-xs text-slate-400">Which companies clicked through and how long they spent on the site</p>
+            <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">Which companies clicked through and how long they spent on the site</p>
           </div>
         </div>
         <table className="mt-3 w-full text-sm">
           <thead>
-            <tr className="border-b border-slate-100 text-left text-[11px] uppercase tracking-wide text-slate-400">
+            <tr className="border-b border-slate-100 dark:border-navy-800 text-left text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">
               <th className="px-5 py-3 font-semibold">Company</th>
               <th className="px-5 py-3 font-semibold">Campaign</th>
               <th className="px-5 py-3 font-semibold">Time Active</th>
@@ -107,17 +107,17 @@ export default function EmailCampaign() {
           </thead>
           <tbody>
             {websiteEngagement.map((w) => (
-              <tr key={w.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60">
-                <td className="px-5 py-3.5 font-semibold text-navy-900">{w.company}</td>
-                <td className="px-5 py-3.5 text-slate-500">{w.campaign}</td>
-                <td className="px-5 py-3.5 text-slate-500">
+              <tr key={w.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 dark:border-navy-800/40 dark:hover:bg-navy-800/40">
+                <td className="px-5 py-3.5 font-semibold text-navy-900 dark:text-white">{w.company}</td>
+                <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{w.campaign}</td>
+                <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">
                   <span className="flex items-center gap-1.5"><Clock size={12} /> {w.timeActive}</span>
                 </td>
-                <td className="px-5 py-3.5 text-slate-500">
-                  <span className="font-semibold text-navy-900">{w.pagesViewed}</span>
-                  <span className="ml-1 text-xs text-slate-400">({w.pages.join(', ')})</span>
+                <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">
+                  <span className="font-semibold text-navy-900 dark:text-white">{w.pagesViewed}</span>
+                  <span className="ml-1 text-xs text-slate-400 dark:text-slate-500">({w.pages.join(', ')})</span>
                 </td>
-                <td className="px-5 py-3.5 text-right text-slate-500">{w.lastVisit}</td>
+                <td className="px-5 py-3.5 text-right text-slate-500 dark:text-slate-400">{w.lastVisit}</td>
               </tr>
             ))}
           </tbody>

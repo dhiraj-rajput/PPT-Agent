@@ -3,6 +3,7 @@ import Task from '../models/Task.js';
 import User from '../models/User.js';
 import { requireAuth } from '../middleware/auth.js';
 import { sendTaskAssignedEmail } from '../utils/mailer.js';
+import { pushNotification } from '../utils/notify.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -40,6 +41,15 @@ async function notifyAssignee(task, assignerId) {
   } catch (err) {
     console.error('Task assignment email failed:', err.message);
   }
+
+  await pushNotification({
+    userId: assignee._id,
+    type: 'task_assigned',
+    title: 'New task assigned to you',
+    message: `${assigner?.name || 'Someone'} assigned you "${task.title}"${task.due ? ` — due ${task.due}` : ''}.`,
+    link: '/tasks',
+    relatedId: task._id,
+  });
 }
 
 // ---------- GET /api/tasks ----------

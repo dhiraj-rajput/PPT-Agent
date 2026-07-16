@@ -92,15 +92,15 @@ export default function UsersRoles() {
 
       <Card className="!p-0">
         {loading ? (
-          <div className="flex items-center justify-center gap-2 py-12 text-sm text-slate-400">
+          <div className="flex items-center justify-center gap-2 py-12 text-sm text-slate-400 dark:text-slate-500">
             <Loader2 size={16} className="animate-spin" /> Loading users…
           </div>
         ) : users.length === 0 ? (
-          <div className="py-12 text-center text-sm text-slate-400">No users yet. Invite your first teammate.</div>
+          <div className="py-12 text-center text-sm text-slate-400 dark:text-slate-500">No users yet. Invite your first teammate.</div>
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-100 text-left text-[11px] uppercase tracking-wide text-slate-400">
+              <tr className="border-b border-slate-100 dark:border-navy-800 text-left text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">
                 <th className="px-5 py-3 font-semibold">User</th>
                 <th className="px-5 py-3 font-semibold">Role</th>
                 <th className="px-5 py-3 font-semibold">Status</th>
@@ -109,7 +109,7 @@ export default function UsersRoles() {
             </thead>
             <tbody>
               {users.map((u) => (
-                <tr key={u.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60">
+                <tr key={u.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 dark:border-navy-800/40 dark:hover:bg-navy-800/40">
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-3">
                       <img
@@ -118,25 +118,25 @@ export default function UsersRoles() {
                         alt={u.name}
                       />
                       <div>
-                        <p className="font-semibold text-navy-900">{u.name}</p>
-                        <p className="text-xs text-slate-400">{u.email}</p>
+                        <p className="font-semibold text-navy-900 dark:text-white">{u.name}</p>
+                        <p className="text-xs text-slate-400 dark:text-slate-500">{u.email}</p>
                       </div>
                     </div>
                   </td>
-                  <td className="px-5 py-3.5 text-slate-500">{u.role}</td>
+                  <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{u.role}</td>
                   <td className="px-5 py-3.5">
                     <StatusBadge status={u.status} />
                   </td>
                   <td className="relative px-5 py-3.5 text-right">
                     <button
                       onClick={() => setMenuOpenId(menuOpenId === u.id ? null : u.id)}
-                      className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100"
+                      className="rounded-lg p-1.5 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-navy-700"
                     >
                       <MoreHorizontal size={15} />
                     </button>
                     {menuOpenId === u.id && (
-                      <div className="absolute right-5 z-10 mt-1 w-48 rounded-xl border border-slate-100 bg-white p-1.5 text-left shadow-card">
-                        <p className="px-2.5 py-1.5 text-[11px] font-semibold uppercase text-slate-400">Change role</p>
+                      <div className="absolute right-5 z-10 mt-1 w-48 rounded-xl border border-slate-100 dark:border-navy-800 bg-white dark:bg-navy-900 p-1.5 text-left shadow-card">
+                        <p className="px-2.5 py-1.5 text-[11px] font-semibold uppercase text-slate-400 dark:text-slate-500">Change role</p>
                         {ROLES.map((r) => (
                           <button
                             key={r}
@@ -165,47 +165,47 @@ export default function UsersRoles() {
         >
           <form
             onSubmit={submitInvite}
-            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-soft"
+            className="w-full max-w-md rounded-2xl bg-white dark:bg-navy-900 p-6 shadow-soft"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-navy-900">Invite User</h3>
-              <button type="button" onClick={() => setOpen(false)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100">
+              <h3 className="text-sm font-bold text-navy-900 dark:text-white">Invite User</h3>
+              <button type="button" onClick={() => setOpen(false)} className="rounded-lg p-1.5 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-navy-700">
                 <X size={16} />
               </button>
             </div>
 
-            <p className="mt-1 text-xs text-slate-400">
+            <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
               We'll create their account and email them a sign-in link with a temporary password.
             </p>
 
             <div className="mt-4 flex flex-col gap-3">
               <div>
-                <label className="text-xs font-semibold text-slate-500">Name</label>
+                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Name</label>
                 <input
                   value={form.name}
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-brand-500"
+                  className="mt-1 w-full rounded-xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-3.5 py-2.5 text-sm text-navy-900 dark:text-white outline-none focus:border-brand-500"
                   placeholder="Jane Smith"
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-slate-500">Email</label>
+                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Email</label>
                 <input
                   type="email"
                   value={form.email}
                   onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-brand-500"
+                  className="mt-1 w-full rounded-xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-3.5 py-2.5 text-sm text-navy-900 dark:text-white outline-none focus:border-brand-500"
                   placeholder="jane@company.com"
                   required
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-slate-500">Role</label>
+                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Role</label>
                 <select
                   value={form.role}
                   onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-brand-500"
+                  className="mt-1 w-full rounded-xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-3.5 py-2.5 text-sm text-navy-900 dark:text-white outline-none focus:border-brand-500"
                 >
                   {ROLES.map((r) => (
                     <option key={r}>{r}</option>
@@ -225,7 +225,7 @@ export default function UsersRoles() {
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="rounded-lg border border-slate-200 px-3.5 py-2 text-xs font-semibold text-navy-900 hover:bg-slate-50"
+                className="rounded-lg border border-slate-200 dark:border-navy-700 px-3.5 py-2 text-xs font-semibold text-navy-900 dark:text-white hover:bg-slate-50 dark:hover:bg-navy-800"
               >
                 Cancel
               </button>

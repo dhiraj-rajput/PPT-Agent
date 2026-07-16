@@ -64,22 +64,22 @@ export default function VerifyOtp() {
   if (!email || !purpose) return null;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#F6F7FB] px-6 py-12">
+    <div className="flex min-h-screen items-center justify-center bg-[#F6F7FB] dark:bg-navy-950 px-6 py-12">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex items-center justify-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-brand-500 to-accent-orange">
             <Sparkles size={20} className="text-white" />
           </div>
-          <p className="text-sm font-extrabold tracking-wide text-navy-900">ORBITAVANYA TECH</p>
+          <p className="text-sm font-extrabold tracking-wide text-navy-900 dark:text-white">ORBITAVANYA TECH</p>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-card">
+        <div className="rounded-2xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 p-8 shadow-card">
           <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-brand-50">
             <ShieldCheck size={20} className="text-brand-600" />
           </div>
-          <h1 className="text-xl font-extrabold text-navy-900">Check your email</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            We sent a 6-digit code to <span className="font-semibold text-navy-900">{email}</span>.
+          <h1 className="text-xl font-extrabold text-navy-900 dark:text-white">Check your email</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            We sent a 6-digit code to <span className="font-semibold text-navy-900 dark:text-white">{email}</span>.
             Enter it below to {purpose === 'register' ? 'verify your account' : 'finish signing in'}.
           </p>
 
@@ -102,7 +102,7 @@ export default function VerifyOtp() {
               value={otp}
               onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
               placeholder="000000"
-              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] outline-none focus:border-brand-500"
+              className="w-full rounded-xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] outline-none focus:border-brand-500"
             />
 
             <button
@@ -123,7 +123,7 @@ export default function VerifyOtp() {
           </button>
         </div>
 
-        <p className="mt-6 text-center text-sm text-slate-500">
+        <p className="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">
           <Link to="/login" className="font-semibold text-brand-600">
             Back to sign in
           </Link>

@@ -77,7 +77,7 @@ export default function Reports() {
                         </div>
                         <div>
                           <p className="font-semibold text-navy-900 dark:text-white leading-tight">{r.title}</p>
-                          <p className="text-xs text-slate-400 mt-0.5">{r.filename}</p>
+                          <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{r.filename}</p>
                         </div>
                       </div>
                     </td>
@@ -123,10 +123,10 @@ export default function Reports() {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-navy-900 dark:text-white">{previewing.title}</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">{previewing.company_name} · Ref: {previewing.ref || 'N/A'} · {previewing.size}</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{previewing.company_name} · Ref: {previewing.ref || 'N/A'} · {previewing.size}</p>
                 </div>
               </div>
-              <button onClick={() => setPreviewing(null)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-navy-900">
+              <button onClick={() => setPreviewing(null)} className="rounded-lg p-1.5 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-navy-900">
                 <X size={18} />
               </button>
             </div>
@@ -151,7 +151,7 @@ export default function Reports() {
               ) : (
                 <iframe
                   src={`http://localhost:8000/api/reports/view/${previewing.filename}`}
-                  className="w-full h-full border-0 rounded-xl bg-white shadow-inner"
+                  className="w-full h-full border-0 rounded-xl bg-white dark:bg-navy-900 shadow-inner"
                   title={previewing.title}
                 />
               )}

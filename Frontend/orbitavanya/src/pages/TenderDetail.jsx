@@ -102,7 +102,7 @@ export default function TenderDetail() {
         <div className="flex flex-col gap-5">
           <Card>
             <div className="flex items-center gap-2">
-              <Users size={16} className="text-slate-400" />
+              <Users size={16} className="text-slate-400 dark:text-slate-500" />
               <h3 className="text-sm font-bold text-navy-900 dark:text-white">Suggested Companies</h3>
             </div>
             <div className="mt-3 flex flex-col gap-3">

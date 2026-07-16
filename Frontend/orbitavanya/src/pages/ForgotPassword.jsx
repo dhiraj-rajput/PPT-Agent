@@ -36,7 +36,7 @@ function PasswordStrengthMeter({ password }) {
           />
         ))}
       </div>
-      <p className="mt-1 text-xs font-semibold text-slate-500">{label}</p>
+      <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">{label}</p>
       <ul className="mt-2 grid grid-cols-1 gap-1 sm:grid-cols-2">
         {rules.map((rule) => (
           <li key={rule.key} className="flex items-center gap-1.5 text-xs">
@@ -55,18 +55,18 @@ function PasswordStrengthMeter({ password }) {
 
 function Shell({ children }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#F6F7FB] px-6 py-12">
+    <div className="flex min-h-screen items-center justify-center bg-[#F6F7FB] dark:bg-navy-950 px-6 py-12">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex items-center justify-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-brand-500 to-accent-orange">
             <Sparkles size={20} className="text-white" />
           </div>
-          <p className="text-sm font-extrabold tracking-wide text-navy-900">ORBITAVANYA TECH</p>
+          <p className="text-sm font-extrabold tracking-wide text-navy-900 dark:text-white">ORBITAVANYA TECH</p>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-card">{children}</div>
+        <div className="rounded-2xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 p-8 shadow-card">{children}</div>
 
-        <p className="mt-6 text-center text-sm text-slate-500">
+        <p className="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">
           <Link to="/login" className="font-semibold text-brand-600">
             Back to sign in
           </Link>
@@ -193,21 +193,21 @@ export default function ForgotPassword() {
 
       {step === 'email' && (
         <>
-          <h1 className="text-xl font-extrabold text-navy-900">Forgot your password?</h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <h1 className="text-xl font-extrabold text-navy-900 dark:text-white">Forgot your password?</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             Enter your account email and we'll send you a verification code.
           </p>
           <form onSubmit={handleRequestOtp} className="mt-6 flex flex-col gap-4">
             <div>
-              <label className="mb-1.5 block text-sm font-semibold text-navy-900">Email address</label>
-              <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 focus-within:border-brand-500">
-                <Mail size={16} className="text-slate-400" />
+              <label className="mb-1.5 block text-sm font-semibold text-navy-900 dark:text-white">Email address</label>
+              <div className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-3.5 py-2.5 focus-within:border-brand-500">
+                <Mail size={16} className="text-slate-400 dark:text-slate-500" />
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full border-0 bg-transparent text-sm outline-none placeholder:text-slate-400"
+                  className="w-full border-0 bg-transparent text-sm outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
                   placeholder="you@company.com"
                 />
               </div>
@@ -228,9 +228,9 @@ export default function ForgotPassword() {
           <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-brand-50">
             <ShieldCheck size={20} className="text-brand-600" />
           </div>
-          <h1 className="text-xl font-extrabold text-navy-900">Check your email</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Enter the 6-digit code we sent to <span className="font-semibold text-navy-900">{email}</span>.
+          <h1 className="text-xl font-extrabold text-navy-900 dark:text-white">Check your email</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            Enter the 6-digit code we sent to <span className="font-semibold text-navy-900 dark:text-white">{email}</span>.
           </p>
           <form onSubmit={handleVerifyOtp} className="mt-6 flex flex-col gap-4">
             <input
@@ -242,7 +242,7 @@ export default function ForgotPassword() {
               value={otp}
               onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
               placeholder="000000"
-              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] outline-none focus:border-brand-500"
+              className="w-full rounded-xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] outline-none focus:border-brand-500"
             />
             <button
               type="submit"
@@ -266,7 +266,7 @@ export default function ForgotPassword() {
               setError('');
               setInfo('');
             }}
-            className="mt-2 w-full text-center text-xs font-semibold text-slate-400"
+            className="mt-2 w-full text-center text-xs font-semibold text-slate-400 dark:text-slate-500"
           >
             Use a different email
           </button>
@@ -275,13 +275,13 @@ export default function ForgotPassword() {
 
       {step === 'password' && (
         <>
-          <h1 className="text-xl font-extrabold text-navy-900">Set a new password</h1>
-          <p className="mt-1 text-sm text-slate-500">Choose a strong password for your account.</p>
+          <h1 className="text-xl font-extrabold text-navy-900 dark:text-white">Set a new password</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Choose a strong password for your account.</p>
           <form onSubmit={handleResetPassword} className="mt-6 flex flex-col gap-4">
             <div>
-              <label className="mb-1.5 block text-sm font-semibold text-navy-900">New password</label>
-              <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 focus-within:border-brand-500">
-                <Lock size={16} className="text-slate-400" />
+              <label className="mb-1.5 block text-sm font-semibold text-navy-900 dark:text-white">New password</label>
+              <div className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-3.5 py-2.5 focus-within:border-brand-500">
+                <Lock size={16} className="text-slate-400 dark:text-slate-500" />
                 <input
                   type={showPw ? 'text' : 'password'}
                   required
@@ -289,7 +289,7 @@ export default function ForgotPassword() {
                   onChange={(e) => setNewPassword(e.target.value)}
                   className="w-full border-0 bg-transparent text-sm outline-none"
                 />
-                <button type="button" onClick={() => setShowPw((s) => !s)} className="text-slate-400">
+                <button type="button" onClick={() => setShowPw((s) => !s)} className="text-slate-400 dark:text-slate-500">
                   {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
@@ -297,13 +297,13 @@ export default function ForgotPassword() {
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-semibold text-navy-900">Confirm new password</label>
+              <label className="mb-1.5 block text-sm font-semibold text-navy-900 dark:text-white">Confirm new password</label>
               <div
                 className={`flex items-center gap-2 rounded-xl border bg-white px-3.5 py-2.5 focus-within:border-brand-500 ${
                   confirmPassword && !passwordsMatch ? 'border-tomato-300' : 'border-slate-200'
                 }`}
               >
-                <Lock size={16} className="text-slate-400" />
+                <Lock size={16} className="text-slate-400 dark:text-slate-500" />
                 <input
                   type={showConfirmPw ? 'text' : 'password'}
                   required
@@ -311,7 +311,7 @@ export default function ForgotPassword() {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   className="w-full border-0 bg-transparent text-sm outline-none"
                 />
-                <button type="button" onClick={() => setShowConfirmPw((s) => !s)} className="text-slate-400">
+                <button type="button" onClick={() => setShowConfirmPw((s) => !s)} className="text-slate-400 dark:text-slate-500">
                   {showConfirmPw ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
@@ -336,8 +336,8 @@ export default function ForgotPassword() {
           <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50">
             <Check size={22} className="text-emerald-600" />
           </div>
-          <h1 className="text-xl font-extrabold text-navy-900">Password updated</h1>
-          <p className="mt-1 text-sm text-slate-500">Taking you to your dashboard…</p>
+          <h1 className="text-xl font-extrabold text-navy-900 dark:text-white">Password updated</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Taking you to your dashboard…</p>
         </div>
       )}
     </Shell>

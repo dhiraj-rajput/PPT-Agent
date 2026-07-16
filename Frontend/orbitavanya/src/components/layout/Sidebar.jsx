@@ -76,7 +76,7 @@ export default function Sidebar({ collapsed, onToggle }) {
         {!collapsed && (
           <div className="leading-tight">
             <p className="text-sm font-extrabold tracking-wide text-white">ORBITAVANYA</p>
-            <p className="text-[10px] font-semibold tracking-[0.2em] text-slate-400">TECH</p>
+            <p className="text-[10px] font-semibold tracking-[0.2em] text-slate-400 dark:text-slate-500">TECH</p>
           </div>
         )}
       </div>
@@ -93,7 +93,7 @@ export default function Sidebar({ collapsed, onToggle }) {
         <div className="mx-3 mb-3 rounded-xl bg-white/5 p-3.5">
           <div className="flex items-center justify-between text-xs">
             <span className="font-semibold text-white">AI Credits</span>
-            <span className="text-slate-400">12,450 / 20,000</span>
+            <span className="text-slate-400 dark:text-slate-500">12,450 / 20,000</span>
           </div>
           <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
             <div className="h-full w-[62%] rounded-full bg-gradient-to-r from-brand-500 to-accent-sky" />
@@ -108,7 +108,7 @@ export default function Sidebar({ collapsed, onToggle }) {
 
       <button
         onClick={onToggle}
-        className="flex items-center justify-center gap-2 border-t border-white/10 py-3 text-xs font-medium text-slate-400 hover:text-white"
+        className="flex items-center justify-center gap-2 border-t border-white/10 py-3 text-xs font-medium text-slate-400 dark:text-slate-500 hover:text-white"
       >
         <ChevronLeft size={16} className={`transition-transform ${collapsed ? 'rotate-180' : ''}`} />
         {!collapsed && 'Collapse'}

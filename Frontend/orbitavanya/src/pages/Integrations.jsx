@@ -60,15 +60,15 @@ function GoogleMeetCard() {
       <div className="flex items-start justify-between">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-sm font-bold text-red-600">GM</div>
         {loading ? (
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-500">Checking…</span>
+          <span className="rounded-full bg-slate-100 dark:bg-navy-800 px-2.5 py-1 text-[11px] font-bold text-slate-500 dark:text-slate-400">Checking…</span>
         ) : status.connected ? (
           <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-700">Connected</span>
         ) : (
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-500">Not Connected</span>
+          <span className="rounded-full bg-slate-100 dark:bg-navy-800 px-2.5 py-1 text-[11px] font-bold text-slate-500 dark:text-slate-400">Not Connected</span>
         )}
       </div>
-      <p className="mt-3 text-sm font-bold text-navy-900">Google Meet</p>
-      <p className="mt-1 text-xs text-slate-400">
+      <p className="mt-3 text-sm font-bold text-navy-900 dark:text-white">Google Meet</p>
+      <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
         {status.connected ? `Connected as ${status.connectedEmail}` : 'Auto-create Google Meet links when scheduling meetings'}
       </p>
       {error && <p className="mt-2 text-xs text-tomato-600">{error}</p>}
@@ -76,7 +76,7 @@ function GoogleMeetCard() {
         onClick={handleConnect}
         disabled={connecting || loading}
         className={`mt-4 w-full rounded-lg py-2 text-xs font-semibold disabled:opacity-60 ${
-          status.connected ? 'border border-slate-200 text-navy-900' : 'bg-brand-500 text-white'
+          status.connected ? 'border border-slate-200 text-navy-900 dark:border-navy-700 dark:text-white' : 'bg-brand-500 text-white'
         }`}
       >
         {connecting ? 'Redirecting…' : status.connected ? 'Reconnect' : 'Connect'}
@@ -101,12 +101,12 @@ export default function Integrations() {
               {i.connected ? (
                 <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-700">Connected</span>
               ) : (
-                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-500">Not Connected</span>
+                <span className="rounded-full bg-slate-100 dark:bg-navy-800 px-2.5 py-1 text-[11px] font-bold text-slate-500 dark:text-slate-400">Not Connected</span>
               )}
             </div>
-            <p className="mt-3 text-sm font-bold text-navy-900">{i.name}</p>
-            <p className="mt-1 text-xs text-slate-400">{i.desc}</p>
-            <button className={`mt-4 w-full rounded-lg py-2 text-xs font-semibold ${i.connected ? 'border border-slate-200 text-navy-900' : 'bg-brand-500 text-white'}`}>
+            <p className="mt-3 text-sm font-bold text-navy-900 dark:text-white">{i.name}</p>
+            <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{i.desc}</p>
+            <button className={`mt-4 w-full rounded-lg py-2 text-xs font-semibold ${i.connected ? 'border border-slate-200 text-navy-900 dark:border-navy-700 dark:text-white' : 'bg-brand-500 text-white'}`}>
               {i.connected ? 'Manage' : 'Connect'}
             </button>
           </Card>

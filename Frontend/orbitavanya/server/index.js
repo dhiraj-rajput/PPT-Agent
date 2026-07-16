@@ -7,6 +7,7 @@ import userRoutes from './routes/users.js';
 import taskRoutes from './routes/tasks.js';
 import meetingRoutes from './routes/meetings.js';
 import integrationRoutes from './routes/integrations.js';
+import notificationRoutes from './routes/notifications.js';
 
 const app = express();
 
@@ -19,6 +20,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/meetings', meetingRoutes);
 app.use('/api/integrations', integrationRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 app.use((req, res) => res.status(404).json({ error: 'Not found.' }));
 

@@ -36,7 +36,7 @@ function PasswordStrengthMeter({ password }) {
           />
         ))}
       </div>
-      <p className="mt-1 text-xs font-semibold text-slate-500">{label}</p>
+      <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">{label}</p>
       <ul className="mt-2 grid grid-cols-1 gap-1 sm:grid-cols-2">
         {rules.map((rule) => (
           <li key={rule.key} className="flex items-center gap-1.5 text-xs">
@@ -94,7 +94,7 @@ export default function Register() {
   }
 
   return (
-    <div className="flex min-h-screen bg-[#F6F7FB]">
+    <div className="flex min-h-screen bg-[#F6F7FB] dark:bg-navy-950">
       <div className="relative hidden w-1/2 flex-col justify-between overflow-hidden bg-navy-900 p-12 text-white lg:flex">
         <div className="absolute -right-24 -top-24 h-96 w-96 rounded-full bg-brand-500/20 blur-3xl" />
         <div className="absolute -bottom-32 -left-10 h-96 w-96 rounded-full bg-accent-orange/10 blur-3xl" />
@@ -105,7 +105,7 @@ export default function Register() {
           </div>
           <div className="leading-tight">
             <p className="text-sm font-extrabold tracking-wide">ORBITAVANYA</p>
-            <p className="text-[10px] font-semibold tracking-[0.2em] text-slate-400">TECH</p>
+            <p className="text-[10px] font-semibold tracking-[0.2em] text-slate-400 dark:text-slate-500">TECH</p>
           </div>
         </div>
 
@@ -116,7 +116,7 @@ export default function Register() {
           </p>
         </div>
 
-        <p className="relative text-xs text-slate-500">© 2026 OrbitAvanya Tech. All rights reserved.</p>
+        <p className="relative text-xs text-slate-500 dark:text-slate-400">© 2026 OrbitAvanya Tech. All rights reserved.</p>
       </div>
 
       <div className="flex w-full flex-1 items-center justify-center px-6 py-12 lg:w-1/2">
@@ -125,11 +125,11 @@ export default function Register() {
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-brand-500 to-accent-orange">
               <Sparkles size={18} className="text-white" />
             </div>
-            <p className="text-sm font-extrabold tracking-wide text-navy-900">ORBITAVANYA TECH</p>
+            <p className="text-sm font-extrabold tracking-wide text-navy-900 dark:text-white">ORBITAVANYA TECH</p>
           </div>
 
-          <h1 className="text-2xl font-extrabold text-navy-900">Request access</h1>
-          <p className="mt-1 text-sm text-slate-500">Create an account to get started.</p>
+          <h1 className="text-2xl font-extrabold text-navy-900 dark:text-white">Request access</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Create an account to get started.</p>
 
           {error && (
             <div className="mt-4 rounded-lg bg-tomato-50 px-3.5 py-2.5 text-sm text-tomato-700">{error}</div>
@@ -137,54 +137,54 @@ export default function Register() {
 
           <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
             <div>
-              <label className="mb-1.5 block text-sm font-semibold text-navy-900">Full name</label>
-              <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 focus-within:border-brand-500">
-                <User size={16} className="text-slate-400" />
+              <label className="mb-1.5 block text-sm font-semibold text-navy-900 dark:text-white">Full name</label>
+              <div className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-3.5 py-2.5 focus-within:border-brand-500">
+                <User size={16} className="text-slate-400 dark:text-slate-500" />
                 <input
                   type="text"
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full border-0 bg-transparent text-sm outline-none placeholder:text-slate-400"
+                  className="w-full border-0 bg-transparent text-sm outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
                   placeholder="Jane Doe"
                 />
               </div>
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-semibold text-navy-900">Email address</label>
-              <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 focus-within:border-brand-500">
-                <Mail size={16} className="text-slate-400" />
+              <label className="mb-1.5 block text-sm font-semibold text-navy-900 dark:text-white">Email address</label>
+              <div className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-3.5 py-2.5 focus-within:border-brand-500">
+                <Mail size={16} className="text-slate-400 dark:text-slate-500" />
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full border-0 bg-transparent text-sm outline-none placeholder:text-slate-400"
+                  className="w-full border-0 bg-transparent text-sm outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
                   placeholder="you@company.com"
                 />
               </div>
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-semibold text-navy-900">Phone number</label>
-              <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 focus-within:border-brand-500">
-                <Phone size={16} className="text-slate-400" />
+              <label className="mb-1.5 block text-sm font-semibold text-navy-900 dark:text-white">Phone number</label>
+              <div className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-3.5 py-2.5 focus-within:border-brand-500">
+                <Phone size={16} className="text-slate-400 dark:text-slate-500" />
                 <input
                   type="tel"
                   required
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  className="w-full border-0 bg-transparent text-sm outline-none placeholder:text-slate-400"
+                  className="w-full border-0 bg-transparent text-sm outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
                   placeholder="+91 98765 43210"
                 />
               </div>
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-semibold text-navy-900">Password</label>
-              <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 focus-within:border-brand-500">
-                <Lock size={16} className="text-slate-400" />
+              <label className="mb-1.5 block text-sm font-semibold text-navy-900 dark:text-white">Password</label>
+              <div className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-3.5 py-2.5 focus-within:border-brand-500">
+                <Lock size={16} className="text-slate-400 dark:text-slate-500" />
                 <input
                   type={showPw ? 'text' : 'password'}
                   required
@@ -193,7 +193,7 @@ export default function Register() {
                   className="w-full border-0 bg-transparent text-sm outline-none"
                   placeholder="Create a strong password"
                 />
-                <button type="button" onClick={() => setShowPw((s) => !s)} className="text-slate-400">
+                <button type="button" onClick={() => setShowPw((s) => !s)} className="text-slate-400 dark:text-slate-500">
                   {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
@@ -201,13 +201,13 @@ export default function Register() {
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-semibold text-navy-900">Confirm password</label>
+              <label className="mb-1.5 block text-sm font-semibold text-navy-900 dark:text-white">Confirm password</label>
               <div
                 className={`flex items-center gap-2 rounded-xl border bg-white px-3.5 py-2.5 focus-within:border-brand-500 ${
                   confirmPassword && !passwordsMatch ? 'border-tomato-300' : 'border-slate-200'
                 }`}
               >
-                <Lock size={16} className="text-slate-400" />
+                <Lock size={16} className="text-slate-400 dark:text-slate-500" />
                 <input
                   type={showConfirmPw ? 'text' : 'password'}
                   required
@@ -216,7 +216,7 @@ export default function Register() {
                   className="w-full border-0 bg-transparent text-sm outline-none"
                   placeholder="Re-enter your password"
                 />
-                <button type="button" onClick={() => setShowConfirmPw((s) => !s)} className="text-slate-400">
+                <button type="button" onClick={() => setShowConfirmPw((s) => !s)} className="text-slate-400 dark:text-slate-500">
                   {showConfirmPw ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
@@ -239,7 +239,7 @@ export default function Register() {
             </button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-slate-500">
+          <p className="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">
             Already have an account?{' '}
             <Link to="/login" className="font-semibold text-brand-600">
               Sign in

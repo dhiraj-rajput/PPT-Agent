@@ -21,15 +21,15 @@ export default function Analytics() {
             <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${k.bg} ${k.fg}`}>
               <k.icon size={17} />
             </div>
-            <p className="mt-3 text-xs text-slate-500">{k.label}</p>
-            <p className="text-xl font-extrabold text-navy-900">{k.value}</p>
+            <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">{k.label}</p>
+            <p className="text-xl font-extrabold text-navy-900 dark:text-white">{k.value}</p>
           </Card>
         ))}
       </div>
 
       <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
         <Card>
-          <h3 className="text-sm font-bold text-navy-900">Revenue Trend</h3>
+          <h3 className="text-sm font-bold text-navy-900 dark:text-white">Revenue Trend</h3>
           <div className="mt-3 h-64">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={revenueTrend}>
@@ -50,7 +50,7 @@ export default function Analytics() {
         </Card>
 
         <Card>
-          <h3 className="text-sm font-bold text-navy-900">AI Match Accuracy</h3>
+          <h3 className="text-sm font-bold text-navy-900 dark:text-white">AI Match Accuracy</h3>
           <div className="mt-3 h-64">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={aiAccuracy}>
@@ -65,7 +65,7 @@ export default function Analytics() {
         </Card>
 
         <Card className="lg:col-span-2">
-          <h3 className="text-sm font-bold text-navy-900">Conversion Funnel</h3>
+          <h3 className="text-sm font-bold text-navy-900 dark:text-white">Conversion Funnel</h3>
           <div className="mt-3 h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={conversionFunnel} layout="vertical" margin={{ left: 20 }}>

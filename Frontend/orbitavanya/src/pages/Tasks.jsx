@@ -104,23 +104,23 @@ export default function Tasks() {
 
       <Card className="!p-0">
         {loading ? (
-          <div className="flex items-center justify-center gap-2 py-12 text-sm text-slate-400">
+          <div className="flex items-center justify-center gap-2 py-12 text-sm text-slate-400 dark:text-slate-500">
             <Loader2 size={16} className="animate-spin" /> Loading tasks…
           </div>
         ) : tasks.length === 0 ? (
-          <div className="py-12 text-center text-sm text-slate-400">No tasks yet. Create the first one.</div>
+          <div className="py-12 text-center text-sm text-slate-400 dark:text-slate-500">No tasks yet. Create the first one.</div>
         ) : (
           tasks.map((t) => (
-            <div key={t.id} className="flex items-center gap-4 border-b border-slate-50 px-5 py-4 last:border-0">
+            <div key={t.id} className="flex items-center gap-4 border-b border-slate-50 px-5 py-4 last:border-0 dark:border-navy-800/40">
               <input
                 type="checkbox"
                 checked={t.done}
                 onChange={() => toggle(t.id)}
-                className="h-4 w-4 rounded border-slate-300 text-brand-600"
+                className="h-4 w-4 rounded border-slate-300 dark:border-navy-600 text-brand-600"
               />
               <div className="flex-1">
-                <p className={`text-sm font-semibold ${t.done ? 'text-slate-400 line-through' : 'text-navy-900'}`}>{t.title}</p>
-                <p className="text-xs text-slate-400">Due {t.due || 'Not set'}</p>
+                <p className={`text-sm font-semibold ${t.done ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-navy-900 dark:text-white'}`}>{t.title}</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500">Due {t.due || 'Not set'}</p>
               </div>
               <div className="flex items-center gap-2">
                 {t.assignee && (
@@ -134,7 +134,7 @@ export default function Tasks() {
                 <select
                   value={t.assigneeId ?? ''}
                   onChange={(e) => reassign(t.id, e.target.value)}
-                  className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-medium text-navy-900 outline-none focus:border-brand-500"
+                  className="rounded-lg border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-2 py-1.5 text-xs font-medium text-navy-900 dark:text-white outline-none focus:border-brand-500"
                 >
                   <option value="">Unassigned</option>
                   {users.map((u) => (
@@ -155,47 +155,47 @@ export default function Tasks() {
         >
           <form
             onSubmit={submitCreate}
-            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-soft"
+            className="w-full max-w-md rounded-2xl bg-white dark:bg-navy-900 p-6 shadow-soft"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-navy-900">New Task</h3>
-              <button type="button" onClick={() => setOpen(false)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100">
+              <h3 className="text-sm font-bold text-navy-900 dark:text-white">New Task</h3>
+              <button type="button" onClick={() => setOpen(false)} className="rounded-lg p-1.5 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-navy-700">
                 <X size={16} />
               </button>
             </div>
 
-            <p className="mt-1 text-xs text-slate-400">
+            <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
               Assigning to a teammate updates the database and emails them right away.
             </p>
 
             <div className="mt-4 flex flex-col gap-3">
               <div>
-                <label className="text-xs font-semibold text-slate-500">Title</label>
+                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Title</label>
                 <input
                   value={form.title}
                   onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-brand-500"
+                  className="mt-1 w-full rounded-xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-3.5 py-2.5 text-sm text-navy-900 dark:text-white outline-none focus:border-brand-500"
                   placeholder="Draft technical approach section"
                   required
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-semibold text-slate-500">Due</label>
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Due</label>
                   <input
                     value={form.due}
                     onChange={(e) => setForm((f) => ({ ...f, due: e.target.value }))}
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-brand-500"
+                    className="mt-1 w-full rounded-xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-3.5 py-2.5 text-sm text-navy-900 dark:text-white outline-none focus:border-brand-500"
                     placeholder="Tomorrow"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-500">Priority</label>
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Priority</label>
                   <select
                     value={form.priority}
                     onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))}
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-brand-500"
+                    className="mt-1 w-full rounded-xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-3.5 py-2.5 text-sm text-navy-900 dark:text-white outline-none focus:border-brand-500"
                   >
                     <option>High</option>
                     <option>Medium</option>
@@ -204,11 +204,11 @@ export default function Tasks() {
                 </div>
               </div>
               <div>
-                <label className="text-xs font-semibold text-slate-500">Assign to</label>
+                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Assign to</label>
                 <select
                   value={form.assigneeId}
                   onChange={(e) => setForm((f) => ({ ...f, assigneeId: e.target.value }))}
-                  className="mt-1 w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-brand-500"
+                  className="mt-1 w-full rounded-xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-3.5 py-2.5 text-sm text-navy-900 dark:text-white outline-none focus:border-brand-500"
                 >
                   <option value="">Unassigned</option>
                   {users.map((u) => (
@@ -229,7 +229,7 @@ export default function Tasks() {
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="rounded-lg border border-slate-200 px-3.5 py-2 text-xs font-semibold text-navy-900 hover:bg-slate-50"
+                className="rounded-lg border border-slate-200 dark:border-navy-700 px-3.5 py-2 text-xs font-semibold text-navy-900 dark:text-white hover:bg-slate-50 dark:hover:bg-navy-800"
               >
                 Cancel
               </button>

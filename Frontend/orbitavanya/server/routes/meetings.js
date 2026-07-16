@@ -6,6 +6,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { sendMeetingInviteEmail, sendMeetingCancelledEmail } from '../utils/mailer.js';
 import { createZoomMeeting } from '../utils/zoom.js';
 import { createGoogleMeetEvent } from '../utils/googleMeet.js';
+import { pushNotifications } from '../utils/notify.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -184,6 +185,17 @@ router.post('/', async (req, res) => {
       await meeting.save();
     }
 
+    // In-app alert — fires the moment the meeting is set, for the organizer
+    // and every attendee who is a registered OrbitAvanya user.
+    const attendeeUserIds = meeting.attendees.filter((a) => a.userId).map((a) => a.userId);
+    await pushNotifications([req.userId, ...attendeeUserIds], {
+      type: 'meeting_scheduled',
+      title: 'Meeting scheduled',
+      message: `"${meeting.title}" is set for ${meeting.date} at ${meeting.time}${meeting.with ? ` with ${meeting.with}` : ''}.`,
+      link: '/meetings',
+      relatedId: meeting._id,
+    });
+
     res.status(201).json({ meeting: toPublicMeeting(meeting), providerWarning });
   } catch (err) {
     console.error('Create meeting failed:', err.message);
@@ -223,6 +235,17 @@ router.post('/:id/cancel', async (req, res) => {
         }
       });
     }
+
+    // In-app alert — fires the moment the meeting is cancelled, for the
+    // organizer and every attendee who is a registered OrbitAvanya user.
+    const attendeeUserIds = meeting.attendees.filter((a) => a.userId).map((a) => a.userId);
+    await pushNotifications([req.userId, ...attendeeUserIds], {
+      type: 'meeting_cancelled',
+      title: 'Meeting cancelled',
+      message: `"${meeting.title}" originally set for ${meeting.date} at ${meeting.time} has been cancelled.`,
+      link: '/meetings',
+      relatedId: meeting._id,
+    });
 
     res.json({ meeting: toPublicMeeting(meeting) });
   } catch (err) {

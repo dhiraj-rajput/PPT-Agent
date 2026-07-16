@@ -50,7 +50,7 @@ function PasswordStrengthMeter({ password }) {
           />
         ))}
       </div>
-      <p className="mt-1 text-xs font-semibold text-slate-500">{label}</p>
+      <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">{label}</p>
       <ul className="mt-2 grid grid-cols-1 gap-1 sm:grid-cols-2">
         {rules.map((rule) => (
           <li key={rule.key} className="flex items-center gap-1.5 text-xs">
@@ -104,7 +104,7 @@ function ProfileCard() {
 
   return (
     <Card className="lg:col-span-2">
-      <h3 className="text-sm font-bold text-navy-900">Profile Information</h3>
+      <h3 className="text-sm font-bold text-navy-900 dark:text-white">Profile Information</h3>
 
       {error && (
         <div className="mt-3 rounded-lg bg-tomato-50 px-3.5 py-2.5 text-sm text-tomato-700">{error}</div>
@@ -117,61 +117,61 @@ function ProfileCard() {
 
       <form onSubmit={handleSave} className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label className="mb-1.5 block text-xs font-semibold text-slate-500">Full Name</label>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-500 dark:text-slate-400">Full Name</label>
           <input
             value={form.name}
             onChange={(e) => handleChange('name', e.target.value)}
             required
-            className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-navy-900 outline-none focus:border-brand-500"
+            className="w-full rounded-xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-3.5 py-2.5 text-sm text-navy-900 dark:text-white outline-none focus:border-brand-500"
           />
         </div>
 
         <div>
-          <label className="mb-1.5 block text-xs font-semibold text-slate-500">Email</label>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-500 dark:text-slate-400">Email</label>
           <input
             value={user?.email || ''}
             disabled
             title="Email can't be changed here."
-            className="w-full cursor-not-allowed rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-500"
+            className="w-full cursor-not-allowed rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-800/60 px-3.5 py-2.5 text-sm text-slate-500 dark:text-slate-400"
           />
         </div>
 
         <div>
-          <label className="mb-1.5 block text-xs font-semibold text-slate-500">Phone</label>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-500 dark:text-slate-400">Phone</label>
           <input
             type="tel"
             value={form.phone}
             onChange={(e) => handleChange('phone', e.target.value)}
             placeholder="+91 98765 43210"
             required
-            className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-navy-900 outline-none focus:border-brand-500"
+            className="w-full rounded-xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-3.5 py-2.5 text-sm text-navy-900 dark:text-white outline-none focus:border-brand-500"
           />
         </div>
 
         <div>
-          <label className="mb-1.5 block text-xs font-semibold text-slate-500">Role</label>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-500 dark:text-slate-400">Role</label>
           <input
             value={form.role}
             onChange={(e) => handleChange('role', e.target.value)}
-            className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-navy-900 outline-none focus:border-brand-500"
+            className="w-full rounded-xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-3.5 py-2.5 text-sm text-navy-900 dark:text-white outline-none focus:border-brand-500"
           />
         </div>
 
         <div>
-          <label className="mb-1.5 block text-xs font-semibold text-slate-500">Company</label>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-500 dark:text-slate-400">Company</label>
           <input
             value={form.company}
             onChange={(e) => handleChange('company', e.target.value)}
-            className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-navy-900 outline-none focus:border-brand-500"
+            className="w-full rounded-xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-3.5 py-2.5 text-sm text-navy-900 dark:text-white outline-none focus:border-brand-500"
           />
         </div>
 
         <div>
-          <label className="mb-1.5 block text-xs font-semibold text-slate-500">Timezone</label>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-500 dark:text-slate-400">Timezone</label>
           <select
             value={form.timezone}
             onChange={(e) => handleChange('timezone', e.target.value)}
-            className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-navy-900 outline-none focus:border-brand-500"
+            className="w-full rounded-xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-3.5 py-2.5 text-sm text-navy-900 dark:text-white outline-none focus:border-brand-500"
           >
             {TIMEZONES.map((tz) => (
               <option key={tz} value={tz}>
@@ -282,8 +282,8 @@ function ChangePasswordCard() {
           <KeyRound size={16} className="text-brand-600" />
         </div>
         <div>
-          <h3 className="text-sm font-bold text-navy-900">Change Password</h3>
-          <p className="text-xs text-slate-500">
+          <h3 className="text-sm font-bold text-navy-900 dark:text-white">Change Password</h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             We'll email a verification code before your password can be changed.
           </p>
         </div>
@@ -302,7 +302,7 @@ function ChangePasswordCard() {
         <button
           onClick={handleStart}
           disabled={sendingOtp}
-          className="mt-4 flex items-center gap-2 rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-bold text-navy-900 transition-colors hover:bg-slate-50 disabled:opacity-60"
+          className="mt-4 flex items-center gap-2 rounded-xl border border-slate-200 dark:border-navy-700 px-5 py-2.5 text-sm font-bold text-navy-900 dark:text-white transition-colors hover:bg-slate-50 dark:hover:bg-navy-800 disabled:opacity-60"
         >
           {sendingOtp && <Loader2 size={15} className="animate-spin" />}
           {sendingOtp ? 'Sending code…' : 'Change Password'}
@@ -312,7 +312,7 @@ function ChangePasswordCard() {
       {step === 'verify' && (
         <form onSubmit={handleSubmit} className="mt-4 flex max-w-md flex-col gap-4">
           <div>
-            <label className="mb-1.5 block text-xs font-semibold text-slate-500">Verification code</label>
+            <label className="mb-1.5 block text-xs font-semibold text-slate-500 dark:text-slate-400">Verification code</label>
             <input
               type="text"
               inputMode="numeric"
@@ -322,7 +322,7 @@ function ChangePasswordCard() {
               value={otp}
               onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
               placeholder="000000"
-              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-center text-xl font-bold tracking-[0.4em] outline-none focus:border-brand-500"
+              className="w-full rounded-xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-4 py-2.5 text-center text-xl font-bold tracking-[0.4em] outline-none focus:border-brand-500"
             />
             <button
               type="button"
@@ -335,26 +335,26 @@ function ChangePasswordCard() {
           </div>
 
           <div>
-            <label className="mb-1.5 block text-xs font-semibold text-slate-500">New password</label>
+            <label className="mb-1.5 block text-xs font-semibold text-slate-500 dark:text-slate-400">New password</label>
             <input
               type="password"
               required
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-navy-900 outline-none focus:border-brand-500"
+              className="w-full rounded-xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-3.5 py-2.5 text-sm text-navy-900 dark:text-white outline-none focus:border-brand-500"
             />
             <PasswordStrengthMeter password={newPassword} />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-xs font-semibold text-slate-500">Confirm new password</label>
+            <label className="mb-1.5 block text-xs font-semibold text-slate-500 dark:text-slate-400">Confirm new password</label>
             <input
               type="password"
               required
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className={`w-full rounded-xl border px-3.5 py-2.5 text-sm text-navy-900 outline-none focus:border-brand-500 ${
-                confirmPassword && !passwordsMatch ? 'border-tomato-300' : 'border-slate-200'
+              className={`w-full rounded-xl border bg-white dark:bg-navy-900 px-3.5 py-2.5 text-sm text-navy-900 dark:text-white outline-none focus:border-brand-500 ${
+                confirmPassword && !passwordsMatch ? 'border-tomato-300' : 'border-slate-200 dark:border-navy-700'
               }`}
             />
             {confirmPassword && !passwordsMatch && (
@@ -374,7 +374,7 @@ function ChangePasswordCard() {
             <button
               type="button"
               onClick={resetState}
-              className="text-sm font-semibold text-slate-500 hover:text-slate-700"
+              className="text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-700"
             >
               Cancel
             </button>
@@ -411,12 +411,12 @@ export default function Settings() {
           <div className="flex flex-col items-center text-center">
             <img
               src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name || email || 'User')}`}
-              className="h-20 w-20 rounded-full border border-slate-200"
+              className="h-20 w-20 rounded-full border border-slate-200 dark:border-navy-700"
               alt={name || 'User'}
             />
-            <p className="mt-3 text-sm font-bold text-navy-900">{name}</p>
-            <p className="text-xs text-slate-400">{email}</p>
-            <button className="mt-4 w-full rounded-lg border border-slate-200 py-2 text-xs font-semibold text-navy-900">
+            <p className="mt-3 text-sm font-bold text-navy-900 dark:text-white">{name}</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500">{email}</p>
+            <button className="mt-4 w-full rounded-lg border border-slate-200 dark:border-navy-700 py-2 text-xs font-semibold text-navy-900 dark:text-white">
               Change Photo
             </button>
           </div>
@@ -425,17 +425,17 @@ export default function Settings() {
         <ProfileCard />
 
         <Card className="lg:col-span-3">
-          <h3 className="text-sm font-bold text-navy-900">Notification Preferences</h3>
-          <div className="mt-4 flex flex-col divide-y divide-slate-50">
+          <h3 className="text-sm font-bold text-navy-900 dark:text-white">Notification Preferences</h3>
+          <div className="mt-4 flex flex-col divide-y divide-slate-50 dark:divide-navy-800/60">
             {[
               ['New high-match tenders', true],
               ['Weekly performance digest', true],
               ['Proposal deadline reminders', true],
               ['Product updates & tips', false],
             ].map(([label, checked]) => (
-              <label key={label} className="flex items-center justify-between py-3 text-sm text-navy-900">
+              <label key={label} className="flex items-center justify-between py-3 text-sm text-navy-900 dark:text-white">
                 {label}
-                <input type="checkbox" defaultChecked={checked} className="h-4 w-4 rounded border-slate-300 text-brand-600" />
+                <input type="checkbox" defaultChecked={checked} className="h-4 w-4 rounded border-slate-300 dark:border-navy-600 text-brand-600" />
               </label>
             ))}
           </div>
