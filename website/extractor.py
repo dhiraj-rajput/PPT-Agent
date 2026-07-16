@@ -229,6 +229,74 @@ def extract_company_intelligence(
 
 
 # ---------------------------------------------------------------------------
+# AI enrichment (governed by AI_MODE / WEBSITE_AGENT_MODE)
+# ---------------------------------------------------------------------------
+
+def enrich_website_data_with_ai(website_data, combined_clean_text: str):
+    """
+    Runs after rule-based extraction. Uses the AI path (with automatic
+    rule-based fallback via ai.mode.run_with_fallback) to fill in / improve
+    fields the keyword-based extractor struggles with: industry,
+    description, business-relevant products/services phrasing, and
+    industries served. Never overwrites rule-based fields with empty AI
+    output; only fills gaps or adds items the rule-based pass missed.
+
+    Returns the (possibly enriched) website_data object, plus the path used
+    ("ai" or "rule_based") for logging/telemetry.
+    """
+    from ai.mode import run_with_fallback
+    from ai.client import get_ai_client
+
+    def _rule_fn():
+        # No-op: keep the rule-based extraction exactly as-is.
+        return {}
+
+    def _ai_fn():
+        text_sample = (combined_clean_text or "")[:6000]
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You analyze a company's website text and extract a structured profile. "
+                    "Respond ONLY with a JSON object with keys: "
+                    "description (1-3 sentence company summary), industry (short label), "
+                    "products (array of strings), services (array of strings), "
+                    "industries_served (array of strings). "
+                    "If the text doesn't support a field, use an empty string or empty array — "
+                    "never invent facts not implied by the text."
+                ),
+            },
+            {"role": "user", "content": f"Company: {website_data.company_name or website_data.website_url}\n\nWebsite text:\n{text_sample}"},
+        ]
+        return get_ai_client().chat_json(messages)
+
+    ai_result, path_used = run_with_fallback("website", ai_fn=_ai_fn, rule_fn=_rule_fn)
+
+    if path_used == "ai" and ai_result:
+        if not website_data.description and ai_result.get("description"):
+            website_data.description = ai_result["description"]
+        if not website_data.industry and ai_result.get("industry"):
+            website_data.industry = ai_result["industry"]
+        website_data.products = _merge_unique(website_data.products, ai_result.get("products", []))
+        website_data.services = _merge_unique(website_data.services, ai_result.get("services", []))
+        website_data.industries_served = _merge_unique(website_data.industries_served, ai_result.get("industries_served", []))
+
+    return website_data, path_used
+
+
+def _merge_unique(existing: List[str], new_items) -> List[str]:
+    if not isinstance(new_items, list):
+        return existing
+    seen = {item.strip().lower() for item in existing}
+    merged = list(existing)
+    for item in new_items:
+        if isinstance(item, str) and item.strip() and item.strip().lower() not in seen:
+            merged.append(item.strip())
+            seen.add(item.strip().lower())
+    return merged
+
+
+# ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
 

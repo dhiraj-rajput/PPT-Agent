@@ -55,6 +55,7 @@ import shutil
 import subprocess
 import argparse
 from pathlib import Path
+from typing import Optional
 
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor, Emu
@@ -137,7 +138,7 @@ def _force_update_fields_on_open(doc):
 # Formatting helpers
 # --------------------------------------------------------------------------
 
-def _font(run, cfg, name=None, size=11, bold=False, italic=False, color=None):
+def _font(run, cfg, name=None, size: float = 11, bold=False, italic=False, color=None):
     run.font.name = name or cfg["brand"]["body_font"]
     run.font.size = Pt(size)
     run.font.bold = bold
@@ -232,8 +233,9 @@ def build_toc_page(doc, cfg):
     doc.add_paragraph().paragraph_format.space_after = Pt(10)
 
     add_contact_confidentiality_box(doc, cfg)
-    # NOTE: no page break here -- the first section already opens with its
-    # own page_break_before, so adding one here would produce a blank page.
+    # Always end the TOC page with a page break so the first body section
+    # starts at the very top of a fresh page, regardless of TOC length.
+    doc.add_page_break()
 
 
 def add_contact_confidentiality_box(doc, cfg):
@@ -282,6 +284,7 @@ def add_section_title(doc, cfg, text):
     p = doc.add_paragraph(style="Heading 1")
     p.paragraph_format.space_before = Pt(4)
     p.paragraph_format.space_after = Pt(10)
+    p.paragraph_format.keep_with_next = True
     run = p.add_run(text)
     _font(run, cfg, name=cfg["brand"]["heading_font"], size=17, bold=True,
           color=_accent(cfg))
@@ -291,7 +294,7 @@ def add_section_title(doc, cfg, text):
 
 import re
 
-def _add_formatted_runs(paragraph, cfg, text, size=11, color=None, default_bold=False):
+def _add_formatted_runs(paragraph, cfg, text, size: float = 11, color=None, default_bold=False):
     # Split by markdown bold tags **...**
     parts = re.split(r"(\*\*.*?\*\*)", str(text))
     for part in parts:
@@ -307,6 +310,7 @@ def add_subheading(doc, cfg, text):
     p = doc.add_paragraph()
     p.paragraph_format.space_before = Pt(10)
     p.paragraph_format.space_after = Pt(4)
+    p.paragraph_format.keep_with_next = True
     clean_text = text.replace("**", "")
     _font(p.add_run(clean_text), cfg, name=cfg["brand"]["heading_font"], size=12.5,
           bold=True)
@@ -337,6 +341,11 @@ def add_numbered(doc, cfg, items):
 
 
 def add_table_block(doc, cfg, headers, rows, col_widths=None):
+    # Add a small spacer before the table so it doesn't crowd the preceding element
+    pre = doc.add_paragraph()
+    pre.paragraph_format.space_before = Pt(2)
+    pre.paragraph_format.space_after = Pt(2)
+
     table = doc.add_table(rows=1, cols=len(headers))
     table.style = "Table Grid"
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
@@ -355,7 +364,7 @@ def add_table_block(doc, cfg, headers, rows, col_widths=None):
 
     if col_widths:
         _set_column_widths(table, col_widths)
-    doc.add_paragraph().paragraph_format.space_after = Pt(4)
+    doc.add_paragraph().paragraph_format.space_after = Pt(6)
     return table
 
 
@@ -470,12 +479,12 @@ def setup_page(doc):
     section = doc.sections[0]
     section.page_width = Inches(8.5)
     section.page_height = Inches(11)
-    section.left_margin = Inches(0.5)
-    section.right_margin = Inches(0.5)
-    section.top_margin = Inches(0.5)
-    section.bottom_margin = Inches(0.5)
-    section.header_distance = Inches(0.3)
-    section.footer_distance = Inches(0.3)
+    section.left_margin = Inches(0.75)
+    section.right_margin = Inches(0.75)
+    section.top_margin = Inches(0.75)
+    section.bottom_margin = Inches(0.75)
+    section.header_distance = Inches(0.35)
+    section.footer_distance = Inches(0.35)
 
 
 # --------------------------------------------------------------------------
@@ -500,7 +509,7 @@ def generate(cfg: dict, output_docx: str) -> str:
     return str(out_path)
 
 
-def convert_to_pdf(docx_path: str, outdir: str = None) -> str:
+def convert_to_pdf(docx_path: str, outdir: Optional[str] = None) -> str:
     outdir = outdir or str(Path(docx_path).parent)
     soffice = shutil.which("soffice") or shutil.which("libreoffice")
     if not soffice:

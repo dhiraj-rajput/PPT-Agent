@@ -1,3 +1,5 @@
+import { Loader2 } from 'lucide-react';
+
 export function PageHeader({ title, subtitle, action }) {
   return (
     <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -72,3 +74,42 @@ export function ClosingAlertBadge({ daysLeft }) {
     </span>
   );
 }
+
+export function ProgressBar({ progress, message, status }) {
+  if (status === 'idle') return null;
+
+  const barColor = 
+    status === 'failed' ? 'bg-rose-500' :
+    status === 'completed' ? 'bg-emerald-500' :
+    'bg-brand-500';
+
+  const glowColor =
+    status === 'failed' ? 'shadow-rose-500/20' :
+    status === 'completed' ? 'shadow-emerald-500/20' :
+    'shadow-brand-500/20';
+
+  return (
+    <div className="w-full rounded-2xl border border-slate-100 bg-white p-5 shadow-card dark:border-navy-800 dark:bg-navy-900">
+      <div className="flex items-center justify-between gap-3 mb-2.5">
+        <div className="flex items-center gap-2">
+          {status === 'processing' && <Loader2 className="animate-spin text-brand-500 shrink-0" size={14} />}
+          <span className={`text-xs font-bold ${
+            status === 'failed' ? 'text-rose-600 dark:text-rose-400' :
+            status === 'completed' ? 'text-emerald-600 dark:text-emerald-400' :
+            'text-navy-900 dark:text-white'
+          }`}>
+            {message || 'Running generation pipeline...'}
+          </span>
+        </div>
+        <span className="text-xs font-extrabold text-navy-900 dark:text-white">{progress}%</span>
+      </div>
+      <div className="w-full h-2.5 bg-slate-100 dark:bg-navy-800 rounded-full overflow-hidden">
+        <div 
+          className={`h-full ${barColor} ${glowColor} shadow-lg transition-all duration-500 ease-out`} 
+          style={{ width: `${progress}%` }} 
+        />
+      </div>
+    </div>
+  );
+}
+

@@ -20,6 +20,10 @@ if hasattr(sys.stdout, 'reconfigure'):
 if hasattr(sys.stderr, 'reconfigure'):
     getattr(sys.stderr, 'reconfigure')(encoding='utf-8')
 
+from pathlib import Path
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
 from api.sam_gov.opportunities import SAMOpportunitiesClient
 from api.sam_gov.sam_client import SAMEntityClient
 from api.sam_gov.competitors import CompetitorExtractor

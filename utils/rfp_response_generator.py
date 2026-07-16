@@ -69,20 +69,18 @@ OrbitAvanya Tech LLP specializes in:
 
 Your output must be a JSON object with the following keys:
 {
-  "executive_summary": "<3-5 paragraph summary of the engagement>",
-  "key_highlights": ["<up to 6 bullet point highlights>"],
-  "strategic_context_intro": "<1-2 paragraph framing the engagement context>",
+  "executive_summary": "<thorough executive summary — several full paragraphs; do not compress a complex engagement into a couple of sentences>",
+  "key_highlights": ["<one bullet per genuinely distinct highlight — do not pad or artificially cap; a complex RFP may justify 6-12>"],
+  "strategic_context_intro": "<1-3 paragraphs framing the engagement context>",
   "findings": [
-    {"title": "...", "body": "...", "bullets": ["...", "..."]},
-    {"title": "...", "body": "...", "bullets": ["...", "..."]},
     {"title": "...", "body": "...", "bullets": ["...", "..."]}
   ],
-  "scope_intro": "<1-2 paragraph scope overview>",
-  "deliverables": ["<list of deliverables>"],
+  "scope_intro": "<1-3 paragraph scope overview>",
+  "deliverables": ["<one entry per real deliverable — list every deliverable implied by the requirements, not just a token few>"],
   "technical_alignment": [
     {"requirement": "...", "solution": "...", "alignment": "Full / Partial"}
   ],
-  "proposed_solution": "<3-4 paragraphs describing our technical solution>",
+  "proposed_solution": "<a full technical approach narrative, several paragraphs, covering architecture, methodology, and how it satisfies the stated requirements in depth>",
   "capabilities": [{"name": "...", "description": "..."}],
   "tech_stack": ["Technology1", "Technology2"],
   "timeline_intro": "<1 paragraph intro to timeline>",
@@ -106,6 +104,12 @@ RULES:
 - Do NOT invent client names or fabricated references.
 - Keep deliverables specific and actionable.
 - The pricing table is optional — include if the RFP has pricing requirements, else use empty list.
+- The array fields above ("findings", "deliverables", "technical_alignment", "capabilities", "phases",
+  "sla_terms", "past_performance") are NOT capped at a fixed count. Generate one entry per distinct,
+  substantive point the requirements and your solution genuinely support. A simple RFP may only justify
+  a handful of items; a complex, multi-requirement solicitation should produce a proportionally thorough
+  document. Do not pad with filler, and do not artificially truncate real content just to keep the
+  document short — match the depth of a real federal proposal for a solicitation of this complexity.
 - Highlight key metrics, vendor names, technical specifications, and critical requirements by wrapping them in double asterisks (e.g. **15% workshare**, **OrbitAvanya ERP**, **NIST compliance**).
 - Output ONLY valid JSON. No markdown, no preamble.
 """
@@ -158,8 +162,8 @@ OrbitAvanya Tech LLP proposes to serve as a subcontractor, contributing a specif
 
 Your output must be a JSON object with the following keys:
 {
-  "executive_summary": "<3-5 paragraph summary proposing a teaming partnership to the prime winner>",
-  "key_highlights": ["<up to 6 bullet point highlights of our teaming value proposition>"],
+  "executive_summary": "<thorough multi-paragraph summary proposing a teaming partnership — do not compress artificially>",
+  "key_highlights": ["<one bullet per genuinely distinct highlight — no fixed cap>"],
   "strategic_context_intro": "<1-2 paragraph framing the cooperative context between us and the prime>",
   "findings": [
     {"title": "...", "body": "...", "bullets": ["...", "..."]},
@@ -171,7 +175,7 @@ Your output must be a JSON object with the following keys:
   "technical_alignment": [
     {"requirement": "...", "solution": "...", "alignment": "Full / Partial"}
   ],
-  "proposed_solution": "<3-4 paragraphs describing our matched product contribution and how it integrates with the prime's offering>",
+  "proposed_solution": "<a full narrative, several paragraphs, describing our matched product contribution and how it integrates with the prime's offering>",
   "capabilities": [{"name": "...", "description": "..."}],
   "tech_stack": ["Technology1", "Technology2"],
   "timeline_intro": "<1 paragraph timeline intro>",
@@ -194,6 +198,7 @@ RULES:
 - Address the prime contractor directly in the executive summary and strategic context.
 - Keep deliverables specific and aligned with the subcontract workshare.
 - Highlight key metrics, vendor names, technical specifications, and critical requirements by wrapping them in double asterisks (e.g. **15% workshare**, **OrbitAvanya ERP**, **NIST compliance**).
+- Do not artificially limit length or list sizes to keep the document short — generate content proportional to the real complexity of the opportunity; the document template supports any number of pages.
 - Output ONLY valid JSON. No markdown, no preamble.
 """
 
@@ -242,6 +247,78 @@ Position our {product_name} product as the perfect technical contribution to {pr
 Return ONLY the JSON object described in the system prompt.
 """
 
+_PARTNERSHIP_SYSTEM_PROMPT = """\
+You are an expert business development director at OrbitAvanya Tech LLP, a premier technology services and product development company.
+You are drafting a professional B2B Partnership and Joint Value Proposition Proposal to a potential partner company.
+
+OrbitAvanya Tech LLP offers cutting-edge software engineering, custom technical solutions, and proprietary products (e.g., OrbitAvanya ERP, AI Analytics Dashboard, Cloud Migrator, e-Gov Portal).
+
+Your goal is to propose a strategic collaboration between OrbitAvanya Tech LLP and the target partner company, explaining how we can complement their business, what joint solutions we can offer, and the mutual value of this partnership.
+
+Your output must be a JSON object with the following keys:
+{
+  "executive_summary": "<thorough multi-paragraph executive summary proposing a strategic partnership — do not compress artificially>",
+  "key_highlights": ["<one bullet per genuinely distinct synergy — no fixed cap>"],
+  "strategic_context_intro": "<1-2 paragraph framing the partnership vision and market opportunity>",
+  "findings": [
+    {"title": "...", "body": "...", "bullets": ["...", "..."]},
+    {"title": "...", "body": "...", "bullets": ["...", "..."]}
+  ],
+  "scope_intro": "<1-2 paragraph detailing the proposed collaborative areas and joint services>",
+  "deliverables": ["<list of joint offerings or cooperation milestones>"],
+  "technical_alignment": [
+    {"requirement": "Partner Capability Gap / Need", "solution": "OrbitAvanya Complementary Offering", "alignment": "Full Synergy"}
+  ],
+  "proposed_solution": "<a full narrative, several paragraphs, detailing the joint technology/service solution and value proposition>",
+  "capabilities": [{"name": "...", "description": "..."}],
+  "tech_stack": ["Technology1", "Technology2"],
+  "timeline_intro": "<1 paragraph timeline/roadmap intro>",
+  "phases": [
+    {"phase": "Phase 1", "duration": "Month 1", "focus": "Initial Alignment & Joint Offering Definition", "deliverables": "..."}
+  ],
+  "total_duration": "3-6 Months (Phase 1)",
+  "investment_intro": "<1-2 paragraph cost-sharing, resource-allocation, or revenue-sharing model overview>",
+  "pricing": [
+    {"item": "...", "unit": "Co-Investment / RevShare", "qty": "N/A", "unit_price": "N/A", "total": "N/A"}
+  ],
+  "sla_terms": ["<list of mutual cooperation guidelines and partner commitments>"],
+  "past_performance": [
+    {"project": "...", "client": "...", "period": "...", "relevance": "..."}
+  ]
+}
+
+RULES:
+- Write in a professional, persuasive B2B business development tone.
+- Ground the value proposition in the target partner's profile and OrbitAvanya's product capabilities.
+- Do NOT invent fake client names. Use the actual name of OrbitAvanya Tech LLP and the partner.
+- Highlight key metrics, partner benefits, and synergistic capabilities by wrapping them in double asterisks (e.g. **increased market reach**, **OrbitAvanya AI Dashboard**, **seamless API integration**).
+- Do not artificially limit length or list sizes to keep the document short — generate content proportional to the real complexity of the opportunity; the document template supports any number of pages.
+- Output ONLY valid JSON. No markdown, no preamble.
+"""
+
+_PARTNERSHIP_USER_PROMPT_TEMPLATE = """\
+=======================================================
+OUR COMPANY PROFILE (OrbitAvanya Tech LLP)
+=======================================================
+Company Name: OrbitAvanya Tech LLP
+Our Profile:
+{our_profile}
+
+=======================================================
+TARGET PARTNER COMPANY PROFILE
+=======================================================
+Partner Company: {partner_name}
+Partner Profile:
+{partner_profile}
+
+=======================================================
+INSTRUCTIONS
+=======================================================
+Generate a complete, highly detailed B2B Partnership and Joint Value Proposition Proposal between OrbitAvanya Tech LLP and {partner_name}.
+Analyze {partner_name}'s profile to identify capability gaps, synergies, or market opportunities where OrbitAvanya's products and services can deliver significant value.
+Return ONLY the JSON object described in the system prompt.
+"""
+
 
 
 # ---------------------------------------------------------------------------
@@ -282,10 +359,17 @@ class RFPResponseGenerator:
         Returns:
             Dict of document sections ready for RFPResponsePDF.generate()
         """
-        logger.info("[RFPResponseGen] Generating PRIME response sections via Ollama LLM")
+        logger.info("[RFPResponseGen] Generating PRIME response sections")
         our_profile = self._load_our_profile()
         prompt = self._build_prime_prompt(rfp_data, optimized_profile, our_profile, solicitation_number)
-        sections = self._call_ollama(prompt)
+
+        from ai.mode import run_with_fallback
+        sections, path_used = run_with_fallback(
+            "rfp_response",
+            ai_fn=lambda: self._call_ollama(prompt) or (_ for _ in ()).throw(RuntimeError("empty AI response")),
+            rule_fn=lambda: {},  # no bespoke rule-based prime generator — defaults fill the gaps below
+        )
+        logger.info(f"[RFPResponseGen] PRIME sections generated via '{path_used}' path.")
         return self._validate_and_fill_defaults(sections, rfp_data)
 
     def generate_subcontract_sections(
@@ -298,19 +382,56 @@ class RFPResponseGenerator:
         Mode B — Subcontract teaming proposal.
         LLM-powered by default (Ollama gemma4:31b-cloud) with a programmatic rule-based fallback.
         """
-        logger.info("[RFPResponseGen] Generating SUBCONTRACT sections via Ollama LLM")
-        try:
-            our_profile = self._load_our_profile()
-            prompt = self._build_subcontract_prompt(rfp_data, pitch_data, winner_profile, our_profile)
-            sections = self._call_ollama_subcontract(prompt)
-            if sections:
-                return self._validate_and_fill_defaults(sections, rfp_data)
-        except Exception as exc:
-            logger.warning(f"[RFPResponseGen] Ollama subcontract generation failed: {exc}. Falling back to rule-based.")
+        logger.info("[RFPResponseGen] Generating SUBCONTRACT sections")
+        our_profile = self._load_our_profile()
+        prompt = self._build_subcontract_prompt(rfp_data, pitch_data, winner_profile, our_profile)
 
-        # Fallback to rule-based
-        logger.info("[RFPResponseGen] Falling back to SUBCONTRACT sections (rule-based)")
-        return self._build_subcontract_sections(rfp_data, pitch_data, winner_profile)
+        from ai.mode import run_with_fallback
+
+        def _ai_fn():
+            result = self._call_ollama_subcontract(prompt)
+            if not result:
+                raise RuntimeError("empty AI response")
+            return result
+
+        sections, path_used = run_with_fallback(
+            "rfp_response",
+            ai_fn=_ai_fn,
+            rule_fn=lambda: self._build_subcontract_sections(rfp_data, pitch_data, winner_profile),
+        )
+        logger.info(f"[RFPResponseGen] SUBCONTRACT sections generated via '{path_used}' path.")
+        if path_used == "rule_based":
+            return sections  # already fully-formed from _build_subcontract_sections
+        return self._validate_and_fill_defaults(sections, rfp_data)
+
+    def generate_partnership_sections(
+        self,
+        partner_profile: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Mode C — B2B Partnership and Joint Value Proposition.
+        LLM-powered via Ollama gemma4:31b-cloud.
+        """
+        logger.info("[RFPResponseGen] Generating B2B PARTNERSHIP sections")
+        our_profile = self._load_our_profile()
+        prompt = self._build_partnership_prompt(partner_profile, our_profile)
+        dummy_rfp = {"metadata": {"issuing_agency": partner_profile.get("company_name", "Target Partner")}}
+
+        from ai.mode import run_with_fallback
+
+        def _ai_fn():
+            result = self._call_ollama_partnership(prompt)
+            if not result:
+                raise RuntimeError("empty AI response")
+            return result
+
+        sections, path_used = run_with_fallback(
+            "rfp_response",
+            ai_fn=_ai_fn,
+            rule_fn=lambda: {},
+        )
+        logger.info(f"[RFPResponseGen] PARTNERSHIP sections generated via '{path_used}' path.")
+        return self._validate_and_fill_defaults(sections, dummy_rfp)
 
     def _build_subcontract_prompt(
         self,
@@ -393,69 +514,18 @@ class RFPResponseGenerator:
             workshare_pct=workshare
         )
 
-    def _call_ollama_subcontract(self, user_prompt: str, max_retries: int = 3) -> Dict[str, Any]:
-        """Calls Ollama chat API using the subcontract system prompt."""
-        try:
-            import ollama as _ollama
-        except ImportError:
-            raise RuntimeError("ollama package not installed. Run: pip install ollama>=0.4.0")
-
-        from config.settings import settings
-        model = settings.ollama_model or "gemma4:31b-cloud"
-        host = settings.ollama_host or ""
-        api_key = settings.ollama_api_key or ""
-
+    def _call_ollama_subcontract(self, user_prompt: str) -> Dict[str, Any]:
+        """Calls the shared Ollama Cloud client using the subcontract system prompt."""
+        from ai.client import get_ai_client
         messages = [
             {"role": "system", "content": _SUBCONTRACT_SYSTEM_PROMPT},
-            {"role": "user",   "content": user_prompt},
+            {"role": "user", "content": user_prompt},
         ]
-
-        last_error: Exception | None = None
-        for attempt in range(max_retries):
-            try:
-                client_kwargs: Dict[str, Any] = {}
-                if host:
-                    client_kwargs["host"] = host
-
-                headers = {}
-                if api_key:
-                    headers["Authorization"] = f"Bearer {api_key}"
-                    client_kwargs["headers"] = headers
-
-                if client_kwargs or headers:
-                    client = _ollama.Client(**client_kwargs)
-                    response = client.chat(
-                        model=model,
-                        messages=messages,
-                        format="json",
-                        options={"temperature": 0.2},
-                    )
-                else:
-                    response = _ollama.chat(
-                        model=model,
-                        messages=messages,
-                        format="json",
-                        options={"temperature": 0.2},
-                    )
-
-                content = response.message.content
-                if not content:
-                    raise ValueError("Ollama returned empty response.")
-
-                return self._parse_json(content)
-
-            except Exception as exc:
-                last_error = exc
-                wait = 3.0 * (1.5 ** attempt)
-                logger.warning(
-                    f"[RFPResponseGen] Ollama attempt {attempt + 1}/{max_retries} failed: {exc} "
-                    f"(retrying in {wait:.1f}s)"
-                )
-                if attempt < max_retries - 1:
-                    time.sleep(wait)
-
-        logger.error(f"[RFPResponseGen] All Ollama attempts failed: {last_error}")
-        return {}
+        try:
+            return get_ai_client().chat_json(messages)
+        except Exception as exc:
+            logger.warning(f"[RFPResponseGen] AI subcontract generation failed: {exc}")
+            return {}
 
     # ------------------------------------------------------------------
     # Mode A — LLM
@@ -522,69 +592,18 @@ class RFPResponseGenerator:
             our_company_profile=our_summary,
         )
 
-    def _call_ollama(self, user_prompt: str, max_retries: int = 3) -> Dict[str, Any]:
-        """Call Ollama gemma4:31b-cloud and parse the JSON response."""
-        try:
-            import ollama as _ollama
-        except ImportError:
-            raise RuntimeError("ollama package not installed. Run: pip install ollama>=0.4.0")
-
-        from config.settings import settings
-        model = settings.ollama_model or "gemma4:31b-cloud"
-        host = settings.ollama_host or ""
-        api_key = settings.ollama_api_key or ""
-
+    def _call_ollama(self, user_prompt: str) -> Dict[str, Any]:
+        """Call the shared Ollama Cloud client and parse the JSON response."""
+        from ai.client import get_ai_client
         messages = [
             {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user",   "content": user_prompt},
+            {"role": "user", "content": user_prompt},
         ]
-
-        last_error: Exception | None = None
-        for attempt in range(max_retries):
-            try:
-                client_kwargs: Dict[str, Any] = {}
-                if host:
-                    client_kwargs["host"] = host
-                
-                headers = {}
-                if api_key:
-                    headers["Authorization"] = f"Bearer {api_key}"
-                    client_kwargs["headers"] = headers
-
-                if client_kwargs or headers:
-                    client = _ollama.Client(**client_kwargs)
-                    response = client.chat(
-                        model=model,
-                        messages=messages,
-                        format="json",
-                        options={"temperature": 0.2},
-                    )
-                else:
-                    response = _ollama.chat(
-                        model=model,
-                        messages=messages,
-                        format="json",
-                        options={"temperature": 0.2},
-                    )
-
-                content = response.message.content
-                if not content:
-                    raise ValueError("Ollama returned empty response.")
-
-                return self._parse_json(content)
-
-            except Exception as exc:
-                last_error = exc
-                wait = 3.0 * (1.5 ** attempt)
-                logger.warning(
-                    f"[RFPResponseGen] Ollama attempt {attempt + 1}/{max_retries} failed: {exc} "
-                    f"(retrying in {wait:.1f}s)"
-                )
-                if attempt < max_retries - 1:
-                    time.sleep(wait)
-
-        logger.error(f"[RFPResponseGen] All Ollama attempts failed: {last_error}")
-        return {}
+        try:
+            return get_ai_client().chat_json(messages)
+        except Exception as exc:
+            logger.error(f"[RFPResponseGen] AI prime generation failed: {exc}")
+            return {}
 
     def _parse_json(self, text: str) -> Dict[str, Any]:
         """Parse JSON from Ollama response, stripping markdown fences if present."""
@@ -831,6 +850,54 @@ class RFPResponseGenerator:
     # Helpers
     # ------------------------------------------------------------------
 
+    def _build_partnership_prompt(
+        self,
+        partner_profile: Dict[str, Any],
+        our_profile: Dict[str, Any]
+    ) -> str:
+        partner_name = partner_profile.get("company_name", "Target Partner")
+        
+        # Format partner profile summary
+        products = partner_profile.get("products") or []
+        services = partner_profile.get("services") or []
+        partner_summary = (
+            f"Company Name: {partner_name}\n"
+            f"Products: {', '.join(products[:6]) if isinstance(products, list) else products}\n"
+            f"Services: {', '.join(services[:6]) if isinstance(services, list) else services}\n"
+            f"Industry: {partner_profile.get('industry', 'Technology/Services')}\n"
+            f"About: {partner_profile.get('about', '')}\n"
+            f"Business Model: {partner_profile.get('business_model', '')}\n"
+        )
+        
+        # Format our profile summary
+        tech_list = self._get_flat_tech_stack(our_profile)
+        our_products = our_profile.get("products") or []
+        our_services = our_profile.get("services") or []
+        our_certs = our_profile.get("certifications") or []
+        our_summary = (
+            f"Company: OrbitAvanya Tech LLP\n"
+            f"Products: {', '.join(our_products[:6]) if isinstance(our_products, list) else our_products}\n"
+            f"Services: {', '.join(our_services[:6]) if isinstance(our_services, list) else our_services}\n"
+            f"Tech Stack: {', '.join(tech_list[:8])}\n"
+            f"Certifications: {', '.join(our_certs[:4]) if isinstance(our_certs, list) else our_certs}\n"
+            f"About: {our_profile.get('about', '')}\n"
+        )
+        
+        return _PARTNERSHIP_USER_PROMPT_TEMPLATE.format(
+            partner_name=partner_name,
+            partner_profile=partner_summary,
+            our_profile=our_summary
+        )
+
+    def _call_ollama_partnership(self, user_prompt: str) -> Dict[str, Any]:
+        """Calls the shared Ollama Cloud client using the B2B partnership system prompt."""
+        from ai.client import get_ai_client
+        messages = [
+            {"role": "system", "content": _PARTNERSHIP_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ]
+        return get_ai_client().chat_json(messages)
+
     def _load_our_profile(self) -> Dict[str, Any]:
         """Load Orbit Avanya's own company profile from private/."""
         if self._our_profile is not None:
@@ -840,16 +907,18 @@ class RFPResponseGenerator:
         if profile_path.exists():
             try:
                 with open(profile_path, encoding="utf-8") as f:
-                    self._our_profile = json.load(f)
-                    if isinstance(self._our_profile, list) and self._our_profile:
-                        self._our_profile = self._our_profile[0]
-                    logger.info("[RFPResponseGen] Loaded own company profile from private/")
-                    return self._our_profile
+                    raw_data = json.load(f)
+                    if isinstance(raw_data, list) and raw_data:
+                        raw_data = raw_data[0]
+                    if isinstance(raw_data, dict):
+                        self._our_profile = raw_data
+                        logger.info("[RFPResponseGen] Loaded own company profile from private/")
+                        return self._our_profile
             except Exception as exc:
                 logger.warning(f"[RFPResponseGen] Could not load own profile: {exc}")
 
         # Fallback hardcoded profile
-        self._our_profile = {
+        fallback: Dict[str, Any] = {
             "products":         ["T360 Platform", "OrbitAI", "GovConnect Suite", "DataBridge"],
             "services":         ["Enterprise Software Development", "Cloud Architecture", "AI/ML Solutions",
                                  "e-Governance Platforms", "System Integration", "DevOps & CI/CD"],
@@ -857,7 +926,8 @@ class RFPResponseGenerator:
                                  "MongoDB", "AWS", "Azure", "Docker", "Kubernetes"],
             "certifications":   ["SAM.gov Registered", "MSME India", "ISO 27001 (In Progress)"],
         }
-        return self._our_profile
+        self._our_profile = fallback
+        return fallback
 
     def _get_flat_tech_stack(self, profile: Dict[str, Any]) -> List[str]:
         """Helper to flatten the tech stack if it is a dictionary, or return the list."""
@@ -957,3 +1027,12 @@ def generate_subcontract_sections(
     """Generate rule-based subcontract teaming sections."""
     gen = RFPResponseGenerator(project_root=project_root)
     return gen.generate_subcontract_sections(rfp_data, pitch_data, winner_profile)
+
+
+def generate_partnership_sections(
+    partner_profile: Dict[str, Any],
+    project_root: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Generate LLM-powered partnership sections."""
+    gen = RFPResponseGenerator(project_root=project_root)
+    return gen.generate_partnership_sections(partner_profile)

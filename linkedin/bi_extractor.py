@@ -37,9 +37,101 @@ class BIExtractor:
         pass
 
     async def extract_bi_profile(self, company_data: LinkedInCompanyData) -> BIProfile:
-        """Extracts strategic business insights and constructs a BIProfile using rules."""
-        logger.info(f"[BIExtractor] Starting rule-based extraction for: '{company_data.company_slug}'")
-        return self._extract_bi_profile_rules(company_data)
+        """
+        Extracts strategic business insights and constructs a BIProfile.
+        Governed by the global AI_MODE toggle (LINKEDIN_AGENT_MODE override):
+        tries AI extraction first, automatically falls back to the
+        deterministic rule-based extraction on failure or 429 rate-limit.
+        """
+        from ai.mode import run_with_fallback
+
+        profile, path_used = run_with_fallback(
+            "linkedin",
+            ai_fn=lambda: self._extract_bi_profile_ai(company_data),
+            rule_fn=lambda: self._extract_bi_profile_rules(company_data),
+        )
+        logger.info(f"[BIExtractor] BI profile extracted via '{path_used}' path for '{company_data.company_slug}'")
+        return profile
+
+    def _extract_bi_profile_ai(self, company_data: LinkedInCompanyData) -> BIProfile:
+        """AI-based BI extraction: asks the LLM to read the company's LinkedIn
+        data (about text, posts, jobs) and surface the same categories of
+        insight the rule-based pass produces, but with actual comprehension
+        instead of keyword matching."""
+        from ai.client import get_ai_client
+
+        about_text = getattr(getattr(company_data, "description", None), "about_us", "") or ""
+        posts = getattr(company_data, "recent_posts", None) or []
+        jobs = getattr(company_data, "job_postings", None) or []
+        posts_text = "\n".join(f"- {getattr(p, 'content', '') or getattr(p, 'text', '')}" for p in posts[:8])
+        jobs_text = "\n".join(f"- {getattr(j, 'title', '')}" for j in jobs[:10])
+
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a B2B business intelligence analyst. Given a company's LinkedIn "
+                    "about text, recent posts, and open job titles, extract strategic insight. "
+                    "Respond ONLY with a JSON object with keys: "
+                    "key_differentiators (array of up to 5 strings), "
+                    "competitive_advantages (array of strings), "
+                    "identified_competitors (array of {competitor_name, relationship_type}), "
+                    "strategic_initiatives (array of {initiative_name, description, priority_level}), "
+                    "growth_signals (array of {signal_type, description}), "
+                    "business_challenges (array of {challenge_area, description}). "
+                    "Only include items clearly supported by the text — do not invent facts."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Company: {company_data.company_slug}\n\n"
+                    f"About:\n{about_text[:3000]}\n\n"
+                    f"Recent posts:\n{posts_text}\n\n"
+                    f"Open job titles:\n{jobs_text}"
+                ),
+            },
+        ]
+        result = get_ai_client().chat_json(messages)
+
+        return BIProfile(
+            key_differentiators=result.get("key_differentiators", []) or [],
+            competitive_advantages=result.get("competitive_advantages", []) or [],
+            identified_competitors=[
+                CompetitorMention(
+                    competitor_name=c.get("competitor_name", ""),
+                    relationship_type=c.get("relationship_type"),
+                    source="ai_inferred",
+                )
+                for c in result.get("identified_competitors", []) or []
+                if c.get("competitor_name")
+            ],
+            strategic_initiatives=[
+                StrategicInitiative(
+                    initiative_name=s.get("initiative_name", ""),
+                    description=s.get("description", ""),
+                    priority_level=s.get("priority_level"),
+                )
+                for s in result.get("strategic_initiatives", []) or []
+                if s.get("initiative_name")
+            ],
+            growth_signals=[
+                GrowthSignal(
+                    signal_type=g.get("signal_type", "Product Launch"),
+                    description=g.get("description", ""),
+                )
+                for g in result.get("growth_signals", []) or []
+                if g.get("description")
+            ],
+            business_challenges=[
+                BusinessChallenge(
+                    challenge_area=b.get("challenge_area", ""),
+                    description=b.get("description", ""),
+                )
+                for b in result.get("business_challenges", []) or []
+                if b.get("description")
+            ],
+        )
 
     # ---------------------------------------------------------------------------
     # Method B: Rule-Based BI Extraction (Heuristics)

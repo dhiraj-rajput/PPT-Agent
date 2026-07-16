@@ -388,8 +388,146 @@ def crawl_website(
     timeout_ms: int | None = None,
 ) -> dict[str, dict[str, Any]]:
     """
-    Crawl a company website starting from the homepage (Prasanna crawler integration).
+    Crawl a company website starting from the homepage.
+
+    Primary:  crawl4ai — async, JS-rendered, faster, Markdown extraction.
+    Fallback: Playwright sync crawler — used if crawl4ai is not installed
+              or raises an unrecoverable error.
+
+    Returns a dict mapping URL → {"url": str, "html": str, "status": str}.
     """
+    from config.settings import settings
+
+    limit_pages: int = max_pages if max_pages is not None else int(
+        getattr(settings, "MAX_CRAWL_PAGES", 15)
+    )
+    limit_timeout: float = float(
+        timeout_ms if timeout_ms is not None else int(
+            getattr(settings, "CRAWL_TIMEOUT", 30000)
+        )
+    )
+
+    # ------------------------------------------------------------------ #
+    # Primary: crawl4ai                                                    #
+    # ------------------------------------------------------------------ #
+    try:
+        import asyncio
+        from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
+        from urllib.parse import urljoin as _urljoin
+        from bs4 import BeautifulSoup as _BSoup
+
+        logger.info(
+            f"[crawl_website] Starting crawl4ai crawl: {homepage_url} "
+            f"(max_pages={limit_pages}, timeout={limit_timeout}ms)"
+        )
+
+        async def _run_crawl4ai() -> dict[str, dict[str, Any]]:
+            browser_cfg = BrowserConfig(
+                headless=getattr(settings, "BROWSER_HEADLESS", True),
+                verbose=False,
+            )
+            run_cfg = CrawlerRunConfig(
+                cache_mode=CacheMode.BYPASS,
+                page_timeout=int(limit_timeout),
+                js_code="window.scrollTo(0, document.body.scrollHeight);",
+                wait_for="body",
+                word_count_threshold=20,
+            )
+
+            pages: dict[str, dict[str, Any]] = {}
+            link_filter = LinkFilter(homepage_url)
+
+            async with AsyncWebCrawler(config=browser_cfg) as crawler:
+                # Start with the seed
+                urls_to_visit: list[str] = [homepage_url]
+                visited: set[str] = set()
+
+                while urls_to_visit and len(pages) < limit_pages:
+                    batch = []
+                    for u in urls_to_visit[:3]:       # crawl up to 3 in parallel
+                        if u not in visited:
+                            visited.add(u)
+                            batch.append(u)
+                    urls_to_visit = [u for u in urls_to_visit if u not in visited]
+
+                    if not batch:
+                        break
+
+                    results = await crawler.arun_many(batch, config=run_cfg)
+
+                    for res in results:
+                        url = res.url
+                        if res.success:
+                            html = res.html or ""
+                            # Discover new links via crawl4ai's extracted links + link filter
+                            discovered = link_filter.extract_and_filter_links(html)
+                            for new_link in discovered[:20]:
+                                if new_link not in visited and new_link not in urls_to_visit:
+                                    urls_to_visit.append(new_link)
+
+                            pages[url] = {
+                                "url": url,
+                                "html": html,
+                                # Keep cleaned markdown for extractor as a bonus
+                                "cleaned_markdown": res.markdown or "",
+                                "status": "success",
+                            }
+                            logger.info(
+                                f"[crawl4ai] Crawled: {url} "
+                                f"({len(html)} bytes, markdown={len(res.markdown or '')} chars)"
+                            )
+                        else:
+                            logger.warning(f"[crawl4ai] Failed: {url} — {res.error_message}")
+                            pages[url] = {
+                                "url": url,
+                                "html": "",
+                                "status": "failed",
+                                "error": res.error_message or "Unknown error",
+                            }
+
+            return pages
+
+        # Run the async crawl in a fresh event loop (works from sync context / threads)
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                    future = ex.submit(asyncio.run, _run_crawl4ai())
+                    result = future.result(timeout=int(limit_timeout / 1000) + 120)
+            else:
+                result = loop.run_until_complete(_run_crawl4ai())
+        except RuntimeError:
+            result = asyncio.run(_run_crawl4ai())
+
+        success_count = sum(1 for p in result.values() if p["status"] == "success")
+        logger.info(
+            f"[crawl4ai] Crawl complete: {success_count}/{len(result)} pages successful"
+        )
+        return result
+
+    except ImportError:
+        logger.warning(
+            "[crawl_website] crawl4ai not available — falling back to Playwright crawler. "
+            "Install it with: pip install crawl4ai"
+        )
+    except Exception as exc:
+        logger.warning(
+            f"[crawl_website] crawl4ai raised an error ({exc}) — falling back to Playwright crawler."
+        )
+
+    # ------------------------------------------------------------------ #
+    # Fallback: Playwright sync crawler                                    #
+    # ------------------------------------------------------------------ #
+    return _playwright_crawl_website(homepage_url, limit_pages, limit_timeout)
+
+
+def _playwright_crawl_website(
+    homepage_url: str,
+    limit_pages: int,
+    limit_timeout: float,
+) -> dict[str, dict[str, Any]]:
+    """Playwright-based synchronous website crawler (fallback when crawl4ai is unavailable)."""
     from utils.helpers import is_valid_url
     from website.urls import normalize_url as p_normalize_url, is_internal_link, should_ignore_url, get_url_priority
     from website.parser import extract_links
@@ -400,10 +538,10 @@ def crawl_website(
         logger.error(f"Invalid starting URL: {homepage_url}")
         return {}
 
-    limit_pages: int = max_pages if max_pages is not None else int(getattr(settings, "MAX_CRAWL_PAGES", 15))
-    limit_timeout: float = float(timeout_ms if timeout_ms is not None else int(getattr(settings, "CRAWL_TIMEOUT", 30000)))
-
-    logger.info(f"Starting sync crawl: {homepage_url} (max_pages={limit_pages}, timeout={limit_timeout}ms)")
+    logger.info(
+        f"[Playwright] Starting sync crawl: {homepage_url} "
+        f"(max_pages={limit_pages}, timeout={limit_timeout}ms)"
+    )
 
     visited_pages: dict[str, dict[str, Any]] = {}
     visited_urls_set: set[str] = set()
@@ -436,10 +574,10 @@ def crawl_website(
                     continue
                 visited_urls_set.add(current_url)
 
-                logger.info(f"[{len(visited_pages)+1}/{max_pages}] Crawling: {current_url}")
+                logger.info(f"[Playwright] [{len(visited_pages)+1}/{limit_pages}] Crawling: {current_url}")
                 try:
                     response = page.goto(current_url, wait_until="domcontentloaded")
-                    page.wait_for_timeout(800)  # Allow JS to settle
+                    page.wait_for_timeout(800)
 
                     final_url = page.url
                     html_content = page.content()
@@ -453,7 +591,6 @@ def crawl_website(
                         }
                         continue
 
-                    # Skip if redirected to an external domain
                     if not is_internal_link(final_url, homepage_url):
                         logger.warning(f"Redirected to external domain: {final_url}")
                         visited_pages[current_url] = {
@@ -465,7 +602,6 @@ def crawl_website(
                         "url": final_url, "html": html_content, "status": "success"
                     }
 
-                    # Discover new internal links
                     raw_links = extract_links(html_content)
                     for raw_link in raw_links:
                         norm = p_normalize_url(raw_link, current_url)
@@ -484,11 +620,11 @@ def crawl_website(
                         "url": current_url, "html": "", "status": "failed", "error": str(ex)
                     }
 
-                time.sleep(0.4)  # Polite delay
+                time.sleep(0.4)
 
         finally:
             browser.close()
 
     success_count = sum(1 for p in visited_pages.values() if p["status"] == "success")
-    logger.info(f"Crawl complete: {success_count}/{len(visited_pages)} pages successful")
+    logger.info(f"[Playwright] Crawl complete: {success_count}/{len(visited_pages)} pages successful")
     return visited_pages

@@ -361,18 +361,36 @@ class PitchCompiler:
 
         # 12. Teaming outreach narrative
         our_product = our_profile.get("product_name")
-        outreach_text = (
-            f"Dear Team at {winner_name},\n\n"
-            f"First, congratulations on winning the prime contract award for VA/DHS Solicitation {sol_num} ({rfp_title})!\n\n"
-            f"Orbit Avanya LLP is writing to propose a strategic subcontracting partnership to support your delivery team "
-            f"on this contract. As an agile technology firm specializing in secure visual dashboards and database integrations, "
-            f"we offer a pre-built {our_product} product framework that fits the technical requirements of this project.\n\n"
-            f"We propose taking on a {workshare_pct}% subcontracting work share, specifically focusing on building the Next.js "
-            f"dashboards, configuring the Python ETL data pipelines, and implementing the security compliance logging layers. "
-            f"By teaming with Orbit Avanya, {winner_name} gains access to certified visual analytics developers and pre-tested database "
-            f"interfaces, reducing implementation timeframes and mitigating technical execution risk.\n\n"
-            f"We look forward to discussing how our {our_product} capabilities can align with your program delivery plans."
+        is_mock_or_unknown = (
+            not sol_num 
+            or sol_num.lower() in ("unknown", "none", "n/a")
+            or sol_num.lower().startswith("mock")
         )
+        if is_mock_or_unknown:
+            outreach_text = (
+                f"Dear Team at {winner_name},\n\n"
+                f"Orbit Avanya LLP is writing to propose a strategic teaming partnership to support your delivery team "
+                f"on {rfp_title}. As an agile technology firm specializing in secure visual dashboards and database integrations, "
+                f"we offer a pre-built {our_product} product framework that fits the technical requirements of this project.\n\n"
+                f"We propose taking on a {workshare_pct}% teaming work share, specifically focusing on building the Next.js "
+                f"dashboards, configuring the Python ETL data pipelines, and implementing the security compliance logging layers. "
+                f"By teaming with Orbit Avanya, {winner_name} gains access to certified visual analytics developers and pre-tested database "
+                f"interfaces, reducing implementation timeframes and mitigating technical execution risk.\n\n"
+                f"We look forward to discussing how our {our_product} capabilities can align with your project delivery plans."
+            )
+        else:
+            outreach_text = (
+                f"Dear Team at {winner_name},\n\n"
+                f"First, congratulations on winning the prime contract award for VA/DHS Solicitation {sol_num} ({rfp_title})!\n\n"
+                f"Orbit Avanya LLP is writing to propose a strategic subcontracting partnership to support your delivery team "
+                f"on this contract. As an agile technology firm specializing in secure visual dashboards and database integrations, "
+                f"we offer a pre-built {our_product} product framework that fits the technical requirements of this project.\n\n"
+                f"We propose taking on a {workshare_pct}% subcontracting work share, specifically focusing on building the Next.js "
+                f"dashboards, configuring the Python ETL data pipelines, and implementing the security compliance logging layers. "
+                f"By teaming with Orbit Avanya, {winner_name} gains access to certified visual analytics developers and pre-tested database "
+                f"interfaces, reducing implementation timeframes and mitigating technical execution risk.\n\n"
+                f"We look forward to discussing how our {our_product} capabilities can align with your program delivery plans."
+            )
 
         # 13. Extract competitors list (excluding pricing/money) from rfp_data
         raw_competitors = rfp_data.get("competitors") or []

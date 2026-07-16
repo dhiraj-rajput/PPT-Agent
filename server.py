@@ -1,139 +1,116 @@
-import os
-import json
-import uvicorn
-from pathlib import Path
-from datetime import datetime
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
-from fastapi.middleware.cors import CORSMiddleware
-from utils.db_client import get_collection, close_connection
+"""
+server.py
+----------
+OrbitAvanya — FastAPI backend entry point.
 
-app = FastAPI(title="PPT-Agent Backend API", version="1.0")
+Runs all API routes on a single server (port 8000), replacing the
+separate Node.js auth server that previously ran on port 5000.
+
+Routes:
+  /api/auth/*          — register, login, OTP, JWT, me
+  /api/users/*         — user management + invite
+  /api/tasks/*         — tasks CRUD + assignment
+  /api/meetings/*      — meetings + Jitsi/Zoom/Google Meet
+  /api/notifications/* — in-app alerts
+  /api/integrations/*  — Google OAuth for Meet
+  /api/companies/*     — company intelligence
+  /api/tenders/*       — SAM.gov tender opportunities
+  /api/proposals/*     — AI proposal generation
+  /api/reports/*       — analytics reports
+  /api/rfp-respond/*   — RFP Auto-Respond (AI proposal from uploaded RFP)
+"""
+
+import uvicorn
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from utils.db_client import close_connection
+
+# ---- Core feature routes ----
+from api.routes.companies import router as companies_router
+from api.routes.reports import router as reports_router
+from api.routes.proposals import router as proposals_router
+from api.routes.tenders import router as tenders_router
+
+# ---- Auth & user management (ported from Node.js) ----
+from api.routes.auth import router as auth_router
+from api.routes.users import router as users_router
+from api.routes.tasks import router as tasks_router
+from api.routes.meetings import router as meetings_router
+from api.routes.notifications import router as notifications_router
+from api.routes.integrations import router as integrations_router
+
+# ---- RFP Auto-Respond (formerly BidForge) ----
+from api.routes.rfp_respond import router as rfp_respond_router
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: load/verify SAM entities database + ensure MongoDB indexes
+    from api.routes.companies import import_sam_entities_csv
+    import_sam_entities_csv()
+
+    # Ensure indexes for all collections (core + new auth collections)
+    try:
+        from utils.db_client import ensure_all_indexes, get_collection
+        ensure_all_indexes()
+
+        # Additional indexes for auth/tasks/meetings/notifications collections
+        get_collection("users").create_index("email", unique=True)
+        get_collection("otps").create_index([("userId", 1), ("purpose", 1)])
+        get_collection("otps").create_index("expiresAt", expireAfterSeconds=0)
+        get_collection("tasks").create_index("createdAt")
+        get_collection("meetings").create_index([("date", 1), ("time", 1)])
+        get_collection("notifications").create_index([("user", 1), ("createdAt", -1)])
+        get_collection("notifications").create_index([("user", 1), ("read", 1)])
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"MongoDB index setup warning: {e}")
+
+    yield
+    # Shutdown: close DB connection
+    close_connection()
+
+
+app = FastAPI(
+    title="OrbitAvanya Backend API",
+    version="2.0",
+    description="AI-powered tender intelligence, company research, and proposal generation platform.",
+    lifespan=lifespan,
+)
 
 # Enable CORS for frontend connectivity
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-def sync_reports_with_mongo():
-    """Scan output/pdf folder, parse metadata using config files, and sync with MongoDB."""
-    pdf_dir = Path("output/pdf")
-    proposals_dir = Path("output/proposals")
-    reports_col = get_collection("reports")
-    
-    if not pdf_dir.exists():
-        return []
-        
-    synced_filenames = []
-    
-    for pdf_path in pdf_dir.glob("*.pdf"):
-        filename = pdf_path.name
-        synced_filenames.append(filename)
-        
-        # Attempt to find corresponding proposal config JSON
-        # Filenames look like: N00164-26-R-0001_prime_proposal.pdf
-        # Config names look like: N00164-26-R-0001_prime_config.json
-        parts = filename.rsplit("_", 1)
-        prefix = parts[0] if len(parts) > 1 else filename.replace(".pdf", "")
-        
-        config_path = proposals_dir / f"{prefix}_config.json"
-        
-        # Fallback to match_config if direct config is missing
-        if not config_path.exists():
-            rfp_id = filename.split("_", 1)[0]
-            config_path = proposals_dir / f"{rfp_id}_match_config.json"
-            
-        company_name = "Unknown Company"
-        proposal_title = filename.replace("_", " ").replace(".pdf", "").title()
-        proposal_subtitle = ""
-        proposal_date = ""
-        ref = ""
-        
-        if config_path.exists():
-            try:
-                with open(config_path, "r", encoding="utf-8") as f:
-                    cfg = json.load(f)
-                    brand = cfg.get("brand", {})
-                    prop = cfg.get("proposal", {})
-                    # prepared_for is the client target company
-                    company_name = prop.get("prepared_for") or brand.get("company_name") or "Unknown Company"
-                    proposal_title = prop.get("title") or proposal_title
-                    proposal_subtitle = prop.get("subtitle") or ""
-                    proposal_date = prop.get("proposal_date") or ""
-                    ref = prop.get("engagement_ref") or ""
-            except Exception as e:
-                print(f"Error parsing config {config_path}: {e}")
-                
-        # If date is missing in config, use file modification time
-        if not proposal_date:
-            mtime = pdf_path.stat().st_mtime
-            proposal_date = datetime.fromtimestamp(mtime).strftime("%b %d, %Y")
-            
-        file_size_bytes = pdf_path.stat().st_size
-        if file_size_bytes >= 1024 * 1024:
-            file_size = f"{file_size_bytes / (1024 * 1024):.1f} MB"
-        else:
-            file_size = f"{file_size_bytes / 1024:.0f} KB"
-            
-        report_record = {
-            "filename": filename,
-            "company_name": company_name,
-            "title": proposal_title,
-            "subtitle": proposal_subtitle,
-            "date": proposal_date,
-            "size": file_size,
-            "ref": ref,
-            "type": "PDF",
-            "filepath": str(pdf_path.resolve())
-        }
-        
-        # Store in MongoDB
-        reports_col.update_one(
-            {"filename": filename},
-            {"$set": report_record},
-            upsert=True
-        )
-        
-    # Clean up any records in MongoDB whose physical files no longer exist
-    all_stored = list(reports_col.find({}, {"filename": 1}))
-    for record in all_stored:
-        if record["filename"] not in synced_filenames:
-            reports_col.delete_one({"filename": record["filename"]})
+# ---- Register all routers ----
+app.include_router(auth_router, prefix="/api")
+app.include_router(users_router, prefix="/api")
+app.include_router(tasks_router, prefix="/api")
+app.include_router(meetings_router, prefix="/api")
+app.include_router(notifications_router, prefix="/api")
+app.include_router(integrations_router, prefix="/api")
+app.include_router(companies_router, prefix="/api")
+app.include_router(reports_router, prefix="/api")
+app.include_router(proposals_router, prefix="/api")
+app.include_router(tenders_router, prefix="/api")
+app.include_router(rfp_respond_router, prefix="/api")
 
-@app.get("/api/reports")
-def get_reports():
-    """Retrieve all reports synced with MongoDB."""
-    try:
-        sync_reports_with_mongo()
-        reports_col = get_collection("reports")
-        reports = list(reports_col.find({}, {"_id": 0}))
-        return reports
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/reports/view/{filename}")
-def view_report(filename: str):
-    """Serve a PDF report inline in the browser."""
-    pdf_path = Path("output/pdf") / filename
-    if not pdf_path.exists():
-        raise HTTPException(status_code=404, detail="Report file not found")
-    return FileResponse(pdf_path, media_type="application/pdf")
+@app.get("/api/health")
+async def health():
+    return {"ok": True, "service": "OrbitAvanya API v2.0"}
 
-@app.get("/api/reports/download/{filename}")
-def download_report(filename: str):
-    """Force download of a PDF report."""
-    pdf_path = Path("output/pdf") / filename
-    if not pdf_path.exists():
-        raise HTTPException(status_code=404, detail="Report file not found")
-    return FileResponse(pdf_path, media_type="application/pdf", filename=filename)
-
-@app.on_event("shutdown")
-def shutdown_db_client():
-    close_connection()
 
 if __name__ == "__main__":
     uvicorn.run("server:app", host="127.0.0.1", port=8000, reload=True)

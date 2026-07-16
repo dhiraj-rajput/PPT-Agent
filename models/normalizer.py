@@ -58,6 +58,10 @@ def clean_list(items: Optional[List[Any]], max_len: int = 150) -> List[str]:
         item_str = re.sub(r"\s+", " ", item_str).strip()
         if not item_str:
             continue
+        # Clean LinkedIn noise
+        item_str = clean_linkedin_garbage(item_str)
+        if not item_str:
+            continue
         # Drop overly long items (likely sentence fragments, not names)
         if len(item_str) > max_len:
             continue
@@ -98,6 +102,57 @@ def _is_nav_garbage(text: str) -> bool:
     if _NAV_GARBAGE_PATTERNS.match(text):
         return True
     return False
+
+
+def clean_linkedin_garbage(text: str) -> str:
+    """Strip common LinkedIn login wall, cookies consent, and scraper noise."""
+    if not text:
+        return ""
+    
+    # 1. Clean line-by-line block noise
+    lines = text.splitlines()
+    cleaned_lines = []
+    for line in lines:
+        line_strip = line.strip()
+        # Filter out obvious login page/sign-in elements
+        lower_line = line_strip.lower()
+        if any(keyword in lower_line for keyword in [
+            "sign in", "welcome back", "forgot password", "join now", "cookie policy",
+            "user agreement", "privacy policy", "linkedin member", "view all employees",
+            "report this post", "followers", "followers count", "get directions",
+            "by clicking continue", "continue to join", "show password", "agree to linkedin",
+            "email or phone password", "see all employees locations"
+        ]):
+            continue
+        # Strip lines that look like social post headers
+        if lower_line.startswith("we were honoured to welcome") or lower_line.startswith("we appreciate the interest shown"):
+            continue
+        cleaned_lines.append(line)
+        
+    cleaned = "\n".join(cleaned_lines)
+
+    # 2. Regex search-and-replace for inline noise blocks
+    patterns = [
+        r"(?i)sign in welcome back email or phone password show forgot password\??",
+        r"(?i)sign in or by clicking continue to join or sign in, you agree to linkedin.*",
+        r"(?i)new to linkedin\? join now.*",
+        r"(?i)see all employees locations primary.*get directions",
+        r"(?i)linkedin member\s*linkedin member\s*linkedin member\s*linkedin member\s*linkedin member",
+        r"(?i)view \d+ employees at .*",
+        r"(?i)report this post",
+        r"(?i)followers \d+d",
+        r"(?i)we were honoured to welcome.*",
+        r"(?i)together, we continue to.*",
+        r"(?i)we appreciate the interest shown by.*",
+        r"(?i)looking forward to fostering.*",
+        r"(?i)nasiru abdullahi",
+    ]
+    for p in patterns:
+        cleaned = re.sub(p, "", cleaned)
+
+    # Replace multiple spaces/newlines
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned
 
 
 def merge_lists(*lists: Optional[List[str]], max_len: int = 150) -> List[str]:
@@ -432,6 +487,15 @@ def normalize_company_intelligence(
         or ""
     )[:8_000]
 
+    # Clean descriptions dict values
+    cleaned_descs = {}
+    for k, v in descriptions.items():
+        cleaned_descs[k] = clean_linkedin_garbage(v)
+
+    # Clean executive summary and tagline
+    executive_summary = clean_linkedin_garbage(executive_summary)
+    tagline = clean_linkedin_garbage(tagline)
+
     return {
         # Identity
         "company_name": company_name,
@@ -443,7 +507,7 @@ def normalize_company_intelligence(
         "specialties": specialties,
 
         # Descriptions
-        "descriptions": descriptions,
+        "descriptions": cleaned_descs,
         "executive_summary": executive_summary,
         "mission_statement": mission_statement,
 

@@ -29,13 +29,8 @@ from urllib.parse import urlparse, urlunparse
 
 from models.company_schema import OptimizedCompanyProfile
 from models.normalizer import normalize_company_intelligence
-
-try:
-    import ollama as _ollama_lib
-    _OLLAMA_AVAILABLE = True
-except ImportError:
-    _ollama_lib = None
-    _OLLAMA_AVAILABLE = False
+from ai.client import get_ai_client
+from ai.mode import run_with_fallback, AIMode
 
 logger = logging.getLogger(__name__)
 
@@ -126,18 +121,8 @@ class BusinessIntelligenceCompactor:
     def __init__(self) -> None:
         from config.settings import settings as _settings
         self._settings = _settings
-        # Ollama configuration (free cloud model)
-        self.ollama_model: str = getattr(_settings, "OLLAMA_MODEL", "gemma4:31b-cloud") or "gemma4:31b-cloud"
-        self.ollama_host: str = getattr(_settings, "OLLAMA_HOST", "") or ""
-        self.ollama_api_key: str = getattr(_settings, "OLLAMA_API_KEY", "") or ""
-        self.temperature: float = 0.05
-
-        # Ollama model fallback chain — tried in order when the primary model fails.
-        self._ollama_model_fallbacks: List[str] = [
-            "gemma4:31b-cloud",
-            "gemma3:27b",
-            "llama3.1:8b",
-        ]
+        # Shared Ollama Cloud client (model fallback chain + retries live here)
+        self.ai_client = get_ai_client()
 
         # MongoDB (optional — skip gracefully if offline)
         self.db = None
@@ -180,12 +165,22 @@ class BusinessIntelligenceCompactor:
             external_insights=external_insights,
         )
 
-        # 2. LLM compaction with rule-based fallback
-        try:
-            raw_profile = self._run_llm_compaction(normalized)
-        except Exception as exc:
-            logger.warning(f"[Compactor] LLM compaction failed: {exc}. Falling back to rule-based compaction.")
-            raw_profile = self._run_rules_compaction(normalized)
+        # 2. AI compaction with rule-based fallback, governed by the global
+        #    AI_MODE toggle (with COMPACTOR_MODE per-agent override) and
+        #    automatic 429-aware fallback via ai.mode.run_with_fallback.
+        import os
+        bypass_llm = os.getenv("BYPASS_LLM", "false").lower() in ("true", "1", "yes")
+        force_mode = AIMode.RULE_BASED if bypass_llm else None
+        if bypass_llm:
+            logger.info("[Compactor] BYPASS_LLM=true — forcing rule-based compaction.")
+
+        raw_profile, path_used = run_with_fallback(
+            "compactor",
+            ai_fn=lambda: self._run_llm_compaction(normalized),
+            rule_fn=lambda: self._run_rules_compaction(normalized),
+            force_mode=force_mode,
+        )
+        logger.info(f"[Compactor] Compaction completed via '{path_used}' path.")
 
         # 3. Inject metadata
         raw_profile["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
@@ -267,92 +262,14 @@ class BusinessIntelligenceCompactor:
     # LLM call
     # ------------------------------------------------------------------
 
-    def _run_llm_compaction(self, normalized_data: Dict[str, Any], max_retries: int = 3) -> Dict[str, Any]:
+    def _run_llm_compaction(self, normalized_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Call Ollama with the normalised payload and return parsed JSON.
-
-        Model fallback chain:
-          1. Tries self.ollama_model (default: gemma4:31b-cloud)
-          2. On failure, rotates through self._ollama_model_fallbacks
-          3. Raises RuntimeError only after all models + all retries are exhausted
+        Call the shared Ollama Cloud client with the normalised payload and
+        return parsed JSON. Model fallback chain + retries + 429 detection
+        all live in ai.client.OllamaAIClient now.
         """
-        if not _OLLAMA_AVAILABLE:
-            raise RuntimeError(
-                "ollama package not installed. Run: pip install ollama>=0.4.0"
-            )
-
         messages = _build_messages(normalized_data)
-        last_error: Exception | None = None
-
-        # Build model trial list: primary model first, then fallbacks (deduped)
-        models_to_try: List[str] = [self.ollama_model]
-        for m in self._ollama_model_fallbacks:
-            if m not in models_to_try:
-                models_to_try.append(m)
-
-        for model in models_to_try:
-            for attempt in range(max_retries):
-                try:
-                    raw = self._call_ollama(messages, model=model)
-                    result = self._parse_json_from_response(raw)
-                    if model != self.ollama_model:
-                        logger.info(f"[Compactor] Fell back to Ollama model: {model}")
-                    return result
-                except Exception as exc:
-                    last_error = exc
-                    wait = 2.0 * (1.5 ** attempt)
-                    logger.warning(
-                        f"[Compactor] Ollama {model} attempt {attempt + 1}/{max_retries} failed: {exc} "
-                        f"(retrying in {wait:.1f}s)"
-                    )
-                    if attempt < max_retries - 1:
-                        time.sleep(wait)
-                    else:
-                        break  # try next model
-
-        raise RuntimeError(
-            f"All Ollama models failed. Last error: {last_error}. "
-            f"Models tried: {models_to_try}"
-        )
-
-    def _call_ollama(self, messages: List[Dict[str, str]], model: Optional[str] = None) -> str:
-        """Call Ollama chat API and return the response text."""
-        if not _OLLAMA_AVAILABLE:
-            raise RuntimeError("ollama package not installed. Run: pip install ollama>=0.4.0")
-        target_model = model or self.ollama_model
-
-        # Build Ollama client (optionally with custom host & api key)
-        client_kwargs: Dict[str, Any] = {}
-        if self.ollama_host:
-            client_kwargs["host"] = self.ollama_host
-        
-        headers = {}
-        if self.ollama_api_key:
-            headers["Authorization"] = f"Bearer {self.ollama_api_key}"
-            client_kwargs["headers"] = headers
-
-        if client_kwargs or headers:
-            # If headers are provided, we must use Client. If host is empty, Client uses default localhost.
-            client = _ollama_lib.Client(**client_kwargs)
-            response = client.chat(
-                model=target_model,
-                messages=messages,
-                options={"temperature": self.temperature},
-                format="json",
-            )
-        else:
-            response = _ollama_lib.chat(
-                model=target_model,
-                messages=messages,
-                options={"temperature": self.temperature},
-                format="json",
-            )
-
-        content = response.message.content
-        if not content:
-            raise ValueError(f"Ollama ({target_model}) returned an empty response.")
-        logger.info(f"[Compactor] Ollama ({target_model}) responded successfully.")
-        return str(content)
+        return self.ai_client.chat_json(messages)
 
     # ------------------------------------------------------------------
     # JSON parsing
@@ -414,8 +331,13 @@ class BusinessIntelligenceCompactor:
             
         try:
             collection = self.db["company_profiles"]
-            # Inject company_slug so it's persisted in the final document
+            # Inject company_slug (website-based) so it's persisted
             profile["company_slug"] = company_slug
+            # Also persist a name-based slug so the frontend can match by company name
+            company_name = profile.get("company_name", "")
+            if company_name:
+                name_slug = re.sub(r"[^a-z0-9]+", "-", company_name.lower()).strip("-")
+                profile["company_name_slug"] = name_slug
             result = collection.update_one(
                 {"company_slug": company_slug},
                 {"$set": profile},
@@ -447,10 +369,10 @@ class BusinessIntelligenceCompactor:
             specs_str = f" specializing in {', '.join(specialties[:3])}" if specialties else ""
             description = f"{company_name} is a professional organization operating in the {industry} sector{specs_str}. Headquarters are located in {hq or 'unknown'}."
         
-        # Truncate/clean description
+        # Truncate/clean description — keep up to 2000 chars for quality
         description = description.strip()
-        if len(description) > 500:
-            description = description[:497] + "..."
+        if len(description) > 2000:
+            description = description[:1997] + "..."
 
         # 2. Tech stack
         tech_stack = normalized.get("technology_stack", [])

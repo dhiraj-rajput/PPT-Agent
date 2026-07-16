@@ -224,6 +224,42 @@ export default function Topbar({ onMenuClick }) {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
+  const [aiMode, setAiMode] = useState('auto');
+  const [loadingMode, setLoadingMode] = useState(false);
+
+  useEffect(() => {
+    // Fetch initial AI mode from backend
+    fetch('http://localhost:8000/api/companies/settings/ai-mode')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.ai_mode) {
+          setAiMode(data.ai_mode);
+        }
+      })
+      .catch((err) => console.error('Error fetching AI mode:', err));
+  }, []);
+
+  const toggleAiMode = async () => {
+    if (loadingMode) return;
+    setLoadingMode(true);
+    const newMode = aiMode === 'rule_based' ? 'auto' : 'rule_based';
+    try {
+      const res = await fetch('http://localhost:8000/api/companies/settings/ai-mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: newMode }),
+      });
+      const data = await res.json();
+      if (data && data.ai_mode) {
+        setAiMode(data.ai_mode);
+      }
+    } catch (err) {
+      console.error('Error setting AI mode:', err);
+    } finally {
+      setLoadingMode(false);
+    }
+  };
+
   const toggleTheme = () => {
     setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
   };
@@ -245,6 +281,24 @@ export default function Topbar({ onMenuClick }) {
       </div>
 
       <div className="flex items-center gap-2">
+        {/* AI System vs Rule-Based Toggle Button */}
+        <button
+          onClick={toggleAiMode}
+          disabled={loadingMode}
+          className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all ${
+            aiMode === 'rule_based'
+              ? 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300'
+              : 'border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100 dark:border-brand-900 dark:bg-brand-950/50 dark:text-brand-300'
+          }`}
+          title="Click to toggle between AI-first and Rule-based fallback systems"
+        >
+          <span className="relative flex h-2 w-2">
+            <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${aiMode === 'rule_based' ? 'bg-amber-400' : 'bg-brand-400'}`}></span>
+            <span className={`relative inline-flex h-2 w-2 rounded-full ${aiMode === 'rule_based' ? 'bg-amber-500' : 'bg-brand-500'}`}></span>
+          </span>
+          <span>{aiMode === 'rule_based' ? 'System: Rule-Based' : 'System: AI-Enabled'}</span>
+        </button>
+
         <button className="rounded-lg p-2.5 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-navy-800">
           <HelpCircle size={19} />
         </button>

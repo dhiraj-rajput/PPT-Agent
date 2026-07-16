@@ -314,8 +314,13 @@ class AuthenticatedLinkedInScraper:
             await page.wait_for_timeout(PAGE_LOAD_WAIT_MS)
             await self._scroll_page_gradually(page)
 
-            page_text = await page.inner_text("body")
-            page_content = await page.content()
+            try:
+                page_text = await page.inner_text("body")
+                page_content = await page.content()
+            except Exception as e:
+                logger.warning(f"[Layer 3] Failed to read page contents, page context was destroyed: {e}")
+                page_text = "Page context destroyed"
+                page_content = "<html><body>Context destroyed</body></html>"
 
             raw_record = RawLinkedInScrapedData(
                 company_slug=company_slug,
@@ -328,7 +333,11 @@ class AuthenticatedLinkedInScraper:
             )
 
             # Extract leadership members listed on the page
-            leadership_members = await self._extract_leadership_members(page)
+            leadership_members = []
+            try:
+                leadership_members = await self._extract_leadership_members(page)
+            except Exception as e:
+                logger.warning(f"[Layer 3] Failed to extract leadership members, context destroyed: {e}")
 
             people_data = {
                 "leadership_team": [member.model_dump() for member in leadership_members],
@@ -480,20 +489,23 @@ class AuthenticatedLinkedInScraper:
 
         Scrolls in 3 steps from top to bottom with random delays between.
         """
-        viewport_height = await page.evaluate("window.innerHeight")
-        scroll_positions = [
-            viewport_height * 0.5,
-            viewport_height * 1.5,
-            viewport_height * 3.0,
-        ]
+        try:
+            viewport_height = await page.evaluate("window.innerHeight")
+            scroll_positions = [
+                viewport_height * 0.5,
+                viewport_height * 1.5,
+                viewport_height * 3.0,
+            ]
 
-        for scroll_position in scroll_positions:
-            await page.evaluate(f"window.scrollTo(0, {scroll_position})")
-            # Random pause between scrolls to simulate reading
-            await page.wait_for_timeout(1500 + (500 * asyncio.get_event_loop().time() % 3))
+            for scroll_position in scroll_positions:
+                await page.evaluate(f"window.scrollTo(0, {scroll_position})")
+                # Random pause between scrolls to simulate reading
+                await page.wait_for_timeout(1500 + (500 * asyncio.get_event_loop().time() % 3))
 
-        # Scroll back to top
-        await page.evaluate("window.scrollTo(0, 0)")
+            # Scroll back to top
+            await page.evaluate("window.scrollTo(0, 0)")
+        except Exception as e:
+            logger.warning(f"Gradual scroll interrupted: {e}")
 
     async def _extract_leadership_members(
         self,

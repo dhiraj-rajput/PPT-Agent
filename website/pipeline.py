@@ -18,7 +18,7 @@ from utils.helpers import setup_logger, is_valid_url
 from website.crawler import crawl_website
 from website.cleaner import clean_html_content, extract_raw_text
 from website.classifier import classify_text_by_sections
-from website.extractor import extract_company_intelligence, identify_role_pages
+from website.extractor import extract_company_intelligence, identify_role_pages, enrich_website_data_with_ai
 from website.parser import parse_html_metadata, extract_contact_info
 from website.models import WebsiteData, RawWebsiteScrapedData
 from website.storage import WebsiteStorage
@@ -175,6 +175,12 @@ class WebsitePipeline:
         # Ensure LinkedIn URL found from site is stored
         if isinstance(linkedin_url_found, str) and linkedin_url_found and not website_data.linkedin_url:
             website_data.linkedin_url = linkedin_url_found
+
+        # Step 4b: AI enrichment (governed by AI_MODE / WEBSITE_AGENT_MODE,
+        # automatically falls back to the rule-based extraction above on
+        # failure or 429 rate-limit)
+        website_data, ai_path_used = enrich_website_data_with_ai(website_data, combined_clean_text)
+        logger.info(f"Website enrichment completed via '{ai_path_used}' path.")
 
         # Step 5: Save structured data
         self.storage.save_website_data(website_data)

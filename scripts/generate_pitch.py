@@ -20,9 +20,8 @@ if hasattr(sys.stdout, 'reconfigure'):
 if hasattr(sys.stderr, 'reconfigure'):
     getattr(sys.stderr, 'reconfigure')(encoding='utf-8')
 
-# Project root setting
-PROJECT_ROOT = Path(__file__).resolve().parent
-sys.path.append(str(PROJECT_ROOT))
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from utils.rfp_parser import RFPParser
 from utils.pitch_compiler import PitchCompiler

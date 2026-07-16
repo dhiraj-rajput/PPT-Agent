@@ -1,200 +1,624 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Plus, SlidersHorizontal, Eye, FileText, MoreHorizontal } from 'lucide-react';
+import { Search, Plus, SlidersHorizontal, Eye, FileText, X, Upload, Check, Loader2, AlertOctagon, Calendar } from 'lucide-react';
 import { PageHeader, Card, MatchBadge, StatusBadge } from '../components/ui/Common.jsx';
-import { companies } from '../data/companies.js';
-
-// Buckets the raw `size` range string (e.g. "1000-5000", "10000+") into a simple
-// Large / Mid / Small / Other category for filtering.
-function sizeCategory(size) {
-  if (!size) return 'Other';
-  const n = parseInt(String(size).replace(/[^0-9]/g, ''), 10);
-  if (Number.isNaN(n)) return 'Other';
-  if (n >= 5000) return 'Large';
-  if (n >= 200) return 'Mid';
-  if (n > 0) return 'Small';
-  return 'Other';
-}
 
 export default function Companies() {
+  // Query & Filters States
   const [query, setQuery] = useState('');
-  const [industry, setIndustry] = useState('All');
   const [sizeFilter, setSizeFilter] = useState('All');
-  const [allCompanies, setAllCompanies] = useState(companies);
+  const [naicsFilter, setNaicsFilter] = useState('All');
+  const [naicsCodes, setNaicsCodes] = useState([]);
+  
+  // Data States
+  const [allCompanies, setAllCompanies] = useState([]);
+  const [totalCompanies, setTotalCompanies] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
+  const [loading, setLoading] = useState(false);
   const itemsPerPage = 20;
 
-  useEffect(() => {
-    fetch('/companies.json')
+  // Add/Import Modal States
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [activeTab, setActiveTab] = useState('manual'); // 'manual' | 'import'
+  const [manualForm, setManualForm] = useState({
+    name: '',
+    uei: '',
+    cage_code: '',
+    primary_naics: '',
+    primary_naics_desc: '',
+    city: '',
+    state: '',
+    country: 'USA',
+    contact: '',
+    email: '',
+    phone: '',
+    size: 'Small',
+    status: 'Active'
+  });
+  const [importFormat, setImportFormat] = useState('csv'); // 'csv' | 'json'
+  const [importData, setImportData] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
+
+  // Fetch companies dynamically from FastAPI backend
+  const fetchCompanies = () => {
+    setLoading(true);
+    const params = new URLSearchParams({
+      page: currentPage.toString(),
+      limit: itemsPerPage.toString(),
+    });
+    if (query) params.append('query', query);
+    if (sizeFilter !== 'All') params.append('size', sizeFilter);
+    if (naicsFilter !== 'All') params.append('naics', naicsFilter);
+
+    fetch(`http://localhost:8000/api/companies?${params.toString()}`)
       .then((res) => {
-        if (!res.ok) throw new Error('Failed to load full dataset');
+        if (!res.ok) throw new Error('Failed to fetch from API');
         return res.json();
       })
       .then((data) => {
-        setAllCompanies(data);
+        setAllCompanies(data.companies || []);
+        setTotalCompanies(data.total || 0);
+        if (data.naics_codes && naicsCodes.length === 0) {
+          setNaicsCodes(data.naics_codes);
+        }
+        setLoading(false);
       })
       .catch((err) => {
-        console.warn("Could not load full companies.json, using fallback companies.js data.", err);
+        console.error('Error fetching companies:', err);
+        setLoading(false);
       });
-  }, []);
+  };
 
-  const industries = useMemo(() => {
-    return ['All', ...new Set(allCompanies.map((c) => c.industry))];
-  }, [allCompanies]);
+  useEffect(() => {
+    fetchCompanies();
+  }, [currentPage, query, sizeFilter, naicsFilter]);
 
-  const filtered = useMemo(() => {
-    return allCompanies.filter((c) => {
-      const q = query.toLowerCase();
-      const matchesQuery = 
-        c.name.toLowerCase().includes(q) || 
-        c.uei.toLowerCase().includes(q) || 
-        c.contact.toLowerCase().includes(q);
-      const matchesIndustry = industry === 'All' || c.industry === industry;
-      const matchesSize = sizeFilter === 'All' || sizeCategory(c.size) === sizeFilter;
-      return matchesQuery && matchesIndustry && matchesSize;
-    });
-  }, [allCompanies, query, industry, sizeFilter]);
-
-  // Reset page when search or filter changes
+  // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [query, industry, sizeFilter]);
+  }, [query, sizeFilter, naicsFilter]);
 
-  const pageCount = Math.ceil(filtered.length / itemsPerPage);
-  const paginatedData = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    return filtered.slice(start, start + itemsPerPage);
-  }, [filtered, currentPage]);
+  const pageCount = Math.ceil(totalCompanies / itemsPerPage);
+
+  // Handle manual company add submission
+  const handleManualSubmit = (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    fetch('http://localhost:8000/api/companies', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(manualForm)
+    })
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to add company');
+        return data;
+      })
+      .then(() => {
+        setIsSubmitting(false);
+        setShowAddModal(false);
+        // Reset form
+        setManualForm({
+          name: '',
+          uei: '',
+          cage_code: '',
+          primary_naics: '',
+          primary_naics_desc: '',
+          city: '',
+          state: '',
+          country: 'USA',
+          contact: '',
+          email: '',
+          phone: '',
+          size: 'Small',
+          status: 'Active'
+        });
+        fetchCompanies();
+      })
+      .catch((err) => {
+        setIsSubmitting(false);
+        setSubmitError(err.message);
+      });
+  };
+
+  // Handle bulk import submission
+  const handleImportSubmit = (e) => {
+    e.preventDefault();
+    if (!importData || !importData.trim()) return;
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    fetch('http://localhost:8000/api/companies/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        format: importFormat,
+        data: importData
+      })
+    })
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to import data');
+        return data;
+      })
+      .then((data) => {
+        setIsSubmitting(false);
+        setShowAddModal(false);
+        setImportData('');
+        fetchCompanies();
+        alert(`Successfully imported ${data.count} new companies.`);
+      })
+      .catch((err) => {
+        setIsSubmitting(false);
+        setSubmitError(err.message);
+      });
+  };
 
   return (
     <div>
       <PageHeader
         title="Companies"
-        subtitle={`${allCompanies.length.toLocaleString()} companies tracked across your pipeline`}
+        subtitle={`${totalCompanies.toLocaleString()} companies loaded from SAM database`}
         action={
-          <button className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-bold text-white shadow-soft hover:bg-brand-600">
+          <button 
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-bold text-white shadow-soft hover:bg-brand-600 transition-colors"
+          >
             <Plus size={16} /> Add Company
           </button>
         }
       />
 
+      {/* Filters Bar */}
       <Card className="!p-4">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex flex-1 min-w-[220px] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 dark:border-navy-700 dark:bg-navy-800">
+          {/* Search Bar */}
+          <div className="flex flex-1 min-w-[240px] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 dark:border-navy-700 dark:bg-navy-800">
             <Search size={16} className="text-slate-400 dark:text-slate-500" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by name, UEI or contact..."
+              placeholder="Search by Legal Name, UEI, or contact..."
               className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-white"
             />
           </div>
-          <select
-            value={industry}
-            onChange={(e) => setIndustry(e.target.value)}
-            className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-800 dark:text-white"
-          >
-            {industries.map((i) => <option key={i}>{i}</option>)}
-          </select>
+
+          {/* Size Filter */}
           <select
             value={sizeFilter}
             onChange={(e) => setSizeFilter(e.target.value)}
-            className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-800 dark:text-white"
+            className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-800 dark:text-white cursor-pointer"
           >
-            {['All', 'Large', 'Mid', 'Small', 'Other'].map((s) => (
-              <option key={s} value={s}>{s === 'All' ? 'All Company Sizes' : `${s} Company`}</option>
+            <option value="All">All Company Sizes</option>
+            <option value="Small">Small Business</option>
+            <option value="Large">Large Business</option>
+          </select>
+
+          {/* NAICS Sector Filter */}
+          <select
+            value={naicsFilter}
+            onChange={(e) => setNaicsFilter(e.target.value)}
+            className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-800 dark:text-white max-w-xs cursor-pointer truncate"
+          >
+            <option value="All">All NAICS Sectors</option>
+            {naicsCodes.map((code) => (
+              <option key={code} value={code}>{code}</option>
             ))}
           </select>
-          <button className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-medium text-navy-900 dark:border-navy-700 dark:bg-navy-800 dark:text-white">
-            <SlidersHorizontal size={15} /> Filters
-          </button>
         </div>
       </Card>
 
-      <Card className="mt-5 !p-0 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 text-left text-[11px] uppercase tracking-wide text-slate-400 dark:border-navy-800 dark:text-slate-400">
-                <th className="px-5 py-3 font-semibold">Company</th>
-                <th className="px-5 py-3 font-semibold">Industry</th>
-                <th className="px-5 py-3 font-semibold">Location</th>
-                <th className="px-5 py-3 font-semibold">Size</th>
-                <th className="px-5 py-3 font-semibold">Revenue</th>
-                <th className="px-5 py-3 font-semibold">Match Score</th>
-                <th className="px-5 py-3 font-semibold">Status</th>
-                <th className="px-5 py-3 font-semibold text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedData.map((c) => (
-                <tr key={c.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 dark:border-navy-800/40 dark:hover:bg-navy-800/40">
-                  <td className="px-5 py-3.5">
-                    <Link to={`/companies/${c.id}`} className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-xs font-bold text-brand-600 dark:bg-navy-800 dark:text-brand-400">
-                        {c.name.slice(0, 2).toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="font-semibold text-navy-900 hover:text-brand-600 dark:text-white dark:hover:text-brand-400 leading-tight">{c.name}</p>
-                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{c.contact}</p>
-                      </div>
-                    </Link>
-                  </td>
-                  <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{c.industry}</td>
-                  <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{c.location}</td>
-                  <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{sizeCategory(c.size)}</td>
-                  <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{c.revenue}</td>
-                  <td className="px-5 py-3.5"><MatchBadge score={c.matchScore} /></td>
-                  <td className="px-5 py-3.5"><StatusBadge status={c.status} /></td>
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center justify-end gap-1 text-slate-400 dark:text-slate-500">
-                      <Link to={`/companies/${c.id}`} className="rounded-lg p-1.5 hover:bg-slate-100 dark:hover:bg-navy-800"><Eye size={14} /></Link>
-                      <button className="rounded-lg p-1.5 hover:bg-slate-100 dark:hover:bg-navy-800"><FileText size={14} /></button>
-                      <button className="rounded-lg p-1.5 hover:bg-slate-100 dark:hover:bg-navy-800"><MoreHorizontal size={14} /></button>
-                    </div>
-                  </td>
+      {/* Main Table */}
+      {loading ? (
+        <Card className="flex flex-col items-center justify-center py-20 mt-5">
+          <Loader2 className="animate-spin text-brand-500" size={32} />
+          <p className="mt-4 text-sm text-slate-500 dark:text-slate-400 font-medium">Loading companies from database...</p>
+        </Card>
+      ) : (
+        <Card className="mt-5 !p-0 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 text-left text-[11px] uppercase tracking-wide text-slate-400 dark:border-navy-800 dark:text-slate-400">
+                  <th className="px-5 py-3 font-semibold w-[30%] min-w-[260px]">Company</th>
+                  <th className="px-5 py-3 font-semibold">UEI / CAGE</th>
+                  <th className="px-5 py-3 font-semibold w-[15%] max-w-[150px]">NAICS Sector</th>
+                  <th className="px-5 py-3 font-semibold">Location</th>
+                  <th className="px-5 py-3 font-semibold">Size</th>
+                  <th className="px-5 py-3 font-semibold">Reg. Expiry</th>
+                  <th className="px-5 py-3 font-semibold">Match Score</th>
+                  <th className="px-5 py-3 font-semibold">Status</th>
                 </tr>
-              ))}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="px-5 py-10 text-center text-slate-400 dark:text-slate-500">
-                    No companies match your search.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {allCompanies.map((c) => (
+                  <tr key={c.uei} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 dark:border-navy-800/40 dark:hover:bg-navy-800/40">
+                    {/* Company Column */}
+                    <td className="px-5 py-3.5 w-[30%] min-w-[260px]">
+                      <Link to={`/companies/${c.uei}`} className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 shrink-0 flex-shrink-0 items-center justify-center rounded-lg bg-brand-50 text-xs font-bold text-brand-600 dark:bg-navy-900 dark:text-brand-400 aspect-square">
+                          {(c.name || '??').slice(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="font-bold text-navy-900 hover:text-brand-600 dark:text-white dark:hover:text-brand-400 leading-tight text-sm">
+                            {c.name || 'Unnamed Company'}
+                          </p>
+                          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{c.contact || c.ebiz_contact || '—'}</p>
+                        </div>
+                      </Link>
+                    </td>
+                    {/* UEI/CAGE Column */}
+                    <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400 font-mono text-xs">
+                      <p>{c.uei || '—'}</p>
+                      {c.cage_code && <p className="text-[10px] text-slate-400 mt-0.5">CAGE: {c.cage_code}</p>}
+                    </td>
+                    {/* NAICS Sector Column */}
+                    <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400 text-xs w-[15%] max-w-[150px]">
+                      <p className="font-semibold text-navy-900 dark:text-slate-300">{c.primary_naics || '—'}</p>
+                      <p className="mt-0.5 text-slate-400 dark:text-slate-500 truncate" title={c.primary_naics_desc}>{c.primary_naics_desc || ''}</p>
+                    </td>
+                    {/* Location Column */}
+                    <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400 text-xs">
+                      {c.location || (c.city && c.state ? `${c.city}, ${c.state}` : c.city || c.state || '—')}
+                    </td>
+                    {/* Size Column */}
+                    <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-semibold whitespace-nowrap ${
+                        c.size === 'Small' 
+                          ? 'bg-sky-50 text-sky-700 dark:bg-sky-950/20 dark:text-sky-400' 
+                          : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/20 dark:text-indigo-400'
+                      }`}>
+                        {c.size || 'Unknown'} Business
+                      </span>
+                    </td>
+                    {/* Registration Expiry */}
+                    <td className="px-5 py-3.5 text-xs">
+                      {c.expiration_date ? (
+                        <span className={`flex items-center gap-1 font-mono ${
+                          new Date(c.expiration_date) < new Date()
+                            ? 'text-rose-500'
+                            : new Date(c.expiration_date) < new Date(Date.now() + 90 * 86400000)
+                            ? 'text-amber-600'
+                            : 'text-slate-500 dark:text-slate-400'
+                        }`}>
+                          <Calendar size={11} />
+                          {c.expiration_date}
+                        </span>
+                      ) : <span className="text-slate-300">—</span>}
+                    </td>
+                    {/* Match Score Column */}
+                    <td className="px-5 py-3.5"><MatchBadge score={c.matchScore ?? c.match_score} /></td>
+                    {/* Status Column */}
+                    <td className="px-5 py-3.5">
+                      <div className="flex flex-col gap-1">
+                        <StatusBadge status={c.status} />
+                        {c.exclusions === 'Y' && (
+                          <span className="flex items-center gap-0.5 text-[10px] font-bold text-rose-500">
+                            <AlertOctagon size={10} /> Excluded
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {allCompanies.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="px-5 py-10 text-center text-slate-400 dark:text-slate-500">
+                      No companies match your search and filter criteria.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
 
-        {/* Pagination Controls */}
-        {pageCount > 1 && (
-          <div className="flex items-center justify-between border-t border-slate-100 p-4 dark:border-navy-800">
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Showing <span className="font-semibold text-navy-900 dark:text-white">{(currentPage - 1) * itemsPerPage + 1}</span> to{' '}
-              <span className="font-semibold text-navy-900 dark:text-white">
-                {Math.min(currentPage * itemsPerPage, filtered.length)}
-              </span>{' '}
-              of <span className="font-semibold text-navy-900 dark:text-white">{filtered.length.toLocaleString()}</span> companies
-            </p>
-            <div className="flex gap-2">
-              <button
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage((p) => p - 1)}
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-navy-900 hover:bg-slate-50 disabled:opacity-50 dark:border-navy-700 dark:text-white dark:hover:bg-navy-800"
-              >
-                Previous
-              </button>
-              <button
-                disabled={currentPage === pageCount}
-                onClick={() => setCurrentPage((p) => p + 1)}
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-navy-900 hover:bg-slate-50 disabled:opacity-50 dark:border-navy-700 dark:text-white dark:hover:bg-navy-800"
-              >
-                Next
+          {/* Pagination Controls */}
+          {pageCount > 1 && (
+            <div className="flex items-center justify-between border-t border-slate-100 p-4 dark:border-navy-800">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Showing <span className="font-semibold text-navy-900 dark:text-white">{(currentPage - 1) * itemsPerPage + 1}</span> to{' '}
+                <span className="font-semibold text-navy-900 dark:text-white">
+                  {Math.min(currentPage * itemsPerPage, totalCompanies)}
+                </span>{' '}
+                of <span className="font-semibold text-navy-900 dark:text-white">{totalCompanies.toLocaleString()}</span> companies
+              </p>
+              <div className="flex gap-2">
+                <button
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage((p) => p - 1)}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-navy-900 hover:bg-slate-50 disabled:opacity-50 dark:border-navy-700 dark:text-white dark:hover:bg-navy-800 transition-colors"
+                >
+                  Previous
+                </button>
+                <button
+                  disabled={currentPage === pageCount}
+                  onClick={() => setCurrentPage((p) => p + 1)}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-navy-900 hover:bg-slate-50 disabled:opacity-50 dark:border-navy-700 dark:text-white dark:hover:bg-navy-800 transition-colors"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Add & Import Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/80 p-4 backdrop-blur-md" onClick={() => setShowAddModal(false)}>
+          <div 
+            className="w-full max-w-2xl rounded-2xl bg-white dark:bg-navy-800 shadow-2xl overflow-hidden border border-slate-100 dark:border-navy-700 flex flex-col max-h-[90vh]" 
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-navy-700 p-5 shrink-0 bg-white dark:bg-navy-800">
+              <div>
+                <h3 className="text-base font-extrabold text-navy-900 dark:text-white">Add New Company</h3>
+                <p className="text-xs text-slate-400 mt-1">Add a single company or import datasets into the collection</p>
+              </div>
+              <button onClick={() => setShowAddModal(false)} className="rounded-lg p-2 text-slate-400 hover:text-navy-950 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-navy-900 transition-colors">
+                <X size={18} />
               </button>
             </div>
+
+            {/* Modal Tabs */}
+            <div className="flex border-b border-slate-100 dark:border-navy-700 bg-slate-50 dark:bg-navy-900 shrink-0">
+              <button 
+                onClick={() => setActiveTab('manual')}
+                className={`flex-1 py-3 text-xs font-bold border-b-2 transition-colors ${
+                  activeTab === 'manual' 
+                    ? 'border-brand-500 text-brand-600 dark:text-brand-400 bg-white dark:bg-navy-800' 
+                    : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+                }`}
+              >
+                Manually Enter Details
+              </button>
+              <button 
+                onClick={() => setActiveTab('import')}
+                className={`flex-1 py-3 text-xs font-bold border-b-2 transition-colors ${
+                  activeTab === 'import' 
+                    ? 'border-brand-500 text-brand-600 dark:text-brand-400 bg-white dark:bg-navy-800' 
+                    : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+                }`}
+              >
+                Import CSV / JSON
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-5">
+              {submitError && (
+                <div className="mb-4 rounded-xl bg-rose-50 border border-rose-100 p-3 text-xs font-semibold text-rose-600 dark:bg-rose-950/20 dark:border-rose-900/30 dark:text-rose-400">
+                  Error: {submitError}
+                </div>
+              )}
+
+              {activeTab === 'manual' ? (
+                <form onSubmit={handleManualSubmit} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Name */}
+                    <div>
+                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">Legal Business Name *</label>
+                      <input 
+                        required
+                        value={manualForm.name}
+                        onChange={(e) => setManualForm({...manualForm, name: e.target.value})}
+                        placeholder="Company Name"
+                        className="w-full text-xs rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 outline-none focus:border-brand-400 focus:bg-white dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                      />
+                    </div>
+                    {/* UEI */}
+                    <div>
+                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">Unique Entity ID (UEI) *</label>
+                      <input 
+                        required
+                        value={manualForm.uei}
+                        onChange={(e) => setManualForm({...manualForm, uei: e.target.value})}
+                        placeholder="12-character ID"
+                        className="w-full text-xs rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 outline-none focus:border-brand-400 focus:bg-white dark:border-navy-700 dark:bg-navy-900 dark:text-white font-mono"
+                      />
+                    </div>
+                    {/* CAGE Code */}
+                    <div>
+                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">CAGE Code</label>
+                      <input 
+                        value={manualForm.cage_code}
+                        onChange={(e) => setManualForm({...manualForm, cage_code: e.target.value})}
+                        placeholder="5-character CAGE"
+                        className="w-full text-xs rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 outline-none focus:border-brand-400 focus:bg-white dark:border-navy-700 dark:bg-navy-900 dark:text-white font-mono"
+                      />
+                    </div>
+                    {/* Size */}
+                    <div>
+                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">Business Size</label>
+                      <select 
+                        value={manualForm.size}
+                        onChange={(e) => setManualForm({...manualForm, size: e.target.value})}
+                        className="w-full text-xs rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 outline-none focus:border-brand-400 focus:bg-white dark:border-navy-700 dark:bg-navy-900 dark:text-white cursor-pointer"
+                      >
+                        <option value="Small">Small Business</option>
+                        <option value="Large">Large Business</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-slate-100 dark:border-navy-700 pt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Primary NAICS */}
+                    <div>
+                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">Primary NAICS Code</label>
+                      <input 
+                        value={manualForm.primary_naics}
+                        onChange={(e) => setManualForm({...manualForm, primary_naics: e.target.value})}
+                        placeholder="e.g. 541511"
+                        className="w-full text-xs rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 outline-none focus:border-brand-400 focus:bg-white dark:border-navy-700 dark:bg-navy-900 dark:text-white font-mono"
+                      />
+                    </div>
+                    {/* NAICS Desc */}
+                    <div>
+                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">NAICS Description</label>
+                      <input 
+                        value={manualForm.primary_naics_desc}
+                        onChange={(e) => setManualForm({...manualForm, primary_naics_desc: e.target.value})}
+                        placeholder="e.g. Custom Computer Programming Services"
+                        className="w-full text-xs rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 outline-none focus:border-brand-400 focus:bg-white dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="border-t border-slate-100 dark:border-navy-700 pt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* City */}
+                    <div>
+                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">City</label>
+                      <input 
+                        value={manualForm.city}
+                        onChange={(e) => setManualForm({...manualForm, city: e.target.value})}
+                        placeholder="City"
+                        className="w-full text-xs rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 outline-none focus:border-brand-400 focus:bg-white dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                      />
+                    </div>
+                    {/* State */}
+                    <div>
+                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">State / Province</label>
+                      <input 
+                        value={manualForm.state}
+                        onChange={(e) => setManualForm({...manualForm, state: e.target.value})}
+                        placeholder="State"
+                        className="w-full text-xs rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 outline-none focus:border-brand-400 focus:bg-white dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                      />
+                    </div>
+                    {/* Country */}
+                    <div>
+                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">Country</label>
+                      <input 
+                        value={manualForm.country}
+                        onChange={(e) => setManualForm({...manualForm, country: e.target.value})}
+                        placeholder="Country"
+                        className="w-full text-xs rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 outline-none focus:border-brand-400 focus:bg-white dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="border-t border-slate-100 dark:border-navy-700 pt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Gov Contact */}
+                    <div>
+                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">Contact Name</label>
+                      <input 
+                        value={manualForm.contact}
+                        onChange={(e) => setManualForm({...manualForm, contact: e.target.value})}
+                        placeholder="Contact Person"
+                        className="w-full text-xs rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 outline-none focus:border-brand-400 focus:bg-white dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                      />
+                    </div>
+                    {/* Email */}
+                    <div>
+                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">Contact Email</label>
+                      <input 
+                        type="email"
+                        value={manualForm.email}
+                        onChange={(e) => setManualForm({...manualForm, email: e.target.value})}
+                        placeholder="Email Address"
+                        className="w-full text-xs rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 outline-none focus:border-brand-400 focus:bg-white dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                      />
+                    </div>
+                    {/* Phone */}
+                    <div>
+                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">Contact Phone</label>
+                      <input 
+                        value={manualForm.phone}
+                        onChange={(e) => setManualForm({...manualForm, phone: e.target.value})}
+                        placeholder="Phone Number"
+                        className="w-full text-xs rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 outline-none focus:border-brand-400 focus:bg-white dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Manual Footer */}
+                  <div className="flex justify-end gap-3 border-t border-slate-100 dark:border-navy-700 pt-5 mt-5">
+                    <button 
+                      type="button"
+                      onClick={() => setShowAddModal(false)}
+                      className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-semibold text-navy-900 hover:bg-slate-50 dark:border-navy-700 dark:bg-navy-800 dark:text-white dark:hover:bg-navy-700 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="flex items-center justify-center gap-1.5 rounded-xl bg-brand-500 px-5 py-2.5 text-xs font-bold text-white shadow-soft hover:bg-brand-600 transition-colors disabled:opacity-75"
+                    >
+                      {isSubmitting ? <Loader2 className="animate-spin" size={14} /> : <Check size={14} />}
+                      Save Details
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <form onSubmit={handleImportSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">Import Format</label>
+                    <div className="flex gap-4">
+                      <label className="flex items-center gap-1.5 text-xs font-medium text-navy-900 dark:text-white cursor-pointer">
+                        <input 
+                          type="radio" 
+                          checked={importFormat === 'csv'}
+                          onChange={() => setImportFormat('csv')}
+                          className="text-brand-500 focus:ring-brand-500" 
+                        />
+                        CSV String (with headers)
+                      </label>
+                      <label className="flex items-center gap-1.5 text-xs font-medium text-navy-900 dark:text-white cursor-pointer">
+                        <input 
+                          type="radio" 
+                          checked={importFormat === 'json'}
+                          onChange={() => setImportFormat('json')}
+                          className="text-brand-500 focus:ring-brand-500" 
+                        />
+                        JSON Array of Objects
+                      </label>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">Paste Data Here *</label>
+                    <textarea 
+                      required
+                      value={importData}
+                      onChange={(e) => setImportData(e.target.value)}
+                      rows={10}
+                      placeholder={importFormat === 'csv' 
+                        ? "UEI,Legal_Business_Name,Registration_Status,Primary_NAICS_Code,Primary_NAICS_Description,Is_Small_Business,Gov_Contact_Name,Gov_Contact_Email\nXYZ123,Hope Pulse,Active,541511,Computer Programming,Y,John,john@hope.com" 
+                        : "[\n  {\n    \"uei\": \"XYZ123\",\n    \"name\": \"Hope Pulse\",\n    \"status\": \"Active\",\n    \"primary_naics\": \"541511\",\n    \"primary_naics_desc\": \"Computer Programming\"\n  }\n]"
+                      }
+                      className="w-full text-xs font-mono rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 outline-none focus:border-brand-400 focus:bg-white dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                    />
+                  </div>
+
+                  {/* Import Footer */}
+                  <div className="flex justify-end gap-3 border-t border-slate-100 dark:border-navy-700 pt-5 mt-5">
+                    <button 
+                      type="button"
+                      onClick={() => setShowAddModal(false)}
+                      className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-semibold text-navy-900 hover:bg-slate-50 dark:border-navy-700 dark:bg-navy-800 dark:text-white dark:hover:bg-navy-700 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="flex items-center justify-center gap-1.5 rounded-xl bg-brand-500 px-5 py-2.5 text-xs font-bold text-white shadow-soft hover:bg-brand-600 transition-colors disabled:opacity-75"
+                    >
+                      {isSubmitting ? <Loader2 className="animate-spin" size={14} /> : <Upload size={14} />}
+                      Bulk Import
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
           </div>
-        )}
-      </Card>
+        </div>
+      )}
     </div>
   );
 }

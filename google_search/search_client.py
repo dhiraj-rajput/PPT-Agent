@@ -108,6 +108,54 @@ class CompanyDiscovery:
     # Public search methods
     # ---------------------------------------------------------------------------
 
+    def _verify_search_result_match(self, company_name: str, url: str, title: str, snippet: str) -> bool:
+        """
+        Verify if the search result title, snippet, or URL is a good match for the company_name.
+        """
+        name_lower = company_name.lower()
+        title_lower = title.lower()
+        snippet_lower = snippet.lower()
+        url_lower = url.lower()
+
+        # Clean words of company name into key tokens
+        words = re.sub(r'[^a-z0-9\s]+', '', name_lower).split()
+        stop_words = {
+            "inc", "llc", "ltd", "corp", "co", "and", "the", "for", "solutions", 
+            "systems", "services", "group", "company", "corporation", "association",
+            "foundation", "community", "development", "international", "agency", "services"
+        }
+        distinctive_tokens = [w for w in words if w not in stop_words and len(w) > 2]
+
+        if not distinctive_tokens:
+            return True
+
+        # Check domain match first (e.g. if company name has a distinct token, and domain has it too)
+        domain = self._get_domain(url) or ""
+        domain_lower = domain.lower()
+        
+        generic_brand_words = {
+            "hope", "group", "center", "centre", "alliance", "union", "care", "trust", 
+            "hands", "partnership", "house", "people", "global", "national", "united"
+        }
+        
+        for token in distinctive_tokens:
+            if token in domain_lower and token not in generic_brand_words:
+                return True
+
+        # Otherwise, check keyword match in title or snippet
+        matches = [t for t in distinctive_tokens if t in title_lower or t in snippet_lower]
+        if not matches:
+            return False
+
+        # If it's a multi-word distinct brand, prevent single matches of generic words
+        # (e.g. "Hope" matching "Buckeye Community Hope" when the target is "Hope Pulse")
+        if len(distinctive_tokens) >= 2 and len(matches) < 2:
+            for t in ["pulse", "unique", "avanya"]:
+                if t in distinctive_tokens and t not in matches:
+                    return False
+
+        return len(matches) / len(distinctive_tokens) >= 0.5
+
     def find_official_website(self, company_name: str) -> Optional[str]:
         """
         Search for a company's official website using Tavily.
@@ -126,11 +174,15 @@ class CompanyDiscovery:
         results = self._tavily_search(query)
         for r in results:
             url = r.get("url", "")
+            title = r.get("title", "")
+            snippet = r.get("content", "")
             # Skip LinkedIn, Wikipedia, social media, aggregator sites
             if url and self._is_likely_official_site(url, company_name):
-                self._save_cache(query, {"website_url": url})
-                logger.info(f"Found official website: {url} (query='{query}')")
-                return url
+                # Verify match
+                if self._verify_search_result_match(company_name, url, title, snippet):
+                    self._save_cache(query, {"website_url": url})
+                    logger.info(f"Found official website: {url} (query='{query}')")
+                    return url
 
         logger.warning(f"Could not find official website for: {company_name}")
         return None
@@ -153,11 +205,15 @@ class CompanyDiscovery:
         results = self._tavily_search(query)
         for r in results:
             url = r.get("url", "")
+            title = r.get("title", "")
+            snippet = r.get("content", "")
             if "linkedin.com/company/" in url:
-                clean_url = self._normalize_linkedin_url(url)
-                self._save_cache(query, {"linkedin_url": clean_url})
-                logger.info(f"Found LinkedIn URL: {clean_url} (query='{query}')")
-                return clean_url
+                # Verify match
+                if self._verify_search_result_match(company_name, url, title, snippet):
+                    clean_url = self._normalize_linkedin_url(url)
+                    self._save_cache(query, {"linkedin_url": clean_url})
+                    logger.info(f"Found LinkedIn URL: {clean_url} (query='{query}')")
+                    return clean_url
 
         logger.warning(f"Could not find LinkedIn URL for: {company_name}")
         return None

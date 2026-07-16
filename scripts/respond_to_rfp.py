@@ -35,7 +35,7 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     getattr(sys.stderr, "reconfigure")(encoding="utf-8")
 
-PROJECT_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from utils.rfp_parser import RFPParser
@@ -75,19 +75,35 @@ def _load_winner_profile(winner_name: str) -> dict:
             profile.pop("_id", None)
             logger.info(f"Loaded winner profile from MongoDB: {winner_name}")
             return profile
+            
+        # Try database fuzzy match using keyword overlap
+        common = {"inc", "llc", "ltd", "corp", "corporation", "co", "company", "foundation", "for", "and", "the", "of", "community", "development", "group", "services", "solutions", "tech", "technology"}
+        words = [w.lower() for w in winner_name.split() if w.lower() not in common and len(w) > 2]
+        if words:
+            for p in col.find({}):
+                p_name = p.get("company_name", "").lower()
+                p_slug = p.get("company_slug", "").lower()
+                if any(w in p_name or w in p_slug for w in words):
+                    p.pop("_id", None)
+                    logger.info(f"Loaded winner profile from MongoDB (fuzzy keyword match): {p.get('company_name')}")
+                    return p
     except Exception as e:
         logger.warning(f"Could not load winner profile from DB: {e}")
 
     # Try disk
     json_dir = PROJECT_ROOT / "output" / "json"
-    slug = winner_name.lower().replace(" ", "_").replace(",", "").replace(".", "")[:30]
-    for path in json_dir.glob(f"*{slug[:10]}*_profile.json"):
-        try:
-            with open(path, encoding="utf-8") as f:
-                logger.info(f"Loaded winner profile from disk: {path}")
-                return json.load(f)
-        except Exception:
-            pass
+    words = [w.lower().replace(",", "").replace(".", "") for w in winner_name.split() if len(w) > 2]
+    if not words:
+        words = [winner_name.lower()]
+    for path in json_dir.glob("*.json"):
+        clean_path_name = path.name.lower()
+        if any(w in clean_path_name for w in words):
+            try:
+                with open(path, encoding="utf-8") as f:
+                    logger.info(f"Loaded winner profile from disk (fuzzy match): {path}")
+                    return json.load(f)
+            except Exception:
+                pass
 
     logger.warning(f"No profile found for winner: {winner_name}. Using empty profile.")
     return {"company_name": winner_name}
@@ -299,6 +315,56 @@ def run_subcontract_mode(args: argparse.Namespace) -> str:
 
     return pdf_path
 
+def run_partnership_mode(args: argparse.Namespace) -> str:
+    """
+    Mode C — B2B Partnership and Joint Value Proposition.
+    """
+    partner_name = args.winner
+
+    print(f"\n{'=' * 70}")
+    print(f"  B2B PARTNERSHIP PROPOSAL")
+    print(f"  Partner: {partner_name}")
+    print(f"{'=' * 70}\n")
+
+    # Clean existing generated documents for this partner/mode
+    pdf_out_dir = PROJECT_ROOT / "output" / "pdf"
+    safe_partner_name = "".join(c if c.isalnum() else "_" for c in partner_name).lower()
+    if pdf_out_dir.exists():
+        for old_file in pdf_out_dir.glob(f"{safe_partner_name}_partnership_proposal.*"):
+            try:
+                old_file.unlink()
+                print(f"  Cleared old generated file: {old_file.name}")
+            except Exception:
+                pass
+
+    # 1. Load partner company profile
+    print(f"Step 1: Loading partner company profile for '{partner_name}'...")
+    partner_profile = _load_winner_profile(partner_name)
+    print("  ✓ Profile ready.")
+
+    # 2. Build sections (LLM-based)
+    print("\nStep 2: Building partnership proposal sections via Ollama LLM...")
+    gen = RFPResponseGenerator(project_root=str(PROJECT_ROOT))
+    sections = gen.generate_partnership_sections(partner_profile=partner_profile)
+    print(f"  ✓ Sections built: {list(sections.keys())[:5]}...")
+
+    # 3. Generate PDF
+    proj_title = args.title or f"Strategic Partnership Proposal"
+    
+    print("\nStep 3: Generating DOCX-styled PDF...")
+    pdf_path = generate_rfp_response_pdf(
+        solicitation_number=safe_partner_name,
+        mode="partnership",
+        sections=sections,
+        agency_name=partner_name,
+        proposal_title=proj_title,
+        winner_name=partner_name,
+        project_root=str(PROJECT_ROOT),
+    )
+    print(f"  ✓ PDF saved to: {pdf_path}")
+
+    return pdf_path
+
 
 # ---------------------------------------------------------------------------
 # CLI
@@ -313,28 +379,29 @@ def main() -> None:
 Examples:
   python respond_to_rfp.py --solicitation N00178-26-R-3001 --mode prime
   python respond_to_rfp.py --solicitation 36C24626Q0420 --mode subcontract --winner "Guidehouse LLP"
-  python respond_to_rfp.py --solicitation DHS-2026-RFP-0043 --mode prime --agency "DHS" --title "IT Modernization Proposal"
+  python respond_to_rfp.py --mode partnership --winner "Often Inc"
         """,
     )
 
     parser.add_argument(
         "--solicitation", "-s",
         type=str,
-        required=True,
-        help="Solicitation number (e.g. N00178-26-R-3001)",
+        required=False,
+        default=None,
+        help="Solicitation number (required for 'prime' and 'subcontract' modes)",
     )
     parser.add_argument(
         "--mode", "-m",
         type=str,
-        choices=["prime", "subcontract"],
+        choices=["prime", "subcontract", "partnership"],
         default="prime",
-        help="Response mode: 'prime' (respond to agency) or 'subcontract' (teaming to winner)",
+        help="Response mode: 'prime' (respond to agency), 'subcontract' (teaming to winner), or 'partnership' (B2B partnership)",
     )
     parser.add_argument(
         "--winner", "-w",
         type=str,
         default=None,
-        help="Prime contractor name. Looked up from DB if not specified.",
+        help="Prime contractor/partner name.",
     )
     parser.add_argument(
         "--workshare",
@@ -357,29 +424,41 @@ Examples:
 
     args = parser.parse_args()
 
+    # Validate arguments based on mode
+    if args.mode != "partnership" and not args.solicitation:
+        print("❌ Error: --solicitation is required for 'prime' and 'subcontract' modes.")
+        sys.exit(1)
+
+    if args.mode == "partnership" and not args.winner:
+        print("❌ Error: --winner (partner company name) is required for 'partnership' mode.")
+        sys.exit(1)
+
     # Validate workshare
     if not (10.0 <= args.workshare <= 20.0):
         print(f"❌ Error: --workshare must be between 10.0 and 20.0 (got {args.workshare})")
         sys.exit(1)
 
+    sol_label = args.solicitation if args.solicitation else f"N/A (B2B for {args.winner})"
     print(f"""
 ╔══════════════════════════════════════════════════════════════════════╗
 ║      OrbitAvanya Tech LLP — RFP Response Generator                  ║
 ║      Mode: {args.mode.upper():<58s}║
-║      Solicitation: {args.solicitation:<50s}║
+║      Solicitation: {sol_label:<50s}║
 ╚══════════════════════════════════════════════════════════════════════╝""")
 
     try:
         if args.mode == "prime":
             pdf_path = run_prime_mode(args)
-        else:
+        elif args.mode == "subcontract":
             pdf_path = run_subcontract_mode(args)
+        else:
+            pdf_path = run_partnership_mode(args)
 
         print(f"\n{'=' * 70}")
         print(f"  ✅ SUCCESS")
         print(f"  PDF: {pdf_path}")
         print(f"  Mode: {args.mode.upper()}")
-        print(f"  Solicitation: {args.solicitation}")
+        print(f"  Solicitation: {sol_label}")
         print(f"  Generated at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"{'=' * 70}\n")
 

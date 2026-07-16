@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Building2, FileStack, BrainCircuit, FileEdit, Mail,
   Kanban, Calendar, CheckSquare, BarChart3, FileBarChart, Users,
-  Plug, Settings, ChevronLeft, Sparkles
+  Plug, Settings, ChevronLeft, Sparkles, Zap
 } from 'lucide-react';
 
 const topNav = [
@@ -16,6 +16,7 @@ const bizNav = [
   { to: '/tenders', label: 'Tenders', icon: FileStack },
   { to: '/ai-research', label: 'AI Research', icon: BrainCircuit },
   { to: '/proposal-builder', label: 'Proposal Builder', icon: FileEdit },
+  { to: '/rfp-auto-respond', label: 'RFP Auto-Respond', icon: Zap },
   { to: '/email-campaign', label: 'Email Campaign', icon: Mail },
   { to: '/meetings', label: 'Meetings', icon: Calendar },
 ];

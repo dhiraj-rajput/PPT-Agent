@@ -11,6 +11,15 @@ try:
 except ImportError:
     USE_MUPDF = False
 
+# OCR (only needed for scanned/image-only pages — soft dependency)
+try:
+    import pytesseract  # type: ignore
+    from PIL import Image
+    import io as _io
+    _OCR_AVAILABLE = True
+except ImportError:
+    _OCR_AVAILABLE = False
+
 from utils.helpers import setup_logger
 
 logger = setup_logger(__name__)
@@ -54,7 +63,10 @@ class RFPParser:
         self.rfp_docs_dir = self.project_root / "downloads" / "opportunities" / solicitation_number / "rfp_docs"
 
     def extract_text_from_pdfs(self) -> Dict[str, str]:
-        """Reads all PDF documents in the solicitation directory and extracts their text."""
+        """Reads all PDF documents in the solicitation directory and extracts
+        their text. Pages with little/no extractable text layer (i.e. scanned
+        or image-only pages) are rasterized and OCR'd, controlled by
+        settings.OCR_ENABLED / OCR_MIN_CHARS_PER_PAGE."""
         extracted_text = {}
         if not self.rfp_docs_dir.exists():
             logger.warning(f"RFP docs directory not found: {self.rfp_docs_dir}")
@@ -66,33 +78,142 @@ class RFPParser:
         for pdf_path in pdf_files:
             filename = pdf_path.name
             logger.info(f"Extracting text from: {filename}")
-            text = ""
-            
-            if USE_MUPDF:
-                try:
-                    doc = fitz.open(pdf_path)
-                    text_pages = [str(page.get_text()) for page in doc]
-                    text = "\n\n".join(text_pages)
-                    doc.close()
-                except Exception as e:
-                    logger.error(f"PyMuPDF failed to extract {filename}: {e}. Falling back to pypdf.")
-                    
-            if not text:
-                try:
-                    reader = pypdf.PdfReader(pdf_path)
-                    text_pages = []
-                    for page in reader.pages:
-                        page_text = page.extract_text()
-                        if page_text:
-                            text_pages.append(page_text)
-                    text = "\n\n".join(text_pages)
-                except Exception as e:
-                    logger.error(f"pypdf failed to extract {filename}: {e}")
-
-            extracted_text[filename] = text
+            extracted_text[filename] = self._extract_text_from_single_pdf(pdf_path)
         return extracted_text
 
+    def _extract_text_from_single_pdf(self, pdf_path: Path) -> str:
+        """Extract text page-by-page, OCR'ing any page whose text layer is
+        too thin to be a real extraction (scanned page, image-only page)."""
+        from config.settings import settings
+        ocr_enabled = getattr(settings, "OCR_ENABLED", True) and _OCR_AVAILABLE and USE_MUPDF
+        min_chars = getattr(settings, "OCR_MIN_CHARS_PER_PAGE", 40)
+
+        page_texts: List[str] = []
+        ocr_page_count = 0
+
+        if USE_MUPDF:
+            try:
+                doc: Any = fitz.open(pdf_path)
+                for page_index, page in enumerate(doc):
+                    page_text = str(page.get_text()) or ""
+                    if len(page_text.strip()) < min_chars:
+                        if ocr_enabled:
+                            ocr_text = self._ocr_page(page)
+                            if ocr_text.strip():
+                                ocr_page_count += 1
+                                page_text = ocr_text
+                    page_texts.append(page_text)
+                doc.close()
+                if ocr_page_count:
+                    logger.info(f"[RFPParser] OCR'd {ocr_page_count} scanned/image page(s) in {pdf_path.name}")
+                return "\n\n".join(page_texts)
+            except Exception as e:
+                logger.error(f"PyMuPDF failed to extract {pdf_path.name}: {e}. Falling back to pypdf.")
+
+        # pypdf fallback (no per-page OCR available here — pypdf has no rasterizer)
+        try:
+            reader = pypdf.PdfReader(pdf_path)
+            for page in reader.pages:
+                pt = page.extract_text()
+                if pt:
+                    page_texts.append(pt)
+            return "\n\n".join(page_texts)
+        except Exception as e:
+            logger.error(f"pypdf failed to extract {pdf_path.name}: {e}")
+            return ""
+
+    @staticmethod
+    def _ocr_page(fitz_page, dpi: int = 200) -> str:
+        """Rasterize a single PyMuPDF page and run Tesseract OCR on it."""
+        try:
+            zoom = dpi / 72.0
+            matrix = fitz.Matrix(zoom, zoom)
+            pix = fitz_page.get_pixmap(matrix=matrix)
+            img = Image.open(_io.BytesIO(pix.tobytes("png")))
+            return pytesseract.image_to_string(img)
+        except Exception as e:
+            logger.warning(f"[RFPParser] OCR failed for a page: {e}")
+            return ""
+
     def parse_requirements(self, doc_texts: Dict[str, str]) -> Dict[str, Any]:
+        """
+        Parses extracted RFP text into a structured requirements dict.
+        Governed by the global AI_MODE toggle (RFP_PARSER_MODE override):
+        tries AI comprehension first (understands intent/context, not just
+        keyword matches), automatically falls back to the deterministic
+        regex-pattern parser on failure or 429 rate-limit.
+        """
+        from ai.mode import run_with_fallback
+
+        parsed_data, path_used = run_with_fallback(
+            "rfp_parser",
+            ai_fn=lambda: self._parse_requirements_ai(doc_texts),
+            rule_fn=lambda: self._parse_requirements_rules(doc_texts),
+        )
+        parsed_data["parsed_via"] = path_used
+        logger.info(f"[RFPParser] Requirements parsed via '{path_used}' path.")
+        return parsed_data
+
+    def _parse_requirements_ai(self, doc_texts: Dict[str, str]) -> Dict[str, Any]:
+        """
+        Uses the LLM to actually read and understand the RFP text (rather
+        than pattern-match against a fixed keyword list), producing the
+        same structured shape as the rule-based parser so downstream code
+        (rfp_response_generator, pdf rendering) doesn't need to change.
+        """
+        from ai.client import get_ai_client
+
+        combined_text = "\n\n".join(doc_texts.values())
+        # Ollama Cloud context is generous but not unlimited — trim conservatively.
+        text_sample = combined_text[:24000]
+
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a government-contracting RFP analyst. Read the solicitation text and "
+                    "extract a structured requirements summary. Respond ONLY with a JSON object with keys: "
+                    "metadata (object: issuing_agency, project_title, naics_code, deadline, set_aside), "
+                    "security_requirements (array of {standard, requirement_desc, status}), "
+                    "technical_requirements (array of {capability, requirement_desc, status}), "
+                    "facility_requirements (array of {feature, requirement_desc, status}), "
+                    "summary (2-4 sentence plain-English summary of what is being solicited). "
+                    "status should be one of 'Required', 'Optional', 'Information'. "
+                    "Base everything strictly on the provided text — do not invent requirements."
+                ),
+            },
+            {"role": "user", "content": f"Solicitation {self.solicitation_number} text:\n\n{text_sample}"},
+        ]
+        ai_result = get_ai_client().chat_json(messages)
+
+        security = ai_result.get("security_requirements", []) or []
+        technical = ai_result.get("technical_requirements", []) or []
+        facility = ai_result.get("facility_requirements", []) or []
+        metadata = {
+            "solicitation_number": self.solicitation_number,
+            "issuing_agency": "Federal Agency",
+            "project_title": "Enterprise Software Engagement",
+            "naics_code": "541511",
+            "deadline": "N/A",
+            "set_aside": "N/A",
+        }
+        metadata.update({k: v for k, v in (ai_result.get("metadata") or {}).items() if v})
+
+        return {
+            "solicitation_number": self.solicitation_number,
+            "metadata": metadata,
+            "security_requirements": security,
+            "technical_requirements": technical,
+            "facility_requirements": facility,
+            "identified_components": {
+                "security": [r.get("standard", "") for r in security if r.get("standard")],
+                "technical": [r.get("capability", "") for r in technical if r.get("capability")],
+                "layout": [r.get("feature", "") for r in facility if r.get("feature")],
+            },
+            "summary": ai_result.get("summary", ""),
+        }
+
+    def _parse_requirements_rules(self, doc_texts: Dict[str, str]) -> Dict[str, Any]:
         """Scans extracted text for patterns and classifies findings into a structured dict."""
         parsed_data = {
             "solicitation_number": self.solicitation_number,

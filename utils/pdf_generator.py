@@ -156,12 +156,20 @@ class PDFGenerator:
             "it to the same standard and to use it solely for the purposes of the engagement contemplated herein."
         )
 
+        is_mock = (
+            not solicitation_number 
+            or solicitation_number.lower() in ("unknown", "none", "n/a")
+            or solicitation_number.lower().startswith("mock")
+        )
+        title_text = "Teaming & Collaboration Proposal" if is_mock else "Teaming & Subcontracting Proposal"
+        safe_ref_suffix = proposal["prime_contractor"].get("company_name", "PARTNER").upper().replace(" ", "_") if is_mock else solicitation_number.upper()
+        
         proposal_meta = {
-            "title": "Teaming & Subcontracting Proposal",
+            "title": title_text,
             "subtitle": proposal["metadata"].get("project_title", "IT Services Engagement"),
             "prepared_for": proposal["prime_contractor"].get("company_name", "Prime Contractor"),
             "prepared_by": "Ranjeet Kumar — Founder & CEO, OrbitAvanya Tech LLP (AvanyaEdge)",
-            "engagement_ref": f"OAT-CES-2026-{solicitation_number.upper()}-PITCH",
+            "engagement_ref": f"OAT-CES-2026-{safe_ref_suffix}-PITCH",
             "proposal_date": proposal["proposal_settings"].get("proposal_date", datetime.now().strftime("%B %d, %Y")),
             "validity": "90 days from proposal date",
             "confidentiality_text": confidentiality_text
@@ -198,15 +206,25 @@ class PDFGenerator:
 
         # Section 2: Requirement Alignment Matrices
         align_blocks = []
+        align_text = (
+            "The following tables demonstrate the alignment between the strategic project requirements and our product capabilities."
+            if is_mock else
+            "The following tables demonstrate the alignment between the RFP solicitation requirements and our product capabilities."
+        )
         align_blocks.append({
             "type": "paragraph",
-            "text": "The following tables demonstrate the alignment between the RFP solicitation requirements and our product capabilities."
+            "text": align_text
         })
 
         tech_aligns = proposal.get("alignment_matrices", {}).get("technical_capabilities", [])
         if tech_aligns:
-            align_blocks.append({"type": "subheading", "text": "Technical Capability Matrix"})
-            headers = ["RFP Required Capability", "Our Matched Capability", "How It Aligns"]
+            align_title = "Project Capability Matrix" if is_mock else "Technical Capability Matrix"
+            align_blocks.append({"type": "subheading", "text": align_title})
+            headers = (
+                ["Project Requirement", "Our Matched Capability", "How It Aligns"]
+                if is_mock else
+                ["RFP Required Capability", "Our Matched Capability", "How It Aligns"]
+            )
             rows = []
             for item in tech_aligns:
                 rows.append([
@@ -223,8 +241,13 @@ class PDFGenerator:
 
         sec_aligns = proposal.get("alignment_matrices", {}).get("security_compliance", [])
         if sec_aligns:
-            align_blocks.append({"type": "subheading", "text": "Security & Compliance Matrix"})
-            headers = ["RFP Security Requirement", "Our Matched Standard", "How It Aligns"]
+            sec_title = "Security & Compliance Focus Area" if is_mock else "Security & Compliance Matrix"
+            align_blocks.append({"type": "subheading", "text": sec_title})
+            headers = (
+                ["Security Requirement", "Our Matched Standard", "How It Aligns"]
+                if is_mock else
+                ["RFP Security Requirement", "Our Matched Standard", "How It Aligns"]
+            )
             rows = []
             for item in sec_aligns:
                 rows.append([
@@ -247,9 +270,14 @@ class PDFGenerator:
 
         # Section 3: Work Share Breakdown
         share_blocks = []
+        share_text = (
+            f"OrbitAvanya Tech LLP proposes a work share allocation of {proposal['proposal_settings'].get('proposed_workshare_pct', 15.0)}% of the total project scope. The breakdown is structured as follows:"
+            if is_mock else
+            f"OrbitAvanya Tech LLP proposes a work share allocation of {proposal['proposal_settings'].get('proposed_workshare_pct', 15.0)}% of the total contract value. The breakdown is structured as follows:"
+        )
         share_blocks.append({
             "type": "paragraph",
-            "text": f"OrbitAvanya Tech LLP proposes a work share allocation of {proposal['proposal_settings'].get('proposed_workshare_pct', 15.0)}% of the total contract value. The breakdown is structured as follows:"
+            "text": share_text
         })
 
         work_share = proposal.get("alignment_matrices", {}).get("subcontractor_work_share_breakdown", [])
@@ -262,7 +290,7 @@ class PDFGenerator:
                 "type": "table",
                 "headers": headers,
                 "rows": rows,
-                "col_widths": [4.5, 2.5]
+                "col_widths": [4.5, 2.2]
             })
 
         sections_list.append({
@@ -276,11 +304,11 @@ class PDFGenerator:
         outreach_blocks.append({"type": "subheading", "text": "Strategic Contact Point"})
         outreach_blocks.append({
             "type": "paragraph",
-            "text": f"Subject: {proposal.get('pitch_outreach', {}).get('subject', 'Subcontracting Inquiry')}"
+            "text": f"Subject: {proposal.get('pitch_outreach', {}).get('subject', 'Teaming Partnership Inquiry')}"
         })
         outreach_blocks.append({
             "type": "paragraph",
-            "text": f"Email Text:\n{proposal.get('pitch_outreach', {}).get('outreach_email', '')}"
+            "text": f"Email Text:\n{proposal.get('pitch_outreach', {}).get('outreach_email', '') or proposal.get('pitch_outreach', {}).get('narrative', '')}"
         })
 
         sections_list.append({
@@ -302,7 +330,9 @@ class PDFGenerator:
             json.dump(cfg, fh, indent=2, ensure_ascii=False)
 
         # Generate docx
-        import proposal_generator
+        import sys
+        sys.path.insert(0, str(self.project_root / "scripts"))
+        import proposal_generator  # type: ignore
         output_base = self.project_root / "output" / "pdf" / f"{solicitation_number}_pitch_proposal"
         docx_path = str(output_base) + ".docx"
         proposal_generator.generate(cfg, docx_path)
@@ -367,12 +397,20 @@ class PDFGenerator:
             "it to the same standard and to use it solely for the purposes of the engagement contemplated herein."
         )
 
+        is_mock = (
+            not solicitation_number 
+            or solicitation_number.lower() in ("unknown", "none", "n/a")
+            or solicitation_number.lower().startswith("mock")
+        )
+        subtitle_text = f"Automated Capability Evaluation for {proposal['prime_contractor'].get('company_name', 'Teaming Engagement')}" if is_mock else f"Automated Capability Evaluation for {solicitation_number}"
+        safe_ref_suffix = proposal["prime_contractor"].get("company_name", "PARTNER").upper().replace(" ", "_") if is_mock else solicitation_number.upper()
+
         proposal_meta = {
             "title": "Product Suitability & Match Report",
-            "subtitle": f"Automated Capability Evaluation for {solicitation_number}",
+            "subtitle": subtitle_text,
             "prepared_for": proposal["prime_contractor"].get("company_name", "Prime Contractor"),
             "prepared_by": "Ranjeet Kumar — Founder & CEO, OrbitAvanya Tech LLP (AvanyaEdge)",
-            "engagement_ref": f"OAT-CES-2026-{solicitation_number.upper()}-MATCH",
+            "engagement_ref": f"OAT-CES-2026-{safe_ref_suffix}-MATCH",
             "proposal_date": datetime.now().strftime("%B %d, %Y"),
             "validity": "90 days from proposal date",
             "confidentiality_text": confidentiality_text
@@ -382,9 +420,14 @@ class PDFGenerator:
 
         # Executive Suitability Summary
         eval_blocks = []
+        eval_text = (
+            "OrbitAvanya Tech LLP has evaluated our product catalog against the functional, technical, and compliance requirements extracted from the target project."
+            if is_mock else
+            "OrbitAvanya Tech LLP has evaluated our product catalog against the functional, technical, and compliance requirements extracted from the solicitation."
+        )
         eval_blocks.append({
             "type": "paragraph",
-            "text": "OrbitAvanya Tech LLP has evaluated our product catalog against the functional, technical, and compliance requirements extracted from the solicitation."
+            "text": eval_text
         })
         eval_blocks.append({"type": "subheading", "text": "Top Matched Offering"})
         eval_blocks.append({
@@ -400,9 +443,14 @@ class PDFGenerator:
 
         # Suitability Leaderboard
         lead_blocks = []
+        lead_text = (
+            "The table below lists our product catalog sorted by suitability match score against the project requirements:"
+            if is_mock else
+            "The table below lists our product catalog sorted by suitability match score against the RFP requirements:"
+        )
         lead_blocks.append({
             "type": "paragraph",
-            "text": "The table below lists our product catalog sorted by suitability match score against the RFP requirements:"
+            "text": lead_text
         })
 
         headers = ["Product Offering", "Industry Domain", "Suitability Score"]
@@ -419,7 +467,7 @@ class PDFGenerator:
 
         sections_list.append({
             "title": "Product Match Leaderboard",
-            "page_break_before": True,
+            "page_break_before": False,
             "blocks": lead_blocks
         })
 
@@ -437,7 +485,7 @@ class PDFGenerator:
             
         sections_list.append({
             "title": "Top Product Profiles",
-            "page_break_before": True,
+            "page_break_before": False,
             "blocks": profile_blocks
         })
 
@@ -454,7 +502,9 @@ class PDFGenerator:
             json.dump(cfg, fh, indent=2, ensure_ascii=False)
 
         # Generate docx
-        import proposal_generator
+        import sys
+        sys.path.insert(0, str(self.project_root / "scripts"))
+        import proposal_generator  # type: ignore
         output_base = self.project_root / "output" / "pdf" / f"{solicitation_number}_product_match_report"
         docx_path = str(output_base) + ".docx"
         proposal_generator.generate(cfg, docx_path)

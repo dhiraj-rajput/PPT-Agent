@@ -12,8 +12,8 @@ Usage:
     from config.settings import settings
 
     settings.MONGO_URI
-    settings.OPENROUTER_API_KEY
-    settings.OPENROUTER_MODEL
+    settings.AI_MODE
+    settings.OLLAMA_MODEL
     ...
 """
 
@@ -49,8 +49,6 @@ class AppSettings(BaseSettings):
         default="ppt_agent_db",
         description="Name of the MongoDB database to use.",
     )
-
-
 
     # ------------------------------------------------------------------
     # Search — Tavily (company name → LinkedIn URL resolution)
@@ -89,7 +87,7 @@ class AppSettings(BaseSettings):
     )
 
     # ------------------------------------------------------------------
-    # Website Crawler (prasanna/company-extractor settings)
+    # Website Crawler
     # ------------------------------------------------------------------
     MAX_CRAWL_PAGES: int = Field(
         default=15,
@@ -100,9 +98,14 @@ class AppSettings(BaseSettings):
         description="Playwright page load timeout in milliseconds.",
     )
 
-
+    # ------------------------------------------------------------------
+    # SAM.gov
+    # ------------------------------------------------------------------
     SAM_GOV_API_KEY: str = Field(default="", description="SAM.gov API key.")
-    FORCE_MOCK_SAM_GOV: bool = Field(default=False, description="Force SAM.gov to use mock data instead of live queries.")
+    FORCE_MOCK_SAM_GOV: bool = Field(
+        default=False,
+        description="Force SAM.gov to use mock data instead of live queries.",
+    )
 
     # ------------------------------------------------------------------
     # Optional / Other Search & Scraping Services
@@ -133,18 +136,79 @@ class AppSettings(BaseSettings):
         default="",
         description="Optional API key for authenticated hosted Ollama cloud endpoints.",
     )
+    OLLAMA_MODEL_FALLBACKS: str = Field(
+        default="gemma4:31b-cloud,gemma3:27b,llama3.1:8b",
+        description="Comma-separated Ollama model fallback chain, tried in order after OLLAMA_MODEL.",
+    )
+    OLLAMA_TEMPERATURE: float = Field(
+        default=0.1,
+        description="Sampling temperature used for all Ollama Cloud calls.",
+    )
+    GEMINI_API_KEY: str = Field(
+        default="",
+        description="Google AI Studio Gemini API Key for fallback generation.",
+    )
     OPENROUTER_API_KEY: str = Field(
         default="",
-        description="[Deprecated] OpenRouter API key. Use Ollama instead.",
+        description="OpenRouter API Key for fallback generation.",
+    )
+    OPENROUTER_MODEL: str = Field(
+        default="nvidia/nemotron-3-ultra-550b-a55b:free",
+        description="OpenRouter fallback model name.",
     )
     OPENROUTER_BASE_URL: str = Field(
         default="https://openrouter.ai/api/v1",
-        description="[Deprecated] OpenRouter base URL.",
+        description="OpenRouter base URL.",
     )
-    OPENROUTER_MODEL: str = Field(
-        default="google/gemma-4-31b-it:free",
-        description="[Deprecated] OpenRouter model name.",
+
+    # ------------------------------------------------------------------
+    # Global AI / rule-based master switch
+    # ------------------------------------------------------------------
+    AI_MODE: str = Field(
+        default="auto",
+        description=(
+            "Master switch for every agent in the project: "
+            "'ai' or 'auto' = try AI (Ollama Cloud) first, automatically fall back to "
+            "the rule-based implementation on failure or 429 rate-limit; "
+            "'rule_based' = never call AI, always use rule-based logic."
+        ),
     )
+
+    # BYPASS_LLM: legacy env flag — kept for backwards compat. Prefer AI_MODE=rule_based.
+    # When true, forces rule-based compaction regardless of AI_MODE.
+    BYPASS_LLM: bool = Field(
+        default=False,
+        description=(
+            "Legacy flag — forces rule-based compaction when True. "
+            "Prefer setting AI_MODE=rule_based instead."
+        ),
+    )
+
+    # Optional per-agent overrides. Any of these, if set to "ai" or
+    # "rule_based", take precedence over AI_MODE for that agent only.
+    WEBSITE_AGENT_MODE: str = Field(default="", description="Per-agent override for the website scraper.")
+    LINKEDIN_AGENT_MODE: str = Field(default="", description="Per-agent override for the LinkedIn scraper.")
+    SEARCH_AGENT_MODE: str = Field(default="", description="Per-agent override for the external/Google search agent.")
+    COMPACTOR_MODE: str = Field(default="", description="Per-agent override for the profile compactor.")
+    RFP_PARSER_MODE: str = Field(default="", description="Per-agent override for RFP PDF parsing.")
+    RFP_RESPONSE_MODE_AI: str = Field(default="", description="Per-agent override for RFP response document generation.")
+    BIDFORGE_MODE: str = Field(default="", description="Per-agent override for the BidForge-style pipeline.")
+
+    # ------------------------------------------------------------------
+    # OCR (for scanned / image-only RFP PDFs that pypdf/PyMuPDF can't read)
+    # ------------------------------------------------------------------
+    OCR_ENABLED: bool = Field(
+        default=True,
+        description="If true, RFP PDF pages with no extractable text layer are rasterized and OCR'd.",
+    )
+    OCR_MIN_CHARS_PER_PAGE: int = Field(
+        default=40,
+        description="A page with fewer extracted characters than this is treated as scanned/image-only and sent to OCR.",
+    )
+
+    # ------------------------------------------------------------------
+    # Properties
+    # ------------------------------------------------------------------
 
     @property
     def is_authenticated_linkedin_scraping_enabled(self) -> bool:
@@ -179,8 +243,6 @@ class AppSettings(BaseSettings):
     @property
     def profile_collection(self) -> str:
         return self.MONGODB_PROFILE_COLLECTION
-
-
 
     @property
     def search_provider(self) -> str:

@@ -616,33 +616,81 @@ def discover_external_news(state: AgentState) -> dict:
             })
             return {"external_news": []}
 
-        logger.info("[discover_external_news] Running rule-based structured search profiling.")
-        insights = []
-        for r in raw_results[:6]:
-            snippet_lower = r["snippet"].lower()
-            category = "General News"
-            if any(x in snippet_lower for x in ["revenue", "profit", "growth", "funding", "valuation", "financial"]):
-                category = "Financial Health"
-            elif any(x in snippet_lower for x in ["competitor", "market share", "beat", "swot", "rival"]):
-                category = "Competitor Intelligence"
-            elif any(x in snippet_lower for x in ["rfp", "tender", "contract", "win"]):
-                category = "RFP / Contract Win"
-            elif any(x in snippet_lower for x in ["product", "launch", "feature", "release"]):
-                category = "Product Release"
+        logger.info("[discover_external_news] Running structured search profiling (AI with rule-based fallback).")
+        from ai.mode import run_with_fallback
+        from ai.client import get_ai_client
 
-            insights.append({
-                "category": category,
-                "description": r["snippet"],
-                "source_url": r["url"],
-                "confidence_score": 0.8
-            })
+        def _ai_profiling():
+            """Ask the LLM to synthesise a structured profile from raw search snippets."""
+            snippets_text = "\n".join(
+                f"[{r.get('title', '')}] {r.get('snippet', '')} ({r.get('url', '')})"
+                for r in raw_results[:10]
+            )
+            messages = [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a business analyst. Given raw search result snippets about a company, "
+                        "extract a structured JSON object with keys: "
+                        "business_model (string), value_proposition (string), "
+                        "insights (array of {category, description, source_url, confidence_score}). "
+                        "Valid categories: 'Financial Health', 'Competitor Intelligence', "
+                        "'RFP / Contract Win', 'Product Release', 'General News'. "
+                        "confidence_score must be a float 0.0-1.0. "
+                        "Only include facts supported by the snippets — do not invent."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Company: {company_name}\nWebsite: {official_url}\n\n"
+                        f"Search snippets:\n{snippets_text}"
+                    ),
+                },
+            ]
+            return get_ai_client().chat_json(messages)
+
+        def _rule_profiling():
+            """Rule-based fallback: keyword-match snippets into insight categories."""
+            insights = []
+            for r in raw_results[:6]:
+                snippet_lower = r["snippet"].lower()
+                category = "General News"
+                if any(x in snippet_lower for x in ["revenue", "profit", "growth", "funding", "valuation", "financial"]):
+                    category = "Financial Health"
+                elif any(x in snippet_lower for x in ["competitor", "market share", "beat", "swot", "rival"]):
+                    category = "Competitor Intelligence"
+                elif any(x in snippet_lower for x in ["rfp", "tender", "contract", "win"]):
+                    category = "RFP / Contract Win"
+                elif any(x in snippet_lower for x in ["product", "launch", "feature", "release"]):
+                    category = "Product Release"
+                insights.append({
+                    "category": category,
+                    "description": r["snippet"],
+                    "source_url": r["url"],
+                    "confidence_score": 0.8,
+                })
+            return {
+                "business_model": f"Core business model for {company_name} extracted from search snippets.",
+                "value_proposition": f"Value proposition for {company_name} extracted from search snippets.",
+                "insights": insights,
+            }
+
+        profiling_result, path_used = run_with_fallback(
+            "search",
+            ai_fn=_ai_profiling,
+            rule_fn=_rule_profiling,
+        )
+        logger.info(f"[discover_external_news] Structured profiling completed via '{path_used}' path.")
+
+        insights = profiling_result.get("insights", [])
 
         structured_profile = {
             "company_name": company_name,
             "website": official_url,
-            "business_model": f"Core business model for {company_name} extracted from search snippets.",
-            "value_proposition": f"Value proposition for {company_name} extracted from search snippets.",
-            "products_and_services": [],
+            "business_model": profiling_result.get("business_model") or f"Core business model for {company_name} extracted from search snippets.",
+            "value_proposition": profiling_result.get("value_proposition") or f"Value proposition for {company_name} extracted from search snippets.",
+            "products_and_services": profiling_result.get("products_and_services") or [],
             "insights": insights,
             "company_slug": company_slug,
             "scraped_at": datetime.now(tz=timezone.utc).isoformat()

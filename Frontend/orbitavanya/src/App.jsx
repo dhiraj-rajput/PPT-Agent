@@ -23,6 +23,7 @@ import Reports from './pages/Reports.jsx';
 import Settings from './pages/Settings.jsx';
 import UsersRoles from './pages/UsersRoles.jsx';
 import Integrations from './pages/Integrations.jsx';
+import RFPAutoRespond from './pages/RFPAutoRespond.jsx';
 import NotFound from './pages/NotFound.jsx';
 
 export default function App() {
@@ -52,6 +53,7 @@ export default function App() {
         <Route path="/settings" element={<Settings />} />
         <Route path="/settings/users" element={<UsersRoles />} />
         <Route path="/settings/integrations" element={<Integrations />} />
+        <Route path="/rfp-auto-respond" element={<RFPAutoRespond />} />
       </Route>
       </Route>
 

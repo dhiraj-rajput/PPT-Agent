@@ -32,6 +32,12 @@ def generate_rfp_response_pdf(
     """
     root_path = Path(project_root) if project_root else Path(__file__).resolve().parent.parent
     
+    is_mock = (
+        not solicitation_number 
+        or solicitation_number.lower() in ("unknown", "none", "n/a")
+        or solicitation_number.lower().startswith("mock")
+    )
+
     # 1. Construct the config dictionary (cfg)
     brand = {
         "company_name": "OrbitAvanya Tech LLP",
@@ -63,12 +69,20 @@ def generate_rfp_response_pdf(
     # Format current date
     proposal_date = datetime.now().strftime("%B %d, %Y")
     
+    if mode == "subcontract":
+        doc_title = "Teaming & Collaboration Proposal" if is_mock else "Teaming Proposal"
+    elif mode == "partnership":
+        doc_title = "Partnership Proposal"
+    else:
+        doc_title = "Technical Proposal" if is_mock else "RFP Response Proposal"
+
+    safe_ref_suffix = (winner_name or "PARTNER").upper().replace(" ", "_") if is_mock else solicitation_number.upper()
     proposal = {
-        "title": "Engagement Proposal" if mode == "subcontract" else "RFP Response Proposal",
+        "title": doc_title,
         "subtitle": proposal_title,
-        "prepared_for": winner_name if mode == "subcontract" else agency_name,
+        "prepared_for": winner_name if mode == "subcontract" or mode == "partnership" else agency_name,
         "prepared_by": "Ranjeet Kumar — Founder & CEO, OrbitAvanya Tech LLP (AvanyaEdge)",
-        "engagement_ref": f"OAT-CES-2026-{solicitation_number.upper()}-FULL",
+        "engagement_ref": f"OAT-CES-2026-{safe_ref_suffix}-FULL",
         "proposal_date": proposal_date,
         "validity": "90 days from proposal date",
         "confidentiality_text": confidentiality_text
@@ -140,8 +154,13 @@ def generate_rfp_response_pdf(
         
     tech_alignments = sections.get("technical_alignment", [])
     if tech_alignments:
-        scope_blocks.append({"type": "subheading", "text": "Technical Requirements Alignment"})
-        headers = ["RFP Requirement", "Our Solution", "Alignment"]
+        align_title = "Project Requirements Alignment" if is_mock else "Technical Requirements Alignment"
+        scope_blocks.append({"type": "subheading", "text": align_title})
+        headers = (
+            ["Project Requirement", "Our Solution", "Alignment"]
+            if is_mock else
+            ["RFP Requirement", "Our Solution", "Alignment"]
+        ) if mode != "partnership" else ["Partner Gap / Need", "OrbitAvanya Solution", "Synergy"]
         rows = []
         for a in tech_alignments:
             rows.append([
@@ -153,7 +172,7 @@ def generate_rfp_response_pdf(
             "type": "table",
             "headers": headers,
             "rows": rows,
-            "col_widths": [2.5, 3.0, 1.5]
+            "col_widths": [2.3, 2.9, 1.5]
         })
         
     sections_list.append({
@@ -182,7 +201,7 @@ def generate_rfp_response_pdf(
             "type": "table",
             "headers": headers,
             "rows": rows,
-            "col_widths": [2.5, 4.5]
+            "col_widths": [2.5, 4.2]
         })
         
     tech_stack = sections.get("tech_stack", [])
@@ -218,14 +237,14 @@ def generate_rfp_response_pdf(
             "type": "table",
             "headers": headers,
             "rows": rows,
-            "col_widths": [1.0, 1.2, 2.3, 2.5]
+            "col_widths": [1.0, 1.1, 2.2, 2.4]
         })
         
     total_duration = sections.get("total_duration", "8–10 Weeks")
     time_blocks.append({"type": "paragraph", "text": f"Total Estimated Duration: {total_duration}"})
     
     sections_list.append({
-        "title": "Implementation Timeline",
+        "title": "Implementation Timeline" if mode != "partnership" else "Partnership Roadmap",
         "page_break_before": True,
         "blocks": time_blocks
     })
@@ -252,7 +271,7 @@ def generate_rfp_response_pdf(
             "type": "table",
             "headers": headers,
             "rows": rows,
-            "col_widths": [2.8, 1.0, 0.7, 1.2, 1.3]
+            "col_widths": [2.8, 0.9, 0.65, 1.15, 1.2]
         })
         
     sla_terms = sections.get("sla_terms", [])
@@ -263,9 +282,14 @@ def generate_rfp_response_pdf(
     workshare = sections.get("workshare_pct")
     if workshare and mode == "subcontract":
         invest_blocks.append({"type": "spacer"})
+        workshare_desc = (
+            f"Proposed Work Share: OrbitAvanya Tech LLP proposes to assume {workshare}% of the total project scope as our teaming work share."
+            if is_mock else
+            f"Proposed Work Share: OrbitAvanya Tech LLP proposes to assume {workshare}% of the total contract value as our subcontract work share."
+        )
         invest_blocks.append({
             "type": "paragraph",
-            "text": f"Proposed Work Share: OrbitAvanya Tech LLP proposes to assume {workshare}% of the total contract value as our subcontract work share."
+            "text": workshare_desc
         })
         
     sections_list.append({
@@ -300,7 +324,7 @@ def generate_rfp_response_pdf(
             ["NAICS Codes", "541511, 541512, 541519, 541611"],
             ["Certifications", "MSME (India) · SAM.gov Registered"]
         ],
-        "col_widths": [2.5, 4.5]
+        "col_widths": [2.4, 4.3]
     })
     
     sections_list.append({
@@ -362,13 +386,19 @@ def generate_rfp_response_pdf(
     logger.info(f"[RFPResponsePDF] Configuration saved to: {config_path}")
     
     # 3. Generate docx document via proposal_generator
-    import proposal_generator
     import os
     import sys
+    sys.path.insert(0, str(root_path / "scripts"))
+    import proposal_generator  # type: ignore
     import shutil
     import subprocess
     
-    suffix = "prime_proposal" if mode == "prime" else "subcontract_proposal"
+    if mode == "prime":
+        suffix = "prime_proposal"
+    elif mode == "subcontract":
+        suffix = "subcontract_proposal"
+    else:
+        suffix = "partnership_proposal"
     output_base = root_path / "output" / "pdf" / f"{solicitation_number}_{suffix}"
     output_base.parent.mkdir(parents=True, exist_ok=True)
     

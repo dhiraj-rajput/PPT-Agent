@@ -181,7 +181,7 @@ export default function Dashboard() {
               {companies.slice(0, 5).map((c) => (
                 <tr key={c.id} className="border-t border-slate-50 dark:border-navy-800">
                   <td className="py-2.5 font-semibold text-navy-900 dark:text-white">
-                    <Link to={`/companies/${c.id}`} className="hover:text-brand-600 dark:hover:text-brand-400">{c.name}</Link>
+                    <Link to={`/companies/${c.uei || c.id}`} className="hover:text-brand-600 dark:hover:text-brand-400">{c.name}</Link>
                   </td>
                   <td className="py-2.5 text-slate-500 dark:text-slate-400">{c.industry}</td>
                   <td className="py-2.5">
