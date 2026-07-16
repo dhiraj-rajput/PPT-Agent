@@ -15,6 +15,12 @@ body {
   background-color: #F6F5F7;
   color: #1c151e;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+html.dark body {
+  background-color: #130f15;
+  color: #f3f0f5;
 }
 
 ::-webkit-scrollbar {
@@ -31,6 +37,12 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #b9a5c0;
 }
+html.dark ::-webkit-scrollbar-thumb {
+  background: #382a3c;
+}
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #533f5a;
+}
 
 .scrollbar-none::-webkit-scrollbar {
   display: none;
@@ -43,4 +55,8 @@ body {
 :focus-visible {
   outline: 2px solid #1c151e;
   outline-offset: 2px;
+}
+
+html.dark :focus-visible {
+  outline: 2px solid #f3f0f5;
 }

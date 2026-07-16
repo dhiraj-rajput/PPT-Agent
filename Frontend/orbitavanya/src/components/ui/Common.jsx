@@ -39,6 +39,7 @@ const statusStyles = {
   Prospect: 'bg-amber-100 text-amber-700',
   Draft: 'bg-slate-100 text-slate-600',
   Inactive: 'bg-slate-100 text-slate-500',
+  Pending: 'bg-amber-100 text-amber-700',
   Scheduled: 'bg-sky-100 text-sky-700',
   Completed: 'bg-violet-100 text-violet-700',
   'In Review': 'bg-amber-100 text-amber-700',
