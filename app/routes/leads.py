@@ -190,7 +190,10 @@ async def import_leads_csv(
 
     contents = await file.read()
     try:
-        content_str = contents.decode("utf-8-sig")
+        try:
+            content_str = contents.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            content_str = contents.decode("latin-1")
         reader = csv.DictReader(io.StringIO(content_str))
         if reader.fieldnames:
             reader.fieldnames = [h.strip().lower() for h in reader.fieldnames]
