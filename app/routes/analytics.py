@@ -1,5 +1,5 @@
 from datetime import datetime, timezone, timedelta
-from typing import Dict, List
+from typing import Dict, List, Optional
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 
