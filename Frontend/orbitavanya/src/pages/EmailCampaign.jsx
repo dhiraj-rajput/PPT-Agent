@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Plus, Send, MousePointerClick, MailOpen, Reply, Clock, Globe, X, Play, Pause, Copy, Trash2, Upload, Rocket } from 'lucide-react';
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { PageHeader, Card, StatusBadge } from '../components/ui/Common.jsx';
 import { api } from '../lib/api.jsx';
 
@@ -176,7 +176,7 @@ export default function EmailCampaign() {
     try {
       let campaignBody = form.body;
       if (attachmentType !== 'none' && attachedPath) {
-        const viewerUrl = `${window.location.origin}/document-viewer?path=${encodeURIComponent(attachedPath)}&campaignId={{campaignId}}&leadId={{leadId}}&filename=${encodeURIComponent(attachedFilename)}`;
+        const viewerUrl = `{{clientUrl}}/document-viewer?path=${encodeURIComponent(attachedPath)}&campaignId={{campaignId}}&leadId={{leadId}}&filename=${encodeURIComponent(attachedFilename)}`;
         campaignBody += `\n\n<p>Please review the attached document online: <a href="${viewerUrl}" target="_blank" data-track-click="true" data-track-label="${attachedFilename}">View ${attachedFilename}</a></p>`;
       }
 
@@ -312,17 +312,20 @@ export default function EmailCampaign() {
         <h3 className="text-sm font-bold text-navy-900 dark:text-white">Performance Trend</h3>
         <div className="mt-3 h-64">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={trends}>
-              <CartesianGrid vertical={false} stroke="#F1F3F9" />
-              <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 10, border: '1px solid #F1F3F9' }} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Line type="monotone" dataKey="sent" name="Sent" stroke="#1c151e" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="opened" name="Opened" stroke="#2f879d" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="clicked" name="Clicked" stroke="#f7b708" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="replied" name="Replied" stroke="#e41b50" strokeWidth={2} dot={false} />
-            </LineChart>
+            <BarChart data={trends} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <CartesianGrid vertical={false} stroke="#E2E8F0" strokeDasharray="3 3" />
+              <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <Tooltip
+                contentStyle={{ backgroundColor: '#0F172A', borderRadius: '12px', border: 'none', color: '#FFF', fontSize: '12px' }}
+                cursor={{ fill: 'rgba(148, 163, 184, 0.1)' }}
+              />
+              <Legend wrapperStyle={{ fontSize: 11, paddingTop: 10 }} iconType="circle" />
+              <Bar dataKey="sent" name="Sent" fill="#3B82F6" radius={[4, 4, 0, 0]} barSize={12} />
+              <Bar dataKey="opened" name="Opened" fill="#10B981" radius={[4, 4, 0, 0]} barSize={12} />
+              <Bar dataKey="clicked" name="Clicked" fill="#F59E0B" radius={[4, 4, 0, 0]} barSize={12} />
+              <Bar dataKey="replied" name="Replied" fill="#EF4444" radius={[4, 4, 0, 0]} barSize={12} />
+            </BarChart>
           </ResponsiveContainer>
         </div>
       </Card>

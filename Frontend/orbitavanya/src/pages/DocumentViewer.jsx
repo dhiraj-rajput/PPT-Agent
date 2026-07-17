@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FileText, Eye, Clock, ShieldCheck, Loader2 } from 'lucide-react';
+import { api } from '../lib/api.jsx';
 
 export default function DocumentViewer() {
   const [searchParams] = useSearchParams();
@@ -11,12 +12,14 @@ export default function DocumentViewer() {
 
   const [loading, setLoading] = useState(true);
 
+  const apiBase = api.getBaseUrl();
+
   useEffect(() => {
     if (!campaignId || !leadId) return;
 
     // Load the tracking script from the backend
     const script = document.createElement('script');
-    script.src = 'http://localhost:5050/tracking/tracker.js';
+    script.src = `${apiBase}/tracking/tracker.js`;
     script.async = true;
     script.onload = () => {
       if (window.EmailTracker) {
@@ -32,7 +35,7 @@ export default function DocumentViewer() {
     return () => {
       document.body.removeChild(script);
     };
-  }, [campaignId, leadId]);
+  }, [campaignId, leadId, apiBase]);
 
   if (!path) {
     return (
@@ -45,7 +48,7 @@ export default function DocumentViewer() {
   }
 
   // Stream URL from campaigns router view-file endpoint
-  const streamUrl = `http://localhost:5050/api/campaigns/view-file?path=${encodeURIComponent(path)}`;
+  const streamUrl = `${apiBase}/api/campaigns/view-file?path=${encodeURIComponent(path)}`;
 
   return (
     <div className="flex h-screen w-screen flex-col bg-slate-900 font-sans text-white">

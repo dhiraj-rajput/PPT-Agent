@@ -90,6 +90,7 @@ async def send_campaign_email_to_lead(campaign: dict, lead: dict) -> dict:
         res = re.sub(r"{{\s*title\s*}}", lead_data.get("title") or "", res, flags=re.IGNORECASE)
         res = re.sub(r"{{\s*campaignId\s*}}", str(campaign.get("_id") or ""), res, flags=re.IGNORECASE)
         res = re.sub(r"{{\s*leadId\s*}}", str(lead_data.get("_id") or ""), res, flags=re.IGNORECASE)
+        res = re.sub(r"{{\s*clientUrl\s*}}", settings.CLIENT_URL.rstrip("/"), res, flags=re.IGNORECASE)
         return res
 
     html_body = fill_placeholders(body_tmpl, lead)
@@ -103,9 +104,6 @@ async def send_campaign_email_to_lead(campaign: dict, lead: dict) -> dict:
 
     final_html = f"""
     {click_tracked_html}
-    <p style="font-size:11px;color:#9ca3af;margin-top:24px;">
-      Don't want these emails? <a href="{unsub_link}">Unsubscribe</a>.
-    </p>
     {open_pixel_tag(open_tracking_id)}
     """
 
@@ -293,12 +291,91 @@ async def process_lead_send(campaign: dict, lead: dict):
             )
 
 
+async def check_incoming_replies():
+    """Poll the IMAP inbox for unread email replies from campaign outreach leads."""
+    if not settings.SMTP_USER or not settings.SMTP_PASS:
+        return
+
+    import imaplib
+    import email
+    import time
+    from email.header import decode_header
+
+    # Determine IMAP server securely
+    imap_host = "imap.gmail.com" if "gmail" in settings.SMTP_HOST.lower() else f"imap.{settings.SMTP_HOST.split('smtp.')[-1]}"
+    
+    try:
+        mail = imaplib.IMAP4_SSL(imap_host, 993)
+        mail.login(settings.SMTP_USER, settings.SMTP_PASS)
+        mail.select("INBOX")
+
+        status, messages = mail.search(None, "UNSEEN")
+        if status == "OK" and messages[0]:
+            mail_ids = messages[0].split()
+            leads_col = get_collection("leads")
+            campaigns_col = get_collection("campaigns")
+
+            for mail_id in mail_ids:
+                try:
+                    res, msg_data = mail.fetch(mail_id, "(RFC822)")
+                    for response_part in msg_data:
+                        if isinstance(response_part, tuple):
+                            msg = email.message_from_bytes(response_part[1])
+                            from_header = msg.get("From")
+                            if from_header:
+                                email_match = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", from_header)
+                                if email_match:
+                                    sender_email = email_match.group(0).lower().strip()
+                                    
+                                    lead = leads_col.find_one({
+                                        "email": sender_email,
+                                        "status": {"$in": ["sent", "opened", "clicked"]}
+                                    })
+                                    if lead:
+                                        leads_col.update_one(
+                                            {"_id": lead["_id"]},
+                                            {"$set": {
+                                                "status": "replied",
+                                                "repliedAt": datetime.now(timezone.utc),
+                                                "updatedAt": datetime.now(timezone.utc)
+                                            }}
+                                        )
+                                        
+                                        campaigns_col.update_one(
+                                            {"_id": lead["campaignId"]},
+                                            {"$inc": {"stats.totalReplied": 1}}
+                                        )
+                                        
+                                        get_collection("audit_logs").insert_one({
+                                            "action": "lead.reply",
+                                            "entityType": "Lead",
+                                            "entityId": lead["_id"],
+                                            "details": {"email": sender_email, "subject": msg.get("Subject")},
+                                            "createdAt": datetime.now(timezone.utc)
+                                        })
+                                        
+                                        score_replied(lead["_id"])
+                                        logger.info(f"[Email Worker] Detected incoming email reply from {sender_email}")
+                                        
+                                    mail.store(mail_id, "+FLAGS", "\\Seen")
+                except Exception as parse_err:
+                    logger.error(f"[Email Worker] Failed to parse IMAP message: {parse_err}")
+        
+        mail.close()
+        mail.logout()
+    except Exception as imap_err:
+        logger.debug(f"[Email Worker] IMAP polling skipped or failed: {imap_err}")
+
+
 async def start_email_worker_loop():
     """Background loop polling MongoDB for scheduled campaign emails to process."""
     logger.info("Email worker background polling loop started.")
     campaigns_col = get_collection("campaigns")
     leads_col = get_collection("leads")
     sys_col = get_collection("system_status")
+
+    import time
+    last_reply_check = 0
 
     while True:
         try:
@@ -311,6 +388,12 @@ async def start_email_worker_loop():
                 )
             except Exception as e:
                 logger.error(f"Failed to update worker heartbeat: {e}")
+
+            # Check replies every 30 seconds
+            current_time = time.time()
+            if current_time - last_reply_check >= 30:
+                last_reply_check = current_time
+                await check_incoming_replies()
 
             # Query for active running campaigns
             running_campaigns = list(campaigns_col.find({"status": "running"}))

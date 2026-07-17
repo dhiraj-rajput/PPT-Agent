@@ -458,6 +458,9 @@ export const api = {
   async sendCompanyEmail(body) {
     return post('/api/companies/send-email', body);
   },
+  getBaseUrl() {
+    return BASE_URL;
+  },
 };
 
 export default api;
