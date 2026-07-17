@@ -204,8 +204,8 @@ export default function Register() {
             <div>
               <label className="mb-1.5 block text-sm font-semibold text-navy-900 dark:text-white">Confirm password</label>
               <div
-                className={`flex items-center gap-2 rounded-xl border bg-white px-3.5 py-2.5 focus-within:border-brand-500 ${
-                  confirmPassword && !passwordsMatch ? 'border-tomato-300' : 'border-slate-200'
+                className={`flex items-center gap-2 rounded-xl border bg-white dark:bg-navy-900 px-3.5 py-2.5 focus-within:border-brand-500 ${
+                  confirmPassword && !passwordsMatch ? 'border-tomato-300' : 'border-slate-200 dark:border-navy-700'
                 }`}
               >
                 <Lock size={16} className="text-slate-400 dark:text-slate-500" />
