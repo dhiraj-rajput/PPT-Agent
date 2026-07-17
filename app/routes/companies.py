@@ -590,7 +590,7 @@ def get_profile_detail(
 @router.post("/settings/ai-mode")
 def set_ai_mode(
     payload: dict,
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(get_current_user),
 ):
     mode = payload.get("mode")
     if mode not in ("auto", "ai", "rule_based"):

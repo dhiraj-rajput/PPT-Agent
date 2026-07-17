@@ -299,7 +299,11 @@ def check_incoming_replies():
     import imaplib
     import email
     import time
+    import socket
     from email.header import decode_header
+
+    # Set connection timeout limits
+    socket.setdefaulttimeout(15.0)
 
     # Determine IMAP server securely
     imap_host = "imap.gmail.com" if "gmail" in settings.SMTP_HOST.lower() else f"imap.{settings.SMTP_HOST.split('smtp.')[-1]}"
@@ -393,7 +397,7 @@ async def start_email_worker_loop():
             current_time = time.time()
             if current_time - last_reply_check >= 30:
                 last_reply_check = current_time
-                await asyncio.to_thread(check_incoming_replies)
+                asyncio.create_task(asyncio.to_thread(check_incoming_replies))
 
             # Query for active running campaigns
             running_campaigns = list(campaigns_col.find({"status": "running"}))

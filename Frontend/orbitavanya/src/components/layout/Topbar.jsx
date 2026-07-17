@@ -20,7 +20,7 @@ const TYPE_COLOR = {
 };
 
 function NotificationBell() {
-  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+  const { notifications, unreadCount, markRead, markAllRead } = useNotifications();
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -53,7 +53,7 @@ function NotificationBell() {
           <div className="mb-3 flex items-center justify-between">
             <h4 className="text-sm font-bold text-navy-900 dark:text-white">Notifications</h4>
             {unreadCount > 0 && (
-              <button onClick={markAllAsRead} className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline">
+              <button onClick={markAllRead} className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline">
                 Mark all as read
               </button>
             )}
@@ -68,8 +68,8 @@ function NotificationBell() {
                 const color = TYPE_COLOR[n.type] || 'bg-slate-100 text-slate-700';
                 return (
                   <div
-                    key={n._id}
-                    onClick={() => !n.read && markAsRead(n._id)}
+                    key={n.id}
+                    onClick={() => !n.read && markRead(n.id)}
                     className={`flex items-start gap-3 rounded-xl p-2.5 transition-all cursor-pointer ${
                       n.read ? 'opacity-60' : 'bg-slate-50/50 hover:bg-slate-50 dark:bg-navy-900/40 dark:hover:bg-navy-900/60'
                     }`}
