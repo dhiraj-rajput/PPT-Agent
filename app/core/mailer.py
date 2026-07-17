@@ -1,5 +1,5 @@
 """
-api/utils/mailer.py
+app/core/mailer.py
 --------------------
 Async email utilities — equivalent of the Node.js server/utils/mailer.js
 but running inside the FastAPI backend via aiosmtplib.

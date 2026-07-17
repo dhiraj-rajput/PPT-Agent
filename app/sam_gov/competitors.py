@@ -1,5 +1,5 @@
 """
-api/sam_gov/competitors.py
+app/sam_gov/competitors.py
 --------------------------
 Finds bidders, competitors, and proposal response details (prices, evaluations)
 for a given solicitation number.

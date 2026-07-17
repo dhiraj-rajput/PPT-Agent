@@ -47,6 +47,48 @@ export default function CompanyDetail() {
   const [generationStatus, setGenerationStatus] = useState('idle');
   const [previewingReport, setPreviewingReport] = useState(null);
   const [generationError, setGenerationError] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+
+  useEffect(() => {
+    if (previewingReport) {
+      api.viewReportBlob(previewingReport.filename)
+        .then((blob) => {
+          const url = URL.createObjectURL(blob);
+          setPreviewUrl(url);
+        })
+        .catch((err) => {
+          console.error("Error creating preview URL:", err);
+          setPreviewUrl(null);
+        });
+    } else {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+        setPreviewUrl(null);
+      }
+    }
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewingReport]);
+
+  const handleDownload = async (e, filename) => {
+    e.preventDefault();
+    try {
+      const blob = await api.downloadReport(filename);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Download failed:", err);
+    }
+  };
 
   // Fetch company details on mount
   const fetchCompanyDetails = () => {
@@ -519,13 +561,12 @@ export default function CompanyDetail() {
                     >
                       <Eye size={13} /> View
                     </button>
-                    <a
-                      href={`http://localhost:5050/api/reports/download/${doc.filename}`}
-                      download
+                    <button
+                      onClick={(e) => handleDownload(e, doc.filename)}
                       className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-navy-900 hover:bg-slate-50 dark:border-navy-700 dark:bg-navy-800 dark:text-white dark:hover:bg-navy-700 transition-colors"
                     >
                       <Download size={13} /> Download
-                    </a>
+                    </button>
                   </div>
                 </div>
               ))}
@@ -653,7 +694,7 @@ export default function CompanyDetail() {
             {/* Modal Body: Embedded PDF Viewer */}
             <div className="flex-1 bg-slate-100 dark:bg-navy-900 p-4 md:p-6 flex flex-col overflow-hidden">
               <iframe
-                src={`http://localhost:5050/api/reports/view/${previewingReport.filename}`}
+                src={previewUrl || ""}
                 className="w-full h-full border-0 rounded-xl bg-white shadow-lg"
                 title={previewingReport.title}
               />
@@ -664,13 +705,12 @@ export default function CompanyDetail() {
               <button onClick={() => setPreviewingReport(null)} className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-semibold text-navy-900 hover:bg-slate-50 dark:border-navy-700 dark:bg-navy-800 dark:text-white dark:hover:bg-navy-700 transition-colors">
                 Close
               </button>
-              <a
-                href={`http://localhost:5050/api/reports/download/${previewingReport.filename}`}
-                download
+              <button
+                onClick={(e) => handleDownload(e, previewingReport.filename)}
                 className="flex items-center gap-2 rounded-xl bg-brand-500 px-5 py-2.5 text-xs font-bold text-white shadow-soft hover:bg-brand-600 transition-colors"
               >
                 <Download size={14} /> Download PDF
-              </a>
+              </button>
             </div>
           </div>
         </div>

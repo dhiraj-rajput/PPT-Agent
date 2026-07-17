@@ -1,5 +1,5 @@
 """
-api/sam_gov/competitor_profiler.py
+app/sam_gov/competitor_profiler.py
 ----------------------------------
 Profiles discovered bidders/competitors using a 100% rule-based and pattern-based search.
 No AI, LLM, OpenAI, or Ollama models are used.

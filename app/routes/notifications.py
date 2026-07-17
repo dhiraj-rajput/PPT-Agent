@@ -1,5 +1,5 @@
 """
-api/routes/notifications.py
+app/routes/notifications.py
 ----------------------------
 In-app notification endpoints — mirrors Node.js server/routes/notifications.js.
 

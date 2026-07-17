@@ -66,6 +66,7 @@ async def lifespan(app: FastAPI):
         get_collection("users").create_index("email", unique=True)
         get_collection("otps").create_index([("userId", 1), ("purpose", 1)])
         get_collection("otps").create_index("expiresAt", expireAfterSeconds=0)
+        get_collection("login_failures").create_index("createdAt", expireAfterSeconds=900)
         get_collection("tasks").create_index("createdAt")
         get_collection("meetings").create_index([("date", 1), ("time", 1)])
         get_collection("notifications").create_index([("user", 1), ("createdAt", -1)])

@@ -74,3 +74,31 @@ export function ClosingAlertBadge({ daysLeft }) {
     </span>
   );
 }
+
+export function ProgressBar({ progress, message, status }) {
+  const isError = status === 'error' || status === 'failed';
+  const isCompleted = status === 'completed' || progress >= 100;
+  
+  return (
+    <div className="w-full">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+          {message || 'Processing...'}
+        </span>
+        <span className={`text-xs font-bold ${isError ? 'text-rose-500' : isCompleted ? 'text-emerald-500' : 'text-brand-500'}`}>
+          {progress}%
+        </span>
+      </div>
+      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-navy-800">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ease-out ${
+            isError ? 'bg-rose-500' :
+            isCompleted ? 'bg-emerald-500' :
+            'bg-brand-500'
+          }`}
+          style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+        />
+      </div>
+    </div>
+  );
+}

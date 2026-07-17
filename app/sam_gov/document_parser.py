@@ -1,5 +1,5 @@
 """
-api/sam_gov/document_parser.py
+app/sam_gov/document_parser.py
 ------------------------------
 Downloads and extracts text content from PDF and HTML attachments.
 Uses pypdf to parse PDF files.

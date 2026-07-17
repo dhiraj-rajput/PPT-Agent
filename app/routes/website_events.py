@@ -48,18 +48,30 @@ def log_website_event(body: WebsiteEventBody):
         )
 
     lead_oid = None
+    lead = None
     if body.leadId:
         try:
             lead_oid = ObjectId(body.leadId)
+            leads_col = get_collection("leads")
+            lead = leads_col.find_one({"_id": lead_oid})
+            if not lead:
+                raise HTTPException(status_code=404, detail="Lead not found.")
+        except HTTPException:
+            raise
         except Exception:
-            pass
+            raise HTTPException(status_code=400, detail="Invalid lead ID.")
 
     camp_oid = None
     if body.campaignId:
         try:
             camp_oid = ObjectId(body.campaignId)
+            campaigns_col = get_collection("campaigns")
+            if not campaigns_col.find_one({"_id": camp_oid}):
+                raise HTTPException(status_code=404, detail="Campaign not found.")
+        except HTTPException:
+            raise
         except Exception:
-            pass
+            raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
     doc = {
         "leadId": lead_oid,

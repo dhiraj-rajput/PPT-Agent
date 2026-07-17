@@ -1,5 +1,5 @@
 """
-api/routes/integrations.py
+app/routes/integrations.py
 ---------------------------
 Integration settings endpoints — mirrors Node.js server/routes/integrations.js.
 

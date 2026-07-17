@@ -1,5 +1,5 @@
 """
-api/utils/auth.py
+app/core/auth.py
 ------------------
 JWT authentication utilities for the OrbitAvanya FastAPI backend.
 
@@ -17,7 +17,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 
@@ -77,6 +77,7 @@ def verify_action_token(token: str, expected_purpose: str) -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 async def get_current_user(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
 ) -> dict:
     """FastAPI dependency — decode Bearer token and return the user document."""
@@ -85,10 +86,22 @@ async def get_current_user(
         detail="Not authenticated or token expired.",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    if not credentials:
+    
+    token = None
+    if credentials:
+        token = credentials.credentials
+    else:
+        # Fallback to cookies
+        token = request.cookies.get("orbitavanya_token")
+        if not token:
+            # Fallback to query param
+            token = request.query_params.get("token")
+
+    if not token:
         raise exc
+
     try:
-        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: str = payload.get("sub", "")
         if not user_id:
             raise exc

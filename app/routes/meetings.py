@@ -1,5 +1,5 @@
 """
-api/routes/meetings.py
+app/routes/meetings.py
 -----------------------
 Meetings CRUD — mirrors Node.js server/routes/meetings.js.
 
@@ -59,7 +59,7 @@ def _to_public_meeting(m: Optional[dict]) -> dict:
     }
 
 
-async def _resolve_attendees(raw_attendees: List[dict], users_col) -> List[dict]:
+def _resolve_attendees(raw_attendees: List[dict], users_col) -> List[dict]:
     """Normalize the mixed user-id / email attendees list."""
     if not raw_attendees:
         return []
@@ -164,7 +164,7 @@ async def create_meeting(
 
     users_col = get_collection("users")
     raw_attendees = [a.dict() for a in (body.attendees or [])]
-    resolved = await _resolve_attendees(raw_attendees, users_col)
+    resolved = _resolve_attendees(raw_attendees, users_col)
 
     meeting_type = "In Person" if body.type == "In Person" else "Video Call"
     meeting_link = ""

@@ -1,5 +1,5 @@
 """
-api/sam_gov/opportunities.py
+app/sam_gov/opportunities.py
 ----------------------------
 Client for the SAM.gov Opportunities API (v2).
 Provides searching, filtering, and structuring of federal contract opportunities (RFPs).

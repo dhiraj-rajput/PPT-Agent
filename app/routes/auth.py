@@ -1,5 +1,5 @@
 """
-api/routes/auth.py
+app/routes/auth.py
 -------------------
 Authentication routes for the OrbitAvanya FastAPI backend.
 
@@ -27,7 +27,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 import bcrypt
 from pydantic import BaseModel
 
@@ -235,10 +235,31 @@ async def login(body: LoginBody):
     if not body.email or not body.password:
         raise HTTPException(400, "Email and password are required.")
 
+    normalized_email = body.email.lower().strip()
+    login_failures_col = get_collection("login_failures")
+    now = datetime.now(tz=timezone.utc)
+    cutoff = now - timedelta(minutes=15)
+
+    failures_count = login_failures_col.count_documents({
+        "email": normalized_email,
+        "timestamp": {"$gte": cutoff}
+    })
+    if failures_count >= 5:
+        raise HTTPException(429, "Too many failed login attempts. Please try again in 15 minutes.")
+
     users_col = get_collection("users")
-    user = users_col.find_one({"email": body.email.lower().strip()})
+    user = users_col.find_one({"email": normalized_email})
     if not user or not _verify_password(body.password, user.get("passwordHash", "")):
+        login_failures_col.insert_one({
+            "email": normalized_email,
+            "timestamp": datetime.now(tz=timezone.utc),
+            "createdAt": datetime.now(tz=timezone.utc)
+        })
         raise HTTPException(401, "Incorrect email or password.")
+
+    # Successful login — clear failure count
+    login_failures_col.delete_many({"email": normalized_email})
+
     if not user.get("isVerified"):
         raise HTTPException(403, "Account not yet verified. Check your email for the verification OTP.")
 
@@ -247,7 +268,7 @@ async def login(body: LoginBody):
 
 
 @router.post("/verify-otp")
-def verify_otp(body: VerifyOtpBody):
+def verify_otp(body: VerifyOtpBody, response: Response):
     users_col = get_collection("users")
     otps_col = get_collection("otps")
 
@@ -274,7 +295,8 @@ def verify_otp(body: VerifyOtpBody):
 
     otps_col.update_one({"_id": otp_doc["_id"]}, {"$inc": {"attempts": 1}})
 
-    is_valid = otp_doc.get("otpHash") == _hash_otp(body.otp.strip())
+    import hmac
+    is_valid = hmac.compare_digest(otp_doc.get("otpHash", ""), _hash_otp(body.otp.strip()))
     if not is_valid:
         remaining = _MAX_OTP_ATTEMPTS - otp_doc.get("attempts", 0) - 1
         raise HTTPException(400, f"Incorrect OTP. {remaining} attempt(s) remaining.")
@@ -286,6 +308,14 @@ def verify_otp(body: VerifyOtpBody):
         users_col.update_one({"_id": user["_id"]}, {"$set": {"isVerified": True}})
         token = create_access_token(user_id)
         updated_user = users_col.find_one({"_id": user["_id"]})
+        response.set_cookie(
+            key="orbitavanya_token",
+            value=token,
+            httponly=True,
+            secure=True,
+            samesite="lax",
+            max_age=7 * 24 * 60 * 60,
+        )
         return {"token": token, "user": _to_public_user(updated_user)}
 
     if body.purpose == "login":
@@ -293,6 +323,14 @@ def verify_otp(body: VerifyOtpBody):
             action_token = create_action_token(user_id, "force-change-password")
             return {"mustChangePassword": True, "actionToken": action_token}
         token = create_access_token(user_id)
+        response.set_cookie(
+            key="orbitavanya_token",
+            value=token,
+            httponly=True,
+            secure=True,
+            samesite="lax",
+            max_age=7 * 24 * 60 * 60,
+        )
         return {"token": token, "user": _to_public_user(user)}
 
     if body.purpose in ("reset-password", "change-password"):

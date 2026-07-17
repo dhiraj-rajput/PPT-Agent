@@ -17,6 +17,23 @@ export default function ProposalBuilder() {
   // ----- Track individual triggering states -----
   const [triggeringId, setTriggeringId] = useState(null);
 
+  const handleDownload = async (e, filename) => {
+    e.preventDefault();
+    try {
+      const blob = await api.downloadReport(filename);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Download failed:", err);
+    }
+  };
+
   // Ref to hold the latest active tasks to prevent stable interval resets
   const activeTasksRef = useRef({});
   useEffect(() => {
@@ -436,15 +453,14 @@ export default function ProposalBuilder() {
 
                         {/* Download button for completed drafts */}
                         {p.filename && (
-                          <a
-                            href={`http://localhost:5050/api/reports/download/${p.filename}`}
-                            download
-                            className="flex items-center gap-1 rounded-xl bg-brand-50 hover:bg-brand-100 px-3.5 py-1.5 text-xs font-bold text-brand-700 dark:bg-brand-950/40 dark:text-brand-400 transition-colors"
-                            title="Download PDF"
-                          >
-                            <FileDown size={12} />
-                            Download PDF
-                          </a>
+                           <button
+                             onClick={(e) => handleDownload(e, p.filename)}
+                             className="flex items-center gap-1 rounded-xl bg-brand-50 hover:bg-brand-100 px-3.5 py-1.5 text-xs font-bold text-brand-700 dark:bg-brand-950/40 dark:text-brand-400 transition-colors"
+                             title="Download PDF"
+                           >
+                             <FileDown size={12} />
+                             Download PDF
+                           </button>
                         )}
                       </div>
                     </div>

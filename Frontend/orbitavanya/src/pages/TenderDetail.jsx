@@ -58,6 +58,23 @@ export default function TenderDetail() {
   // Draft Requests and Mode States
   const [draftRequests, setDraftRequests] = useState([]);
   const [modeStates, setModeStates] = useState({ prime: 'idle', subcontract: 'idle' });
+
+  const handleDownload = async (e, filename) => {
+    e.preventDefault();
+    try {
+      const blob = await api.downloadReport(filename);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Download failed:", err);
+    }
+  };
   const [modeMessages, setModeMessages] = useState({});
   const [expandedMode, setExpandedMode] = useState(null); // which mode's description is open
   const [manualWinner, setManualWinner] = useState(''); // manually entered winning company name for subcontract mode
@@ -458,14 +475,13 @@ export default function TenderDetail() {
                           (() => {
                             const draft = draftRequests.find(r => r.mode === mode);
                             return (
-                              <a
-                                href={`http://localhost:5050/api/reports/download/${draft?.completed_filename}`}
-                                download
+                              <button
+                                onClick={(e) => handleDownload(e, draft?.completed_filename)}
                                 className="flex items-center gap-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 text-xs font-bold transition-all shadow-soft"
                               >
                                 <FileDown size={13} />
                                 Download PDF
-                              </a>
+                              </button>
                             );
                           })()
                         ) : (

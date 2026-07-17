@@ -1,5 +1,5 @@
 """
-api/utils/video_rooms.py
+app/core/video_rooms.py
 --------------------------
 Video meeting room creation — mirrors Node.js server/utils/googleMeet.js
 and server/utils/zoom.js but running inside FastAPI.

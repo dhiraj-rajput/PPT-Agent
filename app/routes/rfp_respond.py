@@ -1,5 +1,5 @@
 """
-api/routes/rfp_respond.py
+app/routes/rfp_respond.py
 --------------------------
 RFP Auto-Respond — upload an RFP document, get back a fully-written proposal.
 

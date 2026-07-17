@@ -1,5 +1,5 @@
 """
-api/routes/tenders.py
+app/routes/tenders.py
 ---------------------
 Tenders API — SAM.gov Opportunities v2 integration with MongoDB caching.
 
