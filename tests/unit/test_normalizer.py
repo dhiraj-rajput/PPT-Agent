@@ -6,7 +6,7 @@ garbage filtering, phone validation, and pre-merge normalisation logic.
 """
 
 import pytest
-from models.normalizer import (
+from pipeline.models.normalizer import (
     normalize_company_intelligence,
     _is_valid_phone,
     _is_nav_garbage,

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Sparkles, FileDown, LayoutTemplate, Loader2, Database, AlertCircle, RefreshCw, Play } from 'lucide-react';
 import { PageHeader, Card } from '../components/ui/Common.jsx';
+import { api } from '../lib/api.jsx';
 
 export default function ProposalBuilder() {
   const [tab, setTab] = useState('all');
@@ -26,18 +27,15 @@ export default function ProposalBuilder() {
   const fetchData = useCallback(() => {
     setLoading(true);
     // Fetch generated reports
-    const p1 = fetch('http://localhost:8000/api/reports')
-      .then(res => res.json())
+    const p1 = api.getReports()
       .catch(() => null);
 
     // Fetch active draft requests
-    const p2 = fetch('http://localhost:8000/api/tenders/draft-requests/all')
-      .then(res => res.json())
+    const p2 = api.getAllDraftRequests()
       .catch(() => null);
 
     // Fetch active background tasks
-    const p3 = fetch('http://localhost:8000/api/proposals/status')
-      .then(res => res.json())
+    const p3 = api.getProposals()
       .catch(() => null);
 
     Promise.all([p1, p2, p3]).then(([reportsData, draftsData, tasksData]) => {
@@ -65,7 +63,9 @@ export default function ProposalBuilder() {
     let reconnectTimeout;
     
     function connect() {
-      ws = new WebSocket('ws://localhost:8000/api/proposals/ws');
+      const token = localStorage.getItem('orbitavanya_token');
+      const wsUrl = api.getWebSocketUrl(`/api/proposals/ws${token ? `?token=${encodeURIComponent(token)}` : ''}`);
+      ws = new WebSocket(wsUrl);
 
       ws.onmessage = (event) => {
         try {
@@ -120,21 +120,12 @@ export default function ProposalBuilder() {
     const solicitation = d.solicitation_number || d.notice_id;
     const winner = d.target_company || d.award_awardee || '';
 
-    fetch('http://localhost:8000/api/proposals/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        mode: d.mode,
-        solicitation: solicitation,
-        winner: winner,
-        tender_title: d.tender_title
-      })
+    api.createProposal({
+      mode: d.mode,
+      solicitation: solicitation,
+      winner: winner,
+      tender_title: d.tender_title
     })
-      .then(async res => {
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Failed to start compilation pipeline');
-        return data;
-      })
       .then(() => {
         setTriggeringId(null);
         fetchData();
@@ -446,7 +437,7 @@ export default function ProposalBuilder() {
                         {/* Download button for completed drafts */}
                         {p.filename && (
                           <a
-                            href={`http://localhost:8000/api/reports/download/${p.filename}`}
+                            href={`http://localhost:5050/api/reports/download/${p.filename}`}
                             download
                             className="flex items-center gap-1 rounded-xl bg-brand-50 hover:bg-brand-100 px-3.5 py-1.5 text-xs font-bold text-brand-700 dark:bg-brand-950/40 dark:text-brand-400 transition-colors"
                             title="Download PDF"

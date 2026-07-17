@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { Card, MatchBadge, StatusBadge, ProgressBar } from '../components/ui/Common.jsx';
 import { tenders } from '../data/tenders.jsx';
+import { api } from '../lib/api.jsx';
 
 const cleanDescriptionText = (text) => {
   if (!text) return '';
@@ -50,11 +51,7 @@ export default function CompanyDetail() {
   // Fetch company details on mount
   const fetchCompanyDetails = () => {
     setLoading(true);
-    fetch(`http://localhost:8000/api/companies/${uei}`)
-      .then((res) => {
-        if (!res.ok) throw new Error('Company not found in database');
-        return res.json();
-      })
+    api.getCompany(uei)
       .then((data) => {
         setCompany(data);
         setLoading(false);
@@ -70,11 +67,7 @@ export default function CompanyDetail() {
 
   // Fetch recently generated documents for this company
   const fetchRecentProposals = (companyName) => {
-    fetch(`http://localhost:8000/api/proposals/recent?company_name=${encodeURIComponent(companyName)}`)
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed to fetch recent proposals');
-        return res.json();
-      })
+    api.getRecentProposals(companyName)
       .then((data) => {
         setRecentProposals(data || []);
       })
@@ -88,15 +81,24 @@ export default function CompanyDetail() {
     if (!name) return;
     setAiProfileLoading(true);
     try {
-      const res = await fetch(
-        `http://localhost:8000/api/companies/profiles/search?q=${encodeURIComponent(name)}`
-      );
-      if (res.ok) {
-        const data = await res.json();
-        setAiProfile(data);
-      } else {
-        setAiProfile(null);
+      // Check if there is a task status for the company name that completed and has a resolved_slug
+      const tasks = await api.getCompanyResearchStatus();
+      let resolvedSlug = tasks[name]?.resolved_slug;
+
+      let foundProfile = null;
+      if (resolvedSlug) {
+        try {
+          foundProfile = await api.getProfileDetail(resolvedSlug);
+        } catch {}
       }
+
+      if (!foundProfile) {
+        try {
+          foundProfile = await api.searchProfile(name);
+        } catch {}
+      }
+
+      setAiProfile(foundProfile);
     } catch {
       setAiProfile(null);
     } finally {
@@ -112,11 +114,7 @@ export default function CompanyDetail() {
     setResearchMessage('Initializing research agents...');
     setResearchTaskKey(company.name);
     try {
-      await fetch('http://localhost:8000/api/companies/research', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ company: company.name, force: true }),
-      });
+      await api.triggerResearch(company.name, true);
     } catch (err) {
       setIsResearchingHere(false);
       setResearchMessage('Failed to start research.');
@@ -129,8 +127,7 @@ export default function CompanyDetail() {
     if (isResearchingHere && researchTaskKey) {
       timer = setInterval(async () => {
         try {
-          const res = await fetch('http://localhost:8000/api/companies/research/status');
-          const tasks = await res.json();
+          const tasks = await api.getCompanyResearchStatus();
           const task = tasks[researchTaskKey];
           if (task) {
             setResearchProgress(task.progress || 0);
@@ -166,9 +163,7 @@ export default function CompanyDetail() {
 
     const checkForActiveTask = async () => {
       try {
-        const res = await fetch('http://localhost:8000/api/companies/research/status');
-        if (!res.ok) return;
-        const tasks = await res.json();
+        const tasks = await api.getCompanyResearchStatus();
         // Find any task key that fuzzy-matches this company's name
         const companyNameLower = company.name.toLowerCase();
         const matchingKey = Object.keys(tasks).find(key => {
@@ -199,24 +194,11 @@ export default function CompanyDetail() {
     setGenerationMessage('Initializing pipeline...');
     setGenerationStatus('processing');
 
-    fetch('http://localhost:8000/api/proposals/generate-partnership', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ winner: company.name })
-    })
-      .then(async (res) => {
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Failed to start generation task');
-        return data;
-      })
+    api.generatePartnership(company.name)
       .then(() => {
         // Start polling status
         const pollInterval = setInterval(() => {
-          fetch(`http://localhost:8000/api/proposals/status?company_name=${encodeURIComponent(company.name)}`)
-            .then((res) => {
-              if (!res.ok) throw new Error('Task status unreachable');
-              return res.json();
-            })
+          api.getProposalStatusByCompany(company.name)
             .then((statusData) => {
               setGenerationProgress(statusData.progress || 0);
               setGenerationMessage(statusData.message || 'Running pipeline...');
@@ -538,7 +520,7 @@ export default function CompanyDetail() {
                       <Eye size={13} /> View
                     </button>
                     <a
-                      href={`http://localhost:8000/api/reports/download/${doc.filename}`}
+                      href={`http://localhost:5050/api/reports/download/${doc.filename}`}
                       download
                       className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-navy-900 hover:bg-slate-50 dark:border-navy-700 dark:bg-navy-800 dark:text-white dark:hover:bg-navy-700 transition-colors"
                     >
@@ -607,6 +589,37 @@ export default function CompanyDetail() {
               </div>
             </Card>
           )}
+
+          {/* AI Discovered Contacts */}
+          {aiProfile && (aiProfile.emails?.length > 0 || aiProfile.phone_numbers?.length > 0) && (
+            <Card>
+              <h3 className="text-sm font-bold text-navy-900 dark:text-white flex items-center gap-1.5">
+                <Sparkles size={14} className="text-brand-500" /> AI Discovered Contacts
+              </h3>
+              <div className="mt-3 flex flex-col gap-3.5 text-sm">
+                {aiProfile.emails?.length > 0 && (
+                  <div>
+                    <p className="text-xs text-slate-400 mb-1 flex items-center gap-1"><Mail size={11} /> Email Addresses</p>
+                    <div className="flex flex-col gap-1.5">
+                      {aiProfile.emails.map((email, idx) => (
+                        <a key={idx} href={`mailto:${email}`} className="font-semibold text-brand-500 hover:underline break-all">{email}</a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {aiProfile.phone_numbers?.length > 0 && (
+                  <div>
+                    <p className="text-xs text-slate-400 mb-1 flex items-center gap-1"><Phone size={11} /> Phone Numbers</p>
+                    <div className="flex flex-col gap-1 font-semibold text-navy-900 dark:text-slate-200">
+                      {aiProfile.phone_numbers.map((phone, idx) => (
+                        <p key={idx}>{phone}</p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Card>
+          )}
         </div>
       </div>
 
@@ -640,7 +653,7 @@ export default function CompanyDetail() {
             {/* Modal Body: Embedded PDF Viewer */}
             <div className="flex-1 bg-slate-100 dark:bg-navy-900 p-4 md:p-6 flex flex-col overflow-hidden">
               <iframe
-                src={`http://localhost:8000/api/reports/view/${previewingReport.filename}`}
+                src={`http://localhost:5050/api/reports/view/${previewingReport.filename}`}
                 className="w-full h-full border-0 rounded-xl bg-white shadow-lg"
                 title={previewingReport.title}
               />
@@ -652,7 +665,7 @@ export default function CompanyDetail() {
                 Close
               </button>
               <a
-                href={`http://localhost:8000/api/reports/download/${previewingReport.filename}`}
+                href={`http://localhost:5050/api/reports/download/${previewingReport.filename}`}
                 download
                 className="flex items-center gap-2 rounded-xl bg-brand-500 px-5 py-2.5 text-xs font-bold text-white shadow-soft hover:bg-brand-600 transition-colors"
               >

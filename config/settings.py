@@ -195,6 +195,44 @@ class AppSettings(BaseSettings):
     BIDFORGE_MODE: str = Field(default="", description="Per-agent override for the BidForge-style pipeline.")
 
     # ------------------------------------------------------------------
+    # JWT Authentication, Mailer, Zoom & Google Settings (Consolidated)
+    # ------------------------------------------------------------------
+    JWT_SECRET: str = Field(default="", description="JWT signing secret.")
+    JWT_EXPIRES_DAYS: int = Field(
+        default=7,
+        validation_alias="JWT_EXPIRES_IN",
+        description="Number of days a JWT is valid (mapped to JWT_EXPIRES_IN env key)."
+    )
+    OTP_TTL_MINUTES: int = Field(default=10, description="OTP lifetime in minutes.")
+    DEBUG_OTP: bool = Field(default=False, description="Enable printing OTPs to console for development.")
+    SMTP_HOST: str = Field(default="smtp.gmail.com", description="SMTP server hostname.")
+    SMTP_PORT: int = Field(default=465, description="SMTP server port.")
+    SMTP_USER: str = Field(default="", description="SMTP account username/email.")
+    SMTP_PASS: str = Field(default="", description="SMTP account password.")
+    SMTP_FROM: str = Field(default="", description="Sender email address for outgoing mail.")
+    CLIENT_URL: str = Field(default="http://localhost:5173", description="Frontend application client URL.")
+    ZOOM_ACCOUNT_ID: str = Field(default="", description="Zoom account ID.")
+    ZOOM_CLIENT_ID: str = Field(default="", description="Zoom client ID.")
+    ZOOM_CLIENT_SECRET: str = Field(default="", description="Zoom client secret.")
+    GOOGLE_CLIENT_ID: str = Field(default="", description="Google client ID.")
+    GOOGLE_CLIENT_SECRET: str = Field(default="", description="Google client secret.")
+    GOOGLE_REDIRECT_URI: str = Field(
+        default="http://localhost:8000/api/integrations/google/callback",
+        description="Google OAuth redirect URI.",
+    )
+    PORT: int = Field(default=8000, description="Port to run the API server on.")
+    ENV: str = Field(default="dev", description="Environment mode: dev | prod.")
+    CORS_ORIGINS: list[str] = Field(
+        default=[
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+        ],
+        description="Allowed CORS origins for Frontend connectivity."
+    )
+
+    # ------------------------------------------------------------------
     # OCR (for scanned / image-only RFP PDFs that pypdf/PyMuPDF can't read)
     # ------------------------------------------------------------------
     OCR_ENABLED: bool = Field(

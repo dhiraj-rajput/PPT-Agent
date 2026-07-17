@@ -12,7 +12,7 @@ Focuses on:
 import json
 import pytest
 
-from linkedin.browser_scraper import BrowserLinkedInScraper
+from pipeline.linkedin.browser_scraper import BrowserLinkedInScraper
 
 
 # ---------------------------------------------------------------------------

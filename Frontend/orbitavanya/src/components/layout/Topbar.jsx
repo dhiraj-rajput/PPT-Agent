@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Menu, Search, Bell, HelpCircle, Sun, Moon, LogOut, ChevronDown, Calendar, CheckSquare, Info, Plus, Check } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useNotifications } from '../../context/NotificationContext.jsx';
+import { api } from '../../lib/api.jsx';
 
 const TYPE_ICON = {
   meeting_scheduled: Calendar,
@@ -229,8 +230,7 @@ export default function Topbar({ onMenuClick }) {
 
   useEffect(() => {
     // Fetch initial AI mode from backend
-    fetch('http://localhost:8000/api/companies/settings/ai-mode')
-      .then((res) => res.json())
+    api.getAiMode()
       .then((data) => {
         if (data && data.ai_mode) {
           setAiMode(data.ai_mode);
@@ -244,12 +244,7 @@ export default function Topbar({ onMenuClick }) {
     setLoadingMode(true);
     const newMode = aiMode === 'rule_based' ? 'auto' : 'rule_based';
     try {
-      const res = await fetch('http://localhost:8000/api/companies/settings/ai-mode', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: newMode }),
-      });
-      const data = await res.json();
+      const data = await api.setAiMode(newMode);
       if (data && data.ai_mode) {
         setAiMode(data.ai_mode);
       }

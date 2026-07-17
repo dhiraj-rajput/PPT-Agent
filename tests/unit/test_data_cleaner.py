@@ -10,8 +10,8 @@ All inputs are hand-crafted strings that simulate real LinkedIn page noise.
 import pytest
 from datetime import datetime, timezone
 
-from linkedin.data_cleaner import DataCleaner, clean_raw_text_for_llm
-from linkedin.models import (
+from pipeline.linkedin.data_cleaner import DataCleaner, clean_raw_text_for_llm
+from pipeline.linkedin.models import (
     CompanyIdentity,
     CompanyLocation,
     CompanyPost,

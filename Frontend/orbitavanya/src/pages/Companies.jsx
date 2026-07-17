@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Plus, SlidersHorizontal, Eye, FileText, X, Upload, Check, Loader2, AlertOctagon, Calendar } from 'lucide-react';
 import { PageHeader, Card, MatchBadge, StatusBadge } from '../components/ui/Common.jsx';
+import { api } from '../lib/api.jsx';
 
 export default function Companies() {
   // Query & Filters States
@@ -43,19 +44,15 @@ export default function Companies() {
   // Fetch companies dynamically from FastAPI backend
   const fetchCompanies = () => {
     setLoading(true);
-    const params = new URLSearchParams({
+    const params = {
       page: currentPage.toString(),
       limit: itemsPerPage.toString(),
-    });
-    if (query) params.append('query', query);
-    if (sizeFilter !== 'All') params.append('size', sizeFilter);
-    if (naicsFilter !== 'All') params.append('naics', naicsFilter);
+    };
+    if (query) params.query = query;
+    if (sizeFilter !== 'All') params.size = sizeFilter;
+    if (naicsFilter !== 'All') params.naics = naicsFilter;
 
-    fetch(`http://localhost:8000/api/companies?${params.toString()}`)
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed to fetch from API');
-        return res.json();
-      })
+    api.getCompanies(params)
       .then((data) => {
         setAllCompanies(data.companies || []);
         setTotalCompanies(data.total || 0);
@@ -87,16 +84,7 @@ export default function Companies() {
     setIsSubmitting(true);
     setSubmitError(null);
 
-    fetch('http://localhost:8000/api/companies', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(manualForm)
-    })
-      .then(async (res) => {
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Failed to add company');
-        return data;
-      })
+    api.addCompany(manualForm)
       .then(() => {
         setIsSubmitting(false);
         setShowAddModal(false);
@@ -131,25 +119,12 @@ export default function Companies() {
     setIsSubmitting(true);
     setSubmitError(null);
 
-    fetch('http://localhost:8000/api/companies/import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        format: importFormat,
-        data: importData
-      })
-    })
-      .then(async (res) => {
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Failed to import data');
-        return data;
-      })
-      .then((data) => {
+    api.importCompanies(importFormat, importData)
+      .then(() => {
         setIsSubmitting(false);
         setShowAddModal(false);
         setImportData('');
         fetchCompanies();
-        alert(`Successfully imported ${data.count} new companies.`);
       })
       .catch((err) => {
         setIsSubmitting(false);

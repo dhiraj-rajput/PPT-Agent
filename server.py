@@ -21,33 +21,36 @@ Routes:
 """
 
 import uvicorn
+from dotenv import load_dotenv
+load_dotenv()
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from utils.db_client import close_connection
 
 # ---- Core feature routes ----
-from api.routes.companies import router as companies_router
-from api.routes.reports import router as reports_router
-from api.routes.proposals import router as proposals_router
-from api.routes.tenders import router as tenders_router
+from app.routes.companies import router as companies_router
+from app.routes.reports import router as reports_router
+from app.routes.proposals import router as proposals_router
+from app.routes.tenders import router as tenders_router
 
 # ---- Auth & user management (ported from Node.js) ----
-from api.routes.auth import router as auth_router
-from api.routes.users import router as users_router
-from api.routes.tasks import router as tasks_router
-from api.routes.meetings import router as meetings_router
-from api.routes.notifications import router as notifications_router
-from api.routes.integrations import router as integrations_router
+from app.routes.auth import router as auth_router
+from app.routes.users import router as users_router
+from app.routes.tasks import router as tasks_router
+from app.routes.meetings import router as meetings_router
+from app.routes.notifications import router as notifications_router
+from app.routes.integrations import router as integrations_router
 
 # ---- RFP Auto-Respond (formerly BidForge) ----
-from api.routes.rfp_respond import router as rfp_respond_router
+from app.routes.rfp_respond import router as rfp_respond_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: load/verify SAM entities database + ensure MongoDB indexes
-    from api.routes.companies import import_sam_entities_csv
+    from app.routes.companies import import_sam_entities_csv
     import_sam_entities_csv()
 
     # Ensure indexes for all collections (core + new auth collections)
@@ -72,6 +75,8 @@ async def lifespan(app: FastAPI):
     close_connection()
 
 
+from config.settings import settings
+
 app = FastAPI(
     title="OrbitAvanya Backend API",
     version="2.0",
@@ -82,12 +87,7 @@ app = FastAPI(
 # Enable CORS for frontend connectivity
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -109,10 +109,26 @@ app.include_router(rfp_respond_router, prefix="/api")
 
 @app.get("/api/health")
 async def health():
-    return {"ok": True, "service": "OrbitAvanya API v2.0"}
+    try:
+        from utils.db_client import get_database
+        db = get_database()
+        db.command("ping")
+        db_status = "healthy"
+    except Exception as e:
+        import logging
+        logging.getLogger("server").error(f"Database health check failed: {e}")
+        db_status = "unhealthy"
+    
+    return {
+        "ok": db_status == "healthy",
+        "service": "OrbitAvanya API v2.0",
+        "dependencies": {
+            "mongodb": db_status
+        }
+    }
 
 
 if __name__ == "__main__":
-    import os
-    port = int(os.getenv("PORT", "8000"))
-    uvicorn.run("server:app", host="127.0.0.1", port=port, reload=True)
+    from config.settings import settings
+    reload_enabled = (settings.ENV == "dev")
+    uvicorn.run("server:app", host="127.0.0.1", port=settings.PORT, reload=reload_enabled)

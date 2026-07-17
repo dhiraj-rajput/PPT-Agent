@@ -24,10 +24,10 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from api.sam_gov.opportunities import SAMOpportunitiesClient
-from api.sam_gov.sam_client import SAMEntityClient
-from api.sam_gov.competitors import CompetitorExtractor
-from api.sam_gov.competitor_profiler import CompetitorProfiler
+from app.sam_gov.opportunities import SAMOpportunitiesClient
+from app.sam_gov.sam_client import SAMEntityClient
+from app.sam_gov.competitors import CompetitorExtractor
+from app.sam_gov.competitor_profiler import CompetitorProfiler
 from config.settings import settings
 from utils.db_client import ensure_all_indexes, close_connection, get_collection
 from utils.helpers import setup_logger
@@ -363,9 +363,9 @@ def profile_single_opportunity(selected_opp: dict, opp_client: SAMOpportunitiesC
             # Run proposal compiler & PDF generator fast-path for mock mode
             try:
                 from pathlib import Path
-                from utils.rfp_parser import RFPParser
-                from utils.pitch_compiler import PitchCompiler
-                from utils.pdf_generator import PDFGenerator
+                from documents.rfp_response.rfp_parser import RFPParser
+                from documents.rfp_response.pitch_compiler import PitchCompiler
+                from documents.rfp_response.pdf_generator import PDFGenerator
 
                 proj_root = Path(__file__).resolve().parent
                 print("\n  [Mock Mode] Generating mock B2B proposal JSON & PDF...")
@@ -391,7 +391,7 @@ def profile_single_opportunity(selected_opp: dict, opp_client: SAMOpportunitiesC
         else:
             print("⚡ Launching full scraping pipeline (LinkedIn, Website, Search agents) for the winner...")
             try:
-                from orchestrator import run_pipeline
+                from pipeline.orchestrator import run_pipeline
                 from main import print_summary
                 
                 # Execute the full LangGraph scraping/agent pipeline on the winning company
@@ -407,7 +407,7 @@ def profile_single_opportunity(selected_opp: dict, opp_client: SAMOpportunitiesC
                         col = get_collection("company_profiles")
                         slug = winner_result.get("company_slug") or optimized.get("company_slug")
                         if not slug and (optimized.get("website") or optimized.get("website_url")):
-                            from models.compactor import _domain_key
+                            from pipeline.models.compactor import _domain_key
                             web_val = str(optimized.get("website") or optimized.get("website_url") or "")
                             slug = _domain_key(web_val)
                         

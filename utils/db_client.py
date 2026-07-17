@@ -15,7 +15,6 @@ Usage:
 """
 
 from typing import Optional, Any
-from motor.motor_asyncio import AsyncIOMotorClient
 
 import pymongo
 from pymongo import MongoClient
@@ -55,7 +54,9 @@ def get_database() -> Database:
     if _mongo_database is not None:
         return _mongo_database
 
-    logger.info(f"Connecting to MongoDB at: {settings.MONGO_URI}")
+    import re
+    redacted_uri = re.sub(r'://[^@]*@', '://***:***@', settings.MONGO_URI)
+    logger.info(f"Connecting to MongoDB at: {redacted_uri}")
 
     _mongo_client = MongoClient(
         settings.MONGO_URI,
@@ -204,59 +205,55 @@ def ensure_all_indexes() -> None:
         unique=True,
     )
 
-    logger.info("All agent indexes are in place (9 collections).")
+    # --- Task Statuses collection ---
+    task_statuses = get_collection("task_statuses")
+    task_statuses.create_index([("task_id", pymongo.ASCENDING)], name="idx_task_statuses_id", unique=True)
+    task_statuses.create_index([("expireAt", pymongo.ASCENDING)], name="idx_task_statuses_expire_at", expireAfterSeconds=0)
+
+    # --- OAuth States collection ---
+    oauth_states = get_collection("oauth_states")
+    oauth_states.create_index([("state", pymongo.ASCENDING)], name="idx_oauth_states_id", unique=True)
+    oauth_states.create_index([("expireAt", pymongo.ASCENDING)], name="idx_oauth_states_expire_at", expireAfterSeconds=0)
+
+    logger.info("All agent indexes are in place (11 collections).")
 
 
-class MongoStorageManager:
-    """Persist raw pages, cleaned pages, and final profiles into MongoDB using Motor (Async)."""
+def update_task_status(
+    task_id: str,
+    task_type: str,
+    progress: int,
+    status: str,
+    message: str,
+    filename: Optional[str] = None,
+    extra: Optional[dict] = None,
+) -> None:
+    """Upsert background task progress/status inside MongoDB to support multi-worker deployments."""
+    from datetime import datetime, timezone, timedelta
+    col = get_collection("task_statuses")
+    now = datetime.now(timezone.utc)
+    doc = {
+        "task_id": task_id,
+        "type": task_type,
+        "progress": progress,
+        "status": status,
+        "message": message,
+        "updatedAt": now,
+        "expireAt": now + timedelta(days=1),
+    }
+    if filename is not None:
+        doc["filename"] = filename
+    if extra:
+        doc.update(extra)
+    col.update_one({"task_id": task_id}, {"$set": doc}, upsert=True)
 
-    def __init__(self, settings: Settings) -> None:
-        self._client: AsyncIOMotorClient[Any] = AsyncIOMotorClient(settings.mongodb_uri)
-        self._db = self._client[settings.mongodb_db_name]
-        self.raw_collection = self._db[settings.raw_collection]
-        self.cleaned_collection = self._db[settings.cleaned_collection]
-        self.profile_collection = self._db[settings.profile_collection]
-        self._indexes_ready = False
 
-    async def ensure_indexes(self) -> None:
-        if self._indexes_ready:
-            return
-        await self.raw_collection.create_index([("url", pymongo.ASCENDING)], unique=True, name="unique_raw_url")
-        await self.cleaned_collection.create_index([("url", pymongo.ASCENDING)], unique=True, name="unique_cleaned_url")
-        await self.profile_collection.create_index([("website", pymongo.ASCENDING)], unique=True, sparse=True, name="unique_profile_website")
-        await self.profile_collection.create_index([("company_name", pymongo.ASCENDING)], name="profile_company_name_idx")
-        self._indexes_ready = True
-        logger.info("mongo_indexes_ready")
+def get_task_status_db(task_id: str) -> Optional[dict]:
+    """Retrieve background task status from MongoDB by task_id."""
+    col = get_collection("task_statuses")
+    return col.find_one({"task_id": task_id}, {"_id": 0, "expireAt": 0, "updatedAt": 0})
 
-    async def upsert_raw_page(self, document: dict[str, Any]) -> str:
-        await self.ensure_indexes()
-        await self.raw_collection.update_one(
-            {"url": document["url"]},
-            {"$set": document},
-            upsert=True,
-        )
-        stored = await self.raw_collection.find_one({"url": document["url"]}, {"_id": 1})
-        return str(stored["_id"]) if stored else ""
 
-    async def upsert_cleaned_page(self, document: dict[str, Any]) -> str:
-        await self.ensure_indexes()
-        await self.cleaned_collection.update_one(
-            {"url": document["url"]},
-            {"$set": document},
-            upsert=True,
-        )
-        stored = await self.cleaned_collection.find_one({"url": document["url"]}, {"_id": 1})
-        return str(stored["_id"]) if stored else ""
-
-    async def upsert_company_profile(self, document: dict[str, Any]) -> str:
-        await self.ensure_indexes()
-        await self.profile_collection.update_one(
-            {"website": document["website"]},
-            {"$set": document},
-            upsert=True,
-        )
-        stored = await self.profile_collection.find_one({"website": document["website"]}, {"_id": 1})
-        return str(stored["_id"]) if stored else ""
-
-    def close(self) -> None:
-        self._client.close()
+def get_all_task_statuses_db() -> list[dict]:
+    """Retrieve all background task statuses from MongoDB."""
+    col = get_collection("task_statuses")
+    return list(col.find({}, {"_id": 0, "expireAt": 0, "updatedAt": 0}))

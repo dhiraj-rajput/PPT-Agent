@@ -6,15 +6,15 @@ and the LangGraph orchestrator routing logic.
 """
 
 import pytest
-from google_search.search_client import CompanyDiscovery
-from website.classifier import classify_text_by_sections
-from website.extractor import extract_company_intelligence, identify_role_pages
-from website.models import WebsiteData
-from website.urls import normalize_url, is_internal_link, should_ignore_url, get_url_priority
+from pipeline.google_search.search_client import CompanyDiscovery
+from pipeline.website.classifier import classify_text_by_sections
+from pipeline.website.extractor import extract_company_intelligence, identify_role_pages
+from pipeline.website.models import WebsiteData
+from pipeline.website.urls import normalize_url, is_internal_link, should_ignore_url, get_url_priority
 from typing import Any, cast
-from orchestrator.state import AgentState
-from orchestrator.nodes import classify_input
-from orchestrator.graph import build_graph
+from pipeline.orchestrator.state import AgentState
+from pipeline.orchestrator.nodes import classify_input
+from pipeline.orchestrator.graph import build_graph
 
 
 # ===========================================================================
@@ -183,7 +183,7 @@ def test_orchestrator_graph_compile():
 
 
 def test_discover_external_news_node_skips_when_missing():
-    from orchestrator.nodes import discover_external_news
+    from pipeline.orchestrator.nodes import discover_external_news
     res = discover_external_news(_state({"company_name": None, "website_url": None}))
     assert res == {}
 
@@ -192,7 +192,7 @@ def test_discover_external_news_node_skips_when_missing():
 # 5. Routing and Edge-case Tests
 # ===========================================================================
 
-from orchestrator.graph import _route_after_classify, _route_after_website_discovery
+from pipeline.orchestrator.graph import _route_after_classify, _route_after_website_discovery
 
 def test_routing_logic():
     # Test routing after classification

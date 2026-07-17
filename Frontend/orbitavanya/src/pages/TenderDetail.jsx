@@ -9,6 +9,7 @@ import {
 import { Card, MatchBadge, StatusBadge } from '../components/ui/Common.jsx';
 import { tenders as staticTenders, daysUntilClosing } from '../data/tenders.jsx';
 import { companies as staticCompanies } from '../data/companies.jsx';
+import { api } from '../lib/api.jsx';
 
 // ---------------------------------------------------------------------------
 // Mode config — drives button appearance + backend payload for every status
@@ -63,8 +64,7 @@ export default function TenderDetail() {
 
   // Fetch draft requests status from database helper
   const fetchDraftRequests = useCallback(() => {
-    fetch(`http://localhost:8000/api/tenders/${id}/request-draft`)
-      .then(res => res.json())
+    api.getTenderDraftRequest(id)
       .then(draftData => {
         if (draftData?.requests?.length) {
           setDraftRequests(draftData.requests);
@@ -82,12 +82,7 @@ export default function TenderDetail() {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    fetch(`http://localhost:8000/api/tenders/${id}`)
-      .then(res => {
-        if (res.status === 404) throw new Error('not_found');
-        if (!res.ok) throw new Error('backend_error');
-        return res.json();
-      })
+    api.getTender(id)
       .then(data => {
         setTender(data);
         setBackendOffline(false);
@@ -96,7 +91,7 @@ export default function TenderDetail() {
         fetchDraftRequests();
       })
       .catch(err => {
-        if (err.message === 'not_found') {
+        if (err.message.includes('404') || err.message === 'not_found') {
           const found = staticTenders.find(t => String(t.id) === id);
           if (found) { setTender(found); setBackendOffline(false); }
           else setError('Tender not found. It may not be cached yet — try syncing from SAM.gov on the Tenders page.');
@@ -114,7 +109,9 @@ export default function TenderDetail() {
     let reconnectTimeout;
 
     function connect() {
-      ws = new WebSocket('ws://localhost:8000/api/proposals/ws');
+      const token = localStorage.getItem('orbitavanya_token');
+      const wsUrl = api.getWebSocketUrl(`/api/proposals/ws${token ? `?token=${encodeURIComponent(token)}` : ''}`);
+      ws = new WebSocket(wsUrl);
       ws.onmessage = () => {
         // Refresh statuses whenever a progress push or task update is broadcasted
         fetchDraftRequests();
@@ -156,21 +153,11 @@ export default function TenderDetail() {
     }
 
     setModeStates(s => ({ ...s, [mode]: 'submitting' }));
-    fetch(`http://localhost:8000/api/tenders/${id}/request-draft`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        mode,
-        requester: 'John Doe',
-        target_company: winningCompany,
-        tender_title: tender?.title || 'Tender Proposal'
-      }),
+    api.requestTenderDraft(id, {
+      mode,
+      target_company: winningCompany,
+      tender_title: tender?.title || 'Tender Proposal'
     })
-      .then(async res => {
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Request failed');
-        return data;
-      })
       .then(data => {
         setModeStates(s => ({ ...s, [mode]: data.status === 'already_requested' ? 'already' : 'success' }));
         setModeMessages(m => ({ ...m, [mode]: data.message }));
@@ -472,7 +459,7 @@ export default function TenderDetail() {
                             const draft = draftRequests.find(r => r.mode === mode);
                             return (
                               <a
-                                href={`http://localhost:8000/api/reports/download/${draft?.completed_filename}`}
+                                href={`http://localhost:5050/api/reports/download/${draft?.completed_filename}`}
                                 download
                                 className="flex items-center gap-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 text-xs font-bold transition-all shadow-soft"
                               >

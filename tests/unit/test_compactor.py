@@ -6,7 +6,7 @@ rule-based compaction logic, and end-to-end compaction wrapper.
 """
 
 import pytest
-from models.compactor import (
+from pipeline.models.compactor import (
     BusinessIntelligenceCompactor,
     _canonical_website,
     _domain_key,

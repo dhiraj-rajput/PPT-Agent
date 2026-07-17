@@ -11,8 +11,8 @@ import pytest
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch, call
 
-from linkedin.models import CompanyIdentity, LinkedInCompanyData, RawLinkedInScrapedData
-from linkedin.storage import LinkedInStorage
+from pipeline.linkedin.models import CompanyIdentity, LinkedInCompanyData, RawLinkedInScrapedData
+from pipeline.linkedin.storage import LinkedInStorage
 
 
 # ---------------------------------------------------------------------------
@@ -57,7 +57,7 @@ def sample_raw_data() -> RawLinkedInScrapedData:
 # ---------------------------------------------------------------------------
 
 class TestSaveRawScrapedData:
-    @patch("linkedin.storage.get_collection")
+    @patch("pipeline.linkedin.storage.get_collection")
     def test_inserts_document_and_returns_id(self, mock_get_collection, storage, sample_raw_data):
         mock_collection = MagicMock()
         mock_get_collection.return_value = mock_collection
@@ -73,7 +73,7 @@ class TestSaveRawScrapedData:
         # Should return the string representation of the ObjectId
         assert result == "507f1f77bcf86cd799439011"
 
-    @patch("linkedin.storage.get_collection")
+    @patch("pipeline.linkedin.storage.get_collection")
     def test_document_contains_company_slug(self, mock_get_collection, storage, sample_raw_data):
         mock_collection = MagicMock()
         mock_get_collection.return_value = mock_collection
@@ -94,7 +94,7 @@ class TestSaveRawScrapedData:
 # ---------------------------------------------------------------------------
 
 class TestSaveStructuredCompanyData:
-    @patch("linkedin.storage.get_collection")
+    @patch("pipeline.linkedin.storage.get_collection")
     def test_calls_update_one_upsert(self, mock_get_collection, storage, sample_company_data):
         mock_collection = MagicMock()
         mock_get_collection.return_value = mock_collection
@@ -116,7 +116,7 @@ class TestSaveStructuredCompanyData:
         # Should return the new doc ID
         assert result == "newdoc123"
 
-    @patch("linkedin.storage.get_collection")
+    @patch("pipeline.linkedin.storage.get_collection")
     def test_update_case_fetches_existing_id(self, mock_get_collection, storage, sample_company_data):
         mock_collection = MagicMock()
         mock_get_collection.return_value = mock_collection
@@ -135,7 +135,7 @@ class TestSaveStructuredCompanyData:
         mock_collection.find_one.assert_called_once()
         assert result == "existingdoc456"
 
-    @patch("linkedin.storage.get_collection")
+    @patch("pipeline.linkedin.storage.get_collection")
     def test_filter_uses_company_slug(self, mock_get_collection, storage, sample_company_data):
         mock_collection = MagicMock()
         mock_get_collection.return_value = mock_collection
@@ -155,7 +155,7 @@ class TestSaveStructuredCompanyData:
 # ---------------------------------------------------------------------------
 
 class TestGetStructuredCompanyData:
-    @patch("linkedin.storage.get_collection")
+    @patch("pipeline.linkedin.storage.get_collection")
     def test_returns_none_when_not_found(self, mock_get_collection, storage):
         mock_collection = MagicMock()
         mock_collection.find_one.return_value = None
@@ -164,7 +164,7 @@ class TestGetStructuredCompanyData:
         result = storage.get_structured_company_data("nonexistent-slug")
         assert result is None
 
-    @patch("linkedin.storage.get_collection")
+    @patch("pipeline.linkedin.storage.get_collection")
     def test_returns_company_data_when_found(self, mock_get_collection, storage, sample_company_data):
         mock_collection = MagicMock()
         mock_get_collection.return_value = mock_collection
@@ -180,7 +180,7 @@ class TestGetStructuredCompanyData:
         assert isinstance(result, LinkedInCompanyData)
         assert result.company_slug == "infosys"
 
-    @patch("linkedin.storage.get_collection")
+    @patch("pipeline.linkedin.storage.get_collection")
     def test_strips_mongo_id_before_parse(self, mock_get_collection, storage, sample_company_data):
         mock_collection = MagicMock()
         mock_get_collection.return_value = mock_collection
@@ -199,7 +199,7 @@ class TestGetStructuredCompanyData:
 # ---------------------------------------------------------------------------
 
 class TestCompanyDataExists:
-    @patch("linkedin.storage.get_collection")
+    @patch("pipeline.linkedin.storage.get_collection")
     def test_returns_true_when_exists(self, mock_get_collection, storage):
         mock_collection = MagicMock()
         mock_collection.count_documents.return_value = 1
@@ -208,7 +208,7 @@ class TestCompanyDataExists:
         result = storage.company_data_exists("infosys")
         assert result is True
 
-    @patch("linkedin.storage.get_collection")
+    @patch("pipeline.linkedin.storage.get_collection")
     def test_returns_false_when_not_found(self, mock_get_collection, storage):
         mock_collection = MagicMock()
         mock_collection.count_documents.return_value = 0
@@ -217,7 +217,7 @@ class TestCompanyDataExists:
         result = storage.company_data_exists("unknown-company")
         assert result is False
 
-    @patch("linkedin.storage.get_collection")
+    @patch("pipeline.linkedin.storage.get_collection")
     def test_uses_limit_1_for_efficiency(self, mock_get_collection, storage):
         mock_collection = MagicMock()
         mock_collection.count_documents.return_value = 0
@@ -235,7 +235,7 @@ class TestCompanyDataExists:
 # ---------------------------------------------------------------------------
 
 class TestLogScrapeOperation:
-    @patch("linkedin.storage.get_collection")
+    @patch("pipeline.linkedin.storage.get_collection")
     def test_inserts_log_with_correct_fields(self, mock_get_collection, storage):
         mock_collection = MagicMock()
         mock_get_collection.return_value = mock_collection
@@ -256,7 +256,7 @@ class TestLogScrapeOperation:
         assert log_doc["duration_seconds"] == 45.6
         assert log_doc["error_message"] is None
 
-    @patch("linkedin.storage.get_collection")
+    @patch("pipeline.linkedin.storage.get_collection")
     def test_logs_error_message_on_failure(self, mock_get_collection, storage):
         mock_collection = MagicMock()
         mock_get_collection.return_value = mock_collection
@@ -279,7 +279,7 @@ class TestLogScrapeOperation:
 # ---------------------------------------------------------------------------
 
 class TestGetRecentScrapeLogs:
-    @patch("linkedin.storage.get_collection")
+    @patch("pipeline.linkedin.storage.get_collection")
     def test_returns_list_of_dicts(self, mock_get_collection, storage):
         mock_collection = MagicMock()
         mock_get_collection.return_value = mock_collection
@@ -295,7 +295,7 @@ class TestGetRecentScrapeLogs:
 
         assert isinstance(result, list)
 
-    @patch("linkedin.storage.get_collection")
+    @patch("pipeline.linkedin.storage.get_collection")
     def test_excludes_mongo_id_field(self, mock_get_collection, storage):
         mock_collection = MagicMock()
         mock_get_collection.return_value = mock_collection

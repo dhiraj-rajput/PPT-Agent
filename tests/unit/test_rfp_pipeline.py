@@ -8,10 +8,10 @@ competitor extraction, and profiling modules.
 import pytest
 from unittest.mock import MagicMock, patch
 
-from api.sam_gov.opportunities import SAMOpportunitiesClient
-from api.sam_gov.sam_client import SAMEntityClient
-from api.sam_gov.competitors import CompetitorExtractor
-from api.sam_gov.competitor_profiler import CompetitorProfiler
+from app.sam_gov.opportunities import SAMOpportunitiesClient
+from app.sam_gov.sam_client import SAMEntityClient
+from app.sam_gov.competitors import CompetitorExtractor
+from app.sam_gov.competitor_profiler import CompetitorProfiler
 
 
 class TestSAMOpportunitiesClient:
@@ -95,7 +95,7 @@ class TestCompetitorExtractor:
 
 
 class TestCompetitorProfiler:
-    @patch("api.sam_gov.competitor_profiler.CompetitorProfiler._extract_profile_via_search")
+    @patch("app.sam_gov.competitor_profiler.CompetitorProfiler._extract_profile_via_search")
     def test_profiler_limits_and_caching(self, mock_extract):
         # Setup mock profile extraction
         mock_extract.return_value = {
@@ -123,7 +123,7 @@ class TestCompetitorProfiler:
 
 class TestDocumentParser:
     def test_html_parsing(self):
-        from api.sam_gov.document_parser import DocumentParser
+        from app.sam_gov.document_parser import DocumentParser
         parser = DocumentParser()
         html = b"<html><body><h1>Title</h1><p>This is a test paragraph.</p></body></html>"
         text = parser.extract_text_from_html(html)

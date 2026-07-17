@@ -16,7 +16,7 @@ import { api } from '../lib/api.jsx';
 const POLL_INTERVAL_MS = 2500;
 
 export default function RFPAutoRespond() {
-  const [rfpFile, setRfpFile] = useState(null);
+  const [rfpFiles, setRfpFiles] = useState([]);
   const [templateFile, setTemplateFile] = useState(null);
   const [taskId, setTaskId] = useState(null);
   const [taskState, setTaskState] = useState(null); // { progress, status, message, filename }
@@ -52,8 +52,8 @@ export default function RFPAutoRespond() {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!rfpFile) {
-      setError('Please select an RFP file to upload.');
+    if (rfpFiles.length === 0) {
+      setError('Please select at least one RFP file to upload.');
       return;
     }
     setError('');
@@ -61,7 +61,7 @@ export default function RFPAutoRespond() {
     setTaskId(null);
     setTaskState(null);
     try {
-      const { task_id } = await api.uploadRfp(rfpFile, templateFile);
+      const { task_id } = await api.uploadRfp(rfpFiles, templateFile);
       setTaskId(task_id);
       setTaskState({ progress: 0, status: 'processing', message: 'Upload received, queuing pipeline...', filename: null });
     } catch (err) {
@@ -73,7 +73,7 @@ export default function RFPAutoRespond() {
 
   function reset() {
     clearInterval(pollRef.current);
-    setRfpFile(null);
+    setRfpFiles([]);
     setTemplateFile(null);
     setTaskId(null);
     setTaskState(null);
@@ -81,16 +81,32 @@ export default function RFPAutoRespond() {
   }
 
   // -------------------------------------------------------------------------
-  // Derived state
+  // Derived state & helpers
   // -------------------------------------------------------------------------
 
   const isRunning = taskState && taskState.status === 'processing';
   const isCompleted = taskState && taskState.status === 'completed';
   const isFailed = taskState && taskState.status === 'failed';
   const progress = taskState?.progress ?? 0;
-  const downloadUrl = isCompleted && taskState.filename
-    ? api.getRfpRespondDownloadUrl(taskState.filename)
-    : null;
+
+  const handleDownload = async (e) => {
+    e.preventDefault();
+    if (!taskState?.filename) return;
+    try {
+      const blob = await api.downloadRfpRespond(taskState.filename);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = taskState.filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Download failed:", err);
+      alert("Failed to download file.");
+    }
+  };
 
   // -------------------------------------------------------------------------
   // Render
@@ -149,28 +165,42 @@ export default function RFPAutoRespond() {
               RFP Document <span className="text-rose-500">*</span>
             </label>
             <div
-              className="group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-950/50 px-6 py-10 text-center transition-colors hover:border-brand-400 hover:bg-brand-50/40 dark:hover:bg-brand-900/10"
+              className="group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-950/50 px-6 py-8 text-center transition-colors hover:border-brand-400 hover:bg-brand-50/40 dark:hover:bg-brand-900/10"
               onClick={() => rfpRef.current?.click()}
             >
-              <Upload size={28} className="text-slate-300 dark:text-slate-600 group-hover:text-brand-500 transition-colors" />
-              {rfpFile ? (
-                <div className="flex items-center gap-2">
-                  <FileText size={16} className="text-brand-600" />
-                  <span className="text-sm font-semibold text-navy-900 dark:text-white">{rfpFile.name}</span>
+              {rfpFiles.length > 0 ? (
+                <div className="w-full space-y-2 px-2" onClick={(e) => e.stopPropagation()}>
+                  <p className="text-xs font-semibold text-slate-500 mb-2">Selected RFP Documents:</p>
+                  {rfpFiles.map((file, idx) => (
+                    <div key={idx} className="flex items-center justify-between gap-2 p-2 bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-800 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <FileText size={16} className="text-brand-600 shrink-0" />
+                        <span className="text-xs font-semibold text-navy-900 dark:text-white truncate max-w-[250px]">{file.name}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setRfpFiles(prev => prev.filter((_, i) => i !== idx))}
+                        className="rounded-full p-0.5 text-slate-400 hover:text-rose-500"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); setRfpFile(null); }}
-                    className="rounded-full p-0.5 text-slate-400 hover:text-rose-500"
+                    onClick={() => rfpRef.current?.click()}
+                    className="mt-3 text-xs font-bold text-brand-600 hover:underline inline-block"
                   >
-                    <X size={14} />
+                    + Add more files
                   </button>
                 </div>
               ) : (
                 <>
+                  <Upload size={28} className="text-slate-300 dark:text-slate-600 group-hover:text-brand-500 transition-colors" />
                   <p className="text-sm font-semibold text-navy-900 dark:text-white">
-                    Drop your RFP here or <span className="text-brand-600">browse</span>
+                    Drop your RFP files here or <span className="text-brand-600">browse</span>
                   </p>
-                  <p className="text-xs text-slate-400 dark:text-slate-500">Supports PDF, DOCX, TXT</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500">Supports PDF, DOCX, TXT (Multiple files allowed)</p>
                 </>
               )}
             </div>
@@ -179,7 +209,12 @@ export default function RFPAutoRespond() {
               type="file"
               accept=".pdf,.docx,.doc,.txt"
               className="hidden"
-              onChange={(e) => setRfpFile(e.target.files?.[0] || null)}
+              multiple
+              onChange={(e) => {
+                if (e.target.files) {
+                  setRfpFiles(prev => [...prev, ...Array.from(e.target.files)]);
+                }
+              }}
             />
           </div>
 
@@ -231,7 +266,7 @@ export default function RFPAutoRespond() {
 
           <button
             type="submit"
-            disabled={uploading || !rfpFile}
+            disabled={uploading || rfpFiles.length === 0}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-500 to-accent-orange py-3 text-sm font-bold text-white shadow-soft transition-opacity hover:opacity-90 disabled:opacity-60"
           >
             {uploading ? <Loader2 size={16} className="animate-spin" /> : <Zap size={16} />}
@@ -295,20 +330,19 @@ export default function RFPAutoRespond() {
             </div>
           )}
 
-          {isCompleted && downloadUrl && (
+          {isCompleted && taskState.filename && (
             <div className="space-y-3">
               <div className="flex items-center gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 px-3.5 py-2.5 text-sm text-emerald-700 dark:text-emerald-400">
                 <CheckCircle size={16} className="shrink-0" />
                 Your proposal has been generated and is ready to download.
               </div>
-              <a
-                href={downloadUrl}
-                download
-                className="flex items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3 text-sm font-bold text-white shadow-soft hover:bg-emerald-600 transition-colors"
+              <button
+                onClick={handleDownload}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3 text-sm font-bold text-white shadow-soft hover:bg-emerald-600 transition-colors"
               >
                 <Download size={16} />
                 Download Proposal ({taskState.filename})
-              </a>
+              </button>
             </div>
           )}
         </div>

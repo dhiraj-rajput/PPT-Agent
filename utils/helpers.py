@@ -29,6 +29,9 @@ from tenacity import (
 )
 
 from config.settings import settings
+import threading
+
+SUBPROCESS_SEMAPHORE = threading.Semaphore(3)
 
 
 # ---------------------------------------------------------------------------

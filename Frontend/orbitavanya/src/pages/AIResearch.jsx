@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { api } from '../lib/api.jsx';
 import {
   Sparkles, Search, Building2, TrendingUp, ShieldCheck, Target,
   RefreshCw, Cpu, Award, Zap, AlertTriangle, AlertCircle,
@@ -35,51 +36,49 @@ export default function AIResearch() {
   const [activeTab, setActiveTab] = useState('overview');
   // Pagination state for the company list
   const [currentPage, setCurrentPage] = useState(1);
+  const [taskStatusMap, setTaskStatusMap] = useState({});
 
   // ─── Fetch helpers ───────────────────────────────────────────────────────────
 
   const fetchCompanies = async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/companies?limit=1000');
-      if (res.ok) {
-        const data = await res.json();
-        const list = data.companies || [];
-        setCompaniesList(list);
+      const data = await api.getCompanies({ limit: 1000 });
+      const list = data.companies || [];
+      setCompaniesList(list);
 
-        // Check if there is a query parameter "q" in the URL
-        const params = new URLSearchParams(window.location.search);
-        const qParam = params.get('q');
-        let initialSelection = null;
+      // Check if there is a query parameter "q" in the URL
+      const params = new URLSearchParams(window.location.search);
+      const qParam = params.get('q');
+      let initialSelection = null;
 
-        if (qParam) {
-          const qLower = qParam.toLowerCase();
-          initialSelection = list.find(c =>
-            c.name.toLowerCase().includes(qLower) ||
-            qLower.includes(c.name.toLowerCase())
+      if (qParam) {
+        const qLower = qParam.toLowerCase();
+        initialSelection = list.find(c =>
+          c.name.toLowerCase().includes(qLower) ||
+          qLower.includes(c.name.toLowerCase())
+        );
+      }
+
+      if (initialSelection) {
+        setSelectedCompany(initialSelection);
+      } else {
+        // Default selection — only if no research is already active
+        if (list.length > 0 && !selectedCompany) {
+          setSelectedCompany(list[0]);
+        }
+        // If we reconnected to an active task, upgrade the placeholder
+        // selectedCompany to the real entry from the list
+        setSelectedCompany(prev => {
+          if (!prev) return list[0] || null;
+          // If the current selection looks like a placeholder (no uei/industry properly set)
+          const isPlaceholder = !prev.uei;
+          if (!isPlaceholder) return prev; // already a real entry
+          const match = list.find(c =>
+            c.name.toLowerCase().includes((prev.name || '').toLowerCase().split(' ')[0]) ||
+            (prev.name || '').toLowerCase().includes(c.name.toLowerCase().split(' ')[0])
           );
-        }
-
-        if (initialSelection) {
-          setSelectedCompany(initialSelection);
-        } else {
-          // Default selection — only if no research is already active
-          if (list.length > 0 && !selectedCompany) {
-            setSelectedCompany(list[0]);
-          }
-          // If we reconnected to an active task, upgrade the placeholder
-          // selectedCompany to the real entry from the list
-          setSelectedCompany(prev => {
-            if (!prev) return list[0] || null;
-            // If the current selection looks like a placeholder (no uei/industry properly set)
-            const isPlaceholder = !prev.uei;
-            if (!isPlaceholder) return prev; // already a real entry
-            const match = list.find(c =>
-              c.name.toLowerCase().includes((prev.name || '').toLowerCase().split(' ')[0]) ||
-              (prev.name || '').toLowerCase().includes(c.name.toLowerCase().split(' ')[0])
-            );
-            return match || prev;
-          });
-        }
+          return match || prev;
+        });
       }
     } catch (err) {
       console.error('Error fetching companies:', err);
@@ -88,13 +87,10 @@ export default function AIResearch() {
 
   const fetchProfiles = async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/companies/profiles');
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          setProfiles(data);
-          return data;
-        }
+      const data = await api.getCompactedProfiles();
+      if (Array.isArray(data)) {
+        setProfiles(data);
+        return data;
       }
       setProfiles([]);
       return [];
@@ -118,9 +114,8 @@ export default function AIResearch() {
    */
   const reconnectActiveTask = async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/companies/research/status');
-      if (!res.ok) return;
-      const tasks = await res.json();
+      const tasks = await api.getCompanyResearchStatus();
+      setTaskStatusMap(tasks || {});
       // Find the first task that is still processing
       const activeEntry = Object.entries(tasks).find(
         ([, v]) => v.status === 'processing'
@@ -137,8 +132,8 @@ export default function AIResearch() {
         // (will be refined once companiesList loads via fetchCompanies)
         setSelectedCompany({ name: taskKey, industry: 'Research in progress...' });
       }
-    } catch {
-      // Silently ignore — status endpoint may not be up yet
+    } catch (err) {
+      console.error('Error reconnecting active task:', err);
     }
   };
 
@@ -151,19 +146,30 @@ export default function AIResearch() {
   const matchProfile = useCallback((company, profileList) => {
     if (!company || !profileList?.length) return null;
 
-    const companyName = (company.name || '').toLowerCase().trim();
+    const companyName = (company.name || '').trim();
+
+    // 0. check taskStatusMap for a resolved_slug
+    const resolvedSlug = taskStatusMap[companyName]?.resolved_slug;
+    if (resolvedSlug) {
+      const match = profileList.find(
+        (p) => (p.company_slug || '').toLowerCase() === resolvedSlug.toLowerCase()
+      );
+      if (match) return match;
+    }
+
+    const companyNameLower = companyName.toLowerCase();
 
     // Helper: slug from a string
     const toSlug = (str) =>
       (str || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
-    const companySlug = toSlug(companyName);
+    const companySlug = toSlug(companyNameLower);
 
     // Strip URL scheme/trailing slashes so URLs become a bare domain
     const stripUrl = (str) =>
       (str || '').replace(/^https?:\/\//, '').replace(/\/$/, '').split('/')[0].toLowerCase();
 
-    const companyDomain = stripUrl(companyName); // in case name is a URL
+    const companyDomain = stripUrl(companyNameLower); // in case name is a URL
 
     // Token match — min 2 chars, ignore very common words
     const STOP = new Set(['inc', 'llc', 'ltd', 'corp', 'co', 'and', 'the', 'for',
@@ -172,7 +178,7 @@ export default function AIResearch() {
       (str || '').toLowerCase().replace(/[^a-z0-9\s]+/g, '').split(/\s+/)
         .filter(t => t.length >= 2 && !STOP.has(t));
 
-    const companyTokens = tokenize(companyName);
+    const companyTokens = tokenize(companyNameLower);
 
     return profileList.find(p => {
       const pName = (p.company_name || '').toLowerCase();
@@ -196,7 +202,7 @@ export default function AIResearch() {
 
       return false;
     }) || null;
-  }, []);
+  }, [taskStatusMap]);
 
   // Update selectedProfile whenever selectedCompany or profiles changes
   useEffect(() => {
@@ -214,8 +220,9 @@ export default function AIResearch() {
     if (isResearching && researchTaskKey) {
       timer = setInterval(async () => {
         try {
-          const res = await fetch('http://localhost:8000/api/companies/research/status');
-          const tasks = await res.json();
+          const tasks = await api.getCompanyResearchStatus();
+          setTaskStatusMap(tasks || {});
+          
           const task = tasks[researchTaskKey];
           if (task) {
             setResearchProgress(task.progress || 0);
@@ -223,16 +230,23 @@ export default function AIResearch() {
 
             if (task.status === 'completed') {
               setIsResearching(false);
+              const currentTaskKey = researchTaskKey;
               setResearchTaskKey(null);
 
               // ── Reliable post-research profile fetch ──
-              // Use the new /profiles/search endpoint which matches on name, website, AND slug
               try {
-                const searchRes = await fetch(
-                  `http://localhost:8000/api/companies/profiles/search?q=${encodeURIComponent(researchTaskKey)}`
-                );
-                if (searchRes.ok) {
-                  const foundProfile = await searchRes.json();
+                let foundProfile = null;
+                // If the backend captured the resolved slug, fetch by slug directly
+                if (task.resolved_slug) {
+                  foundProfile = await api.getProfileDetail(task.resolved_slug);
+                }
+
+                // Fallback to query string search
+                if (!foundProfile) {
+                  foundProfile = await api.searchProfile(currentTaskKey);
+                }
+
+                if (foundProfile) {
                   // Re-fetch all profiles to update the list state
                   const allProfiles = await fetchProfiles();
                   setSelectedProfile(foundProfile);
@@ -243,12 +257,12 @@ export default function AIResearch() {
                   if (matchInList) {
                     setSelectedCompany(matchInList);
                   } else {
-                    setSelectedCompany({ name: foundProfile.company_name || researchTaskKey });
+                    setSelectedCompany({ name: foundProfile.company_name || currentTaskKey });
                   }
                 } else {
                   // Fallback: refresh all profiles and re-run matcher
                   const allProfiles = await fetchProfiles();
-                  const found = allProfiles.find(p => matchProfile({ name: researchTaskKey }, [p]));
+                  const found = allProfiles.find(p => matchProfile({ name: currentTaskKey }, [p]));
                   if (found) setSelectedProfile(found);
                 }
               } catch {
@@ -289,12 +303,7 @@ export default function AIResearch() {
     setSelectedProfile(null);
 
     try {
-      const res = await fetch('http://localhost:8000/api/companies/research', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ company: inputVal, force: true }),
-      });
-      const data = await res.json();
+      const data = await api.triggerResearch(inputVal, true);
       if (data && data.task_key) {
         setResearchTaskKey(data.task_key);
       }
@@ -313,12 +322,7 @@ export default function AIResearch() {
     setResearchTaskKey(companyName.trim());
 
     try {
-      const res = await fetch('http://localhost:8000/api/companies/research', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ company: companyName, force: true }),
-      });
-      const data = await res.json();
+      const data = await api.triggerResearch(companyName, true);
       if (data && data.task_key) {
         setResearchTaskKey(data.task_key);
       }

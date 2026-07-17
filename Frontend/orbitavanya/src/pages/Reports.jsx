@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { FileBarChart, Download, Calendar, Eye, X, Loader2, AlertCircle, ShieldAlert } from 'lucide-react';
 import { PageHeader, Card } from '../components/ui/Common.jsx';
+import { api } from '../lib/api.jsx';
 
 const FALLBACK_REPORTS = [
   { 
@@ -32,14 +33,53 @@ export default function Reports() {
   const [previewing, setPreviewing] = useState(null);
   const [loading, setLoading] = useState(false);
   const [backendOffline, setBackendOffline] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState(null);
+
+  useEffect(() => {
+    if (previewing && !backendOffline) {
+      api.viewReportBlob(previewing.filename)
+        .then((blob) => {
+          const url = URL.createObjectURL(blob);
+          setPreviewUrl(url);
+        })
+        .catch((err) => {
+          console.error("Error creating preview URL:", err);
+          setPreviewUrl(null);
+        });
+    } else {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+        setPreviewUrl(null);
+      }
+    }
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewing, backendOffline]);
+
+  const handleDownload = async (e, filename) => {
+    e.preventDefault();
+    try {
+      const blob = await api.downloadReport(filename);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Download failed:", err);
+      alert("Failed to download file.");
+    }
+  };
 
   useEffect(() => {
     setLoading(true);
-    fetch('http://localhost:8000/api/reports')
-      .then((res) => {
-        if (!res.ok) throw new Error('API server unreachable');
-        return res.json();
-      })
+    api.getReports()
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
           setReports(data);
@@ -129,13 +169,12 @@ export default function Reports() {
                         >
                           <Eye size={13} /> View
                         </button>
-                        <a
-                          href={`http://localhost:8000/api/reports/download/${r.filename}`}
-                          download
+                        <button
+                          onClick={(e) => handleDownload(e, r.filename)}
                           className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-navy-900 hover:bg-slate-50 dark:border-navy-700 dark:bg-navy-800 dark:text-white dark:hover:bg-navy-700"
                         >
                           <Download size={13} /> Download
-                        </a>
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -182,17 +221,16 @@ export default function Reports() {
                   <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 max-w-md">
                     To render the PDF directly inside this window, the backend server must be running. You can still download the file using the button below.
                   </p>
-                  <a
-                    href={`http://localhost:8000/api/reports/download/${previewing.filename}`}
-                    download
+                  <button
+                    onClick={(e) => handleDownload(e, previewing.filename)}
                     className="mt-5 flex items-center gap-2 rounded-xl bg-brand-500 px-5 py-3 text-sm font-bold text-white shadow-soft transition-all hover:bg-brand-600"
                   >
                     <Download size={16} /> Download PDF File
-                  </a>
+                  </button>
                 </div>
               ) : (
                 <iframe
-                  src={`http://localhost:8000/api/reports/view/${previewing.filename}`}
+                  src={previewUrl || ''}
                   className="w-full h-full border-0 rounded-xl bg-white shadow-lg"
                   title={previewing.title}
                 />
@@ -204,13 +242,12 @@ export default function Reports() {
               <button onClick={() => setPreviewing(null)} className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-semibold text-navy-900 hover:bg-slate-50 dark:border-navy-700 dark:bg-navy-800 dark:text-white dark:hover:bg-navy-700 transition-colors">
                 Close
               </button>
-              <a
-                href={`http://localhost:8000/api/reports/download/${previewing.filename}`}
-                download
+              <button
+                onClick={(e) => handleDownload(e, previewing.filename)}
                 className="flex items-center gap-2 rounded-xl bg-brand-500 px-5 py-2.5 text-xs font-bold text-white shadow-soft hover:bg-brand-600 transition-colors"
               >
                 <Download size={14} /> Download PDF
-              </a>
+              </button>
             </div>
           </div>
         </div>

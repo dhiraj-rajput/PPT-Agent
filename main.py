@@ -185,7 +185,7 @@ def main():
 
     # --- Run pipeline ---
     try:
-        from orchestrator import run_pipeline
+        from pipeline.orchestrator import run_pipeline
         logger.info(f"Running pipeline for input: '{args.input}'")
         result = run_pipeline(args.input)
     except Exception as e:

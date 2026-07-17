@@ -38,10 +38,10 @@ if hasattr(sys.stderr, "reconfigure"):
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from utils.rfp_parser import RFPParser
-from utils.pitch_compiler import PitchCompiler
-from utils.rfp_response_generator import RFPResponseGenerator
-from utils.rfp_response_pdf import generate_rfp_response_pdf
+from documents.rfp_response.rfp_parser import RFPParser
+from documents.rfp_response.pitch_compiler import PitchCompiler
+from documents.rfp_response.rfp_response_generator import RFPResponseGenerator
+from documents.rfp_response.rfp_response_pdf import generate_rfp_response_pdf
 from utils.helpers import setup_logger
 from utils.db_client import get_collection, close_connection
 
@@ -70,7 +70,8 @@ def _load_winner_profile(winner_name: str) -> dict:
     """Load the compacted winner profile from MongoDB or output/json/."""
     try:
         col = get_collection("company_profiles")
-        profile = col.find_one({"company_name": {"$regex": winner_name, "$options": "i"}})
+        import re
+        profile = col.find_one({"company_name": {"$regex": re.escape(winner_name), "$options": "i"}})
         if profile:
             profile.pop("_id", None)
             logger.info(f"Loaded winner profile from MongoDB: {winner_name}")

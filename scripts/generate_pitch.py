@@ -23,9 +23,9 @@ if hasattr(sys.stderr, 'reconfigure'):
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from utils.rfp_parser import RFPParser
-from utils.pitch_compiler import PitchCompiler
-from utils.pdf_generator import PDFGenerator
+from documents.rfp_response.rfp_parser import RFPParser
+from documents.rfp_response.pitch_compiler import PitchCompiler
+from documents.rfp_response.pdf_generator import PDFGenerator
 from utils.helpers import setup_logger
 from utils.db_client import get_collection, close_connection
 

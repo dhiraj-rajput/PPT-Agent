@@ -1,12 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Search, DollarSign, Calendar, Building2, MapPin, Mail,
   RefreshCw, AlertCircle, Loader2, Database, CheckCircle2,
-  ChevronLeft, ChevronRight, X, Filter, Trophy, Clock, AlertOctagon
+  ChevronLeft, ChevronRight, X, Filter, Trophy, Clock, AlertOctagon, SlidersHorizontal, Eye, FileText, Check, HelpCircle
 } from 'lucide-react';
 import { PageHeader, Card, MatchBadge, StatusBadge } from '../components/ui/Common.jsx';
 import { tenders as staticTenders, daysUntilClosing } from '../data/tenders.jsx';
+import { api } from '../lib/api.jsx';
 
 const SET_ASIDE_OPTIONS = [
   { value: '', label: 'All Set-Asides' },
@@ -59,15 +60,14 @@ export default function Tenders() {
   // ----- Fetch cached tenders from backend -----
   const fetchTenders = useCallback(() => {
     setLoading(true);
-    const params = new URLSearchParams({ page: currentPage, limit: itemsPerPage });
-    if (query) params.append('query', query);
-    if (naicsFilter) params.append('naics', naicsFilter);
-    if (setAsideFilter) params.append('set_aside', setAsideFilter);
-    if (statusFilter !== 'All') params.append('status', statusFilter);
-    if (urgencyFilter !== 'All') params.append('urgency', urgencyFilter);
+    const params = { page: currentPage, limit: itemsPerPage };
+    if (query) params.query = query;
+    if (naicsFilter) params.naics = naicsFilter;
+    if (setAsideFilter) params.set_aside = setAsideFilter;
+    if (statusFilter !== 'All') params.status = statusFilter;
+    if (urgencyFilter !== 'All') params.urgency = urgencyFilter;
 
-    fetch(`http://localhost:8000/api/tenders?${params}`)
-      .then(res => { if (!res.ok) throw new Error('Backend unreachable'); return res.json(); })
+    api.getTenders(params)
       .then(data => {
         setBackendOffline(false);
         setCacheEmpty(data.cache_empty || false);
@@ -92,8 +92,7 @@ export default function Tenders() {
 
   // ----- Fetch sync metadata -----
   const fetchMeta = () => {
-    fetch('http://localhost:8000/api/tenders/meta')
-      .then(r => r.json())
+    api.getTendersMeta()
       .then(data => setSyncMeta(data))
       .catch(() => {});
   };
@@ -110,16 +109,7 @@ export default function Tenders() {
     // Clean empty strings
     Object.keys(body).forEach(k => { if (body[k] === '') delete body[k]; });
 
-    fetch('http://localhost:8000/api/tenders/sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-      .then(async res => {
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Sync failed');
-        return data;
-      })
+    api.syncTenders(body)
       .then(data => {
         setSyncResult({ ok: true, message: data.message, fetched: data.fetched });
         setSyncing(false);
