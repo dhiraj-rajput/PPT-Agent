@@ -18,7 +18,7 @@ Usage:
 """
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
+from pydantic import Field, field_validator
 
 
 class AppSettings(BaseSettings):
@@ -203,6 +203,28 @@ class AppSettings(BaseSettings):
         validation_alias="JWT_EXPIRES_IN",
         description="Number of days a JWT is valid (mapped to JWT_EXPIRES_IN env key)."
     )
+
+    @field_validator("JWT_EXPIRES_DAYS", mode="before")
+    @classmethod
+    def parse_jwt_expires_in(cls, v: Any) -> int:
+        if isinstance(v, str):
+            v_clean = v.strip().lower()
+            if v_clean.endswith("d"):
+                try:
+                    return int(v_clean[:-1])
+                except ValueError:
+                    pass
+            elif v_clean.endswith("h"):
+                try:
+                    hours = int(v_clean[:-1])
+                    return max(1, hours // 24)
+                except ValueError:
+                    pass
+            try:
+                return int(v_clean)
+            except ValueError:
+                pass
+        return v
     OTP_TTL_MINUTES: int = Field(default=10, description="OTP lifetime in minutes.")
     DEBUG_OTP: bool = Field(default=False, description="Enable printing OTPs to console for development.")
     SMTP_HOST: str = Field(default="smtp.gmail.com", description="SMTP server hostname.")
