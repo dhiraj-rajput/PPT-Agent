@@ -175,11 +175,9 @@ export default function EmailCampaign() {
     setCreating(true);
     try {
       let campaignBody = form.body;
-      if (selectedReport && attachmentType === 'report') {
-        const report = reportsList.find(r => r.filename === selectedReport);
-        const reportTitle = report ? report.title : 'Analysis Report';
-        const reportUrl = `${window.location.origin}/api/reports/view/${selectedReport}`;
-        campaignBody += `\n\n<p>Report Link: <a href="${reportUrl}" target="_blank">${reportTitle}</a></p>`;
+      if (attachmentType !== 'none' && attachedPath) {
+        const viewerUrl = `${window.location.origin}/document-viewer?path=${encodeURIComponent(attachedPath)}&campaignId={{campaignId}}&leadId={{leadId}}&filename=${encodeURIComponent(attachedFilename)}`;
+        campaignBody += `\n\n<p>Please review the attached document online: <a href="${viewerUrl}" target="_blank" data-track-click="true" data-track-label="${attachedFilename}">View ${attachedFilename}</a></p>`;
       }
 
       const campaignData = {

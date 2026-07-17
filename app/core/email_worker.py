@@ -88,6 +88,8 @@ async def send_campaign_email_to_lead(campaign: dict, lead: dict) -> dict:
         res = re.sub(r"{{\s*contactName\s*}}", lead_data.get("contactName") or "", res, flags=re.IGNORECASE)
         res = re.sub(r"{{\s*companyName\s*}}", lead_data.get("companyName") or "", res, flags=re.IGNORECASE)
         res = re.sub(r"{{\s*title\s*}}", lead_data.get("title") or "", res, flags=re.IGNORECASE)
+        res = re.sub(r"{{\s*campaignId\s*}}", str(campaign.get("_id") or ""), res, flags=re.IGNORECASE)
+        res = re.sub(r"{{\s*leadId\s*}}", str(lead_data.get("_id") or ""), res, flags=re.IGNORECASE)
         return res
 
     html_body = fill_placeholders(body_tmpl, lead)
@@ -138,6 +140,8 @@ async def send_campaign_email_to_lead(campaign: dict, lead: dict) -> dict:
         msg.attach(MIMEText(final_html, "html"))
 
     msg["Subject"] = subject
+    msg["List-Unsubscribe"] = f"<{unsub_link}>"
+    msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
 
     sender_name = campaign.get("senderName")
     sender_email = campaign.get("senderEmail") or settings.SMTP_USER

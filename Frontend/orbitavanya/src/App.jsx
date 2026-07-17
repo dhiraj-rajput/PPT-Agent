@@ -26,6 +26,7 @@ import Integrations from './pages/Integrations.jsx';
 import RFPAutoRespond from './pages/RFPAutoRespond.jsx';
 import NaicsMuster from './pages/NaicsMuster.jsx';
 import NotFound from './pages/NotFound.jsx';
+import DocumentViewer from './pages/DocumentViewer.jsx';
 
 export default function App() {
   return (
@@ -34,6 +35,7 @@ export default function App() {
       <Route path="/register" element={<Register />} />
       <Route path="/verify-otp" element={<VerifyOtp />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/document-viewer" element={<DocumentViewer />} />
 
       <Route element={<ProtectedRoute />}>
       <Route path="/force-change-password" element={<ForceChangePassword />} />
