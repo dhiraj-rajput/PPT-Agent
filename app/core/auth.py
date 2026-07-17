@@ -140,5 +140,7 @@ def decode_and_get_user(token: str) -> Optional[dict]:
         from bson import ObjectId
         user = get_collection("users").find_one({"_id": ObjectId(user_id)})
         return user
-    except Exception:
+    except Exception as e:
+        import logging
+        logging.getLogger("auth").error(f"WebSocket authentication decode failed: {e}")
         return None

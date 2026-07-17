@@ -357,6 +357,12 @@ def generate_partnership(
     return trigger_proposal_generation(payload, background_tasks)
 
 
+@router.get("")
+def list_proposal_tasks(current_user: dict = Depends(get_current_user)):
+    """Retrieve all active proposal generation tasks for the current user."""
+    return get_user_proposal_tasks_dict(str(current_user["_id"]))
+
+
 @router.get("/status")
 def get_task_status(
     company_name: Optional[str] = None,

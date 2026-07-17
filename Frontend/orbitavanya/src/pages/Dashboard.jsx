@@ -88,10 +88,6 @@ export default function Dashboard() {
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Here is what is happening with your business today.</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-navy-900 dark:border-navy-700 dark:bg-navy-800 dark:text-white">
-            <Calendar size={16} className="text-slate-400 dark:text-slate-500" />
-            Live Database Sync
-          </div>
           <Link to="/proposal-builder" className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-bold text-white shadow-soft hover:bg-brand-600">
             <Plus size={16} /> New Proposal
           </Link>
