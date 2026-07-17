@@ -61,13 +61,15 @@ def _get_google_auth_url(user_id: str) -> str:
     import secrets
     from datetime import datetime, timezone, timedelta
     state_token = secrets.token_urlsafe(32)
+    auth_url, _ = flow.authorization_url(access_type="offline", prompt="consent", state=state_token)
+    
     get_collection("oauth_states").insert_one({
         "state": state_token,
         "userId": user_id,
+        "codeVerifier": getattr(flow, "code_verifier", None),
         "expireAt": datetime.now(timezone.utc) + timedelta(minutes=10)
     })
     
-    auth_url, _ = flow.authorization_url(access_type="offline", prompt="consent", state=state_token)
     return auth_url
 
 
@@ -76,12 +78,14 @@ def _handle_google_callback(code: str, state: Optional[str] = None) -> None:
         raise HTTPException(505, "Google OAuth is not configured.")
         
     user_id_clean = "global"
+    code_verifier = None
     if state:
         # Validate OAuth state and resolve to userId
         state_doc = get_collection("oauth_states").find_one_and_delete({"state": state})
         if not state_doc:
             raise HTTPException(400, "Invalid or expired OAuth state parameter.")
         user_id_clean = state_doc.get("userId") or "global"
+        code_verifier = state_doc.get("codeVerifier")
         
     from google_auth_oauthlib.flow import Flow  # type: ignore
 
@@ -101,7 +105,7 @@ def _handle_google_callback(code: str, state: Optional[str] = None) -> None:
         ],
     )
     flow.redirect_uri = _GOOGLE_REDIRECT_URI
-    flow.fetch_token(code=code)
+    flow.fetch_token(code=code, code_verifier=code_verifier)
     creds = flow.credentials
     # Store refresh token in MongoDB scoped to userId
     get_collection("integrations").update_one(
