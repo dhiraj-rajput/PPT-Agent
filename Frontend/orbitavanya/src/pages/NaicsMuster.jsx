@@ -66,17 +66,18 @@ export default function NaicsMuster() {
     }
   }
 
-  // Refetch when page or filters change
+  // Debounced search and direct filter refetch
   useEffect(() => {
-    fetchNaics();
-  }, [page, sector]);
+    const timer = setTimeout(() => {
+      fetchNaics();
+    }, 250); // 250ms debounce
+    return () => clearTimeout(timer);
+  }, [page, search, sector]);
 
-  // Reset page to 1 and fetch on search submit
-  function handleSearchSubmit(e) {
-    e.preventDefault();
+  // Reset page to 1 on filter or search changes
+  useEffect(() => {
     setPage(1);
-    fetchNaics();
-  }
+  }, [search, sector]);
 
   // Copy code to clipboard
   function handleCopy(code) {
@@ -176,7 +177,7 @@ export default function NaicsMuster() {
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-500 to-accent-orange px-5 py-3 text-sm font-bold text-white shadow-soft transition-all hover:opacity-90"
+          className="flex items-center justify-center gap-2 rounded-xl bg-brand-500 hover:bg-brand-600 px-5 py-3 text-sm font-bold text-white shadow-soft transition-all"
         >
           <Plus size={16} />
           Add NAICS Data
@@ -185,12 +186,13 @@ export default function NaicsMuster() {
 
       {/* Filter / Search Bar Card */}
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft dark:border-navy-800 dark:bg-navy-900">
-        <form onSubmit={handleSearchSubmit} className="flex flex-col gap-4 md:flex-row md:items-center">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          {/* Search box */}
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
             <input
               type="text"
-              placeholder="Search by NAICS code (e.g. 5415) or keywords (e.g. Software, Construction)..."
+              placeholder="Search by NAICS code or title keywords (e.g. Software, Construction)..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-11 pr-4 text-sm font-medium outline-none transition-all focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-500/20 dark:border-navy-800 dark:bg-navy-950 dark:focus:border-brand-500 dark:focus:bg-navy-900"
@@ -198,14 +200,12 @@ export default function NaicsMuster() {
           </div>
 
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-            <div className="relative min-w-[240px]">
+            {/* Sector select filter */}
+            <div className="relative min-w-[280px]">
               <Filter className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
               <select
                 value={sector}
-                onChange={(e) => {
-                  setSector(e.target.value);
-                  setPage(1);
-                }}
+                onChange={(e) => setSector(e.target.value)}
                 className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-10 text-sm font-semibold outline-none transition-all focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-500/20 dark:border-navy-800 dark:bg-navy-950 dark:focus:border-brand-500 dark:focus:bg-navy-900"
               >
                 {NAICS_SECTORS.map((sec) => (
@@ -216,19 +216,37 @@ export default function NaicsMuster() {
               </select>
             </div>
 
-            <button
-              type="submit"
-              className="flex items-center justify-center gap-2 rounded-xl bg-brand-500 px-6 py-3 text-sm font-bold text-white shadow-soft transition-all hover:bg-brand-600 hover:shadow-none"
-            >
-              Search
-            </button>
+            {/* Top Pagination Control next to sector filter */}
+            {total > 0 && (
+              <div className="flex items-center gap-3 bg-slate-50/70 px-4 py-2 rounded-xl border border-slate-200 dark:border-navy-800 dark:bg-navy-950/40">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-all hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-white dark:border-navy-700 dark:bg-navy-800 dark:text-slate-400 dark:hover:bg-navy-750"
+                  title="Previous Page"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <span className="text-xs font-bold text-slate-600 dark:text-slate-400 whitespace-nowrap min-w-[48px] text-center">
+                  {page} / {totalPages}
+                </span>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-all hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-white dark:border-navy-700 dark:bg-navy-800 dark:text-slate-400 dark:hover:bg-navy-750"
+                  title="Next Page"
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+            )}
           </div>
-        </form>
+        </div>
       </div>
 
       {/* Results table */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft dark:border-navy-800 dark:bg-navy-900">
-        {loading ? (
+        {loading && items.length === 0 ? (
           <div className="flex h-64 items-center justify-center gap-2 text-slate-500">
             <RefreshCw className="h-5 w-5 animate-spin" />
             <span className="text-sm font-medium">Loading NAICS descriptions...</span>
@@ -244,26 +262,25 @@ export default function NaicsMuster() {
             <table className="w-full border-collapse text-left text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/70 text-xs font-bold uppercase tracking-wider text-slate-500 dark:border-navy-800 dark:bg-navy-950 dark:text-slate-400">
-                  <th className="px-6 py-4">Code</th>
-                  <th className="px-6 py-4">Title</th>
+                  <th className="px-6 py-4 w-32">Code</th>
+                  <th className="px-6 py-4 w-64">Title</th>
                   <th className="px-6 py-4">Description</th>
-                  <th className="px-6 py-4 text-right">Actions</th>
+                  <th className="px-6 py-4 text-center w-24">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-navy-800">
                 {items.map((item) => {
                   const isExpanded = expandedCodes[item.code];
-                  const hasLongDesc = item.description && item.description.length > 180;
+                  const hasLongDesc = item.description && item.description.length > 200;
                   const displayDesc = hasLongDesc && !isExpanded
-                    ? `${item.description.slice(0, 180)}...`
+                    ? `${item.description.slice(0, 200)}...`
                     : item.description;
 
                   return (
                     <tr key={item.code} className="hover:bg-slate-50/50 dark:hover:bg-navy-950/20">
                       {/* Code Badge */}
                       <td className="whitespace-nowrap px-6 py-4">
-                        <span className="inline-flex items-center gap-1 rounded-lg bg-brand-50/80 px-2.5 py-1 text-xs font-bold text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
-                          <Hash size={12} />
+                        <span className="inline-flex items-center rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-bold text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
                           {item.code}
                         </span>
                       </td>
@@ -289,17 +306,27 @@ export default function NaicsMuster() {
                       </td>
 
                       {/* Action buttons */}
-                      <td className="whitespace-nowrap px-6 py-4 text-right">
+                      <td className="whitespace-nowrap px-6 py-4 text-center">
                         <button
                           onClick={() => handleCopy(item.code)}
-                          className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-all ${
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
                             copiedCode === item.code
                               ? 'border-green-200 bg-green-50 text-green-600 dark:border-green-500/20 dark:bg-green-500/10 dark:text-green-400'
-                              : 'border-slate-200 bg-white text-slate-400 hover:border-slate-300 hover:text-slate-600 dark:border-navy-700 dark:bg-navy-800 dark:hover:border-navy-600 dark:hover:text-white'
+                              : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:border-navy-700 dark:bg-navy-800 dark:hover:border-navy-600 dark:hover:text-white'
                           }`}
                           title="Copy NAICS Code"
                         >
-                          {copiedCode === item.code ? <Check size={14} /> : <Copy size={14} />}
+                          {copiedCode === item.code ? (
+                            <>
+                              <Check size={13} />
+                              <span>Copied!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy size={13} />
+                              <span>Copy</span>
+                            </>
+                          )}
                         </button>
                       </td>
                     </tr>
@@ -323,9 +350,9 @@ export default function NaicsMuster() {
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-all hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-white dark:border-navy-700 dark:bg-navy-800 dark:hover:bg-navy-700"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-all hover:bg-slate-55 disabled:opacity-50 disabled:hover:bg-white dark:border-navy-700 dark:bg-navy-800 dark:text-slate-400 dark:hover:bg-navy-750"
               >
-                <ChevronLeft size={16} />
+                <ChevronLeft size={18} />
               </button>
 
               <div className="text-xs font-bold text-slate-600 dark:text-slate-400">
@@ -335,9 +362,9 @@ export default function NaicsMuster() {
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-all hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-white dark:border-navy-700 dark:bg-navy-800 dark:hover:bg-navy-700"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-all hover:bg-slate-55 disabled:opacity-50 disabled:hover:bg-white dark:border-navy-700 dark:bg-navy-800 dark:text-slate-400 dark:hover:bg-navy-750"
               >
-                <ChevronRight size={16} />
+                <ChevronRight size={18} />
               </button>
             </div>
           </div>

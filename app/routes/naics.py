@@ -58,6 +58,7 @@ def list_naics_codes(
 ):
     coll = get_collection("naics_codes")
     query = {}
+    and_conditions = []
 
     if sector:
         # NAICS sectors can be 2-digit ranges (e.g. 31-33) or single 2-digit prefixes
@@ -69,23 +70,28 @@ def list_naics_codes(
                 # Generate regex matching starting with any digit in the range
                 prefixes = [str(x) for x in range(start, end + 1)]
                 regex_pattern = "^(" + "|".join(prefixes) + ")"
-                query["code"] = {"$regex": regex_pattern}
+                and_conditions.append({"code": {"$regex": regex_pattern}})
             except ValueError:
-                query["code"] = {"$regex": f"^{sector}"}
+                and_conditions.append({"code": {"$regex": f"^{sector}"}})
         else:
-            query["code"] = {"$regex": f"^{sector}"}
+            and_conditions.append({"code": {"$regex": f"^{sector}"}})
 
     if search:
         search = search.strip()
         # If search matches a numeric NAICS prefix/code
         if search.isdigit():
-            query["code"] = {"$regex": f"^{search}"}
+            and_conditions.append({"code": {"$regex": f"^{search}"}})
         else:
             # Use regex on title/description
-            query["$or"] = [
-                {"title": {"$regex": search, "$options": "i"}},
-                {"description": {"$regex": search, "$options": "i"}}
-            ]
+            and_conditions.append({
+                "$or": [
+                    {"title": {"$regex": search, "$options": "i"}},
+                    {"description": {"$regex": search, "$options": "i"}}
+                ]
+            })
+
+    if and_conditions:
+        query["$and"] = and_conditions
 
     total = coll.count_documents(query)
     skip = (page - 1) * limit
