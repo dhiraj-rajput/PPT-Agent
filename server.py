@@ -57,36 +57,40 @@ from app.routes.naics import router as naics_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: load/verify SAM entities database + ensure MongoDB indexes
+    import asyncio
+    
+    # Startup: load/verify SAM entities database + ensure MongoDB indexes in background threads
     from app.routes.companies import import_sam_entities_csv
-    import_sam_entities_csv()
-    # Ensure indexes for all collections (core + new auth collections)
-    try:
-        from utils.db_client import ensure_all_indexes, get_collection
-        ensure_all_indexes()
+    await asyncio.to_thread(import_sam_entities_csv)
 
-        # Additional indexes for auth/tasks/meetings/notifications collections
-        get_collection("users").create_index("email", unique=True)
-        get_collection("otps").create_index([("userId", 1), ("purpose", 1)])
-        get_collection("otps").create_index("expiresAt", expireAfterSeconds=0)
-        get_collection("login_failures").create_index("createdAt", expireAfterSeconds=900)
-        get_collection("tasks").create_index("createdAt")
-        get_collection("meetings").create_index([("date", 1), ("time", 1)])
-        get_collection("notifications").create_index([("user", 1), ("createdAt", -1)])
-        get_collection("notifications").create_index([("user", 1), ("read", 1)])
+    def setup_indexes_sync():
+        try:
+            from utils.db_client import ensure_all_indexes, get_collection
+            ensure_all_indexes()
 
-        # Campaign & Outreach collection indexes
-        get_collection("campaigns").create_index([("createdBy", 1), ("status", 1)])
-        get_collection("leads").create_index([("campaignId", 1), ("email", 1)], unique=True)
-        get_collection("suppressions").create_index("email", unique=True)
-        get_collection("tracking_events").create_index([("campaignId", 1), ("type", 1), ("timestamp", 1)])
-        get_collection("website_events").create_index([("campaignId", 1), ("timestamp", 1)])
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).warning(f"MongoDB index setup warning: {e}")
+            # Additional indexes for auth/tasks/meetings/notifications collections
+            get_collection("users").create_index("email", unique=True)
+            get_collection("otps").create_index([("userId", 1), ("purpose", 1)])
+            get_collection("otps").create_index("expiresAt", expireAfterSeconds=0)
+            get_collection("login_failures").create_index("createdAt", expireAfterSeconds=900)
+            get_collection("tasks").create_index("createdAt")
+            get_collection("meetings").create_index([("date", 1), ("time", 1)])
+            get_collection("notifications").create_index([("user", 1), ("createdAt", -1)])
+            get_collection("notifications").create_index([("user", 1), ("read", 1)])
+
+            # Campaign & Outreach collection indexes
+            get_collection("campaigns").create_index([("createdBy", 1), ("status", 1)])
+            get_collection("leads").create_index([("campaignId", 1), ("email", 1)], unique=True)
+            get_collection("suppressions").create_index("email", unique=True)
+            get_collection("tracking_events").create_index([("campaignId", 1), ("type", 1), ("timestamp", 1)])
+            get_collection("website_events").create_index([("campaignId", 1), ("timestamp", 1)])
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"MongoDB index setup warning: {e}")
+
+    await asyncio.to_thread(setup_indexes_sync)
 
     # Start Background Email Worker Loop
-    import asyncio
     from app.core.email_worker import start_email_worker_loop
     worker_task = asyncio.create_task(start_email_worker_loop())
 

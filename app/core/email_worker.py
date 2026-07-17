@@ -291,7 +291,7 @@ async def process_lead_send(campaign: dict, lead: dict):
             )
 
 
-async def check_incoming_replies():
+def check_incoming_replies():
     """Poll the IMAP inbox for unread email replies from campaign outreach leads."""
     if not settings.SMTP_USER or not settings.SMTP_PASS:
         return
@@ -393,7 +393,7 @@ async def start_email_worker_loop():
             current_time = time.time()
             if current_time - last_reply_check >= 30:
                 last_reply_check = current_time
-                await check_incoming_replies()
+                await asyncio.to_thread(check_incoming_replies)
 
             # Query for active running campaigns
             running_campaigns = list(campaigns_col.find({"status": "running"}))
