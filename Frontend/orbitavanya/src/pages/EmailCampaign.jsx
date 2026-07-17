@@ -60,6 +60,12 @@ export default function EmailCampaign() {
   const [recipientCompany, setRecipientCompany] = useState('');
   const [selectedReport, setSelectedReport] = useState('');
 
+  // Attachment Options
+  const [attachmentType, setAttachmentType] = useState('none'); // 'none' | 'report' | 'device'
+  const [attachedPath, setAttachedPath] = useState('');
+  const [attachedFilename, setAttachedFilename] = useState('');
+  const [uploadingFile, setUploadingFile] = useState(false);
+
   const handleAddLead = async (e) => {
     e.preventDefault();
     if (!leadForm.email.trim()) {
@@ -128,6 +134,33 @@ export default function EmailCampaign() {
     loadAll();
   }, [loadAll]);
 
+  const handleDeviceFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFormError('');
+    setUploadingFile(true);
+    try {
+      const res = await api.uploadCampaignAttachment(file);
+      setAttachedPath(res.attachmentPath);
+      setAttachedFilename(res.attachmentFilename);
+    } catch (err) {
+      setFormError(err.message || 'File upload failed.');
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
+  const handleReportChange = (filename) => {
+    setSelectedReport(filename);
+    if (filename) {
+      setAttachedPath(`private/reports/${filename}`);
+      setAttachedFilename(filename);
+    } else {
+      setAttachedPath('');
+      setAttachedFilename('');
+    }
+  };
+
   async function handleCreateCampaign(e) {
     e.preventDefault();
     setFormError('');
@@ -142,16 +175,18 @@ export default function EmailCampaign() {
     setCreating(true);
     try {
       let campaignBody = form.body;
-      if (selectedReport) {
+      if (selectedReport && attachmentType === 'report') {
         const report = reportsList.find(r => r.filename === selectedReport);
         const reportTitle = report ? report.title : 'Analysis Report';
         const reportUrl = `${window.location.origin}/api/reports/view/${selectedReport}`;
-        campaignBody += `\n\n<p>Attached Analysis Report: <a href="${reportUrl}" target="_blank">${reportTitle}</a></p>`;
+        campaignBody += `\n\n<p>Report Link: <a href="${reportUrl}" target="_blank">${reportTitle}</a></p>`;
       }
 
       const campaignData = {
         ...form,
-        body: campaignBody
+        body: campaignBody,
+        attachmentPath: attachmentType !== 'none' ? attachedPath : '',
+        attachmentFilename: attachmentType !== 'none' ? attachedFilename : ''
       };
 
       const res = await api.createCampaign(campaignData);
@@ -160,14 +195,14 @@ export default function EmailCampaign() {
       if (sendMode === 'single' && campaign) {
         // Automatically add the single lead
         await api.createLead({
-          campaignId: campaign._id,
+          campaignId: campaign.id,
           email: recipientEmail,
           contactName: recipientName,
           companyName: recipientCompany,
           title: 'Recipient'
         });
         // Launch immediately
-        await api.launchCampaign(campaign._id);
+        await api.launchCampaign(campaign.id);
       }
 
       setShowNewCampaign(false);
@@ -177,6 +212,9 @@ export default function EmailCampaign() {
       setRecipientName('');
       setRecipientCompany('');
       setSelectedReport('');
+      setAttachmentType('none');
+      setAttachedPath('');
+      setAttachedFilename('');
       await loadAll();
     } catch (err) {
       setFormError(err.message || 'Could not create campaign.');
@@ -317,19 +355,19 @@ export default function EmailCampaign() {
               </tr>
             )}
             {campaigns.map((c) => (
-              <tr key={c._id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 dark:border-navy-800/40 dark:hover:bg-navy-800/40">
+              <tr key={c.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 dark:border-navy-800/40 dark:hover:bg-navy-800/40">
                 <td className="px-5 py-3.5 font-semibold text-navy-900 dark:text-white">{c.name}</td>
                 <td className="px-5 py-3.5"><StatusBadge status={titleCase(c.status)} /></td>
                 <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{(c.stats?.totalSent || 0).toLocaleString()}</td>
                 <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{(c.stats?.totalOpened || 0).toLocaleString()}</td>
                 <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{(c.stats?.totalClicked || 0).toLocaleString()}</td>
                 <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{(c.stats?.totalReplied || 0).toLocaleString()}</td>
-                <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{new Date(c.createdAt).toLocaleDateString()}</td>
+                <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{c.createdAt ? new Date(c.createdAt).toLocaleDateString() : ''}</td>
                 <td className="px-5 py-3.5">
                   <div className="flex items-center justify-end gap-1">
                     <button
                       title="Add lead manually"
-                      onClick={() => setShowAddLead(c._id)}
+                      onClick={() => setShowAddLead(c.id)}
                       className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-navy-900 dark:hover:bg-navy-800 dark:hover:text-white"
                     >
                       <Plus size={15} />
@@ -338,28 +376,28 @@ export default function EmailCampaign() {
                       title="Import leads from CSV"
                       className="cursor-pointer rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-navy-900 dark:hover:bg-navy-800 dark:hover:text-white"
                     >
-                      <Upload size={15} className={importingFor === c._id ? 'animate-pulse' : ''} />
+                      <Upload size={15} className={importingFor === c.id ? 'animate-pulse' : ''} />
                       <input
                         type="file"
                         accept=".csv"
                         className="hidden"
-                        onChange={(e) => e.target.files?.[0] && handleCsvUpload(c._id, e.target.files[0])}
+                        onChange={(e) => e.target.files?.[0] && handleCsvUpload(c.id, e.target.files[0])}
                       />
                     </label>
                     {(c.status === 'draft' || c.status === 'paused') && (
-                      <button title="Launch / resume sending" onClick={() => handleAction(c.status === 'draft' ? 'launch' : 'resume', c._id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-emerald-600 dark:hover:bg-navy-800">
+                      <button title="Launch / resume sending" onClick={() => handleAction(c.status === 'draft' ? 'launch' : 'resume', c.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-emerald-600 dark:hover:bg-navy-800">
                         {c.status === 'draft' ? <Rocket size={15} /> : <Play size={15} />}
                       </button>
                     )}
                     {c.status === 'running' && (
-                      <button title="Pause" onClick={() => handleAction('pause', c._id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-amber-600 dark:hover:bg-navy-800">
+                      <button title="Pause" onClick={() => handleAction('pause', c.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-amber-600 dark:hover:bg-navy-800">
                         <Pause size={15} />
                       </button>
                     )}
-                    <button title="Duplicate" onClick={() => handleAction('duplicate', c._id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-navy-900 dark:hover:bg-navy-800 dark:hover:text-white">
+                    <button title="Duplicate" onClick={() => handleAction('duplicate', c.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-navy-900 dark:hover:bg-navy-800 dark:hover:text-white">
                       <Copy size={15} />
                     </button>
-                    <button title="Delete" onClick={() => handleAction('delete', c._id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-rose-600 dark:hover:bg-navy-800">
+                    <button title="Delete" onClick={() => handleAction('delete', c.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-rose-600 dark:hover:bg-navy-800">
                       <Trash2 size={15} />
                     </button>
                   </div>
@@ -435,18 +473,19 @@ export default function EmailCampaign() {
               )}
 
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Campaign Name</label>
+                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400 font-bold">Campaign Name *</label>
                 <input
+                  required
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="Q3 Procurement Officers Outreach"
+                  placeholder="E.g., Q3 GovTech Procurement Outreach"
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
                 />
               </div>
 
               {/* Recipient Mode Selection */}
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Recipient Mode</label>
+                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400 font-bold">Recipient Mode</label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
@@ -473,8 +512,8 @@ export default function EmailCampaign() {
                 </div>
                 <p className="mt-1 text-[11px] text-slate-400">
                   {sendMode === 'bulk' 
-                    ? 'This creates a draft campaign. You can import contacts via CSV or add them manually from the campaign table.'
-                    : 'This sends the email to a single recipient immediately upon creation.'
+                    ? 'Creates a draft campaign. You can import contacts via CSV or add them manually from the campaigns table.'
+                    : 'Sends the email to a single recipient immediately upon creation.'
                   }
                 </p>
               </div>
@@ -486,10 +525,11 @@ export default function EmailCampaign() {
                   <div>
                     <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Recipient Email *</label>
                     <input
+                      type="email"
                       required={sendMode === 'single'}
                       value={recipientEmail}
                       onChange={(e) => setRecipientEmail(e.target.value)}
-                      placeholder="client@company.com"
+                      placeholder="E.g., procurement@client.com"
                       className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
                     />
                   </div>
@@ -499,7 +539,7 @@ export default function EmailCampaign() {
                       <input
                         value={recipientName}
                         onChange={(e) => setRecipientName(e.target.value)}
-                        placeholder="John"
+                        placeholder="E.g., Sarah"
                         className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
                       />
                     </div>
@@ -508,7 +548,7 @@ export default function EmailCampaign() {
                       <input
                         value={recipientCompany}
                         onChange={(e) => setRecipientCompany(e.target.value)}
-                        placeholder="Acme Corp"
+                        placeholder="E.g., Apex Logistics"
                         className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
                       />
                     </div>
@@ -516,32 +556,88 @@ export default function EmailCampaign() {
                 </div>
               )}
 
-              {/* Report Selection Dropdown */}
+              {/* Attachment Mode Selection */}
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Link Report Analysis (Optional)</label>
-                <select
-                  value={selectedReport}
-                  onChange={(e) => setSelectedReport(e.target.value)}
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
-                >
-                  <option value="">No report linked</option>
-                  {reportsList.map((rep) => (
-                    <option key={rep.filename} value={rep.filename}>
-                      {rep.title} ({rep.company_name})
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-1 text-[11px] text-slate-400">
-                  Selecting a report will append a secure viewing link to the bottom of the email.
-                </p>
+                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400 font-bold">Campaign PDF Attachment (Optional)</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setAttachmentType('none'); setAttachedPath(''); setAttachedFilename(''); setSelectedReport(''); }}
+                    className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all ${
+                      attachmentType === 'none'
+                        ? 'border-brand-500 bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400'
+                        : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-400 dark:hover:bg-navy-900'
+                    }`}
+                  >
+                    No Attachment
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setAttachmentType('report'); setAttachedPath(''); setAttachedFilename(''); setSelectedReport(''); }}
+                    className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all ${
+                      attachmentType === 'report'
+                        ? 'border-brand-500 bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400'
+                        : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-400 dark:hover:bg-navy-900'
+                    }`}
+                  >
+                    Link Report
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setAttachmentType('device'); setAttachedPath(''); setAttachedFilename(''); setSelectedReport(''); }}
+                    className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all ${
+                      attachmentType === 'device'
+                        ? 'border-brand-500 bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400'
+                        : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-400 dark:hover:bg-navy-900'
+                    }`}
+                  >
+                    Upload File
+                  </button>
+                </div>
               </div>
 
+              {/* Conditional inputs */}
+              {attachmentType === 'report' && (
+                <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3 dark:border-navy-700 dark:bg-navy-900/50">
+                  <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Select Generated Report *</label>
+                  <select
+                    value={selectedReport}
+                    onChange={(e) => handleReportChange(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                  >
+                    <option value="">Choose a report...</option>
+                    {reportsList.map((rep) => (
+                      <option key={rep.filename} value={rep.filename}>
+                        {rep.title} ({rep.company_name})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {attachmentType === 'device' && (
+                <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3 space-y-2 dark:border-navy-700 dark:bg-navy-900/50">
+                  <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Upload PDF from device *</label>
+                  <input
+                    type="file"
+                    accept=".pdf"
+                    onChange={handleDeviceFileUpload}
+                    className="w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100"
+                  />
+                  {uploadingFile && <p className="text-[10px] text-brand-500 font-medium">Uploading PDF to server...</p>}
+                  {attachedFilename && !uploadingFile && (
+                    <p className="text-[10px] text-emerald-600 font-bold">✓ Attached: {attachedFilename}</p>
+                  )}
+                </div>
+              )}
+
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Subject Line</label>
+                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400 font-bold">Subject Line *</label>
                 <input
+                  required
                   value={form.subject}
                   onChange={(e) => setForm({ ...form, subject: e.target.value })}
-                  placeholder="Quick question about {{companyName}}'s procurement pipeline"
+                  placeholder="E.g., Business partnership proposal"
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
                 />
               </div>
@@ -552,7 +648,7 @@ export default function EmailCampaign() {
                   <input
                     value={form.senderName}
                     onChange={(e) => setForm({ ...form, senderName: e.target.value })}
-                    placeholder="OrbitAvanya Outreach"
+                    placeholder="E.g., OrbitAvanya Outreach"
                     className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
                   />
                 </div>
@@ -561,48 +657,24 @@ export default function EmailCampaign() {
                   <input
                     value={form.senderEmail}
                     onChange={(e) => setForm({ ...form, senderEmail: e.target.value })}
-                    placeholder="prasannadhamal982005@gmail.com"
+                    placeholder="E.g., sender@verified.com"
                     className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Email Body (HTML, supports {'{{firstName}}'}, {'{{companyName}}'})</label>
+                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400 font-bold font-bold">Email HTML Body</label>
                 <textarea
                   value={form.body}
                   onChange={(e) => setForm({ ...form, body: e.target.value })}
-                  rows={4}
-                  placeholder="<p>Hi {{firstName}}, ...</p>"
+                  placeholder="<p>Hi {{firstName}},</p><p>We analyzed {{companyName}} and...</p>"
+                  rows={6}
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
                 />
-                <p className="mt-1 text-[11px] text-slate-400">
-                  Use placeholders like <strong>{'{{firstName}}'}</strong> and <strong>{'{{companyName}}'}</strong> inside your text or HTML to personalize each message.
-                </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Daily Send Limit</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={form.dailyLimit}
-                    onChange={(e) => setForm({ ...form, dailyLimit: Number(e.target.value) })}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Timezone</label>
-                  <input
-                    value={form.timezone}
-                    onChange={(e) => setForm({ ...form, timezone: e.target.value })}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex justify-end gap-2 border-t border-slate-100 dark:border-navy-700 pt-4">
                 <button
                   type="button"
                   onClick={() => setShowNewCampaign(false)}
@@ -612,15 +684,12 @@ export default function EmailCampaign() {
                 </button>
                 <button
                   type="submit"
-                  disabled={creating}
+                  disabled={creating || uploadingFile}
                   className="rounded-lg bg-brand-500 px-4 py-2 text-xs font-bold text-white shadow-soft hover:bg-brand-600 disabled:opacity-60"
                 >
                   {creating ? 'Creating…' : 'Create Campaign'}
                 </button>
               </div>
-              <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                Created as a draft — add leads (CSV/manual) from the campaigns table, then launch when ready.
-              </p>
             </form>
           </div>
         </div>

@@ -379,6 +379,11 @@ export const api = {
     formData.append('file', file);
     return _upload('/api/leads/import/csv', formData);
   },
+  async uploadCampaignAttachment(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return _upload('/api/campaigns/upload-attachment', formData);
+  },
   async importLeadsApi(campaignId, leads) {
     return post('/api/leads/import/api', { campaignId, leads });
   },

@@ -1,7 +1,7 @@
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File
 from pydantic import BaseModel, Field
 
 from app.core.auth import get_current_user
@@ -20,6 +20,8 @@ class CampaignCreateBody(BaseModel):
     dailyLimit: Optional[int] = 200
     timezone: Optional[str] = "America/Chicago"
     scheduleStart: Optional[str] = None
+    attachmentPath: Optional[str] = None
+    attachmentFilename: Optional[str] = None
 
 
 class CampaignUpdateBody(BaseModel):
@@ -32,6 +34,8 @@ class CampaignUpdateBody(BaseModel):
     dailyLimit: Optional[int] = None
     timezone: Optional[str] = None
     scheduleStart: Optional[str] = None
+    attachmentPath: Optional[str] = None
+    attachmentFilename: Optional[str] = None
 
 
 def _format_campaign(c: dict) -> dict:
@@ -47,6 +51,8 @@ def _format_campaign(c: dict) -> dict:
         "dailyLimit": c.get("dailyLimit", 200),
         "timezone": c.get("timezone", "America/Chicago"),
         "scheduleStart": c.get("scheduleStart").isoformat() if c.get("scheduleStart") else None,
+        "attachmentPath": c.get("attachmentPath", ""),
+        "attachmentFilename": c.get("attachmentFilename", ""),
         "stats": c.get("stats", {
             "totalSent": 0,
             "totalOpened": 0,
@@ -147,6 +153,8 @@ def create_campaign(
         "dailyLimit": body.dailyLimit or 200,
         "timezone": body.timezone or "America/Chicago",
         "scheduleStart": sched_start,
+        "attachmentPath": body.attachmentPath or "",
+        "attachmentFilename": body.attachmentFilename or "",
         "stats": {
             "totalSent": 0,
             "totalOpened": 0,
@@ -173,6 +181,30 @@ def create_campaign(
     })
 
     return {"campaign": _format_campaign(campaign)}
+
+
+@router.post("/upload-attachment")
+async def upload_campaign_attachment(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    import os
+    import shutil
+    try:
+        os.makedirs("private/uploads", exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        filename = f"{timestamp}_{file.filename}"
+        dest_path = os.path.join("private/uploads", filename)
+        
+        with open(dest_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        return {
+            "attachmentPath": dest_path,
+            "attachmentFilename": file.filename
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save upload: {e}")
 
 
 @router.get("/{id}")
@@ -231,8 +263,10 @@ def update_campaign(
                 updates["scheduleStart"] = datetime.fromisoformat(body.scheduleStart.replace("Z", "+00:00"))
             except Exception:
                 raise HTTPException(status_code=400, detail="Invalid scheduleStart format.")
-        else:
-            updates["scheduleStart"] = None
+    if body.attachmentPath is not None:
+        updates["attachmentPath"] = body.attachmentPath
+    if body.attachmentFilename is not None:
+        updates["attachmentFilename"] = body.attachmentFilename
 
     if updates:
         updates["updatedAt"] = datetime.now(timezone.utc)

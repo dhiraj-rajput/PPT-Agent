@@ -109,10 +109,34 @@ async def send_campaign_email_to_lead(campaign: dict, lead: dict) -> dict:
 
     # Build MIME message
     import aiosmtplib
+    import os
     from email.mime.multipart import MIMEMultipart
     from email.mime.text import MIMEText
+    from email.mime.application import MIMEApplication
 
-    msg = MIMEMultipart("alternative")
+    attach_path = campaign.get("attachmentPath")
+    attach_name = campaign.get("attachmentFilename") or "attachment.pdf"
+
+    if attach_path and os.path.exists(attach_path):
+        msg = MIMEMultipart("mixed")
+        
+        # Attach HTML as alternative
+        alt_part = MIMEMultipart("alternative")
+        alt_part.attach(MIMEText(final_html, "html"))
+        msg.attach(alt_part)
+        
+        # Attach PDF
+        try:
+            with open(attach_path, "rb") as f:
+                part = MIMEApplication(f.read(), Name=attach_name)
+            part['Content-Disposition'] = f'attachment; filename="{attach_name}"'
+            msg.attach(part)
+        except Exception as e:
+            logger.error(f"Failed to read/attach campaign PDF: {e}")
+    else:
+        msg = MIMEMultipart("alternative")
+        msg.attach(MIMEText(final_html, "html"))
+
     msg["Subject"] = subject
 
     sender_name = campaign.get("senderName")
@@ -123,7 +147,6 @@ async def send_campaign_email_to_lead(campaign: dict, lead: dict) -> dict:
         msg["From"] = settings.SMTP_FROM or settings.SMTP_USER
 
     msg["To"] = lead["email"]
-    msg.attach(MIMEText(final_html, "html"))
 
     # Send SMTP email if configured
     if settings.SMTP_USER and settings.SMTP_PASS:
