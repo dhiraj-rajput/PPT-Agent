@@ -178,6 +178,20 @@ export const api = {
     return this.getGoogleAuthUrl();
   },
 
+  // ---------- NAICS Codes ----------
+  async getNaicsCodes(params = {}) {
+    const qs = new URLSearchParams(params).toString();
+    return get(`/api/naics${qs ? `?${qs}` : ''}`);
+  },
+  async addNaicsCode(data) {
+    return post('/api/naics', data);
+  },
+  async importNaicsFile(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return _upload('/api/naics/import', formData);
+  },
+
   // ---------- Companies ----------
   async getCompanies(params = {}) {
     const qs = new URLSearchParams(params).toString();

@@ -24,6 +24,7 @@ import Settings from './pages/Settings.jsx';
 import UsersRoles from './pages/UsersRoles.jsx';
 import Integrations from './pages/Integrations.jsx';
 import RFPAutoRespond from './pages/RFPAutoRespond.jsx';
+import NaicsMuster from './pages/NaicsMuster.jsx';
 import NotFound from './pages/NotFound.jsx';
 
 export default function App() {
@@ -42,6 +43,7 @@ export default function App() {
         <Route path="/companies/:id" element={<CompanyDetail />} />
         <Route path="/tenders" element={<Tenders />} />
         <Route path="/tenders/:id" element={<TenderDetail />} />
+        <Route path="/naics" element={<NaicsMuster />} />
         <Route path="/ai-research" element={<AIResearch />} />
         <Route path="/proposal-builder" element={<ProposalBuilder />} />
         <Route path="/email-campaign" element={<EmailCampaign />} />
