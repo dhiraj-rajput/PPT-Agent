@@ -83,7 +83,13 @@ def _is_valid_phone(phone: str) -> bool:
 
 
 def _generate_otp() -> str:
-    return str(secrets.randbelow(900000) + 100000)
+    from config.settings import settings
+    length = getattr(settings, "OTP_LENGTH", 6)
+    if not isinstance(length, int) or length < 4 or length > 10:
+        length = 6
+    low = 10 ** (length - 1)
+    high = 10 ** length - 1
+    return str(secrets.randbelow(high - low + 1) + low)
 
 
 def _hash_otp(otp: str) -> str:
@@ -241,7 +247,7 @@ async def login(body: LoginBody):
 
 
 @router.post("/verify-otp")
-async def verify_otp(body: VerifyOtpBody):
+def verify_otp(body: VerifyOtpBody):
     users_col = get_collection("users")
     otps_col = get_collection("otps")
 
@@ -309,7 +315,7 @@ async def forgot_password(body: ForgotPasswordBody):
 
 
 @router.post("/reset-password")
-async def reset_password(body: ResetPasswordBody):
+def reset_password(body: ResetPasswordBody):
     if body.newPassword != body.confirmPassword:
         raise HTTPException(400, "Passwords do not match.")
     if not _is_strong_password(body.newPassword):
@@ -329,7 +335,7 @@ async def reset_password(body: ResetPasswordBody):
 
 
 @router.patch("/change-password")
-async def change_password(
+def change_password(
     body: ChangePasswordBody,
     current_user: dict = Depends(get_current_user),
 ):
@@ -350,7 +356,7 @@ async def change_password(
 
 
 @router.get("/me")
-async def me(current_user: dict = Depends(get_current_user)):
+def me(current_user: dict = Depends(get_current_user)):
     return {"user": _to_public_user(current_user)}
 
 
@@ -360,7 +366,7 @@ class UpdateProfileBody(BaseModel):
 
 
 @router.patch("/me/profile")
-async def update_profile(
+def update_profile(
     body: UpdateProfileBody,
     current_user: dict = Depends(get_current_user),
 ):
@@ -377,6 +383,6 @@ async def update_profile(
 
 
 @router.post("/logout")
-async def logout():
+def logout():
     # JWT is stateless; client clears the token
     return {"ok": True}

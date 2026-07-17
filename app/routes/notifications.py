@@ -40,7 +40,7 @@ def _to_public_notification(n: dict) -> dict:
 
 
 @router.get("")
-async def list_notifications(current_user: dict = Depends(get_current_user)):
+def list_notifications(current_user: dict = Depends(get_current_user)):
     notifs_col = get_collection("notifications")
     uid = current_user["_id"]
     notifications = list(
@@ -61,7 +61,7 @@ class CreateNotifBody(BaseModel):
 
 
 @router.post("", status_code=201)
-async def create_notification(
+def create_notification(
     body: CreateNotifBody,
     current_user: dict = Depends(get_current_user),
 ):
@@ -98,7 +98,7 @@ async def create_notification(
 
 
 @router.patch("/read-all")
-async def mark_all_read(current_user: dict = Depends(get_current_user)):
+def mark_all_read(current_user: dict = Depends(get_current_user)):
     get_collection("notifications").update_many(
         {"user": current_user["_id"], "read": False},
         {"$set": {"read": True}},
@@ -107,7 +107,7 @@ async def mark_all_read(current_user: dict = Depends(get_current_user)):
 
 
 @router.patch("/{notif_id}/read")
-async def mark_read(
+def mark_read(
     notif_id: str,
     current_user: dict = Depends(get_current_user),
 ):
@@ -127,7 +127,7 @@ async def mark_read(
 
 
 @router.delete("/{notif_id}")
-async def delete_notification(
+def delete_notification(
     notif_id: str,
     current_user: dict = Depends(get_current_user),
 ):

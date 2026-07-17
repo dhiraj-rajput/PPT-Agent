@@ -68,7 +68,7 @@ def _get_google_auth_url(user_id: str) -> str:
     return auth_url
 
 
-async def _handle_google_callback(code: str, state: Optional[str] = None) -> None:
+def _handle_google_callback(code: str, state: Optional[str] = None) -> None:
     if not _GOOGLE_CLIENT_ID:
         raise HTTPException(505, "Google OAuth is not configured.")
         
@@ -125,7 +125,7 @@ def _get_google_connection_status(user_id: str) -> dict:
 # ---------------------------------------------------------------------------
 
 @router.get("/google/status")
-async def google_status(current_user: dict = Depends(get_current_user)):
+def google_status(current_user: dict = Depends(get_current_user)):
     try:
         user_id = str(current_user["_id"])
         return _get_google_connection_status(user_id)
@@ -134,7 +134,7 @@ async def google_status(current_user: dict = Depends(get_current_user)):
 
 
 @router.get("/google/auth-url")
-async def google_auth_url(current_user: dict = Depends(get_current_user)):
+def google_auth_url(current_user: dict = Depends(get_current_user)):
     try:
         user_id = str(current_user["_id"])
         return {"url": _get_google_auth_url(user_id)}
@@ -145,13 +145,13 @@ async def google_auth_url(current_user: dict = Depends(get_current_user)):
 
 
 @router.get("/google/callback")
-async def google_callback(request: Request, code: Optional[str] = None, state: Optional[str] = None, error: Optional[str] = None):
+def google_callback(request: Request, code: Optional[str] = None, state: Optional[str] = None, error: Optional[str] = None):
     if error:
         return RedirectResponse(f"{_CLIENT_URL}/settings/integrations?google=error")
     if not code:
         return RedirectResponse(f"{_CLIENT_URL}/settings/integrations?google=error")
     try:
-        await _handle_google_callback(code, state)
+        _handle_google_callback(code, state)
         return RedirectResponse(f"{_CLIENT_URL}/settings/integrations?google=connected")
     except Exception:
         return RedirectResponse(f"{_CLIENT_URL}/settings/integrations?google=error")

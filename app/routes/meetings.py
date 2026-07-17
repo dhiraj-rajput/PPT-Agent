@@ -148,7 +148,7 @@ class CreateMeetingBody(BaseModel):
 # ---------------------------------------------------------------------------
 
 @router.get("")
-async def list_meetings(current_user: dict = Depends(get_current_user)):
+def list_meetings(current_user: dict = Depends(get_current_user)):
     meetings_col = get_collection("meetings")
     meetings = list(meetings_col.find().sort("date", 1))
     return {"meetings": [_to_public_meeting(m) for m in meetings]}

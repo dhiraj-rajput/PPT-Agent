@@ -227,6 +227,7 @@ class AppSettings(BaseSettings):
                 pass
         return v
     OTP_TTL_MINUTES: int = Field(default=10, description="OTP lifetime in minutes.")
+    OTP_LENGTH: int = Field(default=6, description="Length of generated OTP.")
     DEBUG_OTP: bool = Field(default=False, description="Enable printing OTPs to console for development.")
     SMTP_HOST: str = Field(default="smtp.gmail.com", description="SMTP server hostname.")
     SMTP_PORT: int = Field(default=465, description="SMTP server port.")

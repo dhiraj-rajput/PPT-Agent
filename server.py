@@ -42,17 +42,21 @@ from app.routes.tasks import router as tasks_router
 from app.routes.meetings import router as meetings_router
 from app.routes.notifications import router as notifications_router
 from app.routes.integrations import router as integrations_router
-
 # ---- RFP Auto-Respond (formerly BidForge) ----
 from app.routes.rfp_respond import router as rfp_respond_router
 
+# ---- Email Outreach & Campaign Module ----
+from app.routes.campaigns import router as campaigns_router
+from app.routes.leads import router as leads_router
+from app.routes.tracking import router as tracking_router
+from app.routes.analytics import router as analytics_router
+from app.routes.website_events import router as website_events_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: load/verify SAM entities database + ensure MongoDB indexes
     from app.routes.companies import import_sam_entities_csv
     import_sam_entities_csv()
-
     # Ensure indexes for all collections (core + new auth collections)
     try:
         from utils.db_client import ensure_all_indexes, get_collection
@@ -66,12 +70,30 @@ async def lifespan(app: FastAPI):
         get_collection("meetings").create_index([("date", 1), ("time", 1)])
         get_collection("notifications").create_index([("user", 1), ("createdAt", -1)])
         get_collection("notifications").create_index([("user", 1), ("read", 1)])
+
+        # Campaign & Outreach collection indexes
+        get_collection("campaigns").create_index([("createdBy", 1), ("status", 1)])
+        get_collection("leads").create_index([("campaignId", 1), ("email", 1)], unique=True)
+        get_collection("suppressions").create_index("email", unique=True)
+        get_collection("tracking_events").create_index([("campaignId", 1), ("type", 1), ("timestamp", 1)])
+        get_collection("website_events").create_index([("campaignId", 1), ("timestamp", 1)])
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning(f"MongoDB index setup warning: {e}")
 
+    # Start Background Email Worker Loop
+    import asyncio
+    from app.core.email_worker import start_email_worker_loop
+    worker_task = asyncio.create_task(start_email_worker_loop())
+
     yield
-    # Shutdown: close DB connection
+    # Shutdown: cancel background worker and close DB connection
+    worker_task.cancel()
+    try:
+        # Wait for worker task cancellation to complete
+        pass
+    except Exception:
+        pass
     close_connection()
 
 
@@ -105,6 +127,18 @@ app.include_router(reports_router, prefix="/api")
 app.include_router(proposals_router, prefix="/api")
 app.include_router(tenders_router, prefix="/api")
 app.include_router(rfp_respond_router, prefix="/api")
+
+# Campaign & Outreach module routers
+app.include_router(campaigns_router, prefix="/api")
+app.include_router(leads_router, prefix="/api")
+app.include_router(tracking_router, prefix="/api")
+app.include_router(analytics_router, prefix="/api")
+app.include_router(website_events_router, prefix="/api")
+@app.get("/tracker.js")
+def get_root_tracker_js():
+    from app.routes.tracking import TRACKER_JS
+    from fastapi.responses import Response
+    return Response(content=TRACKER_JS, media_type="application/javascript")
 
 
 @app.get("/api/health")
