@@ -12,7 +12,10 @@ Endpoints:
 from __future__ import annotations
 
 import os
+import logging
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
@@ -147,11 +150,18 @@ def google_auth_url(current_user: dict = Depends(get_current_user)):
 @router.get("/google/callback")
 def google_callback(request: Request, code: Optional[str] = None, state: Optional[str] = None, error: Optional[str] = None):
     if error:
+        logger.error(f"Google OAuth callback received error from Google: {error}")
         return RedirectResponse(f"{_CLIENT_URL}/settings/integrations?google=error")
     if not code:
+        logger.error("Google OAuth callback received no code parameter.")
         return RedirectResponse(f"{_CLIENT_URL}/settings/integrations?google=error")
     try:
         _handle_google_callback(code, state)
         return RedirectResponse(f"{_CLIENT_URL}/settings/integrations?google=connected")
-    except Exception:
+    except Exception as exc:
+        import traceback
+        print("\n=== GOOGLE OAUTH CALLBACK EXCEPTION TRACEBACK ===")
+        traceback.print_exc()
+        print("=================================================\n")
+        logger.error(f"Google OAuth callback processing failed: {exc}")
         return RedirectResponse(f"{_CLIENT_URL}/settings/integrations?google=error")
