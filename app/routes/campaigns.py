@@ -207,6 +207,20 @@ async def upload_campaign_attachment(
         raise HTTPException(status_code=500, detail=f"Failed to save upload: {e}")
 
 
+@router.get("/view-file")
+def view_campaign_file(path: str):
+    import os
+    from fastapi.responses import FileResponse
+    clean_path = path.replace("\\", "/")
+    if not clean_path.startswith("private/uploads") and not clean_path.startswith("private/reports"):
+        raise HTTPException(status_code=403, detail="Access denied")
+        
+    if not os.path.exists(clean_path):
+        raise HTTPException(status_code=404, detail="File not found")
+        
+    return FileResponse(clean_path, media_type="application/pdf")
+
+
 @router.get("/{id}")
 def get_campaign(id: str, current_user: dict = Depends(get_current_user)):
     try:
@@ -413,16 +427,3 @@ def launch_campaign(id: str, current_user: dict = Depends(get_current_user)):
 
     return {"campaign": _format_campaign(campaign), "queuedLeads": queued}
 
-
-@router.get("/view-file")
-def view_campaign_file(path: str):
-    import os
-    from fastapi.responses import FileResponse
-    clean_path = path.replace("\\", "/")
-    if not clean_path.startswith("private/uploads") and not clean_path.startswith("private/reports"):
-        raise HTTPException(status_code=403, detail="Access denied")
-        
-    if not os.path.exists(clean_path):
-        raise HTTPException(status_code=404, detail="File not found")
-        
-    return FileResponse(clean_path, media_type="application/pdf")

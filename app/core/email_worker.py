@@ -313,9 +313,10 @@ def check_incoming_replies():
         mail.login(settings.SMTP_USER, settings.SMTP_PASS)
         mail.select("INBOX")
 
-        status, messages = mail.search(None, "UNSEEN")
+        status, messages = mail.search(None, "ALL")
         if status == "OK" and messages[0]:
-            mail_ids = messages[0].split()
+            # Inspect the last 30 messages in the inbox (handles read/unread reply states robustly)
+            mail_ids = messages[0].split()[-30:]
             leads_col = get_collection("leads")
             campaigns_col = get_collection("campaigns")
 
@@ -368,7 +369,7 @@ def check_incoming_replies():
         mail.close()
         mail.logout()
     except Exception as imap_err:
-        logger.debug(f"[Email Worker] IMAP polling skipped or failed: {imap_err}")
+        logger.warning(f"[Email Worker] IMAP polling skipped or failed: {imap_err}")
 
 
 async def start_email_worker_loop():
