@@ -12,6 +12,11 @@ Usage:
 
 import argparse
 import sys
+from pathlib import Path
+
+# Add project root to python path to resolve local imports
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from documents.bidforge.pipeline import run_bidforge_pipeline
 

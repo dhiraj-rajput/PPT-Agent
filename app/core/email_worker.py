@@ -303,7 +303,7 @@ def check_incoming_replies():
     from email.header import decode_header
 
     # Set connection timeout limits
-    socket.setdefaulttimeout(15.0)
+    socket.setdefaulttimeout(30.0)
 
     # Determine IMAP server securely
     imap_host = "imap.gmail.com" if "gmail" in settings.SMTP_HOST.lower() else f"imap.{settings.SMTP_HOST.split('smtp.')[-1]}"
@@ -322,7 +322,7 @@ def check_incoming_replies():
 
             for mail_id in mail_ids:
                 try:
-                    res, msg_data = mail.fetch(mail_id, "(RFC822)")
+                    res, msg_data = mail.fetch(mail_id, "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT)])")
                     for response_part in msg_data:
                         if isinstance(response_part, tuple):
                             msg = email.message_from_bytes(response_part[1])
