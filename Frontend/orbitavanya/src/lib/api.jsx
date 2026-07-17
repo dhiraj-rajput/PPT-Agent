@@ -209,6 +209,9 @@ export const api = {
   async importCompanies(format, data) {
     return post('/api/companies/import', { format, data });
   },
+  async getCRMPipeline() {
+    return get('/api/companies/pipeline');
+  },
   async getCompactedProfiles() {
     return get('/api/companies/profiles');
   },

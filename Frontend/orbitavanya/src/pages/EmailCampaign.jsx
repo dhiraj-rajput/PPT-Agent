@@ -53,6 +53,13 @@ export default function EmailCampaign() {
   const [addingLead, setAddingLead] = useState(false);
   const [leadError, setLeadError] = useState('');
 
+  const [reportsList, setReportsList] = useState([]);
+  const [sendMode, setSendMode] = useState('bulk'); // 'bulk' | 'single'
+  const [recipientEmail, setRecipientEmail] = useState('');
+  const [recipientName, setRecipientName] = useState('');
+  const [recipientCompany, setRecipientCompany] = useState('');
+  const [selectedReport, setSelectedReport] = useState('');
+
   const handleAddLead = async (e) => {
     e.preventDefault();
     if (!leadForm.email.trim()) {
@@ -98,16 +105,18 @@ export default function EmailCampaign() {
     setLoading(true);
     setError('');
     try {
-      const [ov, tr, cp, eng] = await Promise.all([
+      const [ov, tr, cp, eng, reps] = await Promise.all([
         api.getAnalyticsOverview(),
         api.getAnalyticsTrends(),
         api.listCampaigns(),
         api.getWebsiteEngagement(),
+        api.getReports().catch(() => []),
       ]);
       setOverview(ov);
       setTrends(tr || []);
       setCampaigns(cp?.campaigns || []);
       setEngagement(eng || []);
+      setReportsList(reps || []);
     } catch (err) {
       setError(err.message || 'Could not load campaign data.');
     } finally {
@@ -126,11 +135,48 @@ export default function EmailCampaign() {
       setFormError('Name and subject are required.');
       return;
     }
+    if (sendMode === 'single' && !recipientEmail.trim()) {
+      setFormError('Recipient Email is required in Single Lead mode.');
+      return;
+    }
     setCreating(true);
     try {
-      await api.createCampaign(form);
+      let campaignBody = form.body;
+      if (selectedReport) {
+        const report = reportsList.find(r => r.filename === selectedReport);
+        const reportTitle = report ? report.title : 'Analysis Report';
+        const reportUrl = `${window.location.origin}/api/reports/view/${selectedReport}`;
+        campaignBody += `\n\n<p>Attached Analysis Report: <a href="${reportUrl}" target="_blank">${reportTitle}</a></p>`;
+      }
+
+      const campaignData = {
+        ...form,
+        body: campaignBody
+      };
+
+      const res = await api.createCampaign(campaignData);
+      const campaign = res.campaign;
+
+      if (sendMode === 'single' && campaign) {
+        // Automatically add the single lead
+        await api.createLead({
+          campaignId: campaign._id,
+          email: recipientEmail,
+          contactName: recipientName,
+          companyName: recipientCompany,
+          title: 'Recipient'
+        });
+        // Launch immediately
+        await api.launchCampaign(campaign._id);
+      }
+
       setShowNewCampaign(false);
       setForm(emptyForm);
+      setSendMode('bulk');
+      setRecipientEmail('');
+      setRecipientName('');
+      setRecipientCompany('');
+      setSelectedReport('');
       await loadAll();
     } catch (err) {
       setFormError(err.message || 'Could not create campaign.');
@@ -381,8 +427,7 @@ export default function EmailCampaign() {
                 <X size={18} />
               </button>
             </div>
-
-            <form onSubmit={handleCreateCampaign} className="p-5 space-y-4">
+            <form onSubmit={handleCreateCampaign} className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
               {formError && (
                 <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
                   {formError}
@@ -390,7 +435,7 @@ export default function EmailCampaign() {
               )}
 
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Campaign name</label>
+                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Campaign Name</label>
                 <input
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -399,8 +444,100 @@ export default function EmailCampaign() {
                 />
               </div>
 
+              {/* Recipient Mode Selection */}
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Subject line</label>
+                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Recipient Mode</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSendMode('bulk')}
+                    className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-all ${
+                      sendMode === 'bulk'
+                        ? 'border-brand-500 bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400'
+                        : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-400 dark:hover:bg-navy-900'
+                    }`}
+                  >
+                    Bulk Campaign (Draft & upload CSV later)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSendMode('single')}
+                    className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-all ${
+                      sendMode === 'single'
+                        ? 'border-brand-500 bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400'
+                        : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-400 dark:hover:bg-navy-900'
+                    }`}
+                  >
+                    Single Lead (Send immediately)
+                  </button>
+                </div>
+                <p className="mt-1 text-[11px] text-slate-400">
+                  {sendMode === 'bulk' 
+                    ? 'This creates a draft campaign. You can import contacts via CSV or add them manually from the campaign table.'
+                    : 'This sends the email to a single recipient immediately upon creation.'
+                  }
+                </p>
+              </div>
+
+              {/* Single Recipient Details */}
+              {sendMode === 'single' && (
+                <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3 space-y-3 dark:border-navy-700 dark:bg-navy-900/50">
+                  <h4 className="text-xs font-bold text-navy-900 dark:text-white uppercase tracking-wider">Recipient Details</h4>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Recipient Email *</label>
+                    <input
+                      required={sendMode === 'single'}
+                      value={recipientEmail}
+                      onChange={(e) => setRecipientEmail(e.target.value)}
+                      placeholder="client@company.com"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Recipient Name</label>
+                      <input
+                        value={recipientName}
+                        onChange={(e) => setRecipientName(e.target.value)}
+                        placeholder="John"
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Recipient Company</label>
+                      <input
+                        value={recipientCompany}
+                        onChange={(e) => setRecipientCompany(e.target.value)}
+                        placeholder="Acme Corp"
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Report Selection Dropdown */}
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Link Report Analysis (Optional)</label>
+                <select
+                  value={selectedReport}
+                  onChange={(e) => setSelectedReport(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                >
+                  <option value="">No report linked</option>
+                  {reportsList.map((rep) => (
+                    <option key={rep.filename} value={rep.filename}>
+                      {rep.title} ({rep.company_name})
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[11px] text-slate-400">
+                  Selecting a report will append a secure viewing link to the bottom of the email.
+                </p>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Subject Line</label>
                 <input
                   value={form.subject}
                   onChange={(e) => setForm({ ...form, subject: e.target.value })}
@@ -431,7 +568,7 @@ export default function EmailCampaign() {
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Email body (HTML, supports {'{{firstName}}'}, {'{{companyName}}'})</label>
+                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Email Body (HTML, supports {'{{firstName}}'}, {'{{companyName}}'})</label>
                 <textarea
                   value={form.body}
                   onChange={(e) => setForm({ ...form, body: e.target.value })}
@@ -439,11 +576,14 @@ export default function EmailCampaign() {
                   placeholder="<p>Hi {{firstName}}, ...</p>"
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
                 />
+                <p className="mt-1 text-[11px] text-slate-400">
+                  Use placeholders like <strong>{'{{firstName}}'}</strong> and <strong>{'{{companyName}}'}</strong> inside your text or HTML to personalize each message.
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Daily send limit</label>
+                  <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Daily Send Limit</label>
                   <input
                     type="number"
                     min={1}

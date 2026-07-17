@@ -625,6 +625,49 @@ def get_ai_mode(current_user: dict = Depends(get_current_user)):
     return {"ai_mode": settings.AI_MODE}
 
 
+@router.get("/pipeline")
+def get_pipeline_items(current_user: dict = Depends(get_current_user)):
+    """Retrieve items categorized for the CRM Pipeline stages."""
+    companies_col = get_collection("companies")
+    tenders_col = get_collection("tenders")
+    reports_col = get_collection("reports")
+    meetings_col = get_collection("meetings")
+    leads_col = get_collection("leads")
+
+    # 1. Prospects
+    prospects = list(companies_col.find({}, {"name": 1, "industry": 1, "matchScore": 1, "contact": 1, "uei": 1}).limit(10))
+    
+    # 2. Contacted
+    contacted = list(leads_col.find({"status": {"$in": ["sent", "opened", "clicked", "replied"]}}, {"email": 1, "contactName": 1, "companyName": 1, "status": 1}).limit(10))
+    
+    # 3. Proposals Sent
+    proposals = list(reports_col.find({}, {"title": 1, "company_name": 1, "proposal_type": 1, "size": 1, "filename": 1}).limit(10))
+    
+    # 4. Meetings Booked
+    meetings = list(meetings_col.find({}, {"title": 1, "host": 1, "startTime": 1}).limit(10))
+    
+    # 5. In Negotiation
+    negotiation = list(leads_col.find({"status": "replied"}, {"email": 1, "contactName": 1, "companyName": 1}).limit(10))
+    
+    # 6. Won
+    won = list(tenders_col.find({"has_award": True}, {"title": 1, "agency": 1, "value": 1, "id": 1}).limit(10))
+
+    def fmt_id(doc):
+        doc["id"] = str(doc.get("_id") or doc.get("id") or doc.get("uei") or doc.get("filename") or "")
+        if "_id" in doc:
+            del doc["_id"]
+        return doc
+
+    return {
+        "leads": [fmt_id(p) for p in prospects],
+        "contacted": [fmt_id(c) for c in contacted],
+        "proposals": [fmt_id(p) for p in proposals],
+        "meetings": [fmt_id(m) for m in meetings],
+        "negotiation": [fmt_id(n) for n in negotiation],
+        "won": [fmt_id(w) for w in won]
+    }
+
+
 @router.get("/{uei}")
 def get_company_detail(
     uei: str,
