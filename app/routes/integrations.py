@@ -142,6 +142,16 @@ def google_status(current_user: dict = Depends(get_current_user)):
         raise HTTPException(500, f"Could not check Google connection status: {exc}")
 
 
+@router.delete("/google")
+def disconnect_google(current_user: dict = Depends(get_current_user)):
+    try:
+        user_id = str(current_user["_id"])
+        get_collection("integrations").delete_one({"service": "google", "userId": user_id})
+        return {"success": True, "message": "Google Meet integration disconnected."}
+    except Exception as exc:
+        raise HTTPException(500, f"Could not disconnect Google integration: {exc}")
+
+
 @router.get("/google/auth-url")
 def google_auth_url(current_user: dict = Depends(get_current_user)):
     try:
@@ -157,17 +167,76 @@ def google_auth_url(current_user: dict = Depends(get_current_user)):
 def google_callback(request: Request, code: Optional[str] = None, state: Optional[str] = None, error: Optional[str] = None):
     if error:
         logger.error(f"Google OAuth callback received error from Google: {error}")
-        return RedirectResponse(f"{_CLIENT_URL}/settings/integrations?google=error")
+        return RedirectResponse(f"{_CLIENT_URL}/integrations?google=error")
     if not code:
         logger.error("Google OAuth callback received no code parameter.")
-        return RedirectResponse(f"{_CLIENT_URL}/settings/integrations?google=error")
+        return RedirectResponse(f"{_CLIENT_URL}/integrations?google=error")
     try:
         _handle_google_callback(code, state)
-        return RedirectResponse(f"{_CLIENT_URL}/settings/integrations?google=connected")
+        return RedirectResponse(f"{_CLIENT_URL}/integrations?google=connected")
     except Exception as exc:
         import traceback
         print("\n=== GOOGLE OAUTH CALLBACK EXCEPTION TRACEBACK ===")
         traceback.print_exc()
         print("=================================================\n")
         logger.error(f"Google OAuth callback processing failed: {exc}")
-        return RedirectResponse(f"{_CLIENT_URL}/settings/integrations?google=error")
+        return RedirectResponse(f"{_CLIENT_URL}/integrations?google=error")
+
+
+# ---------------------------------------------------------------------------
+# SAM.gov API Key Integration
+# ---------------------------------------------------------------------------
+
+from pydantic import BaseModel
+
+class SamApiKeyPayload(BaseModel):
+    api_key: str
+
+
+@router.get("/sam/status")
+def sam_status(current_user: dict = Depends(get_current_user)):
+    try:
+        user_id = str(current_user["_id"])
+        doc = get_collection("integrations").find_one({"service": "sam", "userId": user_id})
+        if doc and doc.get("connected"):
+            raw_key = doc.get("apiKey", "")
+            obfuscated = f"****{raw_key[-4:]}" if len(raw_key) >= 4 else "****"
+            return {"connected": True, "apiKey": obfuscated}
+        return {"connected": False, "apiKey": ""}
+    except Exception as exc:
+        raise HTTPException(500, f"Could not check SAM.gov connection status: {exc}")
+
+
+@router.post("/sam/connect")
+def sam_connect(payload: SamApiKeyPayload, current_user: dict = Depends(get_current_user)):
+    try:
+        user_id = str(current_user["_id"])
+        api_key = payload.api_key.strip()
+        if not api_key:
+            raise HTTPException(400, "API key cannot be empty.")
+            
+        get_collection("integrations").update_one(
+            {"service": "sam", "userId": user_id},
+            {"$set": {
+                "service": "sam",
+                "userId": user_id,
+                "apiKey": api_key,
+                "connected": True
+            }},
+            upsert=True
+        )
+        return {"success": True, "message": "SAM.gov API Key saved successfully."}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, f"Could not save SAM.gov API Key: {exc}")
+
+
+@router.delete("/sam")
+def sam_disconnect(current_user: dict = Depends(get_current_user)):
+    try:
+        user_id = str(current_user["_id"])
+        get_collection("integrations").delete_one({"service": "sam", "userId": user_id})
+        return {"success": True, "message": "SAM.gov API Key disconnected."}
+    except Exception as exc:
+        raise HTTPException(500, f"Could not disconnect SAM.gov: {exc}")

@@ -171,11 +171,23 @@ export const api = {
   async getGoogleAuthUrl() {
     return get('/api/integrations/google/auth-url');
   },
+  async googleDisconnect() {
+    return del('/api/integrations/google');
+  },
   async googleIntegrationStatus() {
     return this.getGoogleStatus();
   },
   async googleIntegrationAuthUrl() {
     return this.getGoogleAuthUrl();
+  },
+  async getSamStatus() {
+    return get('/api/integrations/sam/status');
+  },
+  async connectSam(apiKey) {
+    return post('/api/integrations/sam/connect', { api_key: apiKey });
+  },
+  async disconnectSam() {
+    return del('/api/integrations/sam');
   },
 
   // ---------- NAICS Codes ----------
