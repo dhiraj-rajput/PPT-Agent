@@ -49,6 +49,82 @@ export default function CompanyDetail() {
   const [generationError, setGenerationError] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
 
+  // Send Email States
+  const [showSendEmailModal, setShowSendEmailModal] = useState(false);
+  const [availableAttachments, setAvailableAttachments] = useState([]);
+  const [emailForm, setEmailForm] = useState({
+    to_email: '',
+    subject: '',
+    body: '',
+    proposal_filename: '',
+    rfp_filename: ''
+  });
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailSuccess, setEmailSuccess] = useState(false);
+  const [emailError, setEmailError] = useState('');
+
+  const openEmailModal = () => {
+    if (!company) return;
+    const defaultSubject = `Teaming Partnership Discussion - OrbitAvanya`;
+    const defaultBody = `<p>Hi ${company.contact || 'there'},</p>
+<p>I hope this email finds you well.</p>
+<p>I would like to explore potential federal teaming and contracting opportunities with <strong>${company.name}</strong>. Attached is our generated capability proposal document for your consideration.</p>
+<p>Please let me know if you are open to a brief call this week.</p>
+<p>Best regards,<br/>Procurement Teaming Team</p>`;
+    
+    let defaultProposal = '';
+    if (recentProposals && recentProposals.length > 0) {
+      defaultProposal = recentProposals[0].filename || '';
+    }
+
+    setEmailForm({
+      to_email: company.email || company.ebiz_email || '',
+      subject: defaultSubject,
+      body: defaultBody,
+      proposal_filename: defaultProposal,
+      rfp_filename: ''
+    });
+    setEmailSuccess(false);
+    setEmailError('');
+    setShowSendEmailModal(true);
+  };
+
+  useEffect(() => {
+    if (showSendEmailModal) {
+      api.getAvailableAttachments()
+        .then((res) => {
+          setAvailableAttachments(res.attachments || []);
+        })
+        .catch((err) => {
+          console.error("Failed to load attachments:", err);
+        });
+    }
+  }, [showSendEmailModal]);
+
+  const handleSendEmail = async (e) => {
+    e.preventDefault();
+    if (!emailForm.to_email.trim()) {
+      setEmailError("Recipient email is required.");
+      return;
+    }
+    if (!emailForm.subject.trim()) {
+      setEmailError("Subject line is required.");
+      return;
+    }
+    setEmailSending(true);
+    setEmailError('');
+    setEmailSuccess(false);
+    try {
+      await api.sendCompanyEmail(emailForm);
+      setEmailSuccess(true);
+      setTimeout(() => setShowSendEmailModal(false), 2000);
+    } catch (err) {
+      setEmailError(err.message || "Failed to send email outreach.");
+    } finally {
+      setEmailSending(false);
+    }
+  };
+
   useEffect(() => {
     if (previewingReport) {
       api.viewReportBlob(previewingReport.filename)
@@ -332,13 +408,13 @@ export default function CompanyDetail() {
         
         {/* Call to Actions */}
         <div className="flex items-center gap-2">
-          {company.email && (
-            <a 
-              href={`mailto:${company.email}`}
+          {(company.email || company.ebiz_email) && (
+            <button 
+              onClick={openEmailModal}
               className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-navy-900 hover:bg-slate-50 dark:border-navy-700 dark:bg-navy-800 dark:text-white dark:hover:bg-navy-700 transition-colors"
             >
               <Mail size={15} /> Email Contact
-            </a>
+            </button>
           )}
           <button 
             onClick={handleGenerateProposal}
@@ -712,6 +788,133 @@ export default function CompanyDetail() {
                 <Download size={14} /> Download PDF
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Send Email Modal */}
+      {showSendEmailModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/60 p-4 backdrop-blur-xs"
+          onClick={() => !emailSending && setShowSendEmailModal(false)}
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl bg-white dark:bg-navy-800 shadow-soft overflow-hidden border border-slate-100 dark:border-navy-700 flex flex-col max-h-[90vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-navy-700 p-5">
+              <div>
+                <h3 className="text-sm font-bold text-navy-900 dark:text-white">Email Outreach Contact</h3>
+                <p className="text-xs text-slate-400 mt-0.5">Send a capability proposal directly to this company.</p>
+              </div>
+              <button 
+                onClick={() => !emailSending && setShowSendEmailModal(false)} 
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-navy-900"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSendEmail} className="p-5 space-y-4 overflow-y-auto flex-1 text-left">
+              {emailSuccess && (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+                  Email outreach dispatched successfully via prasannadhamal982005@gmail.com!
+                </div>
+              )}
+              {emailError && (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
+                  {emailError}
+                </div>
+              )}
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Recipient Email</label>
+                <input
+                  type="email"
+                  required
+                  value={emailForm.to_email}
+                  onChange={(e) => setEmailForm({ ...emailForm, to_email: e.target.value })}
+                  placeholder="recipient@company.com"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Subject</label>
+                <input
+                  type="text"
+                  required
+                  value={emailForm.subject}
+                  onChange={(e) => setEmailForm({ ...emailForm, subject: e.target.value })}
+                  placeholder="Teaming Partnership Inquiry"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Email Body (HTML supported)</label>
+                <textarea
+                  required
+                  rows={6}
+                  value={emailForm.body}
+                  onChange={(e) => setEmailForm({ ...emailForm, body: e.target.value })}
+                  placeholder="Type your email content here..."
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white font-mono text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Attach Generated Proposal (PDF)</label>
+                <select
+                  value={emailForm.proposal_filename}
+                  onChange={(e) => setEmailForm({ ...emailForm, proposal_filename: e.target.value })}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                >
+                  <option value="">-- No Proposal Attachment --</option>
+                  {availableAttachments
+                    .filter(a => a.type === 'proposal' || a.type === 'rfp_respond')
+                    .map((a) => (
+                      <option key={a.filename} value={a.filename}>{a.label}</option>
+                    ))
+                  }
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Attach Source RFP Document (Optional)</label>
+                <select
+                  value={emailForm.rfp_filename}
+                  onChange={(e) => setEmailForm({ ...emailForm, rfp_filename: e.target.value })}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                >
+                  <option value="">-- No RFP Attachment --</option>
+                  {availableAttachments
+                    .filter(a => a.type === 'uploaded_rfp')
+                    .map((a) => (
+                      <option key={a.filename} value={a.filename}>{a.label}</option>
+                    ))
+                  }
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-navy-700">
+                <button
+                  type="button"
+                  disabled={emailSending}
+                  onClick={() => setShowSendEmailModal(false)}
+                  className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-navy-900 hover:bg-slate-50 dark:border-navy-700 dark:bg-navy-800 dark:text-white dark:hover:bg-navy-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={emailSending}
+                  className="flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-xs font-bold text-white shadow-soft hover:bg-brand-600 disabled:opacity-60"
+                >
+                  {emailSending ? 'Sending Outreach...' : 'Send Email Outreach'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

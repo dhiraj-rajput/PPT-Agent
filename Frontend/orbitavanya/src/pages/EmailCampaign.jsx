@@ -15,7 +15,15 @@ function titleCase(s) {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
-const emptyForm = { name: '', subject: '', body: '', dailyLimit: 200, timezone: 'America/Chicago' };
+const emptyForm = {
+  name: '',
+  subject: '',
+  body: '',
+  dailyLimit: 200,
+  timezone: 'America/Chicago',
+  senderEmail: 'prasannadhamal982005@gmail.com',
+  senderName: 'OrbitAvanya Outreach'
+};
 
 export default function EmailCampaign() {
   const [overview, setOverview] = useState(null);
@@ -32,6 +40,59 @@ export default function EmailCampaign() {
 
   const [importingFor, setImportingFor] = useState(null); // campaignId currently importing a CSV
   const [actionError, setActionError] = useState('');
+  const [workerStatus, setWorkerStatus] = useState(null);
+
+  // Manual Lead Entry States
+  const [showAddLead, setShowAddLead] = useState(null); // campaignId
+  const [leadForm, setLeadForm] = useState({
+    email: '',
+    contactName: '',
+    companyName: '',
+    title: ''
+  });
+  const [addingLead, setAddingLead] = useState(false);
+  const [leadError, setLeadError] = useState('');
+
+  const handleAddLead = async (e) => {
+    e.preventDefault();
+    if (!leadForm.email.trim()) {
+      setLeadError('Email is required.');
+      return;
+    }
+    setAddingLead(true);
+    setLeadError('');
+    try {
+      await api.createLead({
+        campaignId: showAddLead,
+        email: leadForm.email,
+        contactName: leadForm.contactName,
+        companyName: leadForm.companyName,
+        title: leadForm.title
+      });
+      setShowAddLead(null);
+      setLeadForm({ email: '', contactName: '', companyName: '', title: '' });
+      await loadAll();
+    } catch (err) {
+      setLeadError(err.message || 'Could not add lead.');
+    } finally {
+      setAddingLead(false);
+    }
+  };
+
+  const fetchWorkerStatus = useCallback(async () => {
+    try {
+      const status = await api.getCampaignWorkerStatus();
+      setWorkerStatus(status);
+    } catch (err) {
+      console.error('Failed to fetch worker status:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchWorkerStatus();
+    const interval = setInterval(fetchWorkerStatus, 10000);
+    return () => clearInterval(interval);
+  }, [fetchWorkerStatus]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -115,7 +176,21 @@ export default function EmailCampaign() {
     <div>
       <PageHeader
         title="Email Campaign"
-        subtitle="Create, schedule, and track outbound email campaigns"
+        subtitle={
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <span>Create, schedule, and track outbound email campaigns</span>
+            {workerStatus && (
+              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
+                workerStatus.active
+                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/25 dark:text-emerald-400'
+                  : 'bg-rose-100 text-rose-800 dark:bg-rose-950/25 dark:text-rose-400'
+              }`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${workerStatus.active ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+                Outbox Processor: {workerStatus.active ? 'Active' : 'Offline'}
+              </span>
+            )}
+          </div>
+        }
         action={
           <button
             onClick={() => setShowNewCampaign(true)}
@@ -206,6 +281,13 @@ export default function EmailCampaign() {
                 <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{new Date(c.createdAt).toLocaleDateString()}</td>
                 <td className="px-5 py-3.5">
                   <div className="flex items-center justify-end gap-1">
+                    <button
+                      title="Add lead manually"
+                      onClick={() => setShowAddLead(c._id)}
+                      className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-navy-900 dark:hover:bg-navy-800 dark:hover:text-white"
+                    >
+                      <Plus size={15} />
+                    </button>
                     <label
                       title="Import leads from CSV"
                       className="cursor-pointer rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-navy-900 dark:hover:bg-navy-800 dark:hover:text-white"
@@ -327,6 +409,27 @@ export default function EmailCampaign() {
                 />
               </div>
 
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Sender Name</label>
+                  <input
+                    value={form.senderName}
+                    onChange={(e) => setForm({ ...form, senderName: e.target.value })}
+                    placeholder="OrbitAvanya Outreach"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Sender Email</label>
+                  <input
+                    value={form.senderEmail}
+                    onChange={(e) => setForm({ ...form, senderEmail: e.target.value })}
+                    placeholder="prasannadhamal982005@gmail.com"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Email body (HTML, supports {'{{firstName}}'}, {'{{companyName}}'})</label>
                 <textarea
@@ -378,6 +481,98 @@ export default function EmailCampaign() {
               <p className="text-[11px] text-slate-400 dark:text-slate-500">
                 Created as a draft — add leads (CSV/manual) from the campaigns table, then launch when ready.
               </p>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showAddLead && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/60 p-4 backdrop-blur-xs"
+          onClick={() => !addingLead && setShowAddLead(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white dark:bg-navy-800 shadow-soft overflow-hidden border border-slate-100 dark:border-navy-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-navy-700 p-5">
+              <div>
+                <h3 className="text-sm font-bold text-navy-900 dark:text-white">Add Lead Manually</h3>
+                <p className="text-xs text-slate-400 mt-0.5">Add a single recipient email to the campaign outreach list.</p>
+              </div>
+              <button onClick={() => setShowAddLead(null)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-navy-900">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddLead} className="p-5 space-y-4 text-left">
+              {leadError && (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
+                  {leadError}
+                </div>
+              )}
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Recipient Email Address</label>
+                <input
+                  type="email"
+                  required
+                  value={leadForm.email}
+                  onChange={(e) => setLeadForm({ ...leadForm, email: e.target.value })}
+                  placeholder="name@company.com"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Contact Name</label>
+                <input
+                  type="text"
+                  value={leadForm.contactName}
+                  onChange={(e) => setLeadForm({ ...leadForm, contactName: e.target.value })}
+                  placeholder="John Doe"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Company Name</label>
+                <input
+                  type="text"
+                  value={leadForm.companyName}
+                  onChange={(e) => setLeadForm({ ...leadForm, companyName: e.target.value })}
+                  placeholder="Acme Corp"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Job Title</label>
+                <input
+                  type="text"
+                  value={leadForm.title}
+                  onChange={(e) => setLeadForm({ ...leadForm, title: e.target.value })}
+                  placeholder="Procurement Officer"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-navy-700">
+                <button
+                  type="button"
+                  onClick={() => setShowAddLead(null)}
+                  className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-navy-900 hover:bg-slate-50 dark:border-navy-700 dark:bg-navy-800 dark:text-white dark:hover:bg-navy-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addingLead}
+                  className="rounded-lg bg-brand-500 px-4 py-2 text-xs font-bold text-white shadow-soft hover:bg-brand-600 disabled:opacity-60"
+                >
+                  {addingLead ? 'Adding...' : 'Add Lead'}
+                </button>
+              </div>
             </form>
           </div>
         </div>

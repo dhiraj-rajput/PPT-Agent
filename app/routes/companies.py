@@ -87,6 +87,116 @@ def import_sam_entities_csv():
     except Exception as e:
         print(f"Error loading companies CSV: {e}")
 
+class SendCompanyEmailBody(BaseModel):
+    to_email: str
+    subject: str
+    body: str
+    proposal_filename: Optional[str] = None
+    rfp_filename: Optional[str] = None
+
+
+@router.get("/attachments")
+def get_attachments(current_user: dict = Depends(get_current_user)):
+    """List all available proposal and RFP PDF files that can be attached to emails."""
+    import os
+    from pathlib import Path
+    
+    attachments = []
+    
+    # 1. Look in output/pdf (proposal PDFs)
+    pdf_dir = Path("output/pdf")
+    if pdf_dir.exists():
+        for f in pdf_dir.glob("*.pdf"):
+            attachments.append({
+                "filename": f.name,
+                "type": "proposal",
+                "label": f"Proposal: {f.name}"
+            })
+            
+    # 2. Look in output/rfp_respond (RFP response PDFs)
+    rfp_respond_dir = Path("output/rfp_respond")
+    if rfp_respond_dir.exists():
+        for f in rfp_respond_dir.glob("*"):
+            if f.is_file() and not f.name.startswith("."):
+                attachments.append({
+                    "filename": f.name,
+                    "type": "rfp_respond",
+                    "label": f"RFP Respond: {f.name}"
+                })
+                
+    # 3. Look in private/rfp_respond_uploads (uploaded RFP documents)
+    uploads_dir = Path("private/rfp_respond_uploads")
+    if uploads_dir.exists():
+        for p in uploads_dir.rglob("*"):
+            if p.is_file() and not p.name.startswith("."):
+                attachments.append({
+                    "filename": p.name,
+                    "type": "uploaded_rfp",
+                    "label": f"Uploaded RFP: {p.name}"
+                })
+                
+    return {"attachments": attachments}
+
+
+@router.post("/send-email")
+async def send_company_email(body: SendCompanyEmailBody, current_user: dict = Depends(get_current_user)):
+    """Send a custom email to a company with optional attachments (proposal/RFP)."""
+    if not body.to_email:
+        raise HTTPException(status_code=400, detail="Recipient email is required.")
+    
+    attachments_list = []
+    import os
+    from pathlib import Path
+    
+    def locate_and_add_file(filename: str):
+        dirs = [
+            Path("output/pdf"),
+            Path("output/rfp_respond"),
+            Path("private/rfp_respond_uploads")
+        ]
+        for d in dirs:
+            if d.exists():
+                p = d / filename
+                if p.exists() and p.is_file():
+                    attachments_list.append({
+                        "path": str(p.resolve()),
+                        "filename": filename
+                    })
+                    return True
+                for found in d.rglob(filename):
+                    if found.is_file():
+                        attachments_list.append({
+                            "path": str(found.resolve()),
+                            "filename": filename
+                        })
+                        return True
+        return False
+
+    if body.proposal_filename:
+        found = locate_and_add_file(body.proposal_filename)
+        if not found:
+            raise HTTPException(status_code=404, detail=f"Proposal file '{body.proposal_filename}' not found on server.")
+            
+    if body.rfp_filename:
+        if body.rfp_filename != body.proposal_filename:
+            found = locate_and_add_file(body.rfp_filename)
+            if not found:
+                raise HTTPException(status_code=404, detail=f"RFP file '{body.rfp_filename}' not found on server.")
+
+    from app.core.mailer import send_company_email_with_attachments
+    try:
+        await send_company_email_with_attachments(
+            to_email=body.to_email,
+            subject=body.subject,
+            body_html=body.body,
+            attachments=attachments_list
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+        
+    return {"ok": True, "message": "Email sent successfully!"}
+
+
 @router.get("")
 def get_companies(
     query: Optional[str] = None,

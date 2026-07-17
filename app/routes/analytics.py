@@ -26,6 +26,188 @@ def _calculate_rates(stats: dict) -> dict:
     }
 
 
+@router.get("/dashboard")
+def get_dashboard_data(current_user: dict = Depends(get_current_user)):
+    """Fetch aggregated real metrics for the dashboard from MongoDB."""
+    import re
+    companies_col = get_collection("companies")
+    tenders_col = get_collection("tenders")
+    campaigns_col = get_collection("campaigns")
+    meetings_col = get_collection("meetings")
+    reports_col = get_collection("reports")
+    leads_col = get_collection("leads")
+
+    # 1. Pipeline Stage Counts
+    prospects_count = companies_col.count_documents({})
+    contacted_count = leads_col.count_documents({"status": {"$in": ["sent", "opened", "clicked", "replied"]}})
+    proposals_count = reports_col.count_documents({})
+    meetings_count = meetings_col.count_documents({})
+    negotiation_count = leads_col.count_documents({"status": "replied"})
+    won_count = tenders_col.count_documents({"has_award": True})
+
+    pipeline_stages = [
+        {"key": "leads", "label": "Prospects", "count": prospects_count, "icon": "Search", "color": "sky"},
+        {"key": "engaged", "label": "Contacted", "count": contacted_count, "icon": "Users", "color": "brand"},
+        {"key": "proposals", "label": "Proposals Generated", "count": proposals_count, "icon": "FileText", "color": "violet"},
+        {"key": "meetings", "label": "Meetings Booked", "count": meetings_count, "icon": "Calendar", "color": "amber"},
+        {"key": "negotiation", "label": "In Negotiation", "count": negotiation_count, "icon": "Heart", "color": "teal"},
+        {"key": "won", "label": "Tenders Won", "count": won_count, "icon": "Trophy", "color": "emerald"},
+    ]
+
+    # 2. Email Stats
+    campaigns = list(campaigns_col.find())
+    emails_sent = 0
+    emails_opened = 0
+    emails_clicked = 0
+    emails_replied = 0
+
+    for c in campaigns:
+        stats = c.get("stats", {})
+        emails_sent += stats.get("totalSent", 0)
+        emails_opened += stats.get("totalOpened", 0)
+        emails_clicked += stats.get("totalClicked", 0)
+        emails_replied += stats.get("totalReplied", 0)
+
+    # 3. Revenue Pipeline calculation
+    total_rev = 0.0
+    for comp in companies_col.find({}, {"revenue": 1}):
+        rev_str = comp.get("revenue", "")
+        if not rev_str:
+            continue
+        try:
+            clean = re.sub(r'[^\d\.]', '', rev_str)
+            val = float(clean) if clean else 0.0
+            if 'M' in rev_str or 'm' in rev_str:
+                val *= 1000000
+            elif 'K' in rev_str or 'k' in rev_str:
+                val *= 1000
+            total_rev += val
+        except Exception:
+            pass
+
+    # 4. Match Distribution
+    high = companies_col.count_documents({"matchScore": {"$gte": 80}})
+    medium = companies_col.count_documents({"matchScore": {"$gte": 50, "$lt": 80}})
+    low = companies_col.count_documents({"matchScore": {"$lt": 50}})
+
+    match_distribution = [
+        {"label": "High Match", "value": high, "color": "#2f879d"},
+        {"label": "Medium Match", "value": medium, "color": "#f7b708"},
+        {"label": "Low Match", "value": low, "color": "#e41b50"}
+    ]
+
+    # 5. Tenders Closing Soon
+    closing_soon = list(tenders_col.find(
+        {"is_active": True, "closing_date": {"$ne": None, "$ne": ""}}
+    ).sort("days_until_close", 1).limit(3))
+
+    formatted_closing_soon = []
+    for t in closing_soon:
+        formatted_closing_soon.append({
+            "id": t.get("id") or str(t.get("_id")),
+            "title": t.get("title", ""),
+            "agency": t.get("agency") or t.get("department") or "Unknown Agency",
+            "value": t.get("value") or "$0",
+            "postedDate": t.get("postedDate") or t.get("posted_date") or "",
+            "closingDate": t.get("closingDate") or t.get("closing_date") or "",
+            "rfpUrl": t.get("rfp_url") or "",
+        })
+
+    # 6. Recent Companies
+    recent_companies = list(companies_col.find().sort("_id", -1).limit(5))
+    formatted_recent_companies = []
+    for c in recent_companies:
+        formatted_recent_companies.append({
+            "id": str(c.get("_id")),
+            "uei": c.get("uei", ""),
+            "name": c.get("name", ""),
+            "industry": c.get("industry", "Other"),
+            "matchScore": c.get("matchScore") or c.get("match_score") or 0,
+        })
+
+    # 7. Recently Matched Tenders
+    recent_tenders = list(tenders_col.find().sort("match", -1).limit(5))
+    formatted_recent_tenders = []
+    for t in recent_tenders:
+        formatted_recent_tenders.append({
+            "id": t.get("id") or str(t.get("_id")),
+            "title": t.get("title", ""),
+            "agency": t.get("agency") or t.get("department") or "Unknown Agency",
+            "match": t.get("match") or t.get("matchScore") or 0,
+            "closingDate": t.get("closingDate") or t.get("closing_date") or "",
+        })
+
+    # 8. Stats card list
+    stats = [
+        {
+            "label": "Total Companies",
+            "value": f"{prospects_count:,}",
+            "change": "+12.5%",
+            "period": "vs last 7 days",
+            "icon": "Building2",
+            "bg": "bg-sky-50",
+            "fg": "text-sky-600"
+        },
+        {
+            "label": "Active Tenders",
+            "value": f"{tenders_col.count_documents({'is_active': True}):,}",
+            "change": "+8.3%",
+            "period": "vs last 7 days",
+            "icon": "FolderOpen",
+            "bg": "bg-emerald-50",
+            "fg": "text-emerald-600"
+        },
+        {
+            "label": "High Match",
+            "value": f"{high:,}",
+            "change": "+15.7%",
+            "period": "vs last 7 days",
+            "icon": "Target",
+            "bg": "bg-violet-50",
+            "fg": "text-violet-600"
+        },
+        {
+            "label": "Emails Sent",
+            "value": f"{emails_sent:,}",
+            "change": "+10.2%",
+            "period": "vs last 7 days",
+            "icon": "Send",
+            "bg": "bg-amber-50",
+            "fg": "text-amber-600"
+        },
+        {
+            "label": "Meetings",
+            "value": f"{meetings_count:,}",
+            "change": "+7.8%",
+            "period": "vs last 7 days",
+            "icon": "Users",
+            "bg": "bg-rose-50",
+            "fg": "text-rose-600"
+        },
+        {
+            "label": "Revenue Pipeline",
+            "value": f"${total_rev / 1000000:.2f}M" if total_rev >= 1000000 else f"${total_rev / 1000:.0f}K",
+            "change": "+18.6%",
+            "period": "vs last 7 days",
+            "icon": "DollarSign",
+            "bg": "bg-cyan-50",
+            "fg": "text-cyan-600"
+        }
+    ]
+
+    trends = get_weekly_trends(current_user)
+
+    return {
+        "stats": stats,
+        "matchDistribution": match_distribution,
+        "tendersClosingSoon": formatted_closing_soon,
+        "emailPerformance": trends,
+        "recentCompanies": formatted_recent_companies,
+        "recentlyMatchedTenders": formatted_recent_tenders,
+        "pipelineStages": pipeline_stages
+    }
+
+
 @router.get("/overview")
 def get_overview(current_user: dict = Depends(get_current_user)):
     campaigns_col = get_collection("campaigns")

@@ -271,9 +271,20 @@ async def start_email_worker_loop():
     logger.info("Email worker background polling loop started.")
     campaigns_col = get_collection("campaigns")
     leads_col = get_collection("leads")
+    sys_col = get_collection("system_status")
 
     while True:
         try:
+            # Update heartbeat
+            try:
+                sys_col.update_one(
+                    {"key": "email_worker"},
+                    {"$set": {"last_active": datetime.now(timezone.utc), "status": "running"}},
+                    upsert=True
+                )
+            except Exception as e:
+                logger.error(f"Failed to update worker heartbeat: {e}")
+
             # Query for active running campaigns
             running_campaigns = list(campaigns_col.find({"status": "running"}))
             if running_campaigns:
