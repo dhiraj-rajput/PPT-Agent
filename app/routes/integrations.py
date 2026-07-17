@@ -51,6 +51,7 @@ def _get_google_auth_url(user_id: str) -> str:
             }
         },
         scopes=[
+            "openid",
             "https://www.googleapis.com/auth/calendar.events",
             "https://www.googleapis.com/auth/userinfo.email",
         ],
@@ -100,6 +101,7 @@ def _handle_google_callback(code: str, state: Optional[str] = None) -> None:
             }
         },
         scopes=[
+            "openid",
             "https://www.googleapis.com/auth/calendar.events",
             "https://www.googleapis.com/auth/userinfo.email",
         ],

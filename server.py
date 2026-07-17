@@ -20,9 +20,11 @@ Routes:
   /api/rfp-respond/*   — RFP Auto-Respond (AI proposal from uploaded RFP)
 """
 
+import os
 import uvicorn
 from dotenv import load_dotenv
 load_dotenv()
+os.environ["OAUTHLIB_RELAX_TOKEN_SCOPE"] = "1"
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
