@@ -412,6 +412,18 @@ export const api = {
   async confirmChangePassword(actionToken, newPassword, confirmPassword) {
     return post('/api/auth/reset-password', { actionToken, newPassword, confirmPassword });
   },
+  async getDashboardData() {
+    return get('/api/analytics/dashboard');
+  },
+  async getCampaignWorkerStatus() {
+    return get('/api/campaigns/worker-status');
+  },
+  async getAvailableAttachments() {
+    return get('/api/companies/attachments');
+  },
+  async sendCompanyEmail(body) {
+    return post('/api/companies/send-email', body);
+  },
 };
 
 export default api;

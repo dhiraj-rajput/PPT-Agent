@@ -82,6 +82,34 @@ def _queue_pending_leads(campaign_id: ObjectId, daily_limit: int):
     return min(len(pending), limit)
 
 
+@router.get("/worker-status")
+def get_worker_status(current_user: dict = Depends(get_current_user)):
+    """Check if the background email campaign worker is active."""
+    col = get_collection("system_status")
+    status = col.find_one({"key": "email_worker"})
+    if not status:
+        return {"active": False, "message": "Worker has never been started."}
+        
+    last_active = status.get("last_active")
+    if not last_active:
+        return {"active": False, "message": "No active heartbeat recorded."}
+        
+    # Check if last_active is within 30 seconds
+    now = datetime.now(timezone.utc)
+    if last_active.tzinfo is None:
+        last_active = last_active.replace(tzinfo=timezone.utc)
+        
+    diff = (now - last_active).total_seconds()
+    is_active = diff < 30.0
+    
+    return {
+        "active": is_active,
+        "last_active": last_active.isoformat(),
+        "diff_seconds": diff,
+        "message": "Worker is active and polling." if is_active else "Worker seems to be stalled or offline."
+    }
+
+
 @router.get("")
 def list_campaigns(current_user: dict = Depends(get_current_user)):
     col = get_collection("campaigns")

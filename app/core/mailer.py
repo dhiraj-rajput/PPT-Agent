@@ -267,3 +267,60 @@ async def send_meeting_cancelled_email(
         """,
     )
     await _send(to_email, f"Meeting cancelled: {title} — {date} {time}", html)
+
+
+# ---------------------------------------------------------------------------
+# Company custom email with attachments
+# ---------------------------------------------------------------------------
+
+async def send_company_email_with_attachments(
+    to_email: str,
+    subject: str,
+    body_html: str,
+    attachments: list[dict] = None
+) -> None:
+    """Send a custom email to a company with optional attachments."""
+    if not _is_smtp_configured():
+        logger.warning(
+            f"[Mailer] SMTP not configured — skipping email to {to_email}: {subject}"
+        )
+        return
+    try:
+        import aiosmtplib
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+        from email.mime.application import MIMEApplication
+
+        msg = MIMEMultipart("mixed")
+        msg["Subject"] = subject
+        msg["From"] = _SMTP_FROM
+        msg["To"] = to_email
+
+        # Attach text/html part
+        msg.attach(MIMEText(body_html, "html"))
+
+        if attachments:
+            for attach in attachments:
+                path = attach.get("path")
+                filename = attach.get("filename")
+                if path and os.path.exists(path):
+                    with open(path, "rb") as f:
+                        part = MIMEApplication(f.read(), Name=filename)
+                    part['Content-Disposition'] = f'attachment; filename="{filename}"'
+                    msg.attach(part)
+                else:
+                    logger.warning(f"[Mailer] Attachment file not found: {path}")
+
+        await aiosmtplib.send(
+            msg,
+            hostname=_SMTP_HOST,
+            port=_SMTP_PORT,
+            username=_SMTP_USER,
+            password=_SMTP_PASS,
+            use_tls=(_SMTP_PORT == 465),
+            start_tls=(_SMTP_PORT == 587),
+        )
+        logger.info(f"[Mailer] Sent '{subject}' to {to_email} with attachments")
+    except Exception as exc:
+        logger.error(f"[Mailer] Failed to send email to {to_email}: {exc}")
+        raise exc
