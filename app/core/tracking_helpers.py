@@ -7,7 +7,7 @@ import secrets
 from typing import Dict, List, Tuple
 from config.settings import settings
 
-API_BASE_URL = os.getenv("API_BASE_URL") or "http://localhost:5050"
+API_BASE_URL = settings.API_BASE_URL
 
 # 1x1 transparent PNG image served by the open-tracking route
 TRANSPARENT_PNG = base64.b64decode(

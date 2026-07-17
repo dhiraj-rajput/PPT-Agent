@@ -64,17 +64,6 @@ export default function DocumentViewer() {
           </div>
         </div>
 
-        {/* Secure stats display */}
-        <div className="flex items-center gap-4 text-xs">
-          <span className="hidden items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1 text-slate-400 sm:flex">
-            <Clock size={12} className="text-brand-400" />
-            <span>Time tracked live</span>
-          </span>
-          <span className="flex items-center gap-1 text-emerald-400 bg-emerald-500/5 border border-emerald-500/10 px-2.5 py-1 rounded-full text-[10px] font-bold">
-            <ShieldCheck size={12} />
-            Secure Session
-          </span>
-        </div>
       </header>
 
       {/* Main viewer block */}

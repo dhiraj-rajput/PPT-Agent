@@ -234,6 +234,7 @@ class AppSettings(BaseSettings):
     SMTP_USER: str = Field(default="", description="SMTP account username/email.")
     SMTP_PASS: str = Field(default="", description="SMTP account password.")
     SMTP_FROM: str = Field(default="", description="Sender email address for outgoing mail.")
+    API_BASE_URL: str = Field(default="http://localhost:5050", description="API base URL used for tracking email opens and clicks.")
     CLIENT_URL: str = Field(default="http://localhost:5173", description="Frontend application client URL.")
     ZOOM_ACCOUNT_ID: str = Field(default="", description="Zoom account ID.")
     ZOOM_CLIENT_ID: str = Field(default="", description="Zoom client ID.")
