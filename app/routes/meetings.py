@@ -179,6 +179,7 @@ async def create_meeting(
             date=body.date,
             time=body.time,
             attendee_emails=[a["email"] for a in resolved],
+            user_id=str(current_user["_id"]),
         )
         meeting_link = room["meeting_link"]
         used_provider = room["provider"]
