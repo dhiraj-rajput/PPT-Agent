@@ -477,17 +477,6 @@ def import_leads_from_companies(
             report["duplicates"] += 1
             continue
 
-        conflict = _find_company_conflict(company_key, current_user["_id"], exclude_campaign_id=camp_oid)
-        if conflict:
-            report["conflicts"].append({
-                "companyName": company.companyName,
-                "email": email,
-                "conflictCampaignId": str(conflict["_id"]),
-                "conflictCampaignName": conflict.get("name", "another campaign"),
-                "message": f"\"{company.companyName}\" is already enrolled in campaign \"{conflict.get('name', 'another campaign')}\". A company can only be part of one campaign at a time."
-            })
-            continue
-
         existing_emails.add(email)
         used_keys_this_batch.add(company_key)
 

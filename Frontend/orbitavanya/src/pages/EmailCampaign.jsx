@@ -219,6 +219,15 @@ export default function EmailCampaign() {
         });
         // Launch immediately
         await api.launchCampaign(campaign.id);
+      } else if (sendMode === 'database' && campaign && Object.keys(selectedCompanies).length > 0) {
+        const companyList = Object.values(selectedCompanies).map((c) => ({
+          companyName: c.name || '',
+          uei: c.uei || '',
+          contactName: c.contact || '',
+          email: c.email || '',
+          title: c.contact_role || c.industry || 'Lead',
+        }));
+        await api.addCompaniesToCampaign(campaign.id, companyList);
       }
 
       setShowNewCampaign(false);
@@ -740,37 +749,95 @@ export default function EmailCampaign() {
               {/* Recipient Mode Selection */}
               <div>
                 <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400 font-bold">Recipient Mode</label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => setSendMode('bulk')}
-                    className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-all ${
+                    className={`rounded-lg border px-2.5 py-2 text-xs font-semibold transition-all ${
                       sendMode === 'bulk'
                         ? 'border-brand-500 bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400'
                         : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-400 dark:hover:bg-navy-900'
                     }`}
                   >
-                    Bulk Campaign (Draft & upload CSV later)
+                    Draft (CSV later)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSendMode('database');
+                      if (companyResults.length === 0) searchCompanies('');
+                    }}
+                    className={`rounded-lg border px-2.5 py-2 text-xs font-semibold transition-all ${
+                      sendMode === 'database'
+                        ? 'border-brand-500 bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400'
+                        : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-400 dark:hover:bg-navy-900'
+                    }`}
+                  >
+                    Select DB Companies
                   </button>
                   <button
                     type="button"
                     onClick={() => setSendMode('single')}
-                    className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-all ${
+                    className={`rounded-lg border px-2.5 py-2 text-xs font-semibold transition-all ${
                       sendMode === 'single'
                         ? 'border-brand-500 bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400'
                         : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-400 dark:hover:bg-navy-900'
                     }`}
                   >
-                    Single Lead (Send immediately)
+                    Single Lead
                   </button>
                 </div>
                 <p className="mt-1 text-[11px] text-slate-400">
-                  {sendMode === 'bulk' 
-                    ? 'Creates a draft campaign. You can import contacts via CSV or add them manually from the campaigns table.'
-                    : 'Sends the email to a single recipient immediately upon creation.'
-                  }
+                  {sendMode === 'bulk' && 'Creates a draft campaign. You can import contacts via CSV or add them manually later.'}
+                  {sendMode === 'database' && 'Pick registered prospect companies directly from your database to automatically enroll as leads.'}
+                  {sendMode === 'single' && 'Sends the email to a single recipient immediately upon creation.'}
                 </p>
               </div>
+
+              {/* Database Company Multi-Select Details */}
+              {sendMode === 'database' && (
+                <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3 space-y-3 dark:border-navy-700 dark:bg-navy-900/50">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-navy-900 dark:text-white uppercase tracking-wider">Select Companies from Database</h4>
+                    <span className="text-[11px] font-bold text-brand-600">{Object.keys(selectedCompanies).length} Selected</span>
+                  </div>
+                  <div className="relative">
+                    <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      value={companyQuery}
+                      onChange={(e) => setCompanyQuery(e.target.value)}
+                      placeholder="Search registered companies by name or contact…"
+                      className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-1.5 text-xs text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                    />
+                  </div>
+                  <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-white dark:border-navy-700 dark:bg-navy-900">
+                    {searchingCompanies ? (
+                      <div className="p-4 text-center text-xs text-slate-400">Searching database…</div>
+                    ) : companyResults.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-slate-400">No companies found.</div>
+                    ) : (
+                      companyResults.map((c) => {
+                        const key = normalizeCompanyKey(c.name, c.uei);
+                        const selected = !!selectedCompanies[key];
+                        return (
+                          <label key={c.id || key} className="flex items-center justify-between p-2.5 hover:bg-slate-50 dark:hover:bg-navy-800 cursor-pointer border-b border-slate-50 last:border-0">
+                            <div>
+                              <p className="text-xs font-bold text-navy-900 dark:text-white">{c.name}</p>
+                              <p className="text-[11px] text-slate-400">{c.email || 'No email registered'} {c.contact ? `· ${c.contact}` : ''}</p>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              onChange={() => toggleCompanySelection(c)}
+                              className="rounded border-slate-300 text-brand-500 focus:ring-brand-500"
+                            />
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Single Recipient Details */}
               {sendMode === 'single' && (
@@ -1093,13 +1160,10 @@ export default function EmailCampaign() {
                         type="button"
                         key={company.uei || key}
                         onClick={() => toggleCompanySelection(company)}
-                        disabled={!!conflict || noEmail}
                         className={`flex w-full items-center justify-between gap-3 border-b border-slate-50 px-4 py-2.5 text-left last:border-0 dark:border-navy-800/40 ${
-                          conflict || noEmail
-                            ? 'cursor-not-allowed opacity-50'
-                            : selected
-                              ? 'bg-brand-50 dark:bg-brand-500/10'
-                              : 'hover:bg-slate-50 dark:hover:bg-navy-900/60'
+                          selected
+                            ? 'bg-brand-50 dark:bg-brand-500/10'
+                            : 'hover:bg-slate-50 dark:hover:bg-navy-900/60'
                         }`}
                       >
                         <div className="flex items-center gap-3">

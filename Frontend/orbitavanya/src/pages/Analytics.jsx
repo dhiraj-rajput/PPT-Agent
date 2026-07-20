@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
-import { ResponsiveContainer, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, Legend } from 'recharts';
+import { useNavigate } from 'react-router-dom';
+import { ResponsiveContainer, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, LabelList } from 'recharts';
 import { FolderOpen, Building2, Target, Users2, Loader2, RefreshCw, Clock, Star, TrendingUp } from 'lucide-react';
 import { PageHeader, Card, StatusBadge } from '../components/ui/Common.jsx';
 import { api } from '../lib/api.jsx';
 
 export default function Analytics() {
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -18,8 +20,7 @@ export default function Analytics() {
         setLoading(false);
       })
       .catch((err) => {
-        console.error('Error fetching analytics:', err);
-        setError('Failed to load database analytics.');
+        setError(err.message || 'Failed to load dashboard data');
         setLoading(false);
       });
   };
@@ -30,23 +31,16 @@ export default function Analytics() {
 
   if (loading) {
     return (
-      <div className="flex h-[70vh] flex-col items-center justify-center">
-        <Loader2 className="animate-spin text-brand-500" size={36} />
-        <p className="mt-4 text-sm text-slate-500 font-medium">Gathering database analytics...</p>
+      <div className="flex h-96 items-center justify-center">
+        <Loader2 className="animate-spin text-brand-500" size={32} />
       </div>
     );
   }
 
-  if (error) {
+  if (error || !data) {
     return (
-      <div className="flex h-[50vh] flex-col items-center justify-center text-center p-4">
-        <p className="text-sm font-semibold text-rose-600">{error}</p>
-        <button 
-          onClick={fetchAnalytics} 
-          className="mt-4 rounded-xl bg-brand-500 px-4 py-2 text-xs font-bold text-white shadow-soft"
-        >
-          Retry
-        </button>
+      <div className="rounded-xl border border-rose-200 bg-rose-50 p-6 text-center text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
+        {error || 'No analytics data available.'}
       </div>
     );
   }
@@ -75,10 +69,14 @@ export default function Analytics() {
     { label: 'Companies Contacted', value: contactedVal, icon: Users2, bg: 'bg-cyan-50', fg: 'text-cyan-600' },
   ];
 
-  // Map pipeline stages for the conversion funnel
+  // Map pipeline stages for the conversion funnel with normalized visual bar height
+  // so large stage 1 numbers don't hide remaining stages
+  const maxVal = Math.max(...(pipelineStages?.map(p => p.count) || [1]), 1);
   const funnelData = pipelineStages?.map(p => ({
     stage: p.label,
-    value: p.count
+    count: p.count,
+    // Use cubic root scaling for bar width so 23,939 vs 25 are both clearly visible
+    scaledValue: Math.round(Math.pow(p.count, 0.45) * 10) + (p.count > 0 ? 5 : 0),
   })) || [];
 
   return (
@@ -174,12 +172,14 @@ export default function Analytics() {
           <div className="mt-3 h-64">
             {funnelData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={funnelData} layout="vertical" margin={{ left: 20 }}>
+                <BarChart data={funnelData} layout="vertical" margin={{ left: 20, right: 60 }}>
                   <CartesianGrid horizontal={false} stroke="#F1F3F9" />
-                  <XAxis type="number" tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
-                  <YAxis type="category" dataKey="stage" tick={{ fontSize: 12, fill: '#1c151e' }} axisLine={false} tickLine={false} width={130} />
-                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 10, border: '1px solid #F1F3F9' }} />
-                  <Bar dataKey="value" fill="#2f879d" radius={[0, 6, 6, 0]} barSize={20} name="Count" />
+                  <XAxis type="number" hide />
+                  <YAxis type="category" dataKey="stage" tick={{ fontSize: 12, fill: '#1c151e' }} axisLine={false} tickLine={false} width={140} />
+                  <Tooltip formatter={(val, name, item) => [`${(item.payload.count || 0).toLocaleString()} Records`, 'Count']} />
+                  <Bar dataKey="scaledValue" fill="#2f879d" radius={[0, 6, 6, 0]} barSize={22} name="Count">
+                    <LabelList dataKey="count" position="right" formatter={(v) => (v || 0).toLocaleString()} style={{ fontSize: 11, fontWeight: 'bold', fill: '#2f879d' }} />
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -202,12 +202,16 @@ export default function Analytics() {
               <p className="px-5 pb-5 text-xs text-slate-400">No tenders closing soon.</p>
             )}
             {tendersClosingSoon.map((t) => (
-              <div key={t.id} className="px-5 py-3">
-                <p className="text-xs font-semibold text-navy-900 dark:text-white line-clamp-1">{t.title || 'Untitled tender'}</p>
+              <div
+                key={t.id}
+                onClick={() => navigate(`/tenders/${t.id}`)}
+                className="px-5 py-3 hover:bg-slate-50/80 dark:hover:bg-navy-800/50 cursor-pointer transition-colors"
+              >
+                <p className="text-xs font-semibold text-navy-900 dark:text-white line-clamp-1 hover:text-brand-600">{t.title || 'Untitled tender'}</p>
                 <p className="mt-0.5 text-[11px] text-slate-400">{t.agency}</p>
                 <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
                   <span>{t.value}</span>
-                  <span>Closes {t.closingDate || '—'}</span>
+                  <span className="font-semibold text-amber-600 dark:text-amber-400">Closes {t.closingDate || '—'}</span>
                 </div>
               </div>
             ))}
@@ -225,9 +229,13 @@ export default function Analytics() {
               <p className="px-5 pb-5 text-xs text-slate-400">No companies recorded yet.</p>
             )}
             {recentCompanies.map((c) => (
-              <div key={c.id} className="flex items-center justify-between px-5 py-3">
+              <div
+                key={c.id}
+                onClick={() => navigate(`/companies/${c.id}`)}
+                className="flex items-center justify-between px-5 py-3 hover:bg-slate-50/80 dark:hover:bg-navy-800/50 cursor-pointer transition-colors"
+              >
                 <div>
-                  <p className="text-xs font-semibold text-navy-900 dark:text-white">{c.name || 'Unnamed company'}</p>
+                  <p className="text-xs font-semibold text-navy-900 dark:text-white hover:text-brand-600">{c.name || 'Unnamed company'}</p>
                   <p className="mt-0.5 text-[11px] text-slate-400">{c.industry}</p>
                 </div>
                 <span className="rounded-full bg-violet-50 px-2 py-1 text-[10px] font-bold text-violet-600 dark:bg-violet-950/30 dark:text-violet-400">
@@ -249,8 +257,12 @@ export default function Analytics() {
               <p className="px-5 pb-5 text-xs text-slate-400">No matched tenders yet.</p>
             )}
             {recentlyMatchedTenders.map((t) => (
-              <div key={t.id} className="px-5 py-3">
-                <p className="text-xs font-semibold text-navy-900 dark:text-white line-clamp-1">{t.title || 'Untitled tender'}</p>
+              <div
+                key={t.id}
+                onClick={() => navigate(`/tenders/${t.id}`)}
+                className="px-5 py-3 hover:bg-slate-50/80 dark:hover:bg-navy-800/50 cursor-pointer transition-colors"
+              >
+                <p className="text-xs font-semibold text-navy-900 dark:text-white line-clamp-1 hover:text-brand-600">{t.title || 'Untitled tender'}</p>
                 <p className="mt-0.5 text-[11px] text-slate-400">{t.agency}</p>
                 <div className="mt-1.5 flex items-center justify-between text-[11px]">
                   <span className="inline-flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400">

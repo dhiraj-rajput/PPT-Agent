@@ -491,10 +491,27 @@ export default function Companies() {
                     {/* Contact Post / Role */}
                     <div>
                       <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">Post / Role</label>
+                      <select
+                        value={['Procurement Officer', 'Chief Technology Officer (CTO)', 'Director of Procurement', 'EBiz Contact', 'Managing Partner', 'Executive VP'].includes(manualForm.contact_role) ? manualForm.contact_role : 'Custom'}
+                        onChange={(e) => {
+                          if (e.target.value !== 'Custom') {
+                            setManualForm({ ...manualForm, contact_role: e.target.value });
+                          }
+                        }}
+                        className="w-full text-xs rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 outline-none mb-1.5 focus:border-brand-400 focus:bg-white dark:border-navy-700 dark:bg-navy-900 dark:text-white cursor-pointer"
+                      >
+                        <option value="Procurement Officer">Procurement Officer</option>
+                        <option value="Chief Technology Officer (CTO)">CTO</option>
+                        <option value="Director of Procurement">Director of Procurement</option>
+                        <option value="EBiz Contact">EBiz Contact</option>
+                        <option value="Managing Partner">Managing Partner</option>
+                        <option value="Executive VP">Executive VP</option>
+                        <option value="Custom">Custom Role...</option>
+                      </select>
                       <input 
                         value={manualForm.contact_role}
                         onChange={(e) => setManualForm({...manualForm, contact_role: e.target.value})}
-                        placeholder="e.g. Procurement Officer, CTO"
+                        placeholder="Or type custom role..."
                         className="w-full text-xs rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 outline-none focus:border-brand-400 focus:bg-white dark:border-navy-700 dark:bg-navy-900 dark:text-white"
                       />
                     </div>
