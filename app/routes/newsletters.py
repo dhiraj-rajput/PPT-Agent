@@ -110,7 +110,7 @@ def _format_edition(e: dict) -> dict:
 @router.get("")
 def list_newsletters(current_user: dict = Depends(get_current_user)):
     col = get_collection("newsletters")
-    items = col.find({"createdBy": current_user["_id"]}).sort("createdAt", -1)
+    items = col.find().sort("createdAt", -1)
     return {"newsletters": [_format_newsletter(n) for n in items]}
 
 
@@ -149,7 +149,7 @@ def get_newsletter(id: str, current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Invalid newsletter ID")
 
     col = get_collection("newsletters")
-    item = col.find_one({"_id": oid, "createdBy": current_user["_id"]})
+    item = col.find_one({"_id": oid})
     if not item:
         raise HTTPException(status_code=404, detail="Newsletter not found")
 
@@ -309,7 +309,7 @@ def create_edition(
         raise HTTPException(status_code=400, detail="Invalid newsletter ID")
 
     newsletters_col = get_collection("newsletters")
-    newsletter = newsletters_col.find_one({"_id": n_oid, "createdBy": current_user["_id"]})
+    newsletter = newsletters_col.find_one({"_id": n_oid})
     if not newsletter:
         raise HTTPException(status_code=404, detail="Newsletter not found")
 

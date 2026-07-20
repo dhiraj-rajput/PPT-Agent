@@ -230,7 +230,7 @@ export default function Newsletter() {
               onClick={() => setShowSelfSubscribeModal(true)}
               className="shrink-0 flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-soft hover:bg-emerald-700 transition-colors"
             >
-              <Users size={14} /> Subscribe User / Myself
+              <Users size={14} /> Subscribe Contact / Company
             </button>
           )}
         </div>
@@ -605,12 +605,12 @@ export default function Newsletter() {
         </div>
       )}
 
-      {/* Modal: Subscribe User / Myself */}
+      {/* Modal: Subscribe Contact / Company */}
       {showSelfSubscribeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-900/60 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-navy-800">
-            <h3 className="text-base font-bold text-navy-900 dark:text-white">Subscribe User to {selectedNewsletter?.name}</h3>
-            <p className="mt-1 text-xs text-slate-400">Subscribe your team email or yourself to receive all future broadcast editions.</p>
+            <h3 className="text-base font-bold text-navy-900 dark:text-white">Add Contact to {selectedNewsletter?.name}</h3>
+            <p className="mt-1 text-xs text-slate-400">Subscribe an external client contact or enterprise email to receive all broadcast issues.</p>
             <form onSubmit={handleSelfSubscribe} className="mt-4 space-y-4">
               <div>
                 <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1">Subscriber Email Address *</label>
@@ -619,14 +619,14 @@ export default function Newsletter() {
                   required
                   value={userEmailInput}
                   onChange={(e) => setUserEmailInput(e.target.value)}
-                  placeholder="name@company.com"
+                  placeholder="contact@clientcompany.com"
                   className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-xs outline-none focus:border-brand-500 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
                 />
               </div>
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={() => setShowSelfSubscribeModal(false)} className="rounded-xl border px-4 py-2 text-xs font-semibold">Cancel</button>
                 <button type="submit" disabled={subscribingUser} className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-soft hover:bg-emerald-700">
-                  {subscribingUser ? <Loader2 className="animate-spin" size={14} /> : <Check size={14} />} Subscribe
+                  {subscribingUser ? <Loader2 className="animate-spin" size={14} /> : <Check size={14} />} Subscribe Contact
                 </button>
               </div>
             </form>
