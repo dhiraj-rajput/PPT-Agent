@@ -407,6 +407,9 @@ export const api = {
   async createNewsletter(data) {
     return post('/api/newsletters', data);
   },
+  async deleteNewsletter(id) {
+    return del(`/api/newsletters/${id}`);
+  },
   async getNewsletterSubscribers(id, params = {}) {
     const q = new URLSearchParams(params).toString();
     return get(`/api/newsletters/${id}/subscribers${q ? `?${q}` : ''}`);
@@ -414,8 +417,8 @@ export const api = {
   async addNewsletterSubscriber(id, data) {
     return post(`/api/newsletters/${id}/subscribers`, data);
   },
-  async addNewsletterSubscribersFromCompanies(id, companyIds = []) {
-    return post(`/api/newsletters/${id}/subscribers/from-companies`, { companyIds });
+  async addNewsletterSubscribersFromCompanies(id, companyIds = [], manualEmail = '') {
+    return post(`/api/newsletters/${id}/subscribers/companies`, { companyIds, manualEmail });
   },
   async createNewsletterEdition(id, data) {
     return post(`/api/newsletters/${id}/editions`, data);

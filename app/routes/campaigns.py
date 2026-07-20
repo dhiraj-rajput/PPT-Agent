@@ -122,8 +122,7 @@ def get_worker_status(current_user: dict = Depends(get_current_user)):
 @router.get("")
 def list_campaigns(current_user: dict = Depends(get_current_user)):
     col = get_collection("campaigns")
-    user_id = current_user["_id"]
-    campaigns = list(col.find({"createdBy": user_id}).sort("createdAt", -1))
+    campaigns = list(col.find().sort("createdAt", -1))
     return {"campaigns": [_format_campaign(c) for c in campaigns]}
 
 
@@ -245,7 +244,7 @@ def get_campaign(id: str, current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
     col = get_collection("campaigns")
-    campaign = col.find_one({"_id": oid, "createdBy": current_user["_id"]})
+    campaign = col.find_one({"_id": oid})
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found.")
     return {"campaign": _format_campaign(campaign)}
@@ -263,7 +262,7 @@ def update_campaign(
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
     col = get_collection("campaigns")
-    campaign = col.find_one({"_id": oid, "createdBy": current_user["_id"]})
+    campaign = col.find_one({"_id": oid})
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found.")
 
@@ -314,7 +313,7 @@ def delete_campaign(id: str, current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
     col = get_collection("campaigns")
-    campaign = col.find_one_and_delete({"_id": oid, "createdBy": current_user["_id"]})
+    campaign = col.find_one_and_delete({"_id": oid})
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found.")
 
@@ -341,7 +340,7 @@ def duplicate_campaign(id: str, current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
     col = get_collection("campaigns")
-    source = col.find_one({"_id": oid, "createdBy": current_user["_id"]})
+    source = col.find_one({"_id": oid})
     if not source:
         raise HTTPException(status_code=404, detail="Campaign not found.")
 
@@ -394,7 +393,7 @@ def pause_campaign(id: str, current_user: dict = Depends(get_current_user)):
 
     col = get_collection("campaigns")
     campaign = col.find_one_and_update(
-        {"_id": oid, "createdBy": current_user["_id"]},
+        {"_id": oid},
         {"$set": {"status": "paused", "updatedAt": datetime.now(timezone.utc)}},
         return_document=True
     )
@@ -411,7 +410,7 @@ def resume_campaign(id: str, current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
     col = get_collection("campaigns")
-    campaign = col.find_one({"_id": oid, "createdBy": current_user["_id"]})
+    campaign = col.find_one({"_id": oid})
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found.")
 
@@ -430,7 +429,7 @@ def launch_campaign(id: str, current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
     col = get_collection("campaigns")
-    campaign = col.find_one({"_id": oid, "createdBy": current_user["_id"]})
+    campaign = col.find_one({"_id": oid})
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found.")
 

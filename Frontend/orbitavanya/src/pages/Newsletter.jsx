@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Mail, Plus, Users, Send, Check, Loader2, Sparkles, Building2, Search, AlertCircle } from 'lucide-react';
+import { Mail, Plus, Users, Send, Check, Loader2, Sparkles, Building2, Search, AlertCircle, Trash2, Image } from 'lucide-react';
 import { PageHeader, Card, StatusBadge } from '../components/ui/Common.jsx';
 import { api } from '../lib/api.jsx';
 
@@ -79,6 +79,17 @@ export default function Newsletter() {
         setSubmitting(false);
         setMessage(err.message || 'Failed to create newsletter');
       });
+  };
+
+  const handleDeleteNewsletter = async (nlId) => {
+    if (!window.confirm("Are you sure you want to delete this publication and all its broadcast history?")) return;
+    try {
+      await api.deleteNewsletter(nlId);
+      setSelectedNewsletter(null);
+      fetchNewsletters();
+    } catch (err) {
+      alert(err.message || "Failed to delete newsletter");
+    }
   };
 
   const handleSendEdition = async (e) => {
@@ -273,10 +284,22 @@ export default function Newsletter() {
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-bold text-navy-900 dark:text-white">{nl.name}</h4>
-                    <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-bold text-brand-700 dark:bg-navy-700 dark:text-brand-300">
-                      {nl.stats?.totalSubscribers || 0} subs
-                    </span>
+                    <h4 className="text-sm font-bold text-navy-900 dark:text-white truncate pr-2">{nl.name}</h4>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-bold text-brand-700 dark:bg-navy-700 dark:text-brand-300">
+                        {nl.stats?.totalSubscribers || 0} subs
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteNewsletter(nl.id);
+                        }}
+                        className="rounded-lg p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40 transition-colors"
+                        title="Delete Publication"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </div>
                   <p className="mt-1 line-clamp-2 text-xs text-slate-500 dark:text-slate-400">{nl.description || 'No description provided.'}</p>
                 </div>

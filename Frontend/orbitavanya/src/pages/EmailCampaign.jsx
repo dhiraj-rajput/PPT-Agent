@@ -211,18 +211,26 @@ export default function EmailCampaign() {
       const campaign = res.campaign;
 
       if (sendMode === 'single' && campaign) {
-        // Automatically add all single lead recipient emails
+        // Automatically add all single/multiple lead recipients with matching names and companies
         const emails = recipientEmail
-          .split(/[,;\n\s]+/)
+          .split(/[,;\n]+/)
           .map((e) => e.trim())
           .filter((e) => e.length > 0 && e.includes('@'));
+
+        const names = recipientName
+          .split(/[,;\n]+/)
+          .map((n) => n.trim());
+
+        const companies = recipientCompany
+          .split(/[,;\n]+/)
+          .map((c) => c.trim());
         
-        for (const email of emails) {
+        for (let i = 0; i < emails.length; i++) {
           await api.createLead({
             campaignId: campaign.id,
-            email: email,
-            contactName: recipientName || 'Contact',
-            companyName: recipientCompany || '',
+            email: emails[i],
+            contactName: names[i] || names[0] || 'Contact',
+            companyName: companies[i] || companies[0] || '',
             title: 'Recipient'
           });
         }
@@ -890,20 +898,20 @@ export default function EmailCampaign() {
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Recipient Name</label>
+                      <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Recipient Name(s) <span className="font-normal text-slate-400">(Comma separated)</span></label>
                       <input
                         value={recipientName}
                         onChange={(e) => setRecipientName(e.target.value)}
-                        placeholder="E.g., Sarah"
+                        placeholder="E.g., John Doe, Sarah Smith"
                         className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Recipient Company</label>
+                      <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Recipient Company(ies) <span className="font-normal text-slate-400">(Comma separated)</span></label>
                       <input
                         value={recipientCompany}
                         onChange={(e) => setRecipientCompany(e.target.value)}
-                        placeholder="E.g., Apex Logistics"
+                        placeholder="E.g., Acme Corp, Tech Inc"
                         className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
                       />
                     </div>

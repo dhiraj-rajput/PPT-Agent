@@ -156,6 +156,26 @@ def get_newsletter(id: str, current_user: dict = Depends(get_current_user)):
     return {"newsletter": _format_newsletter(item)}
 
 
+@router.delete("/{id}")
+def delete_newsletter(id: str, current_user: dict = Depends(get_current_user)):
+    try:
+        n_oid = ObjectId(id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid newsletter ID")
+
+    newsletters_col = get_collection("newsletters")
+    newsletter = newsletters_col.find_one({"_id": n_oid})
+    if not newsletter:
+        raise HTTPException(status_code=404, detail="Newsletter not found")
+
+    newsletters_col.delete_one({"_id": n_oid})
+    get_collection("editions").delete_many({"newsletterId": n_oid})
+    get_collection("newsletter_subscribers").delete_many({"newsletterId": n_oid})
+    get_collection("newsletter_sends").delete_many({"newsletterId": n_oid})
+
+    return {"ok": True, "message": "Newsletter deleted successfully"}
+
+
 @router.get("/{id}/subscribers")
 def list_subscribers(
     id: str,
@@ -234,8 +254,8 @@ def add_subscriber(
     return {"status": "success"}
 
 
-@router.post("/{id}/subscribers/from-companies")
-def add_subscribers_from_companies(
+@router.post("/{id}/subscribers/companies")
+def add_company_subscribers(
     id: str,
     body: BulkCompanySubscriberBody,
     current_user: dict = Depends(get_current_user),
@@ -255,13 +275,19 @@ def add_subscribers_from_companies(
     query = {}
     if body.companyIds:
         c_oids = []
+        c_ueis = []
         for cid in body.companyIds:
+            c_str = str(cid)
+            c_ueis.append(c_str)
             try:
-                c_oids.append(ObjectId(cid))
+                c_oids.append(ObjectId(c_str))
             except Exception:
                 pass
+        
+        or_conds = [{"uei": {"$in": c_ueis}}]
         if c_oids:
-            query["_id"] = {"$in": c_oids}
+            or_conds.append({"_id": {"$in": c_oids}})
+        query["$or"] = or_conds
 
     companies = list(companies_col.find(query, {"name": 1, "contact": 1, "email": 1}))
     to_insert = []
@@ -298,7 +324,7 @@ def add_subscribers_from_companies(
 
 
 @router.post("/{id}/editions")
-def create_edition(
+async def create_edition(
     id: str,
     body: CreateEditionBody,
     current_user: dict = Depends(get_current_user),
@@ -355,11 +381,17 @@ def create_edition(
                 f'<p style="font-size:11px;color:#94a3b8;">To unsubscribe from this newsletter, <a href="{unsub_link}">click here</a>.</p>'
             )
 
-            success, err = send_company_email_with_attachments(
-                to_email=recipient_email,
-                subject=body.subject,
-                body=body_with_unsub,
-            )
+            try:
+                await send_company_email_with_attachments(
+                    to_email=recipient_email,
+                    subject=body.subject,
+                    body_html=body_with_unsub,
+                )
+                success = True
+                err = ""
+            except Exception as mail_err:
+                success = False
+                err = str(mail_err)
 
             sends_col.insert_one({
                 "editionId": e_id,

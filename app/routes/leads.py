@@ -79,7 +79,7 @@ class BulkCompanyImportBody(BaseModel):
 
 def _assert_campaign_ownership(campaign_id: ObjectId, user_id: ObjectId) -> bool:
     campaigns_col = get_collection("campaigns")
-    campaign = campaigns_col.find_one({"_id": campaign_id, "createdBy": user_id})
+    campaign = campaigns_col.find_one({"_id": campaign_id})
     return bool(campaign)
 
 
