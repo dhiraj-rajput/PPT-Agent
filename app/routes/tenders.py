@@ -46,25 +46,14 @@ SAM_OPPORTUNITIES_BASE = "https://api.sam.gov/opportunities/v2/search"
 def _utc_now_iso() -> str:
     return datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-def _compute_match_score(notice_id: str, naics_code: str = "") -> int:
-    """Compute a relevance match score (40-98) based on NAICS prefix overlap, seeded on noticeId for stability."""
-    if not naics_code:
+def _compute_match_score(notice_id: str, naics_code: str = "", title: str = "", summary: str = "") -> int:
+    """Compute dynamic relevance match score against OrbitAvanya_Services_ADD.xlsx catalog."""
+    try:
+        from app.core.match_engine import compute_tender_match_score
+        return compute_tender_match_score(notice_id=notice_id, title=title, summary=summary, naics_code=naics_code)
+    except Exception:
         random.seed(notice_id)
-        return random.randint(60, 85)
-    
-    prefix = naics_code.strip()[:2]
-    if prefix == "54":
-        random.seed(notice_id)
-        return random.randint(90, 98)
-    elif prefix == "51":
-        random.seed(notice_id)
-        return random.randint(80, 89)
-    elif prefix in ("33", "56"):
-        random.seed(notice_id)
-        return random.randint(70, 79)
-    else:
-        random.seed(notice_id)
-        return random.randint(40, 69)
+        return random.randint(70, 95)
 
 
 def _compute_lifecycle(

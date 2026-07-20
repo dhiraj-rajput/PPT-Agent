@@ -367,7 +367,7 @@ def profile_single_opportunity(selected_opp: dict, opp_client: SAMOpportunitiesC
                 from documents.rfp_response.pitch_compiler import PitchCompiler
                 from documents.rfp_response.pdf_generator import PDFGenerator
 
-                proj_root = Path(__file__).resolve().parent
+                proj_root = Path(__file__).resolve().parent.parent
                 print("\n  [Mock Mode] Generating mock B2B proposal JSON & PDF...")
                 rfp_parser = RFPParser(rfp_profile["solicitation_number"], project_root=str(proj_root))
                 pdf_texts = rfp_parser.extract_text_from_pdfs()

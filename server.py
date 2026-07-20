@@ -54,6 +54,7 @@ from app.routes.tracking import router as tracking_router
 from app.routes.analytics import router as analytics_router
 from app.routes.website_events import router as website_events_router
 from app.routes.naics import router as naics_router
+from app.routes.newsletters import router as newsletters_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -143,6 +144,7 @@ app.include_router(tracking_router, prefix="/api")
 app.include_router(analytics_router, prefix="/api")
 app.include_router(website_events_router, prefix="/api")
 app.include_router(naics_router, prefix="/api")
+app.include_router(newsletters_router, prefix="/api")
 @app.get("/tracker.js")
 def get_root_tracker_js():
     from app.routes.tracking import TRACKER_JS

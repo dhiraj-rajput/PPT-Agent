@@ -98,7 +98,8 @@ def _set_column_widths(table, widths_in):
     table.autofit = False
     for row in table.rows:
         for idx, cell in enumerate(row.cells):
-            cell.width = Inches(widths_in[idx])
+            if idx < len(widths_in):
+                cell.width = Inches(widths_in[idx])
 
 
 def _add_toc_field(paragraph):
@@ -341,6 +342,9 @@ def add_numbered(doc, cfg, items):
 
 
 def add_table_block(doc, cfg, headers, rows, col_widths=None):
+    if not headers or len(headers) == 0:
+        return None
+
     # Add a small spacer before the table so it doesn't crowd the preceding element
     pre = doc.add_paragraph()
     pre.paragraph_format.space_before = Pt(2)
@@ -392,7 +396,7 @@ _BLOCK_HANDLERS = {
 
 
 def add_section(doc, cfg, section):
-    if section.get("page_break_before", True):
+    if section.get("page_break_before", False):
         doc.add_page_break()
     add_section_title(doc, cfg, section["title"])
     for block in section.get("blocks", []):
@@ -485,6 +489,10 @@ def setup_page(doc):
     section.bottom_margin = Inches(0.75)
     section.header_distance = Inches(0.35)
     section.footer_distance = Inches(0.35)
+    try:
+        doc.styles["Normal"].paragraph_format.widow_control = True
+    except Exception:
+        pass
 
 
 # --------------------------------------------------------------------------

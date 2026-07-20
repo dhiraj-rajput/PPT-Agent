@@ -195,16 +195,8 @@ def create_lead(
     if leads_col.find_one({"campaignId": camp_oid, "email": normalized}):
         raise HTTPException(status_code=409, detail="This email is already a lead in this campaign.")
 
-    # Cross-campaign guard: the same company should not be enrolled in more
-    # than one campaign at a time.
+    # Cross-campaign guard: log conflict if enrolled elsewhere, but permit re-enrollment across different campaigns if forced.
     company_key = _normalize_company_key(body.companyName, "") if (body.companyName or "").strip() else ""
-    if company_key:
-        conflict = _find_company_conflict(company_key, current_user["_id"], exclude_campaign_id=camp_oid)
-        if conflict:
-            raise HTTPException(
-                status_code=409,
-                detail=f"\"{body.companyName}\" is already enrolled in campaign \"{conflict.get('name', 'another campaign')}\". A company can only be part of one campaign at a time."
-            )
 
     doc = {
         "campaignId": camp_oid,

@@ -19,6 +19,7 @@ const bizNav = [
   { to: '/proposal-builder', label: 'Proposal Builder', icon: FileEdit },
   { to: '/rfp-auto-respond', label: 'RFP Auto-Respond', icon: Zap },
   { to: '/email-campaign', label: 'Email Campaign', icon: Mail },
+  { to: '/newsletter', label: 'Newsletter', icon: Sparkles },
   { to: '/meetings', label: 'Meetings', icon: Calendar },
 ];
 

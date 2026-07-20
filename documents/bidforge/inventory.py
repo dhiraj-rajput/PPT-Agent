@@ -26,14 +26,15 @@ _PROFILE_PATH = Path(__file__).resolve().parent.parent.parent / "private" / "orb
 
 
 def _load_our_catalog() -> List[Dict[str, Any]]:
-    """
-    private/orbit_avanya_detailed_profiles.json is actually a LIST of per-product
-    profiles (LMS, HMS, ERP, ...), each shaped like:
-      {product_name, industry_domain, about_text, key_features: [...],
-       technology_stack: {frontend: [...], backend: [...], ...}, pricing_model, ...}
-    This builds a flat, usable product catalog from it. Falls back to a small
-    hardcoded catalog if the file is missing/unreadable.
-    """
+    """Loads our product catalog from app.core.company_catalog (Ingests private/OrbitAvanya_Services_ADD.xlsx)."""
+    try:
+        from app.core.company_catalog import get_catalog_products
+        excel_products = get_catalog_products()
+        if excel_products:
+            return excel_products
+    except Exception as exc:
+        logger.warning(f"[BidForge:Inventory] Could not load Excel catalog: {exc}")
+
     if _PROFILE_PATH.exists():
         try:
             raw = json.loads(_PROFILE_PATH.read_text(encoding="utf-8"))

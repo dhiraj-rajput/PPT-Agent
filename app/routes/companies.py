@@ -28,9 +28,12 @@ def import_sam_entities_csv():
                         if not uei:
                             continue
                         
-                        # Determinstic match score based on UEI to remain consistent
-                        random.seed(uei)
-                        match_score = random.randint(70, 98)
+                        from app.core.match_engine import compute_company_match_score
+                        match_score = compute_company_match_score(
+                            primary_naics=row.get("Primary_NAICS_Code", ""),
+                            industry_desc=row.get("Primary_NAICS_Description", ""),
+                            company_name=row.get("Legal_Business_Name", "")
+                        )
                         
                         # Determine size based on Small Business flag
                         is_small = row.get("Is_Small_Business", "").strip().upper() in ("Y", "YES", "TRUE")
@@ -282,6 +285,7 @@ class CompanyCreateBody(BaseModel):
     primary_naics_desc: Optional[str] = ""
     secondary_naics: Optional[str] = ""
     contact: Optional[str] = "N/A"
+    contact_role: Optional[str] = ""
     email: Optional[str] = ""
     phone: Optional[str] = ""
     revenue: Optional[str] = ""

@@ -320,7 +320,6 @@ export default function EmailCampaign() {
 
   const toggleCompanySelection = (company) => {
     const key = normalizeCompanyKey(company.name, company.uei);
-    if (conflictFor(company)) return; // already claimed by another campaign — block selection
     setSelectedCompanies((prev) => {
       const next = { ...prev };
       if (next[key]) delete next[key];

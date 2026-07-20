@@ -15,6 +15,7 @@ import TenderDetail from './pages/TenderDetail.jsx';
 import AIResearch from './pages/AIResearch.jsx';
 import ProposalBuilder from './pages/ProposalBuilder.jsx';
 import EmailCampaign from './pages/EmailCampaign.jsx';
+import Newsletter from './pages/Newsletter.jsx';
 import CRMPipeline from './pages/CRMPipeline.jsx';
 import Meetings from './pages/Meetings.jsx';
 import Tasks from './pages/Tasks.jsx';
@@ -49,6 +50,7 @@ export default function App() {
         <Route path="/ai-research" element={<AIResearch />} />
         <Route path="/proposal-builder" element={<ProposalBuilder />} />
         <Route path="/email-campaign" element={<EmailCampaign />} />
+        <Route path="/newsletter" element={<Newsletter />} />
         <Route path="/crm-pipeline" element={<CRMPipeline />} />
         <Route path="/meetings" element={<Meetings />} />
         <Route path="/tasks" element={<Tasks />} />

@@ -129,38 +129,12 @@ class PDFGenerator:
         with open(json_path, "r", encoding="utf-8") as f:
             proposal = json.load(f)
 
-        brand = {
-            "company_name": "OrbitAvanya Tech LLP",
-            "company_short": "OrbitAvanya",
-            "logo_path": "assets/logo.png",
-            "cover_graphic_path": "assets/cover_graphic.png",
-            "body_font": "Fira Sans Light",
-            "heading_font": "Fira Sans SemiBold",
-            "accent_color": "1F3864",
-            "muted_color": "595959",
-            "address_line1": "13352 Kettle Camp Rd",
-            "address_line2": "Frisco, Texas 75035",
-            "phone": "+917021950643",
-            "website": "www.orbitavanyatech.com"
-        }
+        from documents.brand_config import get_brand_config, DEFAULT_CONFIDENTIALITY_TEXT, is_mock_solicitation
 
-        confidentiality_text = (
-            "This document contains confidential information of OrbitAvanya Tech LLP and its affiliates and/or licensors "
-            "(“OrbitAvanya”), which may include trade secrets, proprietary methodology, and business information. "
-            "The recipient acknowledges that this information has been developed by OrbitAvanya as valuable trade secrets "
-            "and shall remain its exclusive property, to be disclosed only to persons who have a need to know. "
-            "The recipient agrees not to copy or reproduce any information supplied herein without prior written permission "
-            "from an authorized representative of OrbitAvanya.\n\n"
-            "Reciprocally, OrbitAvanya acknowledges that information shared by the recipient during proposal review "
-            "and any subsequent engagement constitutes confidential information of the recipient, and agrees to protect "
-            "it to the same standard and to use it solely for the purposes of the engagement contemplated herein."
-        )
+        brand = get_brand_config()
+        confidentiality_text = DEFAULT_CONFIDENTIALITY_TEXT
 
-        is_mock = (
-            not solicitation_number 
-            or solicitation_number.lower() in ("unknown", "none", "n/a")
-            or solicitation_number.lower().startswith("mock")
-        )
+        is_mock = is_mock_solicitation(solicitation_number)
         title_text = "Teaming & Collaboration Proposal" if is_mock else "Teaming & Subcontracting Proposal"
         safe_ref_suffix = proposal["prime_contractor"].get("company_name", "PARTNER").upper().replace(" ", "_") if is_mock else solicitation_number.upper()
         
@@ -264,7 +238,7 @@ class PDFGenerator:
 
         sections_list.append({
             "title": "Requirement Alignment",
-            "page_break_before": True,
+            "page_break_before": False,
             "blocks": align_blocks
         })
 
@@ -295,7 +269,7 @@ class PDFGenerator:
 
         sections_list.append({
             "title": "Proposed Work Share",
-            "page_break_before": True,
+            "page_break_before": False,
             "blocks": share_blocks
         })
 
@@ -313,7 +287,7 @@ class PDFGenerator:
 
         sections_list.append({
             "title": "Strategic Outreach",
-            "page_break_before": True,
+            "page_break_before": False,
             "blocks": outreach_blocks
         })
 
@@ -330,9 +304,7 @@ class PDFGenerator:
             json.dump(cfg, fh, indent=2, ensure_ascii=False)
 
         # Generate docx
-        import sys
-        sys.path.insert(0, str(self.project_root / "scripts"))
-        import proposal_generator  # type: ignore
+        from scripts import proposal_generator
         output_base = self.project_root / "output" / "pdf" / f"{solicitation_number}_pitch_proposal"
         docx_path = str(output_base) + ".docx"
         proposal_generator.generate(cfg, docx_path)
@@ -502,9 +474,7 @@ class PDFGenerator:
             json.dump(cfg, fh, indent=2, ensure_ascii=False)
 
         # Generate docx
-        import sys
-        sys.path.insert(0, str(self.project_root / "scripts"))
-        import proposal_generator  # type: ignore
+        from scripts import proposal_generator
         output_base = self.project_root / "output" / "pdf" / f"{solicitation_number}_product_match_report"
         docx_path = str(output_base) + ".docx"
         proposal_generator.generate(cfg, docx_path)

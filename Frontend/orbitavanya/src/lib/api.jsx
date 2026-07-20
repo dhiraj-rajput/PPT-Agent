@@ -400,6 +400,30 @@ export const api = {
     return del(`/api/leads/${id}`);
   },
 
+  // ---------- Newsletter ----------
+  async getNewsletters() {
+    return get('/api/newsletters');
+  },
+  async createNewsletter(data) {
+    return post('/api/newsletters', data);
+  },
+  async getNewsletterSubscribers(id, params = {}) {
+    const q = new URLSearchParams(params).toString();
+    return get(`/api/newsletters/${id}/subscribers${q ? `?${q}` : ''}`);
+  },
+  async addNewsletterSubscriber(id, data) {
+    return post(`/api/newsletters/${id}/subscribers`, data);
+  },
+  async addNewsletterSubscribersFromCompanies(id, companyIds = []) {
+    return post(`/api/newsletters/${id}/subscribers/from-companies`, { companyIds });
+  },
+  async createNewsletterEdition(id, data) {
+    return post(`/api/newsletters/${id}/editions`, data);
+  },
+  async getNewsletterEditions(id) {
+    return get(`/api/newsletters/${id}/editions`);
+  },
+
   // ---------- Analytics ----------
   async getAnalyticsOverview() {
     return get('/api/analytics/overview');

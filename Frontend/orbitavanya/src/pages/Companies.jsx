@@ -31,6 +31,7 @@ export default function Companies() {
     state: '',
     country: 'USA',
     contact: '',
+    contact_role: 'Procurement Manager',
     email: '',
     phone: '',
     size: 'Small',
@@ -476,14 +477,24 @@ export default function Companies() {
                     </div>
                   </div>
 
-                  <div className="border-t border-slate-100 dark:border-navy-700 pt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Gov Contact */}
+                  <div className="border-t border-slate-100 dark:border-navy-700 pt-4 grid grid-cols-1 md:grid-cols-4 gap-4">
+                    {/* Contact Name */}
                     <div>
                       <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">Contact Name</label>
                       <input 
                         value={manualForm.contact}
                         onChange={(e) => setManualForm({...manualForm, contact: e.target.value})}
                         placeholder="Contact Person"
+                        className="w-full text-xs rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 outline-none focus:border-brand-400 focus:bg-white dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                      />
+                    </div>
+                    {/* Contact Post / Role */}
+                    <div>
+                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">Post / Role</label>
+                      <input 
+                        value={manualForm.contact_role}
+                        onChange={(e) => setManualForm({...manualForm, contact_role: e.target.value})}
+                        placeholder="e.g. Procurement Officer, CTO"
                         className="w-full text-xs rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 outline-none focus:border-brand-400 focus:bg-white dark:border-navy-700 dark:bg-navy-900 dark:text-white"
                       />
                     </div>

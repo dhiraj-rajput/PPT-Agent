@@ -31,40 +31,13 @@ def generate_rfp_response_pdf(
     Generates a DOCX using proposal_generator.py and then converts it to PDF via LibreOffice.
     """
     root_path = Path(project_root) if project_root else Path(__file__).resolve().parent.parent.parent
-    
-    is_mock = (
-        not solicitation_number 
-        or solicitation_number.lower() in ("unknown", "none", "n/a")
-        or solicitation_number.lower().startswith("mock")
-    )
+    from documents.brand_config import get_brand_config, DEFAULT_CONFIDENTIALITY_TEXT, is_mock_solicitation
+
+    is_mock = is_mock_solicitation(solicitation_number)
 
     # 1. Construct the config dictionary (cfg)
-    brand = {
-        "company_name": "OrbitAvanya Tech LLP",
-        "company_short": "OrbitAvanya",
-        "logo_path": "assets/logo.png",
-        "cover_graphic_path": "assets/cover_graphic.png",
-        "body_font": "Fira Sans Light",
-        "heading_font": "Fira Sans SemiBold",
-        "accent_color": "1F3864",
-        "muted_color": "595959",
-        "address_line1": "13352 Kettle Camp Rd",
-        "address_line2": "Frisco, Texas 75035",
-        "phone": "+917021950643",
-        "website": "www.orbitavanyatech.com"
-    }
-    
-    confidentiality_text = (
-        "This document contains confidential information of OrbitAvanya Tech LLP and its affiliates and/or licensors "
-        "(“OrbitAvanya”), which may include trade secrets, proprietary methodology, and business information. "
-        "The recipient acknowledges that this information has been developed by OrbitAvanya as valuable trade secrets "
-        "and shall remain its exclusive property, to be disclosed only to persons who have a need to know. "
-        "The recipient agrees not to copy or reproduce any information supplied herein without prior written permission "
-        "from an authorized representative of OrbitAvanya.\n\n"
-        "Reciprocally, OrbitAvanya acknowledges that information shared by the recipient during proposal review "
-        "and any subsequent engagement constitutes confidential information of the recipient, and agrees to protect "
-        "it to the same standard and to use it solely for the purposes of the engagement contemplated herein."
-    )
+    brand = get_brand_config()
+    confidentiality_text = DEFAULT_CONFIDENTIALITY_TEXT
     
     # Format current date
     proposal_date = datetime.now().strftime("%B %d, %Y")
@@ -137,7 +110,7 @@ def generate_rfp_response_pdf(
             
     sections_list.append({
         "title": "Strategic Context",
-        "page_break_before": True,
+        "page_break_before": False,
         "blocks": strat_blocks
     })
     
@@ -177,7 +150,7 @@ def generate_rfp_response_pdf(
         
     sections_list.append({
         "title": "Scope of Work",
-        "page_break_before": True,
+        "page_break_before": False,
         "blocks": scope_blocks
     })
     
@@ -211,7 +184,7 @@ def generate_rfp_response_pdf(
         
     sections_list.append({
         "title": "Our Proposed Solution",
-        "page_break_before": True,
+        "page_break_before": False,
         "blocks": sol_blocks
     })
     
@@ -245,7 +218,7 @@ def generate_rfp_response_pdf(
     
     sections_list.append({
         "title": "Implementation Timeline" if mode != "partnership" else "Partnership Roadmap",
-        "page_break_before": True,
+        "page_break_before": False,
         "blocks": time_blocks
     })
     
@@ -294,7 +267,7 @@ def generate_rfp_response_pdf(
         
     sections_list.append({
         "title": "Your Investment",
-        "page_break_before": True,
+        "page_break_before": False,
         "blocks": invest_blocks
     })
     
@@ -366,7 +339,7 @@ def generate_rfp_response_pdf(
     
     sections_list.append({
         "title": "Appendix",
-        "page_break_before": True,
+        "page_break_before": False,
         "blocks": app_blocks
     })
     
@@ -386,10 +359,7 @@ def generate_rfp_response_pdf(
     logger.info(f"[RFPResponsePDF] Configuration saved to: {config_path}")
     
     # 3. Generate docx document via proposal_generator
-    import os
-    import sys
-    sys.path.insert(0, str(root_path / "scripts"))
-    import proposal_generator  # type: ignore
+    from scripts import proposal_generator
     import shutil
     import subprocess
     

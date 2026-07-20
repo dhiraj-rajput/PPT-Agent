@@ -150,21 +150,9 @@ def _generate_sections_rules(
 
 def _generate_with_default_template(sections: Dict[str, Any], parsed_rfp: Dict[str, Any], output_docx: str) -> str:
     from scripts import proposal_generator as pg
+    from documents.brand_config import get_brand_config, DEFAULT_CONFIDENTIALITY_TEXT
 
-    brand = {
-        "company_name": "OrbitAvanya Tech LLP",
-        "company_short": "OrbitAvanya",
-        "logo_path": "assets/logo.png",
-        "cover_graphic_path": "assets/cover_graphic.png",
-        "body_font": "Fira Sans Light",
-        "heading_font": "Fira Sans SemiBold",
-        "accent_color": "1F3864",
-        "muted_color": "595959",
-        "address_line1": "13352 Kettle Camp Rd",
-        "address_line2": "Frisco, Texas 75035",
-        "phone": "+917021950643",
-        "website": "www.orbitavanyatech.com",
-    }
+    brand = get_brand_config()
     proposal = {
         "title": "RFP Response Proposal",
         "subtitle": "Technical & Pricing Proposal",
@@ -173,11 +161,11 @@ def _generate_with_default_template(sections: Dict[str, Any], parsed_rfp: Dict[s
         "engagement_ref": f"OAT-BIDFORGE-{datetime.now().strftime('%Y%m%d')}",
         "proposal_date": datetime.now().strftime("%B %d, %Y"),
         "validity": "90 days from proposal date",
-        "confidentiality_text": (
-            "This document contains confidential information of OrbitAvanya Tech LLP. "
-            "It is intended solely for the use of the addressed recipient(s)."
-        ),
+        "confidentiality_text": DEFAULT_CONFIDENTIALITY_TEXT,
     }
+
+    pricing_headers = sections.get("pricing_table", {}).get("headers", [])
+    pricing_rows = sections.get("pricing_table", {}).get("rows", [])
 
     sections_list = [
         {
@@ -187,26 +175,31 @@ def _generate_with_default_template(sections: Dict[str, Any], parsed_rfp: Dict[s
         },
         {
             "title": "Scope of Work",
-            "page_break_before": True,
+            "page_break_before": False,
             "blocks": [{"type": "bullets", "items": sections.get("scope_of_work", [])}],
         },
-        {
+    ]
+
+    if pricing_headers and len(pricing_headers) > 0:
+        sections_list.append({
             "title": "Pricing",
-            "page_break_before": True,
+            "page_break_before": False,
             "blocks": [{
                 "type": "table",
-                "headers": sections.get("pricing_table", {}).get("headers", []),
-                "rows": sections.get("pricing_table", {}).get("rows", []),
+                "headers": pricing_headers,
+                "rows": pricing_rows,
             }],
-        },
+        })
+
+    sections_list.extend([
         {
             "title": "Competitive Positioning",
-            "page_break_before": True,
+            "page_break_before": False,
             "blocks": [{"type": "paragraph", "text": p} for p in sections.get("competitive_positioning", "").split("\n\n") if p.strip()],
         },
         {
             "title": "Implementation Timeline",
-            "page_break_before": True,
+            "page_break_before": False,
             "blocks": [{
                 "type": "table",
                 "headers": ["Phase", "Duration", "Focus"],
@@ -215,18 +208,18 @@ def _generate_with_default_template(sections: Dict[str, Any], parsed_rfp: Dict[s
         },
         {
             "title": "Terms & Conditions",
-            "page_break_before": True,
+            "page_break_before": False,
             "blocks": [{"type": "bullets", "items": sections.get("terms", [])}],
         },
         {
             "title": "Next Steps",
-            "page_break_before": True,
+            "page_break_before": False,
             "blocks": [
                 {"type": "paragraph", "text": sections.get("next_steps", "")},
                 {"type": "signature", "name": "Ranjeet Kumar Singh", "title": "Founder & CEO", "company": "OrbitAvanya Tech LLP (AvanyaEdge)"},
             ],
         },
-    ]
+    ])
 
     cfg = {"brand": brand, "proposal": proposal, "sections": sections_list}
     return pg.generate(cfg, output_docx)

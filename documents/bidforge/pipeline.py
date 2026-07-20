@@ -37,16 +37,16 @@ def run_bidforge_pipeline(
     print("\nStep 2: Exploring — checking inventory against requirements...")
     inventory = analyze_inventory(parsed_rfp)
 
-    print("\nStep 2: Exploring — gathering competitor / market pricing intelligence...")
+    print("\nStep 3: Exploring — gathering competitor / market pricing intelligence...")
     competitor_intel = gather_competitor_intel(parsed_rfp, inventory)
 
-    print("\nStep 3: Synthesizing pricing strategy...")
+    print("\nStep 4: Synthesizing pricing strategy...")
     strategy = summarise_pricing_strategy(parsed_rfp, inventory, competitor_intel)
 
-    print("\nStep 4: Generating final proposal document...")
+    print("\nStep 5: Generating final proposal document...")
     final_path = generate_final_document(
         parsed_rfp, inventory, competitor_intel, strategy, output_name, template_path
     )
 
-    print(f"\nStep 5: Done. Output: {final_path}")
+    print(f"\nStep 6: Done. Output: {final_path}")
     return final_path

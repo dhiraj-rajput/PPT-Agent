@@ -97,7 +97,7 @@ class PitchCompiler:
 
         # Fallback to local JSON if MongoDB fails
         if not profile:
-            json_path = self.project_root / "orbit_avanya_detailed_profiles.json"
+            json_path = self.project_root / "private" / "orbit_avanya_detailed_profiles.json"
             if json_path.exists():
                 try:
                     with open(json_path, "r", encoding="utf-8") as f:
