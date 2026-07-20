@@ -459,8 +459,21 @@ def import_leads_from_companies(
     to_insert = []
     used_keys_this_batch = set()
 
+    profile_col = get_collection("company_profiles")
+
     for company in body.companies:
         email = normalize_email(company.email)
+        if not email or "@" not in email:
+            # Fallback lookup in researched company profiles
+            profile = profile_col.find_one({
+                "company_name": {"$regex": f"^{re.escape(company.companyName)}$", "$options": "i"}
+            })
+            if profile and profile.get("emails"):
+                email = normalize_email(str(profile["emails"][0]))
+            else:
+                report["invalidEmail"] += 1
+                continue
+
         if not is_valid_email(email) or not is_plausible_domain(extract_domain(email)):
             report["invalidEmail"] += 1
             continue

@@ -108,6 +108,76 @@ export default function RFPAutoRespond() {
     }
   };
 
+  const getStepStatus = (index) => {
+    if (!taskState) return 'pending';
+    const bounds = [15, 35, 65, 100];
+    const prevBound = index === 0 ? 0 : bounds[index - 1];
+    const currentBound = bounds[index];
+    
+    if (isCompleted) return 'completed';
+    
+    if (isFailed) {
+      if (progress > prevBound && progress <= currentBound) {
+        return 'failed';
+      }
+      if (progress > currentBound) return 'completed';
+      return 'pending';
+    }
+    
+    if (isRunning) {
+      if (progress > prevBound && progress <= currentBound) {
+        return 'active';
+      }
+      if (progress > currentBound) {
+        return 'completed';
+      }
+    }
+    
+    return 'pending';
+  };
+
+  const getStepStyles = (index, defaultIcon) => {
+    const status = getStepStatus(index);
+    if (status === 'completed') {
+      return {
+        card: 'border-emerald-500/30 dark:border-emerald-500/20 bg-emerald-50/10 dark:bg-emerald-950/5',
+        container: 'bg-emerald-50 dark:bg-emerald-900/30',
+        icon: CheckCircle,
+        iconClass: 'text-emerald-500 dark:text-emerald-400',
+        statusText: 'Completed',
+        statusClass: 'text-emerald-500 font-bold',
+      };
+    }
+    if (status === 'active') {
+      return {
+        card: 'border-brand-500/30 dark:border-brand-500/20 ring-1 ring-brand-500/20 bg-brand-50/20 dark:bg-brand-950/10 animate-pulse',
+        container: 'bg-brand-100 dark:bg-brand-900/40',
+        icon: Loader2,
+        iconClass: 'text-brand-600 dark:text-brand-400 animate-spin',
+        statusText: 'Processing...',
+        statusClass: 'text-brand-500 font-bold',
+      };
+    }
+    if (status === 'failed') {
+      return {
+        card: 'border-rose-500/30 dark:border-rose-500/20 bg-rose-50/10 dark:bg-rose-950/5',
+        container: 'bg-rose-50 dark:bg-rose-900/30',
+        icon: AlertCircle,
+        iconClass: 'text-rose-500 dark:text-rose-400',
+        statusText: 'Failed',
+        statusClass: 'text-rose-500 font-bold',
+      };
+    }
+    return {
+      card: 'border-slate-100 dark:border-navy-800 bg-white dark:bg-navy-900',
+      container: 'bg-brand-50 dark:bg-brand-900/30',
+      icon: defaultIcon,
+      iconClass: 'text-brand-600 dark:text-brand-400',
+      statusText: '',
+      statusClass: '',
+    };
+  };
+
   // -------------------------------------------------------------------------
   // Render
   // -------------------------------------------------------------------------
@@ -134,21 +204,28 @@ export default function RFPAutoRespond() {
           { icon: FileText, label: 'Parse RFP', desc: 'Extract requirements & scope' },
           { icon: FileCheck, label: 'Inventory Check', desc: 'Match our offerings' },
           { icon: Zap, label: 'Market Intel', desc: 'Competitor pricing analysis' },
-          { icon: Download, label: 'Generate Proposal', desc: 'Professional .docx / .pdf' },
-        ].map(({ icon: Icon, label, desc }, i) => (
-          <div
-            key={i}
-            className="flex items-start gap-3 rounded-xl border border-slate-100 dark:border-navy-800 bg-white dark:bg-navy-900 p-4 shadow-card"
-          >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 dark:bg-brand-900/30">
-              <Icon size={16} className="text-brand-600 dark:text-brand-400" />
+          { icon: Download, label: 'Generate Proposal', desc: 'Professional PDF' },
+        ].map(({ icon: Icon, label, desc }, i) => {
+          const styles = getStepStyles(i, Icon);
+          const RenderedIcon = styles.icon;
+          return (
+            <div
+              key={i}
+              className={`flex items-start gap-3 rounded-xl border p-4 shadow-card transition-all ${styles.card}`}
+            >
+              <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${styles.container}`}>
+                <RenderedIcon size={16} className={styles.iconClass} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-navy-900 dark:text-white truncate">{i + 1}. {label}</p>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate">{desc}</p>
+                {styles.statusText && (
+                  <p className={`text-[10px] mt-0.5 ${styles.statusClass}`}>{styles.statusText}</p>
+                )}
+              </div>
             </div>
-            <div>
-              <p className="text-xs font-bold text-navy-900 dark:text-white">{i + 1}. {label}</p>
-              <p className="text-[11px] text-slate-400 dark:text-slate-500">{desc}</p>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Upload form */}
@@ -347,18 +424,6 @@ export default function RFPAutoRespond() {
           )}
         </div>
       )}
-
-      {/* Info callout */}
-      <div className="rounded-xl border border-brand-100 dark:border-brand-900/30 bg-brand-50/60 dark:bg-brand-900/10 px-4 py-3.5 text-xs text-slate-600 dark:text-slate-400">
-        <p className="font-semibold text-navy-900 dark:text-white mb-1">How it works</p>
-        <ul className="space-y-1 list-disc list-inside">
-          <li>The AI parses your RFP and extracts all technical requirements and deliverables.</li>
-          <li>It checks those requirements against OrbitAvanya's product &amp; service catalog.</li>
-          <li>Live competitor and market pricing intelligence is gathered automatically.</li>
-          <li>A pricing strategy is synthesized, then a professional proposal document is generated.</li>
-          <li>If AI is unavailable, the pipeline falls back to rule-based generation automatically.</li>
-        </ul>
-      </div>
     </div>
   );
 }

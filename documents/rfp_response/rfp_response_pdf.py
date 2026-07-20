@@ -402,13 +402,24 @@ def generate_rfp_response_pdf(
                 word.Quit()
         except Exception as e:
             logger.warning(f"[RFPResponsePDF] Word COM conversion failed: {e}. Trying LibreOffice...")
-
     if not converted:
-        mac_soffice = "/Applications/LibreOffice.app/Contents/MacOS/soffice"
-        soffice = shutil.which("soffice") or shutil.which("libreoffice") or (mac_soffice if os.path.exists(mac_soffice) else None)
+        soffice = shutil.which("soffice") or shutil.which("libreoffice")
+        if not soffice:
+            mac_soffice = "/Applications/LibreOffice.app/Contents/MacOS/soffice"
+            common_paths = [
+                r"C:\Program Files\LibreOffice\program\soffice.exe",
+                r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
+                mac_soffice,
+                "/usr/bin/soffice",
+                "/usr/bin/libreoffice",
+            ]
+            for p in common_paths:
+                if os.path.exists(p):
+                    soffice = p
+                    break
         if soffice:
             try:
-                logger.info(f"[RFPResponsePDF] Attempting LibreOffice conversion to PDF...")
+                logger.info(f"[RFPResponsePDF] Attempting LibreOffice conversion to PDF using {soffice}...")
                 outdir = str(output_base.parent)
                 subprocess.run(
                     [soffice, "--headless", "--convert-to", "pdf", "--outdir", outdir, docx_path],

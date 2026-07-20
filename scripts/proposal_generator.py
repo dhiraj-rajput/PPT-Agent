@@ -518,19 +518,73 @@ def generate(cfg: dict, output_docx: str) -> str:
 
 
 def convert_to_pdf(docx_path: str, outdir: Optional[str] = None) -> str:
+    import sys
+    import os
+    import shutil
+    import subprocess
+    from pathlib import Path
+
     outdir = outdir or str(Path(docx_path).parent)
+    docx_abs = os.path.abspath(docx_path)
+    pdf_path = str(Path(outdir) / (Path(docx_path).stem + ".pdf"))
+    pdf_abs = os.path.abspath(pdf_path)
+
+    # 1. On Windows, try Word COM if comtypes is available
+    if sys.platform == "win32":
+        try:
+            import comtypes.client
+            logger.info("Attempting Word COM conversion to PDF...")
+            word = comtypes.client.CreateObject('Word.Application')
+            word.Visible = False
+            word.DisplayAlerts = 0 # Suppress popups
+            try:
+                doc = word.Documents.Open(docx_abs)
+                doc.SaveAs(pdf_abs, FileFormat=17) # 17 is wdFormatPDF
+                doc.Close()
+                logger.info(f"PDF created via Word COM: {pdf_path}")
+                if os.path.exists(pdf_path):
+                    return pdf_path
+            finally:
+                word.Quit()
+        except Exception as e:
+            logger.warning(f"Word COM conversion failed or not available: {e}. Trying LibreOffice...")
+
+    # 2. Try to find LibreOffice/soffice on PATH or in common directories
     soffice = shutil.which("soffice") or shutil.which("libreoffice")
     if not soffice:
+        mac_soffice = "/Applications/LibreOffice.app/Contents/MacOS/soffice"
+        common_paths = [
+            r"C:\Program Files\LibreOffice\program\soffice.exe",
+            r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
+            mac_soffice,
+            "/usr/bin/soffice",
+            "/usr/bin/libreoffice",
+        ]
+        for p in common_paths:
+            if os.path.exists(p):
+                soffice = p
+                break
+
+    if not soffice:
         raise RuntimeError(
-            "LibreOffice ('soffice') was not found on PATH. Install LibreOffice "
-            "to enable PDF export, or open the .docx and export to PDF manually."
+            "Neither Microsoft Word (via COM) nor LibreOffice ('soffice') was found. "
+            "Install LibreOffice or Microsoft Word to enable PDF export."
         )
+
+    logger.info(f"Attempting LibreOffice conversion using: {soffice}")
     subprocess.run(
-        [soffice, "--headless", "--convert-to", "pdf", "--outdir", outdir, docx_path],
+        [soffice, "--headless", "--convert-to", "pdf", "--outdir", outdir, docx_abs],
         check=True, capture_output=True,
     )
-    pdf_path = str(Path(outdir) / (Path(docx_path).stem + ".pdf"))
-    return pdf_path
+    # LibreOffice saves it under the same stem with .pdf extension in outdir
+    generated_pdf = Path(outdir) / (Path(docx_path).stem + ".pdf")
+    if generated_pdf.exists():
+        # Move it to pdf_abs if they are not matching (though they should be)
+        if os.path.abspath(str(generated_pdf)) != pdf_abs:
+            shutil.move(str(generated_pdf), pdf_abs)
+        return pdf_path
+    
+    raise FileNotFoundError(f"LibreOffice succeeded but PDF was not found at {pdf_path}")
 
 
 def load_config(path: str) -> dict:

@@ -50,7 +50,7 @@ def generate_final_document(
     )
     logger.info(f"[BidForge:DocGen] Section content generated via '{path_used}' path.")
 
-    out_dir = PROJECT_ROOT / "output" / "bidforge"
+    out_dir = PROJECT_ROOT / "output" / "rfp_respond"
     out_dir.mkdir(parents=True, exist_ok=True)
     docx_path = out_dir / f"{output_name}.docx"
 

@@ -426,6 +426,12 @@ export const api = {
   async getNewsletterEditions(id) {
     return get(`/api/newsletters/${id}/editions`);
   },
+  async updateNewsletterEdition(editionId, data) {
+    return put(`/api/newsletters/editions/${editionId}`, data);
+  },
+  async deleteNewsletterEdition(editionId) {
+    return del(`/api/newsletters/editions/${editionId}`);
+  },
 
   // ---------- Analytics ----------
   async getAnalyticsOverview() {

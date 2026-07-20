@@ -245,6 +245,27 @@ def get_companies(
         skip = (page - 1) * limit
         results = list(col.find(filter_query, {"_id": 0}).skip(skip).limit(limit))
 
+        # Look up profiles and active tasks
+        profiles_col = get_collection("company_profiles")
+        tasks_col = get_collection("task_statuses")
+        active_tasks = {t["task_id"].lower(): t["status"] for t in tasks_col.find({"type": "company_research"})}
+
+        for c in results:
+            # Fallback for email
+            if not c.get("email") or not c.get("email").strip():
+                profile = profiles_col.find_one({
+                    "company_name": {"$regex": f"^{re.escape(c['name'])}$", "$options": "i"}
+                })
+                if profile and profile.get("emails"):
+                    c["email"] = profile["emails"][0]
+                    c["hasResearchedProfile"] = True
+                else:
+                    c["hasResearchedProfile"] = False
+            else:
+                c["hasResearchedProfile"] = True
+
+            c["isResearching"] = active_tasks.get(c["name"].lower()) == "processing"
+
         # Get list of unique NAICS descriptions for dropdown filters in the frontend
         naics_list = col.distinct("primary_naics_desc")
         naics_list = sorted([n for n in naics_list if n])

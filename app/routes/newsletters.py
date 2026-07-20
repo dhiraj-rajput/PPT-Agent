@@ -276,15 +276,20 @@ def add_company_subscribers(
     if body.companyIds:
         c_oids = []
         c_ueis = []
+        c_names = []
         for cid in body.companyIds:
             c_str = str(cid)
             c_ueis.append(c_str)
+            c_names.append(c_str)
             try:
                 c_oids.append(ObjectId(c_str))
             except Exception:
                 pass
         
-        or_conds = [{"uei": {"$in": c_ueis}}]
+        or_conds = [
+            {"uei": {"$in": c_ueis}},
+            {"name": {"$in": c_names}}
+        ]
         if c_oids:
             or_conds.append({"_id": {"$in": c_oids}})
         query["$or"] = or_conds
@@ -293,10 +298,19 @@ def add_company_subscribers(
     to_insert = []
     added_count = 0
 
+    profile_col = get_collection("company_profiles")
+
     for c in companies:
         c_email = (c.get("email") or "").strip().lower()
         if not c_email or "@" not in c_email:
-            continue
+            # Fallback lookup in researched company profiles
+            profile = profile_col.find_one({
+                "company_name": {"$regex": f"^{re.escape(c['name'])}$", "$options": "i"}
+            })
+            if profile and profile.get("emails"):
+                c_email = str(profile["emails"][0]).strip().lower()
+            else:
+                continue
         if c_email in suppressed or c_email in existing:
             continue
 
@@ -454,3 +468,67 @@ def list_editions(id: str, current_user: dict = Depends(get_current_user)):
     editions_col = get_collection("editions")
     items = editions_col.find({"newsletterId": n_oid}).sort("createdAt", -1)
     return {"editions": [_format_edition(e) for e in items]}
+
+
+class UpdateEditionBody(BaseModel):
+    subject: str
+    body: str
+
+
+@router.put("/editions/{edition_id}")
+def update_edition(
+    edition_id: str,
+    body: UpdateEditionBody,
+    current_user: dict = Depends(get_current_user),
+):
+    try:
+        e_oid = ObjectId(edition_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid edition ID")
+
+    editions_col = get_collection("editions")
+    edition = editions_col.find_one({"_id": e_oid})
+    if not edition:
+        raise HTTPException(status_code=404, detail="Edition not found")
+
+    # Check ownership or admin
+    if edition.get("createdBy") != current_user["_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    editions_col.update_one(
+        {"_id": e_oid},
+        {"$set": {
+            "subject": body.subject.strip(),
+            "body": body.body.strip(),
+            "updatedAt": datetime.now(timezone.utc)
+        }}
+    )
+    return {"status": "success"}
+
+
+@router.delete("/editions/{edition_id}")
+def delete_edition(
+    edition_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    try:
+        e_oid = ObjectId(edition_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid edition ID")
+
+    editions_col = get_collection("editions")
+    edition = editions_col.find_one({"_id": e_oid})
+    if not edition:
+        raise HTTPException(status_code=404, detail="Edition not found")
+
+    if edition.get("createdBy") != current_user["_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # Delete edition
+    editions_col.delete_one({"_id": e_oid})
+    
+    # Delete related sends and tracking events
+    get_collection("newsletter_sends").delete_many({"editionId": e_oid})
+    get_collection("tracking_events").delete_many({"editionId": e_oid})
+    
+    return {"status": "success"}

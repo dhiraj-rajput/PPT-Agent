@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, Fragment } from 'react';
-import { Plus, Send, MousePointerClick, MailOpen, Reply, Clock, Globe, X, Play, Pause, Copy, Trash2, Upload, Rocket, RefreshCw, Building2, AlertTriangle, ChevronDown, ChevronUp, RotateCw, Hash, Search, Check } from 'lucide-react';
+import { Plus, Send, MousePointerClick, MailOpen, Reply, Clock, Globe, X, Play, Pause, Copy, Trash2, Upload, Rocket, RefreshCw, Building2, AlertTriangle, ChevronDown, ChevronUp, RotateCw, Hash, Search, Check, Loader2 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { PageHeader, Card, StatusBadge } from '../components/ui/Common.jsx';
 import { api } from '../lib/api.jsx';
@@ -355,6 +355,15 @@ export default function EmailCampaign() {
       else next[key] = company;
       return next;
     });
+  };
+
+  const triggerCompanyResearch = async (name) => {
+    try {
+      await api.triggerResearch(name);
+      searchCompanies(companyQuery);
+    } catch (err) {
+      alert("Failed to start research: " + err.message);
+    }
   };
 
   const handleAddCompanies = async () => {
@@ -849,18 +858,35 @@ export default function EmailCampaign() {
                       companyResults.map((c) => {
                         const key = normalizeCompanyKey(c.name, c.uei);
                         const selected = !!selectedCompanies[key];
+                        const hasEmail = !!c.email;
+                        const isResearching = c.isResearching;
                         return (
                           <label key={c.id || key} className="flex items-center justify-between p-2.5 hover:bg-slate-50 dark:hover:bg-navy-800 cursor-pointer border-b border-slate-50 last:border-0">
                             <div>
                               <p className="text-xs font-bold text-navy-900 dark:text-white">{c.name}</p>
-                              <p className="text-[11px] text-slate-400">{c.email || 'No email registered'} {c.contact ? `· ${c.contact}` : ''}</p>
+                              <p className="text-[11px] text-slate-400">
+                                {c.email || (isResearching ? '⏳ Research in progress...' : '❌ No email (requires research)')}
+                                {c.contact ? ` · ${c.contact}` : ''}
+                              </p>
                             </div>
-                            <input
-                              type="checkbox"
-                              checked={selected}
-                              onChange={() => toggleCompanySelection(c)}
-                              className="rounded border-slate-300 text-brand-500 focus:ring-brand-500"
-                            />
+                            {hasEmail ? (
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                onChange={() => toggleCompanySelection(c)}
+                                className="rounded border-slate-300 text-brand-500 focus:ring-brand-500"
+                              />
+                            ) : isResearching ? (
+                              <Loader2 className="animate-spin text-brand-500 animate-duration-1000" size={14} />
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); triggerCompanyResearch(c.name); }}
+                                className="rounded bg-brand-500 hover:bg-brand-600 px-2 py-1 text-[10px] font-bold text-white shadow-soft transition-colors"
+                              >
+                                Research
+                              </button>
+                            )}
                           </label>
                         );
                       })
@@ -1207,12 +1233,11 @@ export default function EmailCampaign() {
                     const key = normalizeCompanyKey(company.name, company.uei);
                     const conflict = conflictFor(company);
                     const selected = !!selectedCompanies[key];
-                    const noEmail = !company.email;
+                    const hasEmail = !!company.email;
+                    const isResearching = company.isResearching;
                     return (
-                      <button
-                        type="button"
+                      <div
                         key={company.uei || key}
-                        onClick={() => toggleCompanySelection(company)}
                         className={`flex w-full items-center justify-between gap-3 border-b border-slate-50 px-4 py-2.5 text-left last:border-0 dark:border-navy-800/40 ${
                           selected
                             ? 'bg-brand-50 dark:bg-brand-500/10'
@@ -1220,12 +1245,31 @@ export default function EmailCampaign() {
                         }`}
                       >
                         <div className="flex items-center gap-3">
-                          <div className={`flex h-5 w-5 items-center justify-center rounded-md border ${selected ? 'border-brand-500 bg-brand-500' : 'border-slate-300 dark:border-navy-600'}`}>
-                            {selected && <Check size={12} className="text-white" />}
-                          </div>
+                          {hasEmail ? (
+                            <button
+                              type="button"
+                              onClick={() => toggleCompanySelection(company)}
+                              className={`flex h-5 w-5 items-center justify-center rounded-md border ${selected ? 'border-brand-500 bg-brand-500' : 'border-slate-300 dark:border-navy-600'}`}
+                            >
+                              {selected && <Check size={12} className="text-white" />}
+                            </button>
+                          ) : isResearching ? (
+                            <Loader2 className="animate-spin text-brand-500 animate-duration-1000" size={14} />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => triggerCompanyResearch(company.name)}
+                              className="rounded bg-brand-500 hover:bg-brand-600 px-2 py-1 text-[10px] font-bold text-white shadow-soft transition-colors"
+                            >
+                              Research
+                            </button>
+                          )}
                           <div>
                             <p className="text-xs font-semibold text-navy-900 dark:text-white">{company.name}</p>
-                            <p className="text-[11px] text-slate-400">{company.email || 'No email on file'} {company.contact ? `· ${company.contact}` : ''}</p>
+                            <p className="text-[11px] text-slate-400">
+                              {company.email || (isResearching ? '⏳ Research in progress...' : '❌ No email (requires research)')}
+                              {company.contact ? ` · ${company.contact}` : ''}
+                            </p>
                           </div>
                         </div>
                         {conflict && (
@@ -1233,7 +1277,7 @@ export default function EmailCampaign() {
                             <AlertTriangle size={11} /> In "{conflict.campaignName}"
                           </span>
                         )}
-                      </button>
+                      </div>
                     );
                   })
                 )}

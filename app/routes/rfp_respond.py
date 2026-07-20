@@ -106,7 +106,23 @@ def _run_pipeline_sync(
                     update(0, f"Pipeline exited with code {proc.returncode}", "failed")
                 return
 
+            # Convert generated docx to PDF
             filename = Path(final_path).name
+            if filename.endswith(".docx"):
+                try:
+                    update(95, "Converting proposal to PDF...")
+                    from scripts.proposal_generator import convert_to_pdf
+                    pdf_path = convert_to_pdf(final_path, str(OUTPUT_DIR))
+                    if pdf_path and Path(pdf_path).exists():
+                        filename = Path(pdf_path).name
+                        try:
+                            os.unlink(final_path)
+                        except Exception:
+                            pass
+                except Exception as pdf_err:
+                    import logging
+                    logging.getLogger(__name__).warning(f"Failed to convert RFP response to PDF: {pdf_err}")
+
             update(100, "Proposal document generated successfully!", "completed", filename)
     except Exception as exc:
         update(0, f"Pipeline failed: {exc}", "failed")

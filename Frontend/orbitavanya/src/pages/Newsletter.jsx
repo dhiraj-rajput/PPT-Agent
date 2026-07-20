@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Mail, Plus, Users, Send, Check, Loader2, Sparkles, Building2, Search, AlertCircle, Trash2, Image } from 'lucide-react';
+import { Mail, Plus, Users, Send, Check, Loader2, Sparkles, Building2, Search, AlertCircle, Trash2, Image, Edit2 } from 'lucide-react';
 import { PageHeader, Card, StatusBadge } from '../components/ui/Common.jsx';
 import { api } from '../lib/api.jsx';
 
@@ -16,6 +16,7 @@ export default function Newsletter() {
   const [newNewsletterForm, setNewNewsletterForm] = useState({ name: '', description: '', senderName: 'OrbitAvanya Tech', senderEmail: 'newsletter@orbitavanyatech.com' });
   const [showComposeModal, setShowComposeModal] = useState(false);
   const [editionForm, setEditionForm] = useState({ subject: '', body: '', sendNow: true });
+  const [editingEditionId, setEditingEditionId] = useState(null);
 
   // Company import modal
   const [showCompanyImport, setShowCompanyImport] = useState(false);
@@ -97,26 +98,34 @@ export default function Newsletter() {
     if (!selectedNewsletter) return;
     setSubmitting(true);
     try {
-      if (recipientTargetMode === 'companies') {
-        const companyIds = Object.keys(selectedBroadcastCompanyIds).filter(k => selectedBroadcastCompanyIds[k]);
-        if (companyIds.length > 0) {
-          await api.addNewsletterSubscribersFromCompanies(selectedNewsletter.id, companyIds);
+      if (editingEditionId) {
+        await api.updateNewsletterEdition(editingEditionId, {
+          subject: editionForm.subject,
+          body: editionForm.body,
+        });
+      } else {
+        if (recipientTargetMode === 'companies') {
+          const companyIds = Object.keys(selectedBroadcastCompanyIds).filter(k => selectedBroadcastCompanyIds[k]);
+          if (companyIds.length > 0) {
+            await api.addNewsletterSubscribersFromCompanies(selectedNewsletter.id, companyIds);
+          }
+        } else if (recipientTargetMode === 'manual' && manualRecipientEmails.trim()) {
+          await api.addNewsletterSubscribersFromCompanies(selectedNewsletter.id, [], manualRecipientEmails.trim());
         }
-      } else if (recipientTargetMode === 'manual' && manualRecipientEmails.trim()) {
-        await api.addNewsletterSubscribersFromCompanies(selectedNewsletter.id, [], manualRecipientEmails.trim());
-      }
 
-      await api.createNewsletterEdition(selectedNewsletter.id, editionForm);
+        await api.createNewsletterEdition(selectedNewsletter.id, editionForm);
+      }
 
       setSubmitting(false);
       setShowComposeModal(false);
+      setEditingEditionId(null);
       setEditionForm({ subject: '', body: '', sendNow: true });
       setSelectedBroadcastCompanyIds({});
       setManualRecipientEmails('');
       fetchNewsletterDetails(selectedNewsletter);
     } catch (err) {
       setSubmitting(false);
-      setMessage(err.message || 'Failed to send edition');
+      setMessage(err.message || 'Failed to process edition');
     }
   };
 
@@ -192,8 +201,41 @@ export default function Newsletter() {
   }, [companySearchQuery, showComposeModal, showCompanyImport]);
 
   const openBroadcastModal = () => {
+    setEditingEditionId(null);
+    setEditionForm({ subject: '', body: '', sendNow: true });
     setShowComposeModal(true);
     fetchDbCompanies(companySearchQuery, 1);
+  };
+
+  const handleEditEdition = (edition) => {
+    setEditingEditionId(edition.id);
+    setEditionForm({
+      subject: edition.subject,
+      body: edition.body,
+      sendNow: edition.status === 'sent' ? false : edition.sendNow,
+    });
+    setShowComposeModal(true);
+  };
+
+  const handleDeleteEdition = async (editionId) => {
+    if (!window.confirm("Are you sure you want to delete this broadcast edition? This will remove its history and tracking stats.")) return;
+    try {
+      await api.deleteNewsletterEdition(editionId);
+      if (selectedNewsletter) {
+        fetchNewsletterDetails(selectedNewsletter);
+      }
+    } catch (err) {
+      alert("Failed to delete edition: " + err.message);
+    }
+  };
+
+  const triggerCompanyResearch = async (name) => {
+    try {
+      await api.triggerResearch(name);
+      fetchDbCompanies(companySearchQuery, companyPage);
+    } catch (err) {
+      alert("Failed to start research: " + err.message);
+    }
   };
 
   return (
@@ -387,9 +429,25 @@ export default function Newsletter() {
                         <Card key={e.id} className="p-5">
                           <div className="flex items-center justify-between">
                             <h4 className="text-sm font-bold text-navy-900 dark:text-white">{e.subject}</h4>
-                            <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400">
-                              {e.stats?.sent || 0} Delivered
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400">
+                                {e.stats?.sent || 0} Delivered
+                              </span>
+                              <button
+                                onClick={() => handleEditEdition(e)}
+                                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-navy-800 transition-colors"
+                                title="Edit Edition"
+                              >
+                                <Edit2 size={13} />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteEdition(e.id)}
+                                className="rounded-lg p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40 transition-colors"
+                                title="Delete Edition"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
                           </div>
                           <p className="mt-2 line-clamp-3 text-xs text-slate-600 dark:text-slate-300 font-mono bg-slate-50 dark:bg-navy-900 p-3 rounded-xl whitespace-pre-wrap">{e.body}</p>
                           <div className="mt-3 flex items-center justify-between text-[11px] text-slate-400">
@@ -481,52 +539,60 @@ export default function Newsletter() {
       {showComposeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-900/60 p-4 backdrop-blur-sm">
           <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl dark:bg-navy-800 max-h-[90vh] flex flex-col overflow-y-auto">
-            <h3 className="text-base font-bold text-navy-900 dark:text-white">Broadcast Newsletter Issue</h3>
-            <p className="mt-1 text-xs text-slate-400">Target your publication to active subscribers, multi-selected company emails, or manual email addresses.</p>
+            <h3 className="text-base font-bold text-navy-900 dark:text-white">
+              {editingEditionId ? 'Edit Broadcast Edition' : 'Broadcast Newsletter Issue'}
+            </h3>
+            <p className="mt-1 text-xs text-slate-400">
+              {editingEditionId 
+                ? 'Update the subject or body content of this broadcast publication edition.'
+                : 'Target your publication to active subscribers, multi-selected company emails, or manual email addresses.'}
+            </p>
 
             <form onSubmit={handleSendEdition} className="mt-4 space-y-4">
               {/* Recipient Mode Selection */}
-              <div>
-                <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1">Target Recipients</label>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setRecipientTargetMode('subscribers')}
-                    className={`rounded-xl border px-3 py-2 text-xs font-semibold transition-all ${
-                      recipientTargetMode === 'subscribers'
-                        ? 'border-brand-500 bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400'
-                        : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-400'
-                    }`}
-                  >
-                    All Subscribers ({subscribers.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRecipientTargetMode('companies')}
-                    className={`rounded-xl border px-3 py-2 text-xs font-semibold transition-all ${
-                      recipientTargetMode === 'companies'
-                        ? 'border-brand-500 bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400'
-                        : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-400'
-                    }`}
-                  >
-                    Select Company Emails
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRecipientTargetMode('manual')}
-                    className={`rounded-xl border px-3 py-2 text-xs font-semibold transition-all ${
-                      recipientTargetMode === 'manual'
-                        ? 'border-brand-500 bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400'
-                        : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-400'
-                    }`}
-                  >
-                    Manual Email(s)
-                  </button>
+              {!editingEditionId && (
+                <div>
+                  <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1">Target Recipients</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setRecipientTargetMode('subscribers')}
+                      className={`rounded-xl border px-3 py-2 text-xs font-semibold transition-all ${
+                        recipientTargetMode === 'subscribers'
+                          ? 'border-brand-500 bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400'
+                          : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-400 dark:hover:bg-navy-700'
+                      }`}
+                    >
+                      All Subscribers ({subscribers.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRecipientTargetMode('companies')}
+                      className={`rounded-xl border px-3 py-2 text-xs font-semibold transition-all ${
+                        recipientTargetMode === 'companies'
+                          ? 'border-brand-500 bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400'
+                          : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-400 dark:hover:bg-navy-700'
+                      }`}
+                    >
+                      Select Company Emails
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRecipientTargetMode('manual')}
+                      className={`rounded-xl border px-3 py-2 text-xs font-semibold transition-all ${
+                        recipientTargetMode === 'manual'
+                          ? 'border-brand-500 bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400'
+                          : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-400 dark:hover:bg-navy-700'
+                      }`}
+                    >
+                      Manual Email(s)
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Conditional Recipient Inputs */}
-              {recipientTargetMode === 'companies' && (
+              {!editingEditionId && recipientTargetMode === 'companies' && (
                 <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3 space-y-2 dark:border-navy-700 dark:bg-navy-900/50">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-navy-900 dark:text-white">Multi-Select Registered Companies</label>
@@ -544,21 +610,39 @@ export default function Newsletter() {
                   <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 bg-white dark:border-navy-700 dark:bg-navy-900 divide-y divide-slate-50 dark:divide-navy-800">
                     {dbCompanies
                       .filter(c => !companySearchQuery || (c.name || '').toLowerCase().includes(companySearchQuery.toLowerCase()))
-                      .map((c) => (
-                        <label key={c.id || c.uei} className="flex items-center justify-between p-2.5 hover:bg-slate-50 dark:hover:bg-navy-800 cursor-pointer">
-                          <div>
-                            <p className="text-xs font-bold text-navy-900 dark:text-white">{c.name}</p>
-                            <p className="text-[11px] text-slate-400">{c.email || 'No registered email'}</p>
-                          </div>
-                          <input
-                            type="checkbox"
-                            disabled={!c.email}
-                            checked={!!selectedBroadcastCompanyIds[c.id || c.uei]}
-                            onChange={(e) => setSelectedBroadcastCompanyIds({ ...selectedBroadcastCompanyIds, [c.id || c.uei]: e.target.checked })}
-                            className="rounded border-slate-300 text-brand-500 focus:ring-brand-500"
-                          />
-                        </label>
-                      ))}
+                      .map((c) => {
+                        const key = c.uei || c.name;
+                        const hasEmail = !!c.email;
+                        const isResearching = c.isResearching;
+                        return (
+                          <label key={key} className="flex items-center justify-between p-2.5 hover:bg-slate-50 dark:hover:bg-navy-800 cursor-pointer">
+                            <div>
+                              <p className="text-xs font-bold text-navy-900 dark:text-white">{c.name}</p>
+                              <p className="text-[11px] text-slate-400">
+                                {c.email || (isResearching ? '⏳ Research in progress...' : '❌ No email (requires research)')}
+                              </p>
+                            </div>
+                            {hasEmail ? (
+                              <input
+                                type="checkbox"
+                                checked={!!selectedBroadcastCompanyIds[key]}
+                                onChange={(e) => setSelectedBroadcastCompanyIds({ ...selectedBroadcastCompanyIds, [key]: e.target.checked })}
+                                className="rounded border-slate-300 text-brand-500 focus:ring-brand-500"
+                              />
+                            ) : isResearching ? (
+                              <Loader2 className="animate-spin text-brand-500 animate-duration-1000" size={14} />
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); triggerCompanyResearch(c.name); }}
+                                className="rounded bg-brand-500 hover:bg-brand-600 px-2 py-1 text-[10px] font-bold text-white shadow-soft transition-colors"
+                              >
+                                Research
+                              </button>
+                            )}
+                          </label>
+                        );
+                      })}
                   </div>
                   <div className="flex items-center justify-between pt-1 text-xs">
                     <div className="flex items-center gap-2">
@@ -566,7 +650,7 @@ export default function Newsletter() {
                         type="button"
                         disabled={companyPage <= 1}
                         onClick={() => fetchDbCompanies(companySearchQuery, companyPage - 1)}
-                        className="rounded-lg border border-slate-200 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 text-[11px]"
+                        className="rounded-lg border border-slate-200 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-300 dark:hover:bg-navy-800 disabled:opacity-40 text-[11px]"
                       >
                         Prev
                       </button>
@@ -577,7 +661,7 @@ export default function Newsletter() {
                         type="button"
                         disabled={companyPage >= Math.ceil(companyTotalCount / 20)}
                         onClick={() => fetchDbCompanies(companySearchQuery, companyPage + 1)}
-                        className="rounded-lg border border-slate-200 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 text-[11px]"
+                        className="rounded-lg border border-slate-200 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-300 dark:hover:bg-navy-800 disabled:opacity-40 text-[11px]"
                       >
                         Next
                       </button>
@@ -586,7 +670,7 @@ export default function Newsletter() {
                 </div>
               )}
 
-              {recipientTargetMode === 'manual' && (
+              {!editingEditionId && recipientTargetMode === 'manual' && (
                 <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3 dark:border-navy-700 dark:bg-navy-900/50">
                   <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1">Enter Email Addresses (Comma Separated)</label>
                   <input
@@ -621,8 +705,27 @@ export default function Newsletter() {
                 />
               </div>
               <div className="flex justify-end gap-3 pt-3">
-                <button type="button" onClick={() => setShowComposeModal(false)} className="rounded-xl border px-4 py-2 text-xs font-semibold">Cancel</button>
-                <button type="submit" disabled={submitting} className="flex items-center gap-1.5 rounded-xl bg-brand-500 px-5 py-2 text-xs font-bold text-white">{submitting ? <Loader2 className="animate-spin" size={14} /> : <Send size={14} />} Send Broadcast</button>
+                <button
+                  type="button"
+                  onClick={() => setShowComposeModal(false)}
+                  className="rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-300 dark:hover:bg-navy-900 px-4 py-2 text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex items-center gap-1.5 rounded-xl bg-brand-500 px-5 py-2 text-xs font-bold text-white shadow-soft hover:bg-brand-600 disabled:opacity-60"
+                >
+                  {submitting ? (
+                    <Loader2 className="animate-spin" size={14} />
+                  ) : editingEditionId ? (
+                    <Edit2 size={14} />
+                  ) : (
+                    <Send size={14} />
+                  )}
+                  {editingEditionId ? 'Update Broadcast' : 'Send Broadcast'}
+                </button>
               </div>
             </form>
           </div>
@@ -648,7 +751,13 @@ export default function Newsletter() {
                 />
               </div>
               <div className="flex justify-end gap-3 pt-2">
-                <button type="button" onClick={() => setShowSelfSubscribeModal(false)} className="rounded-xl border px-4 py-2 text-xs font-semibold">Cancel</button>
+                <button
+                  type="button"
+                  onClick={() => setShowSelfSubscribeModal(false)}
+                  className="rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-300 dark:hover:bg-navy-900 px-4 py-2 text-xs font-semibold"
+                >
+                  Cancel
+                </button>
                 <button type="submit" disabled={subscribingUser} className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-soft hover:bg-emerald-700">
                   {subscribingUser ? <Loader2 className="animate-spin" size={14} /> : <Check size={14} />} Subscribe Contact
                 </button>
@@ -676,21 +785,39 @@ export default function Newsletter() {
             </div>
 
             <div className="mt-3 flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-navy-700 pr-2">
-              {dbCompanies.map((c) => (
-                <label key={c.id || c.uei} className="flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-navy-700/50 cursor-pointer">
-                  <div>
-                    <p className="text-xs font-bold text-navy-900 dark:text-white">{c.name}</p>
-                    <p className="text-[11px] text-slate-400">{c.email || 'No email registered'}</p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    disabled={!c.email}
-                    checked={!!selectedCompanyIds[c.id]}
-                    onChange={(e) => setSelectedCompanyIds({ ...selectedCompanyIds, [c.id]: e.target.checked })}
-                    className="rounded border-slate-300 text-brand-500 focus:ring-brand-500"
-                  />
-                </label>
-              ))}
+              {dbCompanies.map((c) => {
+                const key = c.uei || c.name;
+                const hasEmail = !!c.email;
+                const isResearching = c.isResearching;
+                return (
+                  <label key={key} className="flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-navy-700/50 cursor-pointer">
+                    <div>
+                      <p className="text-xs font-bold text-navy-900 dark:text-white">{c.name}</p>
+                      <p className="text-[11px] text-slate-400">
+                        {c.email || (isResearching ? '⏳ Research in progress...' : '❌ No email (requires research)')}
+                      </p>
+                    </div>
+                    {hasEmail ? (
+                      <input
+                        type="checkbox"
+                        checked={!!selectedCompanyIds[key]}
+                        onChange={(e) => setSelectedCompanyIds({ ...selectedCompanyIds, [key]: e.target.checked })}
+                        className="rounded border-slate-300 text-brand-500 focus:ring-brand-500"
+                      />
+                    ) : isResearching ? (
+                      <Loader2 className="animate-spin text-brand-500 animate-duration-1000" size={14} />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); triggerCompanyResearch(c.name); }}
+                        className="rounded bg-brand-500 hover:bg-brand-600 px-2 py-1 text-[10px] font-bold text-white shadow-soft transition-colors"
+                      >
+                        Research
+                      </button>
+                    )}
+                  </label>
+                );
+              })}
             </div>
 
             <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-navy-700 text-xs">
@@ -699,18 +826,18 @@ export default function Newsletter() {
                   type="button"
                   disabled={companyPage <= 1}
                   onClick={() => fetchDbCompanies(companySearchQuery, companyPage - 1)}
-                  className="rounded-lg border border-slate-200 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 text-[11px]"
+                  className="rounded-lg border border-slate-200 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-300 dark:hover:bg-navy-800 disabled:opacity-40 text-[11px]"
                 >
                   Prev
                 </button>
-                <span className="text-[11px] text-slate-500">
+                <span className="text-[11px] text-slate-500 font-medium">
                   Page {companyPage} of {Math.max(1, Math.ceil(companyTotalCount / 20))} ({companyTotalCount.toLocaleString()} total)
                 </span>
                 <button
                   type="button"
                   disabled={companyPage >= Math.ceil(companyTotalCount / 20)}
                   onClick={() => fetchDbCompanies(companySearchQuery, companyPage + 1)}
-                  className="rounded-lg border border-slate-200 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 text-[11px]"
+                  className="rounded-lg border border-slate-200 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-300 dark:hover:bg-navy-800 disabled:opacity-40 text-[11px]"
                 >
                   Next
                 </button>
@@ -721,8 +848,21 @@ export default function Newsletter() {
             </div>
 
             <div className="flex justify-end gap-3 pt-3">
-              <button type="button" onClick={() => setShowCompanyImport(false)} className="rounded-xl border px-4 py-2 text-xs font-semibold">Cancel</button>
-              <button type="button" onClick={handleImportSelectedCompanies} disabled={importingCompanies} className="rounded-xl bg-brand-500 px-5 py-2 text-xs font-bold text-white">{importingCompanies ? <Loader2 className="animate-spin" size={14} /> : 'Import Selected'}</button>
+              <button
+                type="button"
+                onClick={() => setShowCompanyImport(false)}
+                className="rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-300 dark:hover:bg-navy-900 px-4 py-2 text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleImportSelectedCompanies}
+                disabled={importingCompanies}
+                className="rounded-xl bg-brand-500 px-5 py-2 text-xs font-bold text-white shadow-soft hover:bg-brand-600 disabled:opacity-60"
+              >
+                {importingCompanies ? <Loader2 className="animate-spin" size={14} /> : 'Import Selected'}
+              </button>
             </div>
           </div>
         </div>
