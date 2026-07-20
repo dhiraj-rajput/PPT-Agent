@@ -64,15 +64,18 @@ def open_tracking(
             if registered.get("leadId"):
                 leads_col = get_collection("leads")
                 lead = leads_col.find_one({"_id": registered["leadId"]})
-                if lead and lead.get("status") != "replied" and not lead.get("openedAt"):
-                    status_to_set = "opened" if lead.get("status") == "sent" else lead.get("status", "opened")
+                if lead and lead.get("status") != "replied":
+                    status_to_set = "opened" if lead.get("status") in ("sent", "pending", "draft") else lead.get("status", "opened")
+                    update_dict = {
+                        "status": status_to_set,
+                        "updatedAt": datetime.now(timezone.utc)
+                    }
+                    if not lead.get("openedAt"):
+                        update_dict["openedAt"] = datetime.now(timezone.utc)
+
                     leads_col.update_one(
                         {"_id": lead["_id"]},
-                        {"$set": {
-                            "status": status_to_set,
-                            "openedAt": datetime.now(timezone.utc),
-                            "updatedAt": datetime.now(timezone.utc)
-                        }}
+                        {"$set": update_dict}
                     )
 
                     # Increment campaign stats

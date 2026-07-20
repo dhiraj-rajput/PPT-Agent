@@ -322,7 +322,7 @@ def check_incoming_replies():
 
             for mail_id in mail_ids:
                 try:
-                    res, msg_data = mail.fetch(mail_id, "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT)])")
+                    res, msg_data = mail.fetch(mail_id, "(RFC822)")
                     for response_part in msg_data:
                         if isinstance(response_part, tuple):
                             msg = email.message_from_bytes(response_part[1])
@@ -337,10 +337,25 @@ def check_incoming_replies():
                                         "status": {"$in": ["sent", "opened", "clicked"]}
                                     })
                                     if lead:
+                                        body_text = ""
+                                        if msg.is_multipart():
+                                            for part in msg.walk():
+                                                if part.get_content_type() == "text/plain":
+                                                    body_text = part.get_payload(decode=True).decode(errors="ignore")
+                                                    break
+                                        else:
+                                            body_text = msg.get_payload(decode=True).decode(errors="ignore")
+
+                                        body_text = body_text.strip() or "Reply received."
+                                        reply_subj = str(msg.get("Subject") or "Re: Outreach").strip()
+
                                         leads_col.update_one(
                                             {"_id": lead["_id"]},
                                             {"$set": {
                                                 "status": "replied",
+                                                "replySubject": reply_subj,
+                                                "replyMessage": body_text,
+                                                "replyPreview": body_text[:200],
                                                 "repliedAt": datetime.now(timezone.utc),
                                                 "updatedAt": datetime.now(timezone.utc)
                                             }}
@@ -355,7 +370,7 @@ def check_incoming_replies():
                                             "action": "lead.reply",
                                             "entityType": "Lead",
                                             "entityId": lead["_id"],
-                                            "details": {"email": sender_email, "subject": msg.get("Subject")},
+                                            "details": {"email": sender_email, "subject": reply_subj, "preview": body_text[:200]},
                                             "createdAt": datetime.now(timezone.utc)
                                         })
                                         

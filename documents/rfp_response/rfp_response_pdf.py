@@ -12,6 +12,10 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import shutil
+import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -400,7 +404,8 @@ def generate_rfp_response_pdf(
             logger.warning(f"[RFPResponsePDF] Word COM conversion failed: {e}. Trying LibreOffice...")
 
     if not converted:
-        soffice = shutil.which("soffice") or shutil.which("libreoffice")
+        mac_soffice = "/Applications/LibreOffice.app/Contents/MacOS/soffice"
+        soffice = shutil.which("soffice") or shutil.which("libreoffice") or (mac_soffice if os.path.exists(mac_soffice) else None)
         if soffice:
             try:
                 logger.info(f"[RFPResponsePDF] Attempting LibreOffice conversion to PDF...")

@@ -79,7 +79,8 @@ export default function EmailCampaign() {
   const [recipientName, setRecipientName] = useState('');
   const [recipientCompany, setRecipientCompany] = useState('');
   const [selectedReport, setSelectedReport] = useState('');
-
+  const [viewingReplyLead, setViewingReplyLead] = useState(null);
+  
   // Attachment Options
   const [attachmentType, setAttachmentType] = useState('none'); // 'none' | 'report' | 'device'
   const [attachedPath, setAttachedPath] = useState('');
@@ -661,7 +662,17 @@ export default function EmailCampaign() {
                                   <td className="px-4 py-2 text-slate-500 dark:text-slate-400">{l.sentAt ? <Check size={13} className="text-emerald-500" /> : '—'}</td>
                                   <td className="px-4 py-2 text-slate-500 dark:text-slate-400">{l.openedAt ? <Check size={13} className="text-emerald-500" /> : '—'}</td>
                                   <td className="px-4 py-2 text-slate-500 dark:text-slate-400">{l.clickedAt ? <Check size={13} className="text-emerald-500" /> : '—'}</td>
-                                  <td className="px-4 py-2 text-slate-500 dark:text-slate-400">{l.repliedAt ? <Check size={13} className="text-emerald-500" /> : '—'}</td>
+                                  <td className="px-4 py-2 text-slate-500 dark:text-slate-400">
+                                    {l.repliedAt || l.status === 'replied' || l.replyMessage ? (
+                                      <button
+                                        onClick={() => setViewingReplyLead(l)}
+                                        className="inline-flex items-center gap-1 rounded-md bg-rose-50 px-2 py-0.5 text-[11px] font-bold text-rose-600 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-400 transition-colors"
+                                        title="View incoming email reply text"
+                                      >
+                                        <Mail size={11} /> View Reply
+                                      </button>
+                                    ) : '—'}
+                                  </td>
                                   <td className="px-4 py-2 text-slate-500 dark:text-slate-400">{l.resendCount || 0}</td>
                                   <td className="px-4 py-2 text-right">
                                     <button
@@ -1270,6 +1281,64 @@ export default function EmailCampaign() {
                   className="rounded-lg bg-brand-500 px-4 py-2 text-xs font-bold text-white shadow-soft hover:bg-brand-600 disabled:opacity-60"
                 >
                   {addingCompanies ? 'Adding…' : `Add ${Object.keys(selectedCompanies).length || ''} to Campaign`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Incoming Reply Email Viewer Modal */}
+      {viewingReplyLead && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/70 p-4 backdrop-blur-xs"
+          onClick={() => setViewingReplyLead(null)}
+        >
+          <div
+            className="w-full max-w-xl rounded-2xl bg-white dark:bg-navy-800 shadow-2xl overflow-hidden border border-slate-100 dark:border-navy-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-navy-700 px-5 py-4">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400">
+                  <Mail size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-navy-900 dark:text-white">Incoming Reply Email</h3>
+                  <p className="text-xs text-slate-400">
+                    From {viewingReplyLead.contactName || viewingReplyLead.companyName} ({viewingReplyLead.email})
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setViewingReplyLead(null)}
+                className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-navy-900 dark:hover:bg-navy-700 dark:hover:text-white"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3.5 dark:border-navy-700 dark:bg-navy-900/50 space-y-1">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Subject</p>
+                <p className="text-xs font-bold text-navy-900 dark:text-white">
+                  {viewingReplyLead.replySubject || "Re: Outreach"}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-slate-100 bg-white p-4 dark:border-navy-700 dark:bg-navy-900 space-y-1 max-h-60 overflow-y-auto">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Message Body</p>
+                <div className="text-xs text-slate-700 dark:text-slate-200 whitespace-pre-wrap leading-relaxed font-sans">
+                  {viewingReplyLead.replyMessage || viewingReplyLead.replyPreview || "No reply body text captured yet."}
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  onClick={() => setViewingReplyLead(null)}
+                  className="rounded-xl bg-navy-900 px-4 py-2 text-xs font-bold text-white hover:bg-navy-800 dark:bg-brand-500 dark:hover:bg-brand-600"
+                >
+                  Close
                 </button>
               </div>
             </div>
