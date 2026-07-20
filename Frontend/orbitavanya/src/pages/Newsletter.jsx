@@ -534,6 +534,7 @@ export default function Newsletter() {
                             onChange={(e) => setSelectedBroadcastCompanyIds({ ...selectedBroadcastCompanyIds, [c.id || c.uei]: e.target.checked })}
                             className="rounded border-slate-300 text-brand-500 focus:ring-brand-500"
                           />
+                        </label>
                       ))}
                   </div>
                   <div className="flex items-center justify-between pt-1 text-xs">
