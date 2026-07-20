@@ -17,13 +17,18 @@ from pydantic import BaseModel, EmailStr
 
 from app.core.auth import get_current_user
 from app.core.mailer import send_company_email_with_attachments
-from app.core.tracking_helpers import new_tracking_id, unsubscribe_url
+from app.core.tracking_helpers import (
+    new_tracking_id,
+    open_pixel_tag,
+    rewrite_links_for_tracking,
+    unsubscribe_url,
+)
 from utils.db_client import get_collection
 from utils.helpers import setup_logger
 
 logger = setup_logger(__name__)
 
-router = APIRouter(prefix="/api/newsletters", tags=["newsletters"])
+router = APIRouter(prefix="/newsletters", tags=["newsletters"])
 
 
 class CreateNewsletterBody(BaseModel):
@@ -328,6 +333,7 @@ def create_edition(
     if body.sendNow:
         subscribers = list(subs_col.find({"newsletterId": n_oid, "status": "subscribed"}))
         sent_count = 0
+        events_col = get_collection("tracking_events")
 
         for sub in subscribers:
             recipient_email = sub.get("email")
@@ -337,7 +343,17 @@ def create_edition(
             tracking_id = new_tracking_id()
             unsub_link = unsubscribe_url(str(sub["_id"]), str(n_oid))
 
-            body_with_unsub = f"{body.body}\n\n---\nTo unsubscribe, click here: {unsub_link}"
+            # 1. Rewrite HTML links for click tracking
+            html_body, click_links = rewrite_links_for_tracking(body.body)
+
+            # 2. Append open tracking pixel & unsubscribe link
+            pixel = open_pixel_tag(tracking_id)
+            body_with_unsub = (
+                f"{html_body}\n\n"
+                f"{pixel}\n"
+                f'<hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0;" />'
+                f'<p style="font-size:11px;color:#94a3b8;">To unsubscribe from this newsletter, <a href="{unsub_link}">click here</a>.</p>'
+            )
 
             success, err = send_company_email_with_attachments(
                 to_email=recipient_email,
@@ -358,6 +374,29 @@ def create_edition(
 
             if success:
                 sent_count += 1
+                # Register open tracking event record
+                events_col.insert_one({
+                    "trackingId": tracking_id,
+                    "editionId": e_id,
+                    "newsletterId": n_oid,
+                    "subscriberId": sub["_id"],
+                    "type": "open",
+                    "timestamp": None,  # Will be populated when pixel is fetched
+                    "createdAt": datetime.now(timezone.utc),
+                })
+
+                # Register click tracking event records for links
+                for link in click_links:
+                    events_col.insert_one({
+                        "trackingId": link["trackingId"],
+                        "editionId": e_id,
+                        "newsletterId": n_oid,
+                        "subscriberId": sub["_id"],
+                        "destinationUrl": link["destinationUrl"],
+                        "type": "click",
+                        "timestamp": None,  # Will be populated when link is clicked
+                        "createdAt": datetime.now(timezone.utc),
+                    })
 
         editions_col.update_one(
             {"_id": e_id},

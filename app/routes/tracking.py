@@ -60,33 +60,55 @@ def open_tracking(
                 }}
             )
 
-            leads_col = get_collection("leads")
-            lead = leads_col.find_one({"_id": registered["leadId"]})
-            if lead and lead.get("status") != "replied" and not lead.get("openedAt"):
-                status_to_set = "opened" if lead.get("status") == "sent" else lead.get("status", "opened")
-                leads_col.update_one(
-                    {"_id": lead["_id"]},
-                    {"$set": {
-                        "status": status_to_set,
-                        "openedAt": datetime.now(timezone.utc),
-                        "updatedAt": datetime.now(timezone.utc)
-                    }}
-                )
+            # 1. Handle Lead/Campaign Open
+            if registered.get("leadId"):
+                leads_col = get_collection("leads")
+                lead = leads_col.find_one({"_id": registered["leadId"]})
+                if lead and lead.get("status") != "replied" and not lead.get("openedAt"):
+                    status_to_set = "opened" if lead.get("status") == "sent" else lead.get("status", "opened")
+                    leads_col.update_one(
+                        {"_id": lead["_id"]},
+                        {"$set": {
+                            "status": status_to_set,
+                            "openedAt": datetime.now(timezone.utc),
+                            "updatedAt": datetime.now(timezone.utc)
+                        }}
+                    )
 
-                # Increment campaign stats
-                get_collection("campaigns").update_one(
-                    {"_id": registered["campaignId"]},
-                    {"$inc": {"stats.totalOpened": 1}}
-                )
+                    # Increment campaign stats
+                    if registered.get("campaignId"):
+                        get_collection("campaigns").update_one(
+                            {"_id": registered["campaignId"]},
+                            {"$inc": {"stats.totalOpened": 1}}
+                        )
 
-                # Score open
-                score_email_opened(lead["_id"])
+                    # Score open
+                    score_email_opened(lead["_id"])
+
+            # 2. Handle Newsletter Edition Open
+            if registered.get("editionId"):
+                get_collection("editions").update_one(
+                    {"_id": registered["editionId"]},
+                    {"$inc": {"stats.opened": 1}}
+                )
+                if registered.get("newsletterId"):
+                    get_collection("newsletters").update_one(
+                        {"_id": registered["newsletterId"]},
+                        {"$inc": {"stats.totalOpened": 1}}
+                    )
+                if registered.get("subscriberId"):
+                    get_collection("newsletter_sends").update_one(
+                        {"editionId": registered["editionId"], "subscriberId": registered["subscriberId"]},
+                        {"$set": {"openedAt": datetime.now(timezone.utc)}}
+                    )
         else:
             # Repeat open: Log another tracking event
             events_col.insert_one({
                 "trackingId": trackingId,
-                "leadId": registered["leadId"],
-                "campaignId": registered["campaignId"],
+                "leadId": registered.get("leadId"),
+                "campaignId": registered.get("campaignId"),
+                "editionId": registered.get("editionId"),
+                "newsletterId": registered.get("newsletterId"),
                 "type": "open",
                 "userAgent": ua,
                 "ipHash": ip_hashed,
@@ -132,33 +154,55 @@ def click_tracking(
                 }}
             )
 
-            leads_col = get_collection("leads")
-            lead = leads_col.find_one({"_id": registered["leadId"]})
-            if lead:
-                status_to_set = "clicked" if lead.get("status") != "replied" else lead.get("status")
-                leads_col.update_one(
-                    {"_id": lead["_id"]},
-                    {"$set": {
-                        "status": status_to_set,
-                        "clickedAt": lead.get("clickedAt") or datetime.now(timezone.utc),
-                        "updatedAt": datetime.now(timezone.utc)
-                    }}
-                )
+            # 1. Handle Campaign Lead Click
+            if registered.get("leadId"):
+                leads_col = get_collection("leads")
+                lead = leads_col.find_one({"_id": registered["leadId"]})
+                if lead:
+                    status_to_set = "clicked" if lead.get("status") != "replied" else lead.get("status")
+                    leads_col.update_one(
+                        {"_id": lead["_id"]},
+                        {"$set": {
+                            "status": status_to_set,
+                            "clickedAt": lead.get("clickedAt") or datetime.now(timezone.utc),
+                            "updatedAt": datetime.now(timezone.utc)
+                        }}
+                    )
 
-                # Increment campaign stats
-                get_collection("campaigns").update_one(
-                    {"_id": registered["campaignId"]},
-                    {"$inc": {"stats.totalClicked": 1}}
-                )
+                    # Increment campaign stats
+                    if registered.get("campaignId"):
+                        get_collection("campaigns").update_one(
+                            {"_id": registered["campaignId"]},
+                            {"$inc": {"stats.totalClicked": 1}}
+                        )
 
-                # Score click
-                score_link_clicked(lead["_id"])
+                    # Score click
+                    score_link_clicked(lead["_id"])
+
+            # 2. Handle Newsletter Edition Click
+            if registered.get("editionId"):
+                get_collection("editions").update_one(
+                    {"_id": registered["editionId"]},
+                    {"$inc": {"stats.clicked": 1}}
+                )
+                if registered.get("newsletterId"):
+                    get_collection("newsletters").update_one(
+                        {"_id": registered["newsletterId"]},
+                        {"$inc": {"stats.totalClicked": 1}}
+                    )
+                if registered.get("subscriberId"):
+                    get_collection("newsletter_sends").update_one(
+                        {"editionId": registered["editionId"], "subscriberId": registered["subscriberId"]},
+                        {"$set": {"clickedAt": datetime.now(timezone.utc)}}
+                    )
         else:
             # Repeat click: Log another tracking event
             events_col.insert_one({
                 "trackingId": trackingId,
-                "leadId": registered["leadId"],
-                "campaignId": registered["campaignId"],
+                "leadId": registered.get("leadId"),
+                "campaignId": registered.get("campaignId"),
+                "editionId": registered.get("editionId"),
+                "newsletterId": registered.get("newsletterId"),
                 "type": "click",
                 "destinationUrl": dest_url,
                 "userAgent": ua,

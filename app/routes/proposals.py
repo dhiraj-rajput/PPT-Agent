@@ -280,6 +280,8 @@ async def run_proposal_generation_task(mode: str, solicitation: Optional[str] = 
     await asyncio.to_thread(run_proposal_generation_sync, mode, solicitation, winner, loop)
 
 
+@router.post("")
+@router.post("/")
 @router.post("/generate")
 def trigger_proposal_generation(
     payload: dict,
