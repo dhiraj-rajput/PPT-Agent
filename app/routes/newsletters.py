@@ -17,7 +17,7 @@ from pydantic import BaseModel, EmailStr
 
 from app.core.auth import get_current_user
 from app.core.mailer import send_company_email_with_attachments
-from app.core.tracking_helpers import generate_tracking_id, unsubscribe_url
+from app.core.tracking_helpers import new_tracking_id, unsubscribe_url
 from utils.db_client import get_collection
 from utils.helpers import setup_logger
 
@@ -334,8 +334,8 @@ def create_edition(
             if not recipient_email:
                 continue
 
-            tracking_id = generate_tracking_id()
-            unsub_link = unsubscribe_url(str(sub["_id"]))
+            tracking_id = new_tracking_id()
+            unsub_link = unsubscribe_url(str(sub["_id"]), str(n_oid))
 
             body_with_unsub = f"{body.body}\n\n---\nTo unsubscribe, click here: {unsub_link}"
 
