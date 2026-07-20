@@ -22,17 +22,9 @@ logger = logging.getLogger(__name__)
 
 from config.settings import settings
 
-_SMTP_HOST = settings.SMTP_HOST
-_SMTP_PORT = settings.SMTP_PORT
-_SMTP_USER = settings.SMTP_USER
-_SMTP_PASS = settings.SMTP_PASS
-_SMTP_FROM = settings.SMTP_FROM or _SMTP_USER
-_CLIENT_URL = settings.CLIENT_URL
-_OTP_TTL = settings.OTP_TTL_MINUTES
-
 
 def _is_smtp_configured() -> bool:
-    return bool(_SMTP_USER and _SMTP_PASS)
+    return bool(settings.SMTP_USER and settings.SMTP_PASS)
 
 
 async def _send(to_email: str, subject: str, html: str) -> None:
@@ -49,18 +41,18 @@ async def _send(to_email: str, subject: str, html: str) -> None:
 
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
-        msg["From"] = _SMTP_FROM
+        msg["From"] = settings.SMTP_FROM or settings.SMTP_USER
         msg["To"] = to_email
         msg.attach(MIMEText(html, "html"))
 
         await aiosmtplib.send(
             msg,
-            hostname=_SMTP_HOST,
-            port=_SMTP_PORT,
-            username=_SMTP_USER,
-            password=_SMTP_PASS,
-            use_tls=(_SMTP_PORT == 465),
-            start_tls=(_SMTP_PORT == 587),
+            hostname=settings.SMTP_HOST,
+            port=settings.SMTP_PORT,
+            username=settings.SMTP_USER,
+            password=settings.SMTP_PASS,
+            use_tls=(settings.SMTP_PORT == 465),
+            start_tls=(settings.SMTP_PORT == 587),
         )
         logger.info(f"[Mailer] Sent '{subject}' to {to_email}")
     except Exception as exc:
@@ -114,7 +106,7 @@ async def send_otp_email(to_email: str, otp: str, purpose: str) -> None:
       <h2 style="color:#111827;">{copy['heading']}</h2>
       <p style="color:#374151; font-size: 14px;">
         Use the code below to {copy['body']}.
-        This code expires in {_OTP_TTL} minutes.
+        This code expires in {settings.OTP_TTL_MINUTES} minutes.
       </p>
       <p style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color:#4f46e5; margin: 24px 0;">
         {otp}
@@ -138,7 +130,7 @@ async def send_invite_email(
     inviter_name: Optional[str],
     temp_password: str,
 ) -> None:
-    login_link = f"{_CLIENT_URL}/login"
+    login_link = f"{settings.CLIENT_URL}/login"
     html = _shell(
         "You've been invited to OrbitAvanya",
         f"""
@@ -177,7 +169,7 @@ async def send_task_assigned_email(
     priority: str,
     assigner_name: Optional[str],
 ) -> None:
-    tasks_link = f"{_CLIENT_URL}/tasks"
+    tasks_link = f"{settings.CLIENT_URL}/tasks"
     html = _shell(
         "New task assigned to you",
         f"""
@@ -212,7 +204,7 @@ async def send_meeting_invite_email(
     location: Optional[str],
     organizer_name: Optional[str],
 ) -> None:
-    meetings_link = f"{_CLIENT_URL}/meetings"
+    meetings_link = f"{settings.CLIENT_URL}/meetings"
     if meeting_type == "Video Call" and meeting_link:
         join_block = f"""
         <p style="margin: 16px 0;">
@@ -293,7 +285,7 @@ async def send_company_email_with_attachments(
 
         msg = MIMEMultipart("mixed")
         msg["Subject"] = subject
-        msg["From"] = _SMTP_FROM
+        msg["From"] = settings.SMTP_FROM or settings.SMTP_USER
         msg["To"] = to_email
 
         # Attach text/html part
@@ -313,12 +305,12 @@ async def send_company_email_with_attachments(
 
         await aiosmtplib.send(
             msg,
-            hostname=_SMTP_HOST,
-            port=_SMTP_PORT,
-            username=_SMTP_USER,
-            password=_SMTP_PASS,
-            use_tls=(_SMTP_PORT == 465),
-            start_tls=(_SMTP_PORT == 587),
+            hostname=settings.SMTP_HOST,
+            port=settings.SMTP_PORT,
+            username=settings.SMTP_USER,
+            password=settings.SMTP_PASS,
+            use_tls=(settings.SMTP_PORT == 465),
+            start_tls=(settings.SMTP_PORT == 587),
         )
         logger.info(f"[Mailer] Sent '{subject}' to {to_email} with attachments")
     except Exception as exc:
