@@ -150,21 +150,26 @@ async def send_campaign_email_to_lead(campaign: dict, lead: dict) -> dict:
 
     msg["To"] = lead["email"]
 
-    # Send SMTP email if configured
-    if settings.SMTP_USER and settings.SMTP_PASS:
-        await aiosmtplib.send(
-            msg,
-            hostname=settings.SMTP_HOST,
-            port=settings.SMTP_PORT,
-            username=settings.SMTP_USER,
-            password=settings.SMTP_PASS,
-            use_tls=(settings.SMTP_PORT == 465),
-            start_tls=(settings.SMTP_PORT == 587),
+    # Send SMTP email if configured. IMPORTANT: if SMTP isn't configured we must
+    # raise instead of silently "succeeding" — otherwise the lead gets marked
+    # as sent and campaign stats increment even though no email ever left the
+    # server, which is why campaigns looked like they worked but nothing arrived.
+    if not (settings.SMTP_USER and settings.SMTP_PASS):
+        raise RuntimeError(
+            "SMTP is not configured (SMTP_USER / SMTP_PASS are empty). "
+            "Copy .env.example to .env in the project root and fill in your SMTP "
+            "credentials, then restart the backend."
         )
-    else:
-        logger.warning(
-            f"[Email Worker Mock Send] SMTP not configured — skipping live send to: {lead['email']}"
-        )
+
+    await aiosmtplib.send(
+        msg,
+        hostname=settings.SMTP_HOST,
+        port=settings.SMTP_PORT,
+        username=settings.SMTP_USER,
+        password=settings.SMTP_PASS,
+        use_tls=(settings.SMTP_PORT == 465),
+        start_tls=(settings.SMTP_PORT == 587),
+    )
 
     # Pre-register tracking events in MongoDB
     tracking_events_col = get_collection("tracking_events")
@@ -305,11 +310,31 @@ def check_incoming_replies():
     # Set connection timeout limits
     socket.setdefaulttimeout(30.0)
 
-    # Determine IMAP server securely
-    imap_host = "imap.gmail.com" if "gmail" in settings.SMTP_HOST.lower() else f"imap.{settings.SMTP_HOST.split('smtp.')[-1]}"
-    
+    # Determine IMAP server. An explicit IMAP_HOST setting always wins (needed
+    # for providers whose IMAP host isn't derivable from the SMTP host, e.g.
+    # custom/company mail servers). Otherwise fall back to well-known providers,
+    # then a best-effort guess for anything else.
+    smtp_host = settings.SMTP_HOST.lower()
+    if settings.IMAP_HOST:
+        imap_host = settings.IMAP_HOST
+    elif "gmail" in smtp_host:
+        imap_host = "imap.gmail.com"
+    elif "outlook" in smtp_host or "office365" in smtp_host or "hotmail" in smtp_host or "live.com" in smtp_host:
+        imap_host = "outlook.office365.com"
+    elif "yahoo" in smtp_host:
+        imap_host = "imap.mail.yahoo.com"
+    elif "zoho" in smtp_host:
+        imap_host = "imap.zoho.com"
+    elif smtp_host.startswith("smtp."):
+        # Common convention: mail.example.com / smtp.example.com -> imap.example.com
+        imap_host = "imap." + smtp_host.split("smtp.", 1)[1]
+    else:
+        # Many self-hosted / shared-hosting mail servers use the same
+        # hostname for SMTP and IMAP, just on different ports.
+        imap_host = settings.SMTP_HOST
+
     try:
-        mail = imaplib.IMAP4_SSL(imap_host, 993)
+        mail = imaplib.IMAP4_SSL(imap_host, settings.IMAP_PORT)
         mail.login(settings.SMTP_USER, settings.SMTP_PASS)
         mail.select("INBOX")
 
@@ -379,12 +404,20 @@ def check_incoming_replies():
                                         
                                     mail.store(mail_id, "+FLAGS", "\\Seen")
                 except Exception as parse_err:
-                    logger.error(f"[Email Worker] Failed to parse IMAP message: {parse_err}")
+                    err_str = str(parse_err)
+                    if "MongoClient after close" in err_str or "closed connection" in err_str:
+                        logger.debug(f"[Email Worker] MongoClient was closed during shutdown: {parse_err}")
+                    else:
+                        logger.error(f"[Email Worker] Failed to parse IMAP message: {parse_err}")
         
         mail.close()
         mail.logout()
     except Exception as imap_err:
-        logger.warning(f"[Email Worker] IMAP polling skipped or failed: {imap_err}")
+        err_str = str(imap_err)
+        if "MongoClient after close" in err_str or "closed connection" in err_str:
+            logger.debug(f"[Email Worker] MongoClient was closed during shutdown: {imap_err}")
+        else:
+            logger.warning(f"[Email Worker] IMAP polling skipped or failed: {imap_err}")
 
 
 async def start_email_worker_loop():

@@ -226,14 +226,32 @@ async def upload_campaign_attachment(
 def view_campaign_file(path: str):
     import os
     from fastapi.responses import FileResponse
-    clean_path = path.replace("\\", "/")
-    if not clean_path.startswith("private/uploads") and not clean_path.startswith("private/reports"):
+
+    # Resolve to a real absolute path and verify it is actually contained
+    # within one of the allowed directories. A plain string-prefix check on
+    # the raw path (the previous approach) can be bypassed with "../"
+    # sequences that still start with the right string but resolve outside
+    # the allowed folder — this endpoint is intentionally public (email
+    # recipients open it without logging in), so that containment check has
+    # to be airtight.
+    allowed_bases = [
+        os.path.realpath("private/uploads"),
+        os.path.realpath("private/reports"),
+    ]
+
+    clean_path = path.replace("\\", "/").lstrip("/")
+    resolved = os.path.realpath(clean_path)
+
+    if not any(
+        resolved == base or resolved.startswith(base + os.sep)
+        for base in allowed_bases
+    ):
         raise HTTPException(status_code=403, detail="Access denied")
-        
-    if not os.path.exists(clean_path):
+
+    if not os.path.exists(resolved):
         raise HTTPException(status_code=404, detail="File not found")
-        
-    return FileResponse(clean_path, media_type="application/pdf")
+
+    return FileResponse(resolved, media_type="application/pdf")
 
 
 @router.get("/{id}")

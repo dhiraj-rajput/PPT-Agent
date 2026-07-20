@@ -234,6 +234,15 @@ class AppSettings(BaseSettings):
     SMTP_USER: str = Field(default="", description="SMTP account username/email.")
     SMTP_PASS: str = Field(default="", description="SMTP account password.")
     SMTP_FROM: str = Field(default="", description="Sender email address for outgoing mail.")
+    IMAP_HOST: str = Field(
+        default="",
+        description=(
+            "IMAP server hostname used to poll for reply emails. "
+            "Leave empty to auto-detect from SMTP_HOST (Gmail/Outlook/Yahoo supported); "
+            "set explicitly for other providers (e.g. mail.yourdomain.com)."
+        ),
+    )
+    IMAP_PORT: int = Field(default=993, description="IMAP server port (993 = IMAP over SSL, the standard for all major providers).")
     API_BASE_URL: str = Field(default="http://localhost:5050", description="API base URL used for tracking email opens and clicks.")
     CLIENT_URL: str = Field(default="http://localhost:5173", description="Frontend application client URL.")
     ZOOM_ACCOUNT_ID: str = Field(default="", description="Zoom account ID.")
@@ -242,10 +251,10 @@ class AppSettings(BaseSettings):
     GOOGLE_CLIENT_ID: str = Field(default="", description="Google client ID.")
     GOOGLE_CLIENT_SECRET: str = Field(default="", description="Google client secret.")
     GOOGLE_REDIRECT_URI: str = Field(
-        default="http://localhost:8000/api/integrations/google/callback",
+        default="http://localhost:5050/api/integrations/google/callback",
         description="Google OAuth redirect URI.",
     )
-    PORT: int = Field(default=8000, description="Port to run the API server on.")
+    PORT: int = Field(default=5050, description="Port to run the API server on.")
     ENV: str = Field(default="dev", description="Environment mode: dev | prod.")
     CORS_ORIGINS: list[str] = Field(
         default=[

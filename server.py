@@ -3,7 +3,7 @@ server.py
 ----------
 OrbitAvanya — FastAPI backend entry point.
 
-Runs all API routes on a single server (port 8000), replacing the
+Runs all API routes on a single server (port 5050 by default), replacing the
 separate Node.js auth server that previously ran on port 5000.
 
 Routes:

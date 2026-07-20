@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, Fragment } from 'react';
-import { Plus, Send, MousePointerClick, MailOpen, Reply, Clock, Globe, X, Play, Pause, Copy, Trash2, Upload, Rocket, RefreshCw, Building2, AlertTriangle, ChevronDown, ChevronUp, RotateCw, Hash, Search, Check, Loader2 } from 'lucide-react';
+import { Plus, Send, MousePointerClick, MailOpen, Reply, Clock, Globe, X, Play, Pause, Copy, Trash2, Upload, Rocket, RefreshCw, Building2, AlertTriangle, ChevronDown, ChevronUp, RotateCw, Hash, Search, Check, Loader2, Mail } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { PageHeader, Card, StatusBadge } from '../components/ui/Common.jsx';
 import { api } from '../lib/api.jsx';
@@ -667,7 +667,16 @@ export default function EmailCampaign() {
                                   <td className="px-4 py-2 font-semibold text-navy-900 dark:text-white">{l.companyName || '—'}</td>
                                   <td className="px-4 py-2 text-slate-500 dark:text-slate-400">{l.contactName || '—'}</td>
                                   <td className="px-4 py-2 text-slate-500 dark:text-slate-400">{l.email}</td>
-                                  <td className="px-4 py-2"><StatusBadge status={titleCase(l.status)} /></td>
+                                  <td className="px-4 py-2">
+                                    <div className="flex items-center gap-1.5">
+                                      <StatusBadge status={titleCase(l.status)} />
+                                      {l.lastSendError && (
+                                        <span title={l.lastSendError}>
+                                          <AlertTriangle size={13} className="text-rose-500 cursor-help shrink-0" />
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
                                   <td className="px-4 py-2 text-slate-500 dark:text-slate-400">{l.sentAt ? <Check size={13} className="text-emerald-500" /> : '—'}</td>
                                   <td className="px-4 py-2 text-slate-500 dark:text-slate-400">{l.openedAt ? <Check size={13} className="text-emerald-500" /> : '—'}</td>
                                   <td className="px-4 py-2 text-slate-500 dark:text-slate-400">{l.clickedAt ? <Check size={13} className="text-emerald-500" /> : '—'}</td>
