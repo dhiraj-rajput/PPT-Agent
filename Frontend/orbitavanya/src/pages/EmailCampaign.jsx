@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
-import { Plus, Send, MousePointerClick, MailOpen, Reply, Clock, Globe, X, Play, Pause, Copy, Trash2, Upload, Rocket, RefreshCw } from 'lucide-react';
+import { useEffect, useState, useCallback, Fragment } from 'react';
+import { Plus, Send, MousePointerClick, MailOpen, Reply, Clock, Globe, X, Play, Pause, Copy, Trash2, Upload, Rocket, RefreshCw, Building2, AlertTriangle, ChevronDown, ChevronUp, RotateCw, Hash, Search, Check } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { PageHeader, Card, StatusBadge } from '../components/ui/Common.jsx';
 import { api } from '../lib/api.jsx';
@@ -9,6 +9,8 @@ const SUMMARY_CARDS = [
   { key: 'openRate', label: 'Open Rate', icon: MailOpen, bg: 'bg-emerald-50', fg: 'text-emerald-600', format: (v) => `${v || 0}%` },
   { key: 'clickRate', label: 'Click Rate', icon: MousePointerClick, bg: 'bg-amber-50', fg: 'text-amber-600', format: (v) => `${v || 0}%` },
   { key: 'replyRate', label: 'Reply Rate', icon: Reply, bg: 'bg-rose-50', fg: 'text-rose-600', format: (v) => `${v || 0}%` },
+  { key: 'totalCampaigns', label: 'Campaign Counter', icon: Hash, bg: 'bg-violet-50', fg: 'text-violet-600', format: (v) => (v || 0).toLocaleString() },
+  { key: 'totalResent', label: 'Emails Resent', icon: RotateCw, bg: 'bg-teal-50', fg: 'text-teal-600', format: (v) => (v || 0).toLocaleString() },
 ];
 
 function titleCase(s) {
@@ -52,6 +54,22 @@ export default function EmailCampaign() {
   });
   const [addingLead, setAddingLead] = useState(false);
   const [leadError, setLeadError] = useState('');
+
+  // Multi-company selection for a campaign
+  const [showAddCompanies, setShowAddCompanies] = useState(null); // campaignId
+  const [companyQuery, setCompanyQuery] = useState('');
+  const [companyResults, setCompanyResults] = useState([]);
+  const [selectedCompanies, setSelectedCompanies] = useState({}); // uei/name -> company obj
+  const [companiesInUse, setCompaniesInUse] = useState([]); // [{companyKey, companyName, campaignId, campaignName}]
+  const [searchingCompanies, setSearchingCompanies] = useState(false);
+  const [addingCompanies, setAddingCompanies] = useState(false);
+  const [companiesError, setCompaniesError] = useState('');
+
+  // Per-campaign company breakdown (expand/collapse)
+  const [expandedCampaign, setExpandedCampaign] = useState(null);
+  const [campaignLeads, setCampaignLeads] = useState({}); // campaignId -> leads[]
+  const [loadingLeadsFor, setLoadingLeadsFor] = useState(null);
+  const [resendingLead, setResendingLead] = useState(null);
 
   const [reportsList, setReportsList] = useState([]);
   const [sendMode, setSendMode] = useState('bulk'); // 'bulk' | 'single'
@@ -254,6 +272,145 @@ export default function EmailCampaign() {
     }
   }
 
+  const normalizeCompanyKey = (name, uei) => {
+    if (uei) return `uei:${String(uei).trim().toLowerCase()}`;
+    return `name:${String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '')}`;
+  };
+
+  const loadCompaniesInUse = useCallback(async () => {
+    try {
+      const res = await api.getCompaniesInUse();
+      setCompaniesInUse(res?.inUse || []);
+    } catch (err) {
+      console.error('Failed to load companies-in-use list:', err);
+    }
+  }, []);
+
+  const openAddCompanies = async (campaignId) => {
+    setShowAddCompanies(campaignId);
+    setCompanyQuery('');
+    setCompanyResults([]);
+    setSelectedCompanies({});
+    setCompaniesError('');
+    await loadCompaniesInUse();
+  };
+
+  const searchCompanies = useCallback(async (q) => {
+    setSearchingCompanies(true);
+    try {
+      const res = await api.getCompanies({ query: q, limit: 25 });
+      setCompanyResults(res?.companies || []);
+    } catch (err) {
+      setCompaniesError(err.message || 'Could not search companies.');
+    } finally {
+      setSearchingCompanies(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (showAddCompanies === null) return;
+    const t = setTimeout(() => searchCompanies(companyQuery), 300);
+    return () => clearTimeout(t);
+  }, [companyQuery, showAddCompanies, searchCompanies]);
+
+  const conflictFor = (company) => {
+    const key = normalizeCompanyKey(company.name, company.uei);
+    return companiesInUse.find((u) => u.companyKey === key && u.campaignId !== showAddCompanies);
+  };
+
+  const toggleCompanySelection = (company) => {
+    const key = normalizeCompanyKey(company.name, company.uei);
+    if (conflictFor(company)) return; // already claimed by another campaign — block selection
+    setSelectedCompanies((prev) => {
+      const next = { ...prev };
+      if (next[key]) delete next[key];
+      else next[key] = company;
+      return next;
+    });
+  };
+
+  const handleAddCompanies = async () => {
+    const chosen = Object.values(selectedCompanies);
+    if (chosen.length === 0) {
+      setCompaniesError('Select at least one company.');
+      return;
+    }
+    setAddingCompanies(true);
+    setCompaniesError('');
+    try {
+      const { report } = await api.addCompaniesToCampaign(
+        showAddCompanies,
+        chosen.map((c) => ({
+          uei: c.uei || '',
+          companyName: c.name || '',
+          contactName: c.contact || '',
+          email: c.email || '',
+          title: '',
+          website: c.website || '',
+          linkedin: c.linkedin || '',
+        }))
+      );
+
+      if (report.conflicts && report.conflicts.length > 0) {
+        window.alert(
+          `${report.conflicts.length} compan${report.conflicts.length === 1 ? 'y is' : 'ies are'} already enrolled in another campaign and were skipped:\n\n` +
+          report.conflicts.map((c) => `• ${c.message}`).join('\n')
+        );
+      }
+      window.alert(
+        `Added ${report.added} compan${report.added === 1 ? 'y' : 'ies'} to the campaign` +
+        (report.duplicates ? ` (${report.duplicates} duplicates skipped)` : '') +
+        (report.invalidEmail ? ` (${report.invalidEmail} missing/invalid email skipped)` : '')
+      );
+
+      setShowAddCompanies(null);
+      setSelectedCompanies({});
+      await loadAll();
+      await loadCompaniesInUse();
+    } catch (err) {
+      setCompaniesError(err.message || 'Could not add companies to campaign.');
+    } finally {
+      setAddingCompanies(false);
+    }
+  };
+
+  const loadCampaignLeads = useCallback(async (campaignId) => {
+    setLoadingLeadsFor(campaignId);
+    try {
+      const res = await api.listLeads(campaignId);
+      setCampaignLeads((prev) => ({ ...prev, [campaignId]: res?.leads || [] }));
+    } catch (err) {
+      setActionError(err.message || 'Could not load company data for this campaign.');
+    } finally {
+      setLoadingLeadsFor(null);
+    }
+  }, []);
+
+  const toggleExpandCampaign = async (campaignId) => {
+    if (expandedCampaign === campaignId) {
+      setExpandedCampaign(null);
+      return;
+    }
+    setExpandedCampaign(campaignId);
+    if (!campaignLeads[campaignId]) {
+      await loadCampaignLeads(campaignId);
+    }
+  };
+
+  const handleResendLead = async (campaignId, leadId) => {
+    setResendingLead(leadId);
+    setActionError('');
+    try {
+      await api.resendLead(leadId);
+      await loadCampaignLeads(campaignId);
+      await loadAll();
+    } catch (err) {
+      setActionError(err.message || 'Could not resend to this lead.');
+    } finally {
+      setResendingLead(null);
+    }
+  };
+
   return (
     <div>
       <PageHeader
@@ -304,7 +461,7 @@ export default function EmailCampaign() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
         {SUMMARY_CARDS.map((s) => (
           <Card key={s.key}>
             <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${s.bg} ${s.fg}`}>
@@ -347,12 +504,15 @@ export default function EmailCampaign() {
         <table className="mt-3 w-full text-sm">
           <thead>
             <tr className="border-b border-slate-100 dark:border-navy-800 text-left text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">
+              <th className="px-5 py-3 font-semibold w-8"></th>
+              <th className="px-5 py-3 font-semibold">#</th>
               <th className="px-5 py-3 font-semibold">Campaign</th>
               <th className="px-5 py-3 font-semibold">Status</th>
               <th className="px-5 py-3 font-semibold">Sent</th>
               <th className="px-5 py-3 font-semibold">Opened</th>
               <th className="px-5 py-3 font-semibold">Clicked</th>
               <th className="px-5 py-3 font-semibold">Replied</th>
+              <th className="px-5 py-3 font-semibold">Resent</th>
               <th className="px-5 py-3 font-semibold">Created</th>
               <th className="px-5 py-3 font-semibold text-right">Actions</th>
             </tr>
@@ -360,61 +520,145 @@ export default function EmailCampaign() {
           <tbody>
             {!loading && campaigns.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-5 py-8 text-center text-sm text-slate-400 dark:text-slate-500">
+                <td colSpan={10} className="px-5 py-8 text-center text-sm text-slate-400 dark:text-slate-500">
                   No campaigns yet — click "New Campaign" to create your first one.
                 </td>
               </tr>
             )}
-            {campaigns.map((c) => (
-              <tr key={c.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 dark:border-navy-800/40 dark:hover:bg-navy-800/40">
-                <td className="px-5 py-3.5 font-semibold text-navy-900 dark:text-white">{c.name}</td>
-                <td className="px-5 py-3.5"><StatusBadge status={titleCase(c.status)} /></td>
-                <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{(c.stats?.totalSent || 0).toLocaleString()}</td>
-                <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{(c.stats?.totalOpened || 0).toLocaleString()}</td>
-                <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{(c.stats?.totalClicked || 0).toLocaleString()}</td>
-                <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{(c.stats?.totalReplied || 0).toLocaleString()}</td>
-                <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{c.createdAt ? new Date(c.createdAt).toLocaleDateString() : ''}</td>
-                <td className="px-5 py-3.5">
-                  <div className="flex items-center justify-end gap-1">
+            {campaigns.map((c) => {
+              const isExpanded = expandedCampaign === c.id;
+              const leads = campaignLeads[c.id] || [];
+              return (
+              <Fragment key={c.id}>
+                <tr className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 dark:border-navy-800/40 dark:hover:bg-navy-800/40">
+                  <td className="px-5 py-3.5">
                     <button
-                      title="Add lead manually"
-                      onClick={() => setShowAddLead(c.id)}
-                      className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-navy-900 dark:hover:bg-navy-800 dark:hover:text-white"
+                      title="Show companies in this campaign"
+                      onClick={() => toggleExpandCampaign(c.id)}
+                      className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-navy-900 dark:hover:bg-navy-800 dark:hover:text-white"
                     >
-                      <Plus size={15} />
+                      {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                     </button>
-                    <label
-                      title="Import leads from CSV"
-                      className="cursor-pointer rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-navy-900 dark:hover:bg-navy-800 dark:hover:text-white"
-                    >
-                      <Upload size={15} className={importingFor === c.id ? 'animate-pulse' : ''} />
-                      <input
-                        type="file"
-                        accept=".csv"
-                        className="hidden"
-                        onChange={(e) => e.target.files?.[0] && handleCsvUpload(c.id, e.target.files[0])}
-                      />
-                    </label>
-                    {(c.status === 'draft' || c.status === 'paused') && (
-                      <button title="Launch / resume sending" onClick={() => handleAction(c.status === 'draft' ? 'launch' : 'resume', c.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-emerald-600 dark:hover:bg-navy-800">
-                        {c.status === 'draft' ? <Rocket size={15} /> : <Play size={15} />}
+                  </td>
+                  <td className="px-5 py-3.5 text-slate-400 dark:text-slate-500 font-mono text-xs">{c.campaignNumber ? `#${c.campaignNumber}` : '—'}</td>
+                  <td className="px-5 py-3.5 font-semibold text-navy-900 dark:text-white">{c.name}</td>
+                  <td className="px-5 py-3.5"><StatusBadge status={titleCase(c.status)} /></td>
+                  <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{(c.stats?.totalSent || 0).toLocaleString()}</td>
+                  <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{(c.stats?.totalOpened || 0).toLocaleString()}</td>
+                  <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{(c.stats?.totalClicked || 0).toLocaleString()}</td>
+                  <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{(c.stats?.totalReplied || 0).toLocaleString()}</td>
+                  <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{(c.stats?.totalResent || 0).toLocaleString()}</td>
+                  <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{c.createdAt ? new Date(c.createdAt).toLocaleDateString() : ''}</td>
+                  <td className="px-5 py-3.5">
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        title="Select companies for this campaign"
+                        onClick={() => openAddCompanies(c.id)}
+                        className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-brand-600 dark:hover:bg-navy-800"
+                      >
+                        <Building2 size={15} />
                       </button>
-                    )}
-                    {c.status === 'running' && (
-                      <button title="Pause" onClick={() => handleAction('pause', c.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-amber-600 dark:hover:bg-navy-800">
-                        <Pause size={15} />
+                      <button
+                        title="Add lead manually"
+                        onClick={() => setShowAddLead(c.id)}
+                        className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-navy-900 dark:hover:bg-navy-800 dark:hover:text-white"
+                      >
+                        <Plus size={15} />
                       </button>
-                    )}
-                    <button title="Duplicate" onClick={() => handleAction('duplicate', c.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-navy-900 dark:hover:bg-navy-800 dark:hover:text-white">
-                      <Copy size={15} />
-                    </button>
-                    <button title="Delete" onClick={() => handleAction('delete', c.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-rose-600 dark:hover:bg-navy-800">
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                      <label
+                        title="Import leads from CSV"
+                        className="cursor-pointer rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-navy-900 dark:hover:bg-navy-800 dark:hover:text-white"
+                      >
+                        <Upload size={15} className={importingFor === c.id ? 'animate-pulse' : ''} />
+                        <input
+                          type="file"
+                          accept=".csv"
+                          className="hidden"
+                          onChange={(e) => e.target.files?.[0] && handleCsvUpload(c.id, e.target.files[0])}
+                        />
+                      </label>
+                      {(c.status === 'draft' || c.status === 'paused') && (
+                        <button title="Launch / resume sending" onClick={() => handleAction(c.status === 'draft' ? 'launch' : 'resume', c.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-emerald-600 dark:hover:bg-navy-800">
+                          {c.status === 'draft' ? <Rocket size={15} /> : <Play size={15} />}
+                        </button>
+                      )}
+                      {c.status === 'running' && (
+                        <button title="Pause" onClick={() => handleAction('pause', c.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-amber-600 dark:hover:bg-navy-800">
+                          <Pause size={15} />
+                        </button>
+                      )}
+                      <button title="Duplicate" onClick={() => handleAction('duplicate', c.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-navy-900 dark:hover:bg-navy-800 dark:hover:text-white">
+                        <Copy size={15} />
+                      </button>
+                      <button title="Delete" onClick={() => handleAction('delete', c.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-rose-600 dark:hover:bg-navy-800">
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                {isExpanded && (
+                  <tr className="bg-slate-50/60 dark:bg-navy-900/40">
+                    <td colSpan={10} className="px-5 py-4">
+                      <div className="rounded-xl border border-slate-100 bg-white dark:border-navy-700 dark:bg-navy-800 overflow-hidden">
+                        <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100 dark:border-navy-700">
+                          <p className="text-xs font-bold text-navy-900 dark:text-white">Companies in "{c.name}"</p>
+                          <p className="text-[11px] text-slate-400">{leads.length} compan{leads.length === 1 ? 'y' : 'ies'}</p>
+                        </div>
+                        {loadingLeadsFor === c.id ? (
+                          <div className="px-4 py-6 text-center text-xs text-slate-400">Loading company data…</div>
+                        ) : leads.length === 0 ? (
+                          <div className="px-4 py-6 text-center text-xs text-slate-400">No companies added yet. Use the building icon above to select companies.</div>
+                        ) : (
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="text-left text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-navy-700">
+                                <th className="px-4 py-2 font-semibold">Company</th>
+                                <th className="px-4 py-2 font-semibold">Contact</th>
+                                <th className="px-4 py-2 font-semibold">Email</th>
+                                <th className="px-4 py-2 font-semibold">Status</th>
+                                <th className="px-4 py-2 font-semibold">Sent</th>
+                                <th className="px-4 py-2 font-semibold">Opened</th>
+                                <th className="px-4 py-2 font-semibold">Clicked</th>
+                                <th className="px-4 py-2 font-semibold">Replied</th>
+                                <th className="px-4 py-2 font-semibold">Resends</th>
+                                <th className="px-4 py-2 font-semibold text-right">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {leads.map((l) => (
+                                <tr key={l.id} className="border-b border-slate-50 last:border-0 dark:border-navy-800/40">
+                                  <td className="px-4 py-2 font-semibold text-navy-900 dark:text-white">{l.companyName || '—'}</td>
+                                  <td className="px-4 py-2 text-slate-500 dark:text-slate-400">{l.contactName || '—'}</td>
+                                  <td className="px-4 py-2 text-slate-500 dark:text-slate-400">{l.email}</td>
+                                  <td className="px-4 py-2"><StatusBadge status={titleCase(l.status)} /></td>
+                                  <td className="px-4 py-2 text-slate-500 dark:text-slate-400">{l.sentAt ? <Check size={13} className="text-emerald-500" /> : '—'}</td>
+                                  <td className="px-4 py-2 text-slate-500 dark:text-slate-400">{l.openedAt ? <Check size={13} className="text-emerald-500" /> : '—'}</td>
+                                  <td className="px-4 py-2 text-slate-500 dark:text-slate-400">{l.clickedAt ? <Check size={13} className="text-emerald-500" /> : '—'}</td>
+                                  <td className="px-4 py-2 text-slate-500 dark:text-slate-400">{l.repliedAt ? <Check size={13} className="text-emerald-500" /> : '—'}</td>
+                                  <td className="px-4 py-2 text-slate-500 dark:text-slate-400">{l.resendCount || 0}</td>
+                                  <td className="px-4 py-2 text-right">
+                                    <button
+                                      title="Resend email to this company"
+                                      onClick={() => handleResendLead(c.id, l.id)}
+                                      disabled={resendingLead === l.id}
+                                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-500 hover:bg-slate-50 hover:text-brand-600 disabled:opacity-50 dark:border-navy-700 dark:text-slate-400 dark:hover:bg-navy-900"
+                                    >
+                                      <RotateCw size={11} className={resendingLead === l.id ? 'animate-spin' : ''} />
+                                      Resend
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+              );
+            })}
           </tbody>
         </table>
       </Card>
@@ -794,6 +1038,111 @@ export default function EmailCampaign() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showAddCompanies !== null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/60 p-4 backdrop-blur-xs"
+          onClick={() => !addingCompanies && setShowAddCompanies(null)}
+        >
+          <div
+            className="w-full max-w-2xl rounded-2xl bg-white dark:bg-navy-800 shadow-soft overflow-hidden border border-slate-100 dark:border-navy-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-navy-700 p-5">
+              <div>
+                <h3 className="text-sm font-bold text-navy-900 dark:text-white">Select Companies</h3>
+                <p className="text-xs text-slate-400 mt-0.5">Pick one or more companies to enroll in this campaign. A company already running in another campaign can't be selected again.</p>
+              </div>
+              <button onClick={() => setShowAddCompanies(null)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-navy-900">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3">
+              {companiesError && (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
+                  {companiesError}
+                </div>
+              )}
+
+              <div className="relative">
+                <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={companyQuery}
+                  onChange={(e) => setCompanyQuery(e.target.value)}
+                  placeholder="Search companies by name, UEI, or contact…"
+                  className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                />
+              </div>
+
+              <div className="max-h-80 overflow-y-auto rounded-xl border border-slate-100 dark:border-navy-700">
+                {searchingCompanies ? (
+                  <div className="px-4 py-6 text-center text-xs text-slate-400">Searching…</div>
+                ) : companyResults.length === 0 ? (
+                  <div className="px-4 py-6 text-center text-xs text-slate-400">No companies found.</div>
+                ) : (
+                  companyResults.map((company) => {
+                    const key = normalizeCompanyKey(company.name, company.uei);
+                    const conflict = conflictFor(company);
+                    const selected = !!selectedCompanies[key];
+                    const noEmail = !company.email;
+                    return (
+                      <button
+                        type="button"
+                        key={company.uei || key}
+                        onClick={() => toggleCompanySelection(company)}
+                        disabled={!!conflict || noEmail}
+                        className={`flex w-full items-center justify-between gap-3 border-b border-slate-50 px-4 py-2.5 text-left last:border-0 dark:border-navy-800/40 ${
+                          conflict || noEmail
+                            ? 'cursor-not-allowed opacity-50'
+                            : selected
+                              ? 'bg-brand-50 dark:bg-brand-500/10'
+                              : 'hover:bg-slate-50 dark:hover:bg-navy-900/60'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`flex h-5 w-5 items-center justify-center rounded-md border ${selected ? 'border-brand-500 bg-brand-500' : 'border-slate-300 dark:border-navy-600'}`}>
+                            {selected && <Check size={12} className="text-white" />}
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold text-navy-900 dark:text-white">{company.name}</p>
+                            <p className="text-[11px] text-slate-400">{company.email || 'No email on file'} {company.contact ? `· ${company.contact}` : ''}</p>
+                          </div>
+                        </div>
+                        {conflict && (
+                          <span className="flex items-center gap-1 rounded-full bg-rose-50 px-2 py-1 text-[10px] font-semibold text-rose-600 dark:bg-rose-950/30 dark:text-rose-400">
+                            <AlertTriangle size={11} /> In "{conflict.campaignName}"
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+
+              <p className="text-[11px] text-slate-400">{Object.keys(selectedCompanies).length} selected</p>
+
+              <div className="flex justify-end gap-2 border-t border-slate-100 dark:border-navy-700 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowAddCompanies(null)}
+                  className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-navy-900 hover:bg-slate-50 dark:border-navy-700 dark:bg-navy-800 dark:text-white dark:hover:bg-navy-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddCompanies}
+                  disabled={addingCompanies || Object.keys(selectedCompanies).length === 0}
+                  className="rounded-lg bg-brand-500 px-4 py-2 text-xs font-bold text-white shadow-soft hover:bg-brand-600 disabled:opacity-60"
+                >
+                  {addingCompanies ? 'Adding…' : `Add ${Object.keys(selectedCompanies).length || ''} to Campaign`}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

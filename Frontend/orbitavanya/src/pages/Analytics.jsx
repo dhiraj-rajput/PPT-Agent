@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ResponsiveContainer, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, Legend } from 'recharts';
-import { DollarSign, FolderOpen, Building2, Target, Loader2, RefreshCw } from 'lucide-react';
-import { PageHeader, Card } from '../components/ui/Common.jsx';
+import { FolderOpen, Building2, Target, Users2, Loader2, RefreshCw, Clock, Star, TrendingUp } from 'lucide-react';
+import { PageHeader, Card, StatusBadge } from '../components/ui/Common.jsx';
 import { api } from '../lib/api.jsx';
 
 export default function Analytics() {
@@ -51,18 +51,28 @@ export default function Analytics() {
     );
   }
 
-  const { stats, matchDistribution, emailPerformance, pipelineStages } = data;
+  const {
+    stats,
+    matchDistribution,
+    emailPerformance,
+    pipelineStages,
+    tendersClosingSoon = [],
+    recentCompanies = [],
+    recentlyMatchedTenders = [],
+  } = data;
 
-  const revVal = stats.find(s => s.label === "Revenue Pipeline")?.value || '$0.00M';
   const tendersVal = stats.find(s => s.label === "Active Tenders")?.value || '0';
   const companiesVal = stats.find(s => s.label === "Total Companies")?.value || '0';
   const highMatchVal = stats.find(s => s.label === "High Match")?.value || '0';
+  const contactedVal = stats.find(s => s.label === "Companies Contacted")?.value
+    || stats.find(s => s.label === "Emails Sent")?.value
+    || '0';
 
   const kpis = [
-    { label: 'Total Revenue Pipeline', value: revVal, icon: DollarSign, bg: 'bg-emerald-50', fg: 'text-emerald-600' },
     { label: 'Active Tenders Tracked', value: tendersVal, icon: FolderOpen, bg: 'bg-brand-50', fg: 'text-brand-600' },
     { label: 'Prospect Companies Registered', value: companiesVal, icon: Building2, bg: 'bg-amber-50', fg: 'text-amber-600' },
-    { label: 'Qualified High Match score', value: highMatchVal, icon: Target, bg: 'bg-violet-50', fg: 'text-violet-600' },
+    { label: 'Qualified High Match Score', value: highMatchVal, icon: Target, bg: 'bg-violet-50', fg: 'text-violet-600' },
+    { label: 'Companies Contacted', value: contactedVal, icon: Users2, bg: 'bg-cyan-50', fg: 'text-cyan-600' },
   ];
 
   // Map pipeline stages for the conversion funnel
@@ -73,7 +83,20 @@ export default function Analytics() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Database Analytics" subtitle="Real-time company metrics, outbound conversions, and match analytics" />
+      <PageHeader
+        title="Database Analytics"
+        subtitle="Real-time company metrics, outbound conversions, and match analytics"
+        action={
+          <button
+            onClick={fetchAnalytics}
+            disabled={loading}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-navy-900 dark:border-navy-700 dark:bg-navy-800 dark:text-slate-400 dark:hover:bg-navy-700"
+            title="Refresh data"
+          >
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+          </button>
+        }
+      />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -147,7 +170,7 @@ export default function Analytics() {
 
         {/* Pipeline Stage Funnel */}
         <Card className="lg:col-span-2">
-          <h3 className="text-sm font-bold text-navy-900 dark:text-white">Pipeline stage Conversion</h3>
+          <h3 className="text-sm font-bold text-navy-900 dark:text-white">Pipeline Stage Conversion</h3>
           <div className="mt-3 h-64">
             {funnelData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
@@ -162,6 +185,81 @@ export default function Analytics() {
             ) : (
               <div className="flex h-full items-center justify-center text-xs text-slate-400">No stage metrics recorded.</div>
             )}
+          </div>
+        </Card>
+      </div>
+
+      {/* Data-centric detail tables */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+        {/* Tenders closing soon */}
+        <Card className="!p-0">
+          <div className="flex items-center gap-2 p-5 pb-3">
+            <Clock size={15} className="text-amber-500" />
+            <h3 className="text-sm font-bold text-navy-900 dark:text-white">Tenders Closing Soon</h3>
+          </div>
+          <div className="divide-y divide-slate-50 dark:divide-navy-800/40">
+            {tendersClosingSoon.length === 0 && (
+              <p className="px-5 pb-5 text-xs text-slate-400">No tenders closing soon.</p>
+            )}
+            {tendersClosingSoon.map((t) => (
+              <div key={t.id} className="px-5 py-3">
+                <p className="text-xs font-semibold text-navy-900 dark:text-white line-clamp-1">{t.title || 'Untitled tender'}</p>
+                <p className="mt-0.5 text-[11px] text-slate-400">{t.agency}</p>
+                <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                  <span>{t.value}</span>
+                  <span>Closes {t.closingDate || '—'}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        {/* Recently added companies */}
+        <Card className="!p-0">
+          <div className="flex items-center gap-2 p-5 pb-3">
+            <Building2 size={15} className="text-sky-500" />
+            <h3 className="text-sm font-bold text-navy-900 dark:text-white">Recently Added Companies</h3>
+          </div>
+          <div className="divide-y divide-slate-50 dark:divide-navy-800/40">
+            {recentCompanies.length === 0 && (
+              <p className="px-5 pb-5 text-xs text-slate-400">No companies recorded yet.</p>
+            )}
+            {recentCompanies.map((c) => (
+              <div key={c.id} className="flex items-center justify-between px-5 py-3">
+                <div>
+                  <p className="text-xs font-semibold text-navy-900 dark:text-white">{c.name || 'Unnamed company'}</p>
+                  <p className="mt-0.5 text-[11px] text-slate-400">{c.industry}</p>
+                </div>
+                <span className="rounded-full bg-violet-50 px-2 py-1 text-[10px] font-bold text-violet-600 dark:bg-violet-950/30 dark:text-violet-400">
+                  {c.matchScore || 0}% match
+                </span>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        {/* Recently matched tenders */}
+        <Card className="!p-0">
+          <div className="flex items-center gap-2 p-5 pb-3">
+            <Star size={15} className="text-emerald-500" />
+            <h3 className="text-sm font-bold text-navy-900 dark:text-white">Top Matched Tenders</h3>
+          </div>
+          <div className="divide-y divide-slate-50 dark:divide-navy-800/40">
+            {recentlyMatchedTenders.length === 0 && (
+              <p className="px-5 pb-5 text-xs text-slate-400">No matched tenders yet.</p>
+            )}
+            {recentlyMatchedTenders.map((t) => (
+              <div key={t.id} className="px-5 py-3">
+                <p className="text-xs font-semibold text-navy-900 dark:text-white line-clamp-1">{t.title || 'Untitled tender'}</p>
+                <p className="mt-0.5 text-[11px] text-slate-400">{t.agency}</p>
+                <div className="mt-1.5 flex items-center justify-between text-[11px]">
+                  <span className="inline-flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400">
+                    <TrendingUp size={11} /> {t.match || 0}% match
+                  </span>
+                  <span className="text-slate-500 dark:text-slate-400">Closes {t.closingDate || '—'}</span>
+                </div>
+              </div>
+            ))}
           </div>
         </Card>
       </div>

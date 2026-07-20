@@ -39,6 +39,7 @@ class CampaignUpdateBody(BaseModel):
 
 
 def _format_campaign(c: dict) -> dict:
+    stats = c.get("stats", {}) or {}
     return {
         "id": str(c["_id"]),
         "name": c.get("name", ""),
@@ -53,14 +54,16 @@ def _format_campaign(c: dict) -> dict:
         "scheduleStart": c.get("scheduleStart").isoformat() if c.get("scheduleStart") else None,
         "attachmentPath": c.get("attachmentPath", ""),
         "attachmentFilename": c.get("attachmentFilename", ""),
-        "stats": c.get("stats", {
-            "totalSent": 0,
-            "totalOpened": 0,
-            "totalClicked": 0,
-            "totalReplied": 0,
-            "totalBounced": 0,
-            "totalUnsubscribed": 0
-        }),
+        "campaignNumber": c.get("campaignNumber", 0),
+        "stats": {
+            "totalSent": stats.get("totalSent", 0),
+            "totalOpened": stats.get("totalOpened", 0),
+            "totalClicked": stats.get("totalClicked", 0),
+            "totalReplied": stats.get("totalReplied", 0),
+            "totalBounced": stats.get("totalBounced", 0),
+            "totalUnsubscribed": stats.get("totalUnsubscribed", 0),
+            "totalResent": stats.get("totalResent", 0),
+        },
         "createdAt": c.get("createdAt").isoformat() if c.get("createdAt") else None,
         "updatedAt": c.get("updatedAt").isoformat() if c.get("updatedAt") else None,
     }
@@ -142,6 +145,17 @@ def create_campaign(
         except Exception:
             raise HTTPException(status_code=400, detail="Invalid scheduleStart timestamp format.")
 
+    # Atomically assign the next campaign number so the UI can show a
+    # running "Campaign #N" counter.
+    counters_col = get_collection("counters")
+    counter_doc = counters_col.find_one_and_update(
+        {"_id": f"campaign_seq:{user_id}"},
+        {"$inc": {"seq": 1}},
+        upsert=True,
+        return_document=True,
+    )
+    campaign_number = counter_doc.get("seq", 1) if counter_doc else 1
+
     doc = {
         "name": body.name,
         "description": body.description or "",
@@ -155,13 +169,15 @@ def create_campaign(
         "scheduleStart": sched_start,
         "attachmentPath": body.attachmentPath or "",
         "attachmentFilename": body.attachmentFilename or "",
+        "campaignNumber": campaign_number,
         "stats": {
             "totalSent": 0,
             "totalOpened": 0,
             "totalClicked": 0,
             "totalReplied": 0,
             "totalBounced": 0,
-            "totalUnsubscribed": 0
+            "totalUnsubscribed": 0,
+            "totalResent": 0
         },
         "createdBy": user_id,
         "createdAt": datetime.now(timezone.utc),
@@ -329,6 +345,15 @@ def duplicate_campaign(id: str, current_user: dict = Depends(get_current_user)):
     if not source:
         raise HTTPException(status_code=404, detail="Campaign not found.")
 
+    counters_col = get_collection("counters")
+    counter_doc = counters_col.find_one_and_update(
+        {"_id": f"campaign_seq:{current_user['_id']}"},
+        {"$inc": {"seq": 1}},
+        upsert=True,
+        return_document=True,
+    )
+    campaign_number = counter_doc.get("seq", 1) if counter_doc else 1
+
     doc = {
         "name": f"{source.get('name')} (copy)",
         "description": source.get("description", ""),
@@ -340,13 +365,15 @@ def duplicate_campaign(id: str, current_user: dict = Depends(get_current_user)):
         "dailyLimit": source.get("dailyLimit", 200),
         "timezone": source.get("timezone", "America/Chicago"),
         "scheduleStart": None,
+        "campaignNumber": campaign_number,
         "stats": {
             "totalSent": 0,
             "totalOpened": 0,
             "totalClicked": 0,
             "totalReplied": 0,
             "totalBounced": 0,
-            "totalUnsubscribed": 0
+            "totalUnsubscribed": 0,
+            "totalResent": 0
         },
         "createdBy": current_user["_id"],
         "createdAt": datetime.now(timezone.utc),

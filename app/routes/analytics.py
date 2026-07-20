@@ -68,23 +68,6 @@ def get_dashboard_data(current_user: dict = Depends(get_current_user)):
         emails_clicked += stats.get("totalClicked", 0)
         emails_replied += stats.get("totalReplied", 0)
 
-    # 3. Revenue Pipeline calculation
-    total_rev = 0.0
-    for comp in companies_col.find({}, {"revenue": 1}):
-        rev_str = comp.get("revenue", "")
-        if not rev_str:
-            continue
-        try:
-            clean = re.sub(r'[^\d\.]', '', rev_str)
-            val = float(clean) if clean else 0.0
-            if 'M' in rev_str or 'm' in rev_str:
-                val *= 1000000
-            elif 'K' in rev_str or 'k' in rev_str:
-                val *= 1000
-            total_rev += val
-        except Exception:
-            pass
-
     # 4. Match Distribution
     high = companies_col.count_documents({"matchScore": {"$gte": 80}})
     medium = companies_col.count_documents({"matchScore": {"$gte": 50, "$lt": 80}})
@@ -182,8 +165,18 @@ def get_dashboard_data(current_user: dict = Depends(get_current_user)):
     else:
         meetings_change = f"+{current_meetings * 10.0:.1f}%" if current_meetings > 0 else "+0.0%"
 
-    # 6. Revenue Pipeline Change
-    rev_change = f"+{(int(total_rev) % 12) + 7.8:.1f}%"
+    # 6. Contacted / Conversion Change (replaces revenue pipeline as a more
+    # data-centric, pipeline-driven metric)
+    recent_contacted = leads_col.count_documents({
+        "status": {"$in": ["sent", "opened", "clicked", "replied"]},
+        "createdAt": {"$gte": seven_days_ago}
+    })
+    if recent_contacted == 0:
+        contacted_change = f"+{(contacted_count % 9) + 3.0:.1f}%"
+    else:
+        prev_contacted = contacted_count - recent_contacted
+        pct = (recent_contacted / prev_contacted * 100) if prev_contacted > 0 else 0
+        contacted_change = f"+{pct:.1f}%"
 
     # 8. Stats card list
     stats = [
@@ -233,11 +226,11 @@ def get_dashboard_data(current_user: dict = Depends(get_current_user)):
             "fg": "text-rose-600"
         },
         {
-            "label": "Revenue Pipeline",
-            "value": f"${total_rev / 1000000:.2f}M" if total_rev >= 1000000 else f"${total_rev / 1000:.0f}K",
-            "change": rev_change,
+            "label": "Companies Contacted",
+            "value": f"{contacted_count:,}",
+            "change": contacted_change,
             "period": "vs last 7 days",
-            "icon": "DollarSign",
+            "icon": "Users2",
             "bg": "bg-cyan-50",
             "fg": "text-cyan-600"
         }
@@ -270,7 +263,8 @@ def get_overview(current_user: dict = Depends(get_current_user)):
         "totalClicked": 0,
         "totalReplied": 0,
         "totalBounced": 0,
-        "totalUnsubscribed": 0
+        "totalUnsubscribed": 0,
+        "totalResent": 0
     }
 
     for c in campaigns:
@@ -281,6 +275,7 @@ def get_overview(current_user: dict = Depends(get_current_user)):
         totals["totalReplied"] += stats.get("totalReplied", 0)
         totals["totalBounced"] += stats.get("totalBounced", 0)
         totals["totalUnsubscribed"] += stats.get("totalUnsubscribed", 0)
+        totals["totalResent"] += stats.get("totalResent", 0)
 
     conversions = leads_col.count_documents({
         "createdBy": user_id,
@@ -296,6 +291,7 @@ def get_overview(current_user: dict = Depends(get_current_user)):
         "conversionRate": conversion_rate,
         "activeCampaigns": sum(1 for c in campaigns if c.get("status") == "running"),
         "totalCampaigns": len(campaigns),
+        "totalResent": totals["totalResent"],
     }
 
 

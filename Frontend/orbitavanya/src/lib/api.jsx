@@ -387,6 +387,15 @@ export const api = {
   async importLeadsApi(campaignId, leads) {
     return post('/api/leads/import/api', { campaignId, leads });
   },
+  async addCompaniesToCampaign(campaignId, companies) {
+    return post('/api/leads/import/companies', { campaignId, companies });
+  },
+  async getCompaniesInUse() {
+    return get('/api/leads/companies-in-use');
+  },
+  async resendLead(id) {
+    return post(`/api/leads/${id}/resend`);
+  },
   async deleteLead(id) {
     return del(`/api/leads/${id}`);
   },

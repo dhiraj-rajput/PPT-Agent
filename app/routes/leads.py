@@ -62,10 +62,60 @@ class BulkImportBody(BaseModel):
     leads: List[BulkLeadItem]
 
 
+class CompanySelectItem(BaseModel):
+    uei: Optional[str] = ""
+    companyName: str
+    contactName: Optional[str] = ""
+    email: str
+    title: Optional[str] = ""
+    website: Optional[str] = ""
+    linkedin: Optional[str] = ""
+
+
+class BulkCompanyImportBody(BaseModel):
+    campaignId: str
+    companies: List[CompanySelectItem]
+
+
 def _assert_campaign_ownership(campaign_id: ObjectId, user_id: ObjectId) -> bool:
     campaigns_col = get_collection("campaigns")
     campaign = campaigns_col.find_one({"_id": campaign_id, "createdBy": user_id})
     return bool(campaign)
+
+
+def _normalize_company_key(name: str, uei: str = "") -> str:
+    """Normalize a company identifier so the same company can be matched
+    consistently across campaigns, regardless of casing/whitespace."""
+    if uei:
+        return f"uei:{str(uei).strip().lower()}"
+    return f"name:{re.sub(r'[^a-z0-9]+', '', str(name or '').lower())}"
+
+
+def _find_company_conflict(company_key: str, user_id: ObjectId, exclude_campaign_id: Optional[ObjectId] = None):
+    """Check whether a company (by normalized key) is already enrolled as a
+    lead in ANY other campaign owned by this user. Returns the conflicting
+    campaign document if found, else None."""
+    if not company_key:
+        return None
+
+    leads_col = get_collection("leads")
+    campaigns_col = get_collection("campaigns")
+
+    query = {"createdBy": user_id}
+    if exclude_campaign_id is not None:
+        query["_id"] = {"$ne": exclude_campaign_id}
+    other_campaign_ids = [c["_id"] for c in campaigns_col.find(query, {"_id": 1})]
+    if not other_campaign_ids:
+        return None
+
+    existing_lead = leads_col.find_one({
+        "campaignId": {"$in": other_campaign_ids},
+        "companyKey": company_key,
+    })
+    if not existing_lead:
+        return None
+
+    return campaigns_col.find_one({"_id": existing_lead["campaignId"]})
 
 
 def _format_lead(l: dict) -> dict:
@@ -82,6 +132,7 @@ def _format_lead(l: dict) -> dict:
         "score": l.get("score", 0),
         "grade": l.get("grade", "cold"),
         "sendAttempts": l.get("sendAttempts", 0),
+        "resendCount": l.get("resendCount", 0),
         "lastSendError": l.get("lastSendError", ""),
         "sentAt": l.get("sentAt").isoformat() if l.get("sentAt") else None,
         "openedAt": l.get("openedAt").isoformat() if l.get("openedAt") else None,
@@ -144,9 +195,21 @@ def create_lead(
     if leads_col.find_one({"campaignId": camp_oid, "email": normalized}):
         raise HTTPException(status_code=409, detail="This email is already a lead in this campaign.")
 
+    # Cross-campaign guard: the same company should not be enrolled in more
+    # than one campaign at a time.
+    company_key = _normalize_company_key(body.companyName, "") if (body.companyName or "").strip() else ""
+    if company_key:
+        conflict = _find_company_conflict(company_key, current_user["_id"], exclude_campaign_id=camp_oid)
+        if conflict:
+            raise HTTPException(
+                status_code=409,
+                detail=f"\"{body.companyName}\" is already enrolled in campaign \"{conflict.get('name', 'another campaign')}\". A company can only be part of one campaign at a time."
+            )
+
     doc = {
         "campaignId": camp_oid,
         "companyName": body.companyName or "",
+        "companyKey": company_key,
         "contactName": body.contactName or "",
         "email": normalized,
         "title": body.title or "",
@@ -156,6 +219,7 @@ def create_lead(
         "score": 0,
         "grade": "cold",
         "sendAttempts": 0,
+        "resendCount": 0,
         "lastSendError": "",
         "sentAt": None,
         "openedAt": None,
@@ -331,6 +395,193 @@ def import_leads_api(
     report["imported"] = len(to_insert)
 
     return {"report": report}
+
+
+@router.get("/companies-in-use")
+def get_companies_in_use(current_user: dict = Depends(get_current_user)):
+    """Return every companyKey already enrolled in one of the user's
+    campaigns, mapped to that campaign, so the UI can warn before a
+    duplicate is attempted."""
+    campaigns_col = get_collection("campaigns")
+    leads_col = get_collection("leads")
+
+    campaign_ids = [c["_id"] for c in campaigns_col.find({"createdBy": current_user["_id"]}, {"_id": 1})]
+    if not campaign_ids:
+        return {"inUse": []}
+
+    campaign_names = {c["_id"]: c.get("name", "") for c in campaigns_col.find({"_id": {"$in": campaign_ids}}, {"name": 1})}
+
+    rows = leads_col.find(
+        {"campaignId": {"$in": campaign_ids}, "companyKey": {"$ne": ""}},
+        {"companyKey": 1, "companyName": 1, "campaignId": 1}
+    )
+
+    in_use = []
+    seen = set()
+    for r in rows:
+        key = r.get("companyKey")
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        in_use.append({
+            "companyKey": key,
+            "companyName": r.get("companyName", ""),
+            "campaignId": str(r["campaignId"]),
+            "campaignName": campaign_names.get(r["campaignId"], ""),
+        })
+
+    return {"inUse": in_use}
+
+
+@router.post("/import/companies")
+def import_leads_from_companies(
+    body: BulkCompanyImportBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Add multiple companies (selected from the company database) as leads
+    to a single campaign in one go. Any company already enrolled in another
+    campaign owned by this user is rejected with an alert instead of being
+    silently duplicated."""
+    try:
+        camp_oid = ObjectId(body.campaignId)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid campaign ID.")
+
+    if not _assert_campaign_ownership(camp_oid, current_user["_id"]):
+        raise HTTPException(status_code=404, detail="Campaign not found.")
+
+    leads_col = get_collection("leads")
+    suppressions_col = get_collection("suppressions")
+
+    existing_emails = set(l["email"] for l in leads_col.find({"campaignId": camp_oid}, {"email": 1}))
+    suppressed_emails = set(s["email"] for s in suppressions_col.find({}, {"email": 1}))
+
+    report = {
+        "totalSelected": len(body.companies),
+        "added": 0,
+        "duplicates": 0,
+        "invalidEmail": 0,
+        "suppressed": 0,
+        "conflicts": [],  # companies already claimed by another campaign
+    }
+    to_insert = []
+    used_keys_this_batch = set()
+
+    for company in body.companies:
+        email = normalize_email(company.email)
+        if not is_valid_email(email) or not is_plausible_domain(extract_domain(email)):
+            report["invalidEmail"] += 1
+            continue
+        if email in existing_emails:
+            report["duplicates"] += 1
+            continue
+        if email in suppressed_emails:
+            report["suppressed"] += 1
+            continue
+
+        company_key = _normalize_company_key(company.companyName, company.uei)
+
+        if company_key in used_keys_this_batch:
+            report["duplicates"] += 1
+            continue
+
+        conflict = _find_company_conflict(company_key, current_user["_id"], exclude_campaign_id=camp_oid)
+        if conflict:
+            report["conflicts"].append({
+                "companyName": company.companyName,
+                "email": email,
+                "conflictCampaignId": str(conflict["_id"]),
+                "conflictCampaignName": conflict.get("name", "another campaign"),
+                "message": f"\"{company.companyName}\" is already enrolled in campaign \"{conflict.get('name', 'another campaign')}\". A company can only be part of one campaign at a time."
+            })
+            continue
+
+        existing_emails.add(email)
+        used_keys_this_batch.add(company_key)
+
+        to_insert.append({
+            "campaignId": camp_oid,
+            "companyName": company.companyName or "",
+            "companyKey": company_key,
+            "companyUei": company.uei or "",
+            "contactName": company.contactName or "",
+            "email": email,
+            "title": company.title or "",
+            "website": company.website or "",
+            "linkedin": company.linkedin or "",
+            "status": "pending",
+            "score": 0,
+            "grade": "cold",
+            "sendAttempts": 0,
+            "resendCount": 0,
+            "lastSendError": "",
+            "sentAt": None,
+            "openedAt": None,
+            "clickedAt": None,
+            "repliedAt": None,
+            "bouncedAt": None,
+            "unsubscribedAt": None,
+            "replyPreview": "",
+            "createdBy": current_user["_id"],
+            "createdAt": datetime.now(timezone.utc),
+            "updatedAt": datetime.now(timezone.utc),
+        })
+
+    if to_insert:
+        leads_col.insert_many(to_insert, ordered=False)
+    report["added"] = len(to_insert)
+
+    return {"report": report}
+
+
+@router.post("/{id}/resend")
+def resend_lead(id: str, current_user: dict = Depends(get_current_user)):
+    """Re-queue a single lead's email to be sent again. Keeps a running
+    resend counter and resets the lead so the outbox worker picks it up on
+    its next pass."""
+    try:
+        oid = ObjectId(id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid lead ID.")
+
+    leads_col = get_collection("leads")
+    lead = leads_col.find_one({"_id": oid})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found.")
+
+    if not _assert_campaign_ownership(lead["campaignId"], current_user["_id"]):
+        raise HTTPException(status_code=403, detail="Not authorized.")
+
+    now = datetime.now(timezone.utc)
+    leads_col.update_one(
+        {"_id": oid},
+        {
+            "$set": {
+                "status": "pending",
+                "send_after": now,
+                "lastSendError": "",
+                "updatedAt": now,
+            },
+            "$inc": {"resendCount": 1},
+        }
+    )
+
+    # Track the resend on the campaign-level counters too.
+    get_collection("campaigns").update_one(
+        {"_id": lead["campaignId"]},
+        {"$inc": {"stats.totalResent": 1}, "$set": {"updatedAt": now}}
+    )
+
+    get_collection("audit_logs").insert_one({
+        "action": "lead.resend",
+        "entityType": "Lead",
+        "entityId": oid,
+        "performedBy": current_user["_id"],
+        "createdAt": now,
+    })
+
+    updated = leads_col.find_one({"_id": oid})
+    return {"lead": _format_lead(updated)}
 
 
 @router.delete("/{id}")
