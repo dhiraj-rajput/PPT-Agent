@@ -25,6 +25,7 @@ from app.core.tracking_helpers import (
 )
 from utils.db_client import get_collection
 from utils.helpers import setup_logger
+from fastapi.responses import FileResponse
 
 logger = setup_logger(__name__)
 
@@ -46,6 +47,7 @@ class CreateSubscriberBody(BaseModel):
 
 class BulkCompanySubscriberBody(BaseModel):
     companyIds: Optional[List[str]] = []
+    manualEmail: Optional[str] = ""
 
 
 class CreateEditionBody(BaseModel):
@@ -329,6 +331,28 @@ def add_company_subscribers(
         })
         added_count += 1
 
+    # Process manualEmail
+    if body.manualEmail:
+        raw_emails = re.split(r"[,\s;]+", body.manualEmail)
+        for r_email in raw_emails:
+            clean_email = r_email.strip().lower()
+            if not clean_email or "@" not in clean_email:
+                continue
+            if clean_email in suppressed or clean_email in existing:
+                continue
+            existing.add(clean_email)
+            to_insert.append({
+                "newsletterId": n_oid,
+                "email": clean_email,
+                "contactName": "",
+                "companyName": "",
+                "source": "manual_input",
+                "status": "subscribed",
+                "subscribedAt": datetime.now(timezone.utc),
+                "createdAt": datetime.now(timezone.utc),
+            })
+            added_count += 1
+
     if to_insert:
         subs_col.insert_many(to_insert, ordered=False)
         get_collection("newsletters").update_one(
@@ -404,7 +428,7 @@ async def _send_newsletter_background(
     newsletters_col = get_collection("newsletters")
     events_col = get_collection("tracking_events")
 
-    subscribers = list(subs_col.find({"newsletterId": n_oid, "status": "subscribed"}))
+    subscribers = list(subs_col.find({"newsletterId": n_oid, "status": {"$ne": "unsubscribed"}}))
     sent_count = 0
 
     # Header Image HTML if present
