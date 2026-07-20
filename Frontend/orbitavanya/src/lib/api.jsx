@@ -10,7 +10,7 @@
  * Bearer token is automatically injected from localStorage.
  */
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5050';
+export const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5050';
 const TOKEN_KEY = 'orbitavanya_token';
 
 // ---------------------------------------------------------------------------
@@ -431,6 +431,11 @@ export const api = {
   },
   async deleteNewsletterEdition(editionId) {
     return del(`/api/newsletters/editions/${editionId}`);
+  },
+  async uploadNewsletterImage(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return _upload('/api/newsletters/upload-image', formData);
   },
 
   // ---------- Analytics ----------

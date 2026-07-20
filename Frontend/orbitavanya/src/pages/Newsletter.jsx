@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Mail, Plus, Users, Send, Check, Loader2, Sparkles, Building2, Search, AlertCircle, Trash2, Image, Edit2 } from 'lucide-react';
 import { PageHeader, Card, StatusBadge } from '../components/ui/Common.jsx';
-import { api } from '../lib/api.jsx';
+import { api, BASE_URL } from '../lib/api.jsx';
 
 export default function Newsletter() {
   const [newsletters, setNewsletters] = useState([]);
@@ -15,8 +15,9 @@ export default function Newsletter() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newNewsletterForm, setNewNewsletterForm] = useState({ name: '', description: '', senderName: 'OrbitAvanya Tech', senderEmail: 'newsletter@orbitavanyatech.com' });
   const [showComposeModal, setShowComposeModal] = useState(false);
-  const [editionForm, setEditionForm] = useState({ subject: '', body: '', sendNow: true });
+  const [editionForm, setEditionForm] = useState({ subject: '', body: '', imageUrl: '', sendNow: true });
   const [editingEditionId, setEditingEditionId] = useState(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   // Company import modal
   const [showCompanyImport, setShowCompanyImport] = useState(false);
@@ -102,6 +103,7 @@ export default function Newsletter() {
         await api.updateNewsletterEdition(editingEditionId, {
           subject: editionForm.subject,
           body: editionForm.body,
+          imageUrl: editionForm.imageUrl,
         });
       } else {
         if (recipientTargetMode === 'companies') {
@@ -119,7 +121,7 @@ export default function Newsletter() {
       setSubmitting(false);
       setShowComposeModal(false);
       setEditingEditionId(null);
-      setEditionForm({ subject: '', body: '', sendNow: true });
+      setEditionForm({ subject: '', body: '', imageUrl: '', sendNow: true });
       setSelectedBroadcastCompanyIds({});
       setManualRecipientEmails('');
       fetchNewsletterDetails(selectedNewsletter);
@@ -202,7 +204,7 @@ export default function Newsletter() {
 
   const openBroadcastModal = () => {
     setEditingEditionId(null);
-    setEditionForm({ subject: '', body: '', sendNow: true });
+    setEditionForm({ subject: '', body: '', imageUrl: '', sendNow: true });
     setShowComposeModal(true);
     fetchDbCompanies(companySearchQuery, 1);
   };
@@ -212,9 +214,24 @@ export default function Newsletter() {
     setEditionForm({
       subject: edition.subject,
       body: edition.body,
+      imageUrl: edition.imageUrl || '',
       sendNow: edition.status === 'sent' ? false : edition.sendNow,
     });
     setShowComposeModal(true);
+  };
+
+  const handleNewsletterImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingImage(true);
+    try {
+      const res = await api.uploadNewsletterImage(file);
+      setEditionForm(prev => ({ ...prev, imageUrl: res.imageUrl }));
+    } catch (err) {
+      alert(err.message || 'Image upload failed.');
+    } finally {
+      setUploadingImage(false);
+    }
   };
 
   const handleDeleteEdition = async (editionId) => {
@@ -692,6 +709,52 @@ export default function Newsletter() {
                   placeholder="e.g. September Edition: Federal AI & Cloud Contracting Opportunities"
                   className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-xs outline-none focus:border-brand-500 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1">Header Banner Image (Optional)</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    id="newsletter-image-upload"
+                    onChange={handleNewsletterImageUpload}
+                    className="hidden"
+                  />
+                  <label
+                    htmlFor="newsletter-image-upload"
+                    className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-200 dark:border-navy-700 px-4 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-navy-700 transition-all"
+                  >
+                    {uploadingImage ? (
+                      <Loader2 className="animate-spin text-brand-500" size={14} />
+                    ) : (
+                      <Image size={14} className="text-slate-400" />
+                    )}
+                    Upload Image
+                  </label>
+                  {editionForm.imageUrl && (
+                    <div className="flex items-center gap-2 text-xs text-brand-600 font-semibold bg-brand-50 dark:bg-brand-500/10 px-3 py-1.5 rounded-xl">
+                      <span>✓ Banner Attached</span>
+                      <button
+                        type="button"
+                        onClick={() => setEditionForm(prev => ({ ...prev, imageUrl: '' }))}
+                        className="text-slate-400 hover:text-red-500"
+                        title="Remove banner"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {editionForm.imageUrl && (
+                  <div className="mt-2 rounded-xl overflow-hidden border border-slate-100 dark:border-navy-700 max-h-24 flex items-center bg-slate-50/50 dark:bg-navy-900/30 p-2">
+                    <img
+                      src={`${BASE_URL}/api/newsletters/images/${editionForm.imageUrl}`}
+                      alt="Banner Preview"
+                      className="max-h-20 w-auto rounded object-contain"
+                    />
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1">Newsletter Content *</label>

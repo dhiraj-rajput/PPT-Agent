@@ -160,8 +160,8 @@ def view_report(filename: str, current_user: dict = Depends(get_current_user)):
     col = get_collection("task_statuses")
     task = col.find_one({"filename": safe_filename})
     if task:
-        user_id = current_user.get("user_id") or current_user.get("id")
-        if task.get("userId") and task.get("userId") != str(user_id):
+        user_id = str(current_user["_id"])
+        if task.get("userId") and str(task.get("userId")) != user_id:
             raise HTTPException(status_code=403, detail="Access denied: You do not own this file.")
 
     pdf_path = Path("output/pdf") / safe_filename
@@ -178,8 +178,8 @@ def download_report(filename: str, current_user: dict = Depends(get_current_user
     col = get_collection("task_statuses")
     task = col.find_one({"filename": safe_filename})
     if task:
-        user_id = current_user.get("user_id") or current_user.get("id")
-        if task.get("userId") and task.get("userId") != str(user_id):
+        user_id = str(current_user["_id"])
+        if task.get("userId") and str(task.get("userId")) != user_id:
             raise HTTPException(status_code=403, detail="Access denied: You do not own this file.")
 
     pdf_path = Path("output/pdf") / safe_filename

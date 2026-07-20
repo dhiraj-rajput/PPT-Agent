@@ -180,7 +180,7 @@ async def upload_rfp(
             f.write(content)
 
     output_name = f"rfp_respond_{task_id}"
-    user_id = current_user.get("user_id") or current_user.get("id")
+    user_id = str(current_user["_id"])
     update_task_status(
         task_id,
         "rfp_respond",
@@ -188,7 +188,7 @@ async def upload_rfp(
         "processing",
         "Upload received, queuing pipeline...",
         None,
-        extra={"userId": str(user_id)}
+        extra={"userId": user_id}
     )
 
     background_tasks.add_task(
@@ -203,9 +203,8 @@ def get_status(task_id: str, current_user: dict = Depends(get_current_user)):
     if not task:
         raise HTTPException(404, "Unknown task_id")
     
-    # Ownership Check
-    user_id = current_user.get("user_id") or current_user.get("id")
-    if task.get("userId") and task.get("userId") != str(user_id):
+    user_id = str(current_user["_id"])
+    if task.get("userId") and str(task.get("userId")) != user_id:
         raise HTTPException(403, "Access denied: You do not own this task.")
     return task
 
@@ -218,8 +217,8 @@ def download_result(filename: str, current_user: dict = Depends(get_current_user
     col = get_collection("task_statuses")
     task = col.find_one({"filename": safe_filename})
     if task:
-        user_id = current_user.get("user_id") or current_user.get("id")
-        if task.get("userId") and task.get("userId") != str(user_id):
+        user_id = str(current_user["_id"])
+        if task.get("userId") and str(task.get("userId")) != user_id:
             raise HTTPException(403, "Access denied: You do not own this file.")
 
     for media_type in [

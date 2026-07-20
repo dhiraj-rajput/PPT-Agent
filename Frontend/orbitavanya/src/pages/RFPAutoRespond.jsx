@@ -31,6 +31,20 @@ export default function RFPAutoRespond() {
   // -------------------------------------------------------------------------
 
   useEffect(() => {
+    const savedTaskId = localStorage.getItem('rfp_active_task_id');
+    if (savedTaskId) {
+      setTaskId(savedTaskId);
+      api.getRfpRespondStatus(savedTaskId)
+        .then((state) => {
+          setTaskState(state);
+        })
+        .catch(() => {
+          localStorage.removeItem('rfp_active_task_id');
+        });
+    }
+  }, []);
+
+  useEffect(() => {
     if (!taskId) return;
     pollRef.current = setInterval(async () => {
       try {
@@ -63,6 +77,7 @@ export default function RFPAutoRespond() {
     try {
       const { task_id } = await api.uploadRfp(rfpFiles, templateFile);
       setTaskId(task_id);
+      localStorage.setItem('rfp_active_task_id', task_id);
       setTaskState({ progress: 0, status: 'processing', message: 'Upload received, queuing pipeline...', filename: null });
     } catch (err) {
       setError(err.message || 'Upload failed. Please try again.');
@@ -73,6 +88,7 @@ export default function RFPAutoRespond() {
 
   function reset() {
     clearInterval(pollRef.current);
+    localStorage.removeItem('rfp_active_task_id');
     setRfpFiles([]);
     setTemplateFile(null);
     setTaskId(null);

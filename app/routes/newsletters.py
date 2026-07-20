@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, File, UploadFile, Request
 from pydantic import BaseModel, EmailStr
 
 from app.core.auth import get_current_user
@@ -51,6 +51,7 @@ class BulkCompanySubscriberBody(BaseModel):
 class CreateEditionBody(BaseModel):
     subject: str
     body: str
+    imageUrl: Optional[str] = None
     sendNow: Optional[bool] = True
 
 
@@ -95,6 +96,7 @@ def _format_edition(e: dict) -> dict:
         "newsletterId": str(e["newsletterId"]),
         "subject": e.get("subject", ""),
         "body": e.get("body", ""),
+        "imageUrl": e.get("imageUrl"),
         "status": e.get("status", "draft"),
         "sentAt": e.get("sentAt").isoformat() if e.get("sentAt") else None,
         "stats": {
@@ -337,10 +339,174 @@ def add_company_subscribers(
     return {"added": added_count}
 
 
+@router.post("/upload-image")
+async def upload_image(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+):
+    try:
+        from pathlib import Path
+        import uuid
+        
+        UPLOAD_DIR = Path("private/newsletter_images")
+        UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+        
+        file_ext = Path(file.filename).suffix if file.filename else ".jpg"
+        unique_name = f"{uuid.uuid4().hex}{file_ext}"
+        dest_path = UPLOAD_DIR / unique_name
+        
+        content = await file.read()
+        with open(dest_path, "wb") as f:
+            f.write(content)
+            
+        return {"imageUrl": unique_name}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Image upload failed: {e}")
+
+
+@router.get("/images/{filename}")
+def serve_image(filename: str):
+    from pathlib import Path
+    safe_filename = Path(filename).name
+    image_path = Path("private/newsletter_images") / safe_filename
+    if not image_path.exists():
+        raise HTTPException(status_code=404, detail="Image not found")
+        
+    content_type = "image/jpeg"
+    lower_name = filename.lower()
+    if lower_name.endswith(".png"):
+        content_type = "image/png"
+    elif lower_name.endswith(".gif"):
+        content_type = "image/gif"
+    elif lower_name.endswith(".webp"):
+        content_type = "image/webp"
+    elif lower_name.endswith(".svg"):
+        content_type = "image/svg+xml"
+        
+    return FileResponse(image_path, media_type=content_type)
+
+
+async def _send_newsletter_background(
+    e_id: ObjectId,
+    n_oid: ObjectId,
+    subject: str,
+    body_text: str,
+    base_url: str,
+    image_url: Optional[str] = None
+):
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"Starting background newsletter dispatch for edition {e_id}...")
+
+    subs_col = get_collection("newsletter_subscribers")
+    sends_col = get_collection("newsletter_sends")
+    editions_col = get_collection("editions")
+    newsletters_col = get_collection("newsletters")
+    events_col = get_collection("tracking_events")
+
+    subscribers = list(subs_col.find({"newsletterId": n_oid, "status": "subscribed"}))
+    sent_count = 0
+
+    # Header Image HTML if present
+    header_img_html = ""
+    if image_url:
+        img_url = f"{base_url}api/newsletters/images/{image_url}"
+        header_img_html = (
+            f'<div style="text-align:center;margin-bottom:20px;">'
+            f'  <img src="{img_url}" alt="Newsletter Header Banner" style="max-width:100%;height:auto;border-radius:8px;display:block;margin:0 auto;" />'
+            f'</div>'
+        )
+
+    for sub in subscribers:
+        recipient_email = sub.get("email")
+        if not recipient_email:
+            continue
+
+        tracking_id = new_tracking_id()
+        unsub_link = unsubscribe_url(str(sub["_id"]), str(n_oid))
+
+        # 1. Rewrite HTML links for click tracking
+        html_body, click_links = rewrite_links_for_tracking(body_text)
+
+        # 2. Append open tracking pixel & unsubscribe link in clean 600px wrapper
+        pixel = open_pixel_tag(tracking_id)
+        body_with_unsub = (
+            f'<div style="max-width:600px;margin:0 auto;font-family:sans-serif;color:#334155;line-height:1.6;font-size:14px;">'
+            f"  {header_img_html}"
+            f"  <div style=\"padding:10px 0;\">{html_body}</div>"
+            f'  <hr style="border:none;border-top:1px solid #e2e8f0;margin:25px 0;" />'
+            f'  <p style="font-size:11px;color:#94a3b8;text-align:center;">To unsubscribe from this newsletter, <a href="{unsub_link}" style="color:#3b82f6;text-decoration:underline;">click here</a>.</p>'
+            f"</div>"
+            f"{pixel}"
+        )
+
+        try:
+            await send_company_email_with_attachments(
+                to_email=recipient_email,
+                subject=subject,
+                body_html=body_with_unsub,
+            )
+            success = True
+            err = ""
+        except Exception as mail_err:
+            success = False
+            err = str(mail_err)
+
+        sends_col.insert_one({
+            "editionId": e_id,
+            "newsletterId": n_oid,
+            "subscriberId": sub["_id"],
+            "email": recipient_email,
+            "trackingId": tracking_id,
+            "status": "sent" if success else "failed",
+            "error": err if not success else "",
+            "sentAt": datetime.now(timezone.utc),
+        })
+
+        if success:
+            sent_count += 1
+            # Register open tracking event record
+            events_col.insert_one({
+                "trackingId": tracking_id,
+                "editionId": e_id,
+                "newsletterId": n_oid,
+                "subscriberId": sub["_id"],
+                "type": "open",
+                "timestamp": None,
+                "createdAt": datetime.now(timezone.utc),
+            })
+
+            # Register click tracking event records for links
+            for link in click_links:
+                events_col.insert_one({
+                    "trackingId": link["trackingId"],
+                    "editionId": e_id,
+                    "newsletterId": n_oid,
+                    "subscriberId": sub["_id"],
+                    "destinationUrl": link["destinationUrl"],
+                    "type": "click",
+                    "timestamp": None,
+                    "createdAt": datetime.now(timezone.utc),
+                })
+
+    editions_col.update_one(
+        {"_id": e_id},
+        {"$set": {"status": "sent", "stats.sent": sent_count}}
+    )
+
+    newsletters_col.update_one(
+        {"_id": n_oid},
+        {"$inc": {"stats.totalSent": sent_count}, "$set": {"updatedAt": datetime.now(timezone.utc)}}
+    )
+    logger.info(f"Background newsletter dispatch completed. Sent: {sent_count} emails.")
+
+
 @router.post("/{id}/editions")
 async def create_edition(
     id: str,
     body: CreateEditionBody,
+    request: Request,
+    background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
 ):
     try:
@@ -354,13 +520,12 @@ async def create_edition(
         raise HTTPException(status_code=404, detail="Newsletter not found")
 
     editions_col = get_collection("editions")
-    subs_col = get_collection("newsletter_subscribers")
-    sends_col = get_collection("newsletter_sends")
 
     edition_doc = {
         "newsletterId": n_oid,
         "subject": body.subject.strip(),
         "body": body.body.strip(),
+        "imageUrl": body.imageUrl.strip() if body.imageUrl else None,
         "status": "sending" if body.sendNow else "draft",
         "sentAt": datetime.now(timezone.utc) if body.sendNow else None,
         "stats": {"sent": 0, "opened": 0, "clicked": 0, "unsubscribed": 0},
@@ -371,87 +536,15 @@ async def create_edition(
     e_id = e_res.inserted_id
 
     if body.sendNow:
-        subscribers = list(subs_col.find({"newsletterId": n_oid, "status": "subscribed"}))
-        sent_count = 0
-        events_col = get_collection("tracking_events")
-
-        for sub in subscribers:
-            recipient_email = sub.get("email")
-            if not recipient_email:
-                continue
-
-            tracking_id = new_tracking_id()
-            unsub_link = unsubscribe_url(str(sub["_id"]), str(n_oid))
-
-            # 1. Rewrite HTML links for click tracking
-            html_body, click_links = rewrite_links_for_tracking(body.body)
-
-            # 2. Append open tracking pixel & unsubscribe link
-            pixel = open_pixel_tag(tracking_id)
-            body_with_unsub = (
-                f"{html_body}\n\n"
-                f"{pixel}\n"
-                f'<hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0;" />'
-                f'<p style="font-size:11px;color:#94a3b8;">To unsubscribe from this newsletter, <a href="{unsub_link}">click here</a>.</p>'
-            )
-
-            try:
-                await send_company_email_with_attachments(
-                    to_email=recipient_email,
-                    subject=body.subject,
-                    body_html=body_with_unsub,
-                )
-                success = True
-                err = ""
-            except Exception as mail_err:
-                success = False
-                err = str(mail_err)
-
-            sends_col.insert_one({
-                "editionId": e_id,
-                "newsletterId": n_oid,
-                "subscriberId": sub["_id"],
-                "email": recipient_email,
-                "trackingId": tracking_id,
-                "status": "sent" if success else "failed",
-                "error": err if not success else "",
-                "sentAt": datetime.now(timezone.utc),
-            })
-
-            if success:
-                sent_count += 1
-                # Register open tracking event record
-                events_col.insert_one({
-                    "trackingId": tracking_id,
-                    "editionId": e_id,
-                    "newsletterId": n_oid,
-                    "subscriberId": sub["_id"],
-                    "type": "open",
-                    "timestamp": None,  # Will be populated when pixel is fetched
-                    "createdAt": datetime.now(timezone.utc),
-                })
-
-                # Register click tracking event records for links
-                for link in click_links:
-                    events_col.insert_one({
-                        "trackingId": link["trackingId"],
-                        "editionId": e_id,
-                        "newsletterId": n_oid,
-                        "subscriberId": sub["_id"],
-                        "destinationUrl": link["destinationUrl"],
-                        "type": "click",
-                        "timestamp": None,  # Will be populated when link is clicked
-                        "createdAt": datetime.now(timezone.utc),
-                    })
-
-        editions_col.update_one(
-            {"_id": e_id},
-            {"$set": {"status": "sent", "stats.sent": sent_count}}
-        )
-
-        newsletters_col.update_one(
-            {"_id": n_oid},
-            {"$inc": {"stats.totalSent": sent_count}, "$set": {"updatedAt": datetime.now(timezone.utc)}}
+        base_url = str(request.base_url)
+        background_tasks.add_task(
+            _send_newsletter_background,
+            e_id,
+            n_oid,
+            body.subject.strip(),
+            body.body.strip(),
+            base_url,
+            body.imageUrl.strip() if body.imageUrl else None
         )
 
     created_e = editions_col.find_one({"_id": e_id})
@@ -473,6 +566,7 @@ def list_editions(id: str, current_user: dict = Depends(get_current_user)):
 class UpdateEditionBody(BaseModel):
     subject: str
     body: str
+    imageUrl: Optional[str] = None
 
 
 @router.put("/editions/{edition_id}")
@@ -500,6 +594,7 @@ def update_edition(
         {"$set": {
             "subject": body.subject.strip(),
             "body": body.body.strip(),
+            "imageUrl": body.imageUrl.strip() if body.imageUrl else None,
             "updatedAt": datetime.now(timezone.utc)
         }}
     )

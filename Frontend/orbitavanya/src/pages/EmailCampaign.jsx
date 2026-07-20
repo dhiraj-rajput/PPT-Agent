@@ -856,6 +856,7 @@ export default function EmailCampaign() {
                       <div className="p-4 text-center text-xs text-slate-400">No companies found.</div>
                     ) : (
                       companyResults.map((c) => {
+                        if (!c) return null;
                         const key = normalizeCompanyKey(c.name, c.uei);
                         const selected = !!selectedCompanies[key];
                         const hasEmail = !!c.email;
@@ -1230,6 +1231,7 @@ export default function EmailCampaign() {
                   <div className="px-4 py-6 text-center text-xs text-slate-400">No companies found.</div>
                 ) : (
                   companyResults.map((company) => {
+                    if (!company) return null;
                     const key = normalizeCompanyKey(company.name, company.uei);
                     const conflict = conflictFor(company);
                     const selected = !!selectedCompanies[key];
