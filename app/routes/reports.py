@@ -101,8 +101,8 @@ def sync_reports_with_mongo():
                 print(f"Error resolving RFP title: {e}")
                 
         # If date is missing in config, use file modification time
+        mtime = pdf_path.stat().st_mtime
         if not proposal_date:
-            mtime = pdf_path.stat().st_mtime
             proposal_date = datetime.fromtimestamp(mtime).strftime("%b %d, %Y")
             
         file_size_bytes = pdf_path.stat().st_size
@@ -122,6 +122,8 @@ def sync_reports_with_mongo():
             "size": file_size,
             "ref": ref,
             "type": "PDF",
+            "mtime": mtime,
+            "createdAt": datetime.fromtimestamp(mtime),
             "filepath": str(pdf_path.resolve())
         }
         
@@ -140,11 +142,11 @@ def sync_reports_with_mongo():
 
 @router.get("")
 def get_reports(current_user: dict = Depends(get_current_user)):
-    """Retrieve all reports synced with MongoDB."""
+    """Retrieve all reports synced with MongoDB sorted by date descending."""
     try:
         sync_reports_with_mongo()
         reports_col = get_collection("reports")
-        reports = list(reports_col.find({}, {"_id": 0}))
+        reports = list(reports_col.find({}, {"_id": 0}).sort("mtime", -1))
         return reports
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

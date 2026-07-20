@@ -82,7 +82,8 @@ export default function Reports() {
     api.getReports()
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
-          setReports(data);
+          const sorted = [...data].sort((a, b) => (b.mtime || 0) - (a.mtime || 0));
+          setReports(sorted);
         }
         setBackendOffline(false);
         setLoading(false);

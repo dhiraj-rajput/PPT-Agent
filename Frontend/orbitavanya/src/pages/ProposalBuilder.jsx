@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Sparkles, FileDown, LayoutTemplate, Loader2, Database, AlertCircle, RefreshCw, Play } from 'lucide-react';
+import { Plus, Sparkles, FileDown, LayoutTemplate, Loader2, Database, AlertCircle, RefreshCw, Play, Eye, X } from 'lucide-react';
 import { PageHeader, Card } from '../components/ui/Common.jsx';
 import { api } from '../lib/api.jsx';
 
@@ -13,6 +13,8 @@ export default function ProposalBuilder() {
   const [activeTasks, setActiveTasks] = useState({});
   const [loading, setLoading] = useState(true);
   const [backendOffline, setBackendOffline] = useState(false);
+  const [previewing, setPreviewing] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
 
   // ----- Track individual triggering states -----
   const [triggeringId, setTriggeringId] = useState(null);
@@ -33,6 +35,30 @@ export default function ProposalBuilder() {
       console.error("Download failed:", err);
     }
   };
+
+  useEffect(() => {
+    if (previewing && previewing.filename && !backendOffline) {
+      api.viewReportBlob(previewing.filename)
+        .then((blob) => {
+          const url = URL.createObjectURL(blob);
+          setPreviewUrl(url);
+        })
+        .catch((err) => {
+          console.error("Error creating preview URL:", err);
+          setPreviewUrl(null);
+        });
+    } else {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+        setPreviewUrl(null);
+      }
+    }
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewing, backendOffline]);
 
   // Ref to hold the latest active tasks to prevent stable interval resets
   const activeTasksRef = useRef({});
@@ -441,14 +467,16 @@ export default function ProposalBuilder() {
                           </button>
                         )}
 
-                        {/* View in Reports button for Completed drafts/reports */}
-                        {p.status === 'Completed' && (
-                          <Link
-                            to="/reports"
-                            className="flex items-center gap-1 rounded-xl bg-violet-100 hover:bg-violet-200 px-3.5 py-1.5 text-xs font-bold text-violet-700 dark:bg-violet-950/40 dark:text-violet-400 transition-colors"
+                        {/* View Document modal trigger button */}
+                        {p.filename && (
+                          <button
+                            onClick={() => setPreviewing(p)}
+                            className="flex items-center gap-1 rounded-xl bg-violet-50 hover:bg-violet-100 px-3.5 py-1.5 text-xs font-bold text-violet-700 dark:bg-violet-950/40 dark:text-violet-400 transition-colors"
+                            title="View proposal in viewer"
                           >
-                            View in Reports
-                          </Link>
+                            <Eye size={12} />
+                            View Document
+                          </button>
                         )}
 
                         {/* Download button for completed drafts */}
@@ -478,6 +506,60 @@ export default function ProposalBuilder() {
           )}
         </div>
       </div>
+
+      {/* Inline Document Preview Modal */}
+      {previewing && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/70 p-4 backdrop-blur-xs"
+          onClick={() => setPreviewing(null)}
+        >
+          <div
+            className="flex h-[90vh] w-full max-w-5xl flex-col rounded-2xl bg-white shadow-soft dark:bg-navy-800 border border-slate-100 dark:border-navy-700 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-navy-700">
+              <div className="min-w-0 pr-4">
+                <h3 className="text-sm font-bold text-navy-900 dark:text-white truncate">
+                  {previewing.title || previewing.filename}
+                </h3>
+                <p className="text-xs text-slate-400 font-mono mt-0.5">{previewing.filename}</p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {previewing.filename && (
+                  <button
+                    onClick={(e) => handleDownload(e, previewing.filename)}
+                    className="flex items-center gap-1.5 rounded-xl bg-brand-500 px-3 py-1.5 text-xs font-bold text-white shadow-soft hover:bg-brand-600"
+                  >
+                    <FileDown size={14} /> Download
+                  </button>
+                )}
+                <button
+                  onClick={() => setPreviewing(null)}
+                  className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-navy-900 dark:hover:bg-navy-700 dark:hover:text-white"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 bg-slate-100 dark:bg-navy-900 p-2">
+              {previewUrl ? (
+                <iframe
+                  src={previewUrl}
+                  title="Document Preview"
+                  className="h-full w-full rounded-xl border border-slate-200 dark:border-navy-700 bg-white"
+                />
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center text-slate-400">
+                  <Loader2 size={32} className="animate-spin text-brand-500 mb-2" />
+                  <p className="text-xs font-medium">Loading document viewer...</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
