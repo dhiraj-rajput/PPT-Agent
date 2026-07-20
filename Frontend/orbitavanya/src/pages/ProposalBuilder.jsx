@@ -319,25 +319,55 @@ export default function ProposalBuilder() {
       )}
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-        {/* Left column: Action guidance */}
-        <Card className="lg:col-span-1">
-          <div className="flex items-center gap-2">
-            <LayoutTemplate size={16} className="text-slate-400" />
-            <h3 className="text-sm font-bold text-navy-900 dark:text-white">Build Flow Guide</h3>
+        {/* Left column: Action guidance & Post-generation Summary */}
+        <Card className="lg:col-span-1 space-y-4">
+          <div className="flex items-center gap-2 border-b border-slate-100 dark:border-navy-700 pb-3">
+            <LayoutTemplate size={16} className="text-brand-500" />
+            <h3 className="text-sm font-bold text-navy-900 dark:text-white">Pipeline Summary & Guide</h3>
+          </div>
+
+          {/* Generated Proposals Summary Stats */}
+          <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3.5 dark:border-navy-700 dark:bg-navy-900/50 space-y-2">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Generated Documents</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-lg bg-white p-2.5 shadow-2xs dark:bg-navy-800">
+                <p className="text-[10px] text-slate-400 font-medium">Completed</p>
+                <p className="text-base font-extrabold text-emerald-600 dark:text-emerald-400">
+                  {reports.length}
+                </p>
+              </div>
+              <div className="rounded-lg bg-white p-2.5 shadow-2xs dark:bg-navy-800">
+                <p className="text-[10px] text-slate-400 font-medium">Draft Requests</p>
+                <p className="text-base font-extrabold text-brand-600 dark:text-brand-400">
+                  {draftRequests.length}
+                </p>
+              </div>
+            </div>
+            {reports.length > 0 && (
+              <div className="pt-2 border-t border-slate-200/60 dark:border-navy-700">
+                <p className="text-[11px] font-bold text-navy-900 dark:text-white line-clamp-1">Latest: {reports[0].title || reports[0].filename}</p>
+                <button
+                  onClick={() => setPreviewing(reports[0])}
+                  className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg bg-brand-500 py-1.5 text-xs font-bold text-white shadow-soft hover:bg-brand-600 transition-colors"
+                >
+                  <Eye size={13} /> View Latest Proposal
+                </button>
+              </div>
+            )}
           </div>
           
-          <div className="mt-4 space-y-4 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+          <div className="space-y-3 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
             <div>
-              <p className="font-bold text-navy-900 dark:text-slate-300">1. Select RFP</p>
-              <p>Go to the Tenders tab to find active opportunities cached from SAM.gov.</p>
+              <p className="font-bold text-navy-900 dark:text-slate-300">1. Select RFP Opportunity</p>
+              <p>Search active opportunities cached from SAM.gov on the Tenders page.</p>
             </div>
             <div>
-              <p className="font-bold text-navy-900 dark:text-slate-300">2. Request Proposal Mode</p>
-              <p>Click "Respond as Prime" for open RFPs, or "Seek Subcontract" if a contractor won it.</p>
+              <p className="font-bold text-navy-900 dark:text-slate-300">2. Select Response Mode</p>
+              <p>Click "Respond as Prime" for direct bidding or "Seek Subcontract" for Teaming.</p>
             </div>
             <div>
-              <p className="font-bold text-navy-900 dark:text-slate-300">3. Run Compilation Pipeline</p>
-              <p>Wired drafts appear in the list. Click "Build Proposal" to start background document compiles.</p>
+              <p className="font-bold text-navy-900 dark:text-slate-300">3. Execute Compilation</p>
+              <p>Click "Build Proposal" to trigger the template engine and view generated documents online.</p>
             </div>
           </div>
 

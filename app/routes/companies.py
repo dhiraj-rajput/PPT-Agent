@@ -219,7 +219,8 @@ def get_companies(
             filter_query["$or"] = [
                 {"name": {"$regex": q, "$options": "i"}},
                 {"uei": {"$regex": q, "$options": "i"}},
-                {"contact": {"$regex": q, "$options": "i"}}
+                {"contact": {"$regex": q, "$options": "i"}},
+                {"email": {"$regex": q, "$options": "i"}}
             ]
 
         if size and size != "All":

@@ -81,21 +81,32 @@ export default function Newsletter() {
       });
   };
 
-  const handleSendEdition = (e) => {
+  const handleSendEdition = async (e) => {
     e.preventDefault();
     if (!selectedNewsletter) return;
     setSubmitting(true);
-    api.createNewsletterEdition(selectedNewsletter.id, editionForm)
-      .then(() => {
-        setSubmitting(false);
-        setShowComposeModal(false);
-        setEditionForm({ subject: '', body: '', sendNow: true });
-        fetchNewsletterDetails(selectedNewsletter);
-      })
-      .catch((err) => {
-        setSubmitting(false);
-        setMessage(err.message || 'Failed to send edition');
-      });
+    try {
+      if (recipientTargetMode === 'companies') {
+        const companyIds = Object.keys(selectedBroadcastCompanyIds).filter(k => selectedBroadcastCompanyIds[k]);
+        if (companyIds.length > 0) {
+          await api.addNewsletterSubscribersFromCompanies(selectedNewsletter.id, companyIds);
+        }
+      } else if (recipientTargetMode === 'manual' && manualRecipientEmails.trim()) {
+        await api.addNewsletterSubscribersFromCompanies(selectedNewsletter.id, [], manualRecipientEmails.trim());
+      }
+
+      await api.createNewsletterEdition(selectedNewsletter.id, editionForm);
+
+      setSubmitting(false);
+      setShowComposeModal(false);
+      setEditionForm({ subject: '', body: '', sendNow: true });
+      setSelectedBroadcastCompanyIds({});
+      setManualRecipientEmails('');
+      fetchNewsletterDetails(selectedNewsletter);
+    } catch (err) {
+      setSubmitting(false);
+      setMessage(err.message || 'Failed to send edition');
+    }
   };
 
   const openCompanyImport = () => {
@@ -123,11 +134,56 @@ export default function Newsletter() {
       });
   };
 
+  // Manual & company email selection for broadcast
+  const [recipientTargetMode, setRecipientTargetMode] = useState('subscribers'); // 'subscribers' | 'companies' | 'manual'
+  const [manualRecipientEmails, setManualRecipientEmails] = useState('');
+  const [selectedBroadcastCompanyIds, setSelectedBroadcastCompanyIds] = useState({});
+  const [companySearchQuery, setCompanySearchQuery] = useState('');
+  const [dbCompanies, setDbCompanies] = useState([]);
+  const [subscribingUser, setSubscribingUser] = useState(false);
+  const [userEmailInput, setUserEmailInput] = useState('');
+  const [showSelfSubscribeModal, setShowSelfSubscribeModal] = useState(false);
+
+  const handleSelfSubscribe = (e) => {
+    e.preventDefault();
+    if (!selectedNewsletter || !userEmailInput.trim()) return;
+    setSubscribingUser(true);
+    api.addNewsletterSubscribersFromCompanies(selectedNewsletter.id, [], userEmailInput.trim())
+      .then(() => {
+        setSubscribingUser(false);
+        setShowSelfSubscribeModal(false);
+        setUserEmailInput('');
+        fetchNewsletterDetails(selectedNewsletter);
+      })
+      .catch((err) => {
+        setSubscribingUser(false);
+        setMessage(err.message || 'Failed to subscribe user');
+      });
+  };
+
+  useEffect(() => {
+    if (showComposeModal || showCompanyImport) {
+      const timer = setTimeout(() => {
+        api.getCompanies({ query: companySearchQuery, limit: 100 })
+          .then((res) => setDbCompanies(res?.companies || []))
+          .catch((err) => console.error(err));
+      }, 250);
+      return () => clearTimeout(timer);
+    }
+  }, [companySearchQuery, showComposeModal, showCompanyImport]);
+
+  const openBroadcastModal = () => {
+    setShowComposeModal(true);
+    api.getCompanies({ query: companySearchQuery, limit: 100 })
+      .then((res) => setDbCompanies(res?.companies || []))
+      .catch((err) => console.error(err));
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Newsletter Publications"
-        subtitle="Manage recurring publications, subscribers, and broadcast issue distributions"
+        title="Newsletter Publications & Broadcasting"
+        subtitle="Manage recurring publications, global subscriber lists, and broadcast issue distributions"
         action={
           <div className="flex items-center gap-3">
             <button
@@ -138,7 +194,7 @@ export default function Newsletter() {
             </button>
             {selectedNewsletter && (
               <button
-                onClick={() => setShowComposeModal(true)}
+                onClick={openBroadcastModal}
                 className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-xs font-bold text-white shadow-soft hover:bg-brand-600 transition-colors"
               >
                 <Send size={15} /> Send Broadcast Edition
@@ -147,6 +203,32 @@ export default function Newsletter() {
           </div>
         }
       />
+
+      {/* Explanatory Guide Box: Publication vs Broadcasting */}
+      <div className="rounded-2xl border border-brand-200 bg-gradient-to-r from-brand-50/80 via-white to-slate-50 p-5 dark:border-navy-700 dark:from-navy-800 dark:to-navy-900">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-500 text-white shadow-soft">
+              <Sparkles size={20} />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-navy-900 dark:text-white">Publication & Broadcasting Guide</h3>
+              <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                <strong className="text-brand-600 dark:text-brand-400">Publication:</strong> A recurring newsletter series or thematic channel (e.g., <em>Federal Tech Digest</em>). Users & companies subscribe to publications to receive regular market news.<br/>
+                <strong className="text-brand-600 dark:text-brand-400">Broadcasting & Editions:</strong> Creating an issue (edition) and sending it out to your global subscriber list, multi-selected company emails, or manual email recipients.
+              </p>
+            </div>
+          </div>
+          {selectedNewsletter && (
+            <button
+              onClick={() => setShowSelfSubscribeModal(true)}
+              className="shrink-0 flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-soft hover:bg-emerald-700 transition-colors"
+            >
+              <Users size={14} /> Subscribe User / Myself
+            </button>
+          )}
+        </div>
+      </div>
 
       {loading ? (
         <Card className="flex flex-col items-center justify-center py-20">
@@ -369,9 +451,102 @@ export default function Newsletter() {
       {/* Modal: Broadcast Issue Edition */}
       {showComposeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-900/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl dark:bg-navy-800">
+          <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl dark:bg-navy-800 max-h-[90vh] flex flex-col overflow-y-auto">
             <h3 className="text-base font-bold text-navy-900 dark:text-white">Broadcast Newsletter Issue</h3>
+            <p className="mt-1 text-xs text-slate-400">Target your publication to active subscribers, multi-selected company emails, or manual email addresses.</p>
+
             <form onSubmit={handleSendEdition} className="mt-4 space-y-4">
+              {/* Recipient Mode Selection */}
+              <div>
+                <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1">Target Recipients</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRecipientTargetMode('subscribers')}
+                    className={`rounded-xl border px-3 py-2 text-xs font-semibold transition-all ${
+                      recipientTargetMode === 'subscribers'
+                        ? 'border-brand-500 bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400'
+                        : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-400'
+                    }`}
+                  >
+                    All Subscribers ({subscribers.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRecipientTargetMode('companies')}
+                    className={`rounded-xl border px-3 py-2 text-xs font-semibold transition-all ${
+                      recipientTargetMode === 'companies'
+                        ? 'border-brand-500 bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400'
+                        : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-400'
+                    }`}
+                  >
+                    Select Company Emails
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRecipientTargetMode('manual')}
+                    className={`rounded-xl border px-3 py-2 text-xs font-semibold transition-all ${
+                      recipientTargetMode === 'manual'
+                        ? 'border-brand-500 bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400'
+                        : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-400'
+                    }`}
+                  >
+                    Manual Email(s)
+                  </button>
+                </div>
+              </div>
+
+              {/* Conditional Recipient Inputs */}
+              {recipientTargetMode === 'companies' && (
+                <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3 space-y-2 dark:border-navy-700 dark:bg-navy-900/50">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-navy-900 dark:text-white">Multi-Select Registered Companies</label>
+                    <span className="text-[11px] font-bold text-brand-600">{Object.values(selectedBroadcastCompanyIds).filter(Boolean).length} Selected</span>
+                  </div>
+                  <div className="relative">
+                    <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      value={companySearchQuery}
+                      onChange={(e) => setCompanySearchQuery(e.target.value)}
+                      placeholder="Search company by name or email..."
+                      className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-1.5 text-xs text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                    />
+                  </div>
+                  <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 bg-white dark:border-navy-700 dark:bg-navy-900 divide-y divide-slate-50 dark:divide-navy-800">
+                    {dbCompanies
+                      .filter(c => !companySearchQuery || (c.name || '').toLowerCase().includes(companySearchQuery.toLowerCase()))
+                      .map((c) => (
+                        <label key={c.id || c.uei} className="flex items-center justify-between p-2.5 hover:bg-slate-50 dark:hover:bg-navy-800 cursor-pointer">
+                          <div>
+                            <p className="text-xs font-bold text-navy-900 dark:text-white">{c.name}</p>
+                            <p className="text-[11px] text-slate-400">{c.email || 'No registered email'}</p>
+                          </div>
+                          <input
+                            type="checkbox"
+                            disabled={!c.email}
+                            checked={!!selectedBroadcastCompanyIds[c.id || c.uei]}
+                            onChange={(e) => setSelectedBroadcastCompanyIds({ ...selectedBroadcastCompanyIds, [c.id || c.uei]: e.target.checked })}
+                            className="rounded border-slate-300 text-brand-500 focus:ring-brand-500"
+                          />
+                        </label>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {recipientTargetMode === 'manual' && (
+                <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3 dark:border-navy-700 dark:bg-navy-900/50">
+                  <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1">Enter Email Addresses (Comma Separated)</label>
+                  <input
+                    type="text"
+                    value={manualRecipientEmails}
+                    onChange={(e) => setManualRecipientEmails(e.target.value)}
+                    placeholder="e.g. executive@client.com, director@orbit.com"
+                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-xs outline-none focus:border-brand-500 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                  />
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1">Email Subject *</label>
                 <input
@@ -386,7 +561,7 @@ export default function Newsletter() {
                 <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1">Newsletter Content *</label>
                 <textarea
                   required
-                  rows={8}
+                  rows={6}
                   value={editionForm.body}
                   onChange={(e) => setEditionForm({ ...editionForm, body: e.target.value })}
                   placeholder="Write your newsletter edition broadcast text here..."
@@ -402,14 +577,54 @@ export default function Newsletter() {
         </div>
       )}
 
+      {/* Modal: Subscribe User / Myself */}
+      {showSelfSubscribeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-900/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-navy-800">
+            <h3 className="text-base font-bold text-navy-900 dark:text-white">Subscribe User to {selectedNewsletter?.name}</h3>
+            <p className="mt-1 text-xs text-slate-400">Subscribe your team email or yourself to receive all future broadcast editions.</p>
+            <form onSubmit={handleSelfSubscribe} className="mt-4 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1">Subscriber Email Address *</label>
+                <input
+                  type="email"
+                  required
+                  value={userEmailInput}
+                  onChange={(e) => setUserEmailInput(e.target.value)}
+                  placeholder="name@company.com"
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-xs outline-none focus:border-brand-500 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setShowSelfSubscribeModal(false)} className="rounded-xl border px-4 py-2 text-xs font-semibold">Cancel</button>
+                <button type="submit" disabled={subscribingUser} className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-soft hover:bg-emerald-700">
+                  {subscribingUser ? <Loader2 className="animate-spin" size={14} /> : <Check size={14} />} Subscribe
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Modal: Import from Companies */}
       {showCompanyImport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-900/60 p-4 backdrop-blur-sm">
           <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl dark:bg-navy-800 max-h-[80vh] flex flex-col">
             <h3 className="text-base font-bold text-navy-900 dark:text-white">Import Companies to Newsletter List</h3>
-            <p className="mt-1 text-xs text-slate-500">Select companies from your SAM.gov directory to add to {selectedNewsletter?.name}:</p>
-            <div className="mt-4 flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-navy-700 pr-2">
-              {companies.map((c) => (
+            <p className="mt-1 text-xs text-slate-500">Search and select registered prospect companies to add to {selectedNewsletter?.name}:</p>
+            
+            <div className="relative mt-3">
+              <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                value={companySearchQuery}
+                onChange={(e) => setCompanySearchQuery(e.target.value)}
+                placeholder="Search registered companies by name or email..."
+                className="w-full rounded-xl border border-slate-200 pl-9 pr-3 py-2 text-xs outline-none focus:border-brand-500 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+              />
+            </div>
+
+            <div className="mt-3 flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-navy-700 pr-2">
+              {dbCompanies.map((c) => (
                 <label key={c.id || c.uei} className="flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-navy-700/50 cursor-pointer">
                   <div>
                     <p className="text-xs font-bold text-navy-900 dark:text-white">{c.name}</p>
