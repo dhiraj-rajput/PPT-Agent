@@ -59,6 +59,8 @@ export default function EmailCampaign() {
   const [showAddCompanies, setShowAddCompanies] = useState(null); // campaignId
   const [companyQuery, setCompanyQuery] = useState('');
   const [companyResults, setCompanyResults] = useState([]);
+  const [companyPage, setCompanyPage] = useState(1);
+  const [totalCompaniesCount, setTotalCompaniesCount] = useState(0);
   const [selectedCompanies, setSelectedCompanies] = useState({}); // uei/name -> company obj
   const [companiesInUse, setCompaniesInUse] = useState([]); // [{companyKey, companyName, campaignId, campaignName}]
   const [searchingCompanies, setSearchingCompanies] = useState(false);
@@ -209,14 +211,21 @@ export default function EmailCampaign() {
       const campaign = res.campaign;
 
       if (sendMode === 'single' && campaign) {
-        // Automatically add the single lead
-        await api.createLead({
-          campaignId: campaign.id,
-          email: recipientEmail,
-          contactName: recipientName,
-          companyName: recipientCompany,
-          title: 'Recipient'
-        });
+        // Automatically add all single lead recipient emails
+        const emails = recipientEmail
+          .split(/[,;\n\s]+/)
+          .map((e) => e.trim())
+          .filter((e) => e.length > 0 && e.includes('@'));
+        
+        for (const email of emails) {
+          await api.createLead({
+            campaignId: campaign.id,
+            email: email,
+            contactName: recipientName || 'Contact',
+            companyName: recipientCompany || '',
+            title: 'Recipient'
+          });
+        }
         // Launch immediately
         await api.launchCampaign(campaign.id);
       } else if (sendMode === 'database' && campaign && Object.keys(selectedCompanies).length > 0) {
@@ -304,11 +313,13 @@ export default function EmailCampaign() {
     await loadCompaniesInUse();
   };
 
-  const searchCompanies = useCallback(async (q) => {
+  const searchCompanies = useCallback(async (q, pageNum = 1) => {
     setSearchingCompanies(true);
     try {
-      const res = await api.getCompanies({ query: q, limit: 25 });
+      const res = await api.getCompanies({ query: q, page: pageNum, limit: 20 });
       setCompanyResults(res?.companies || []);
+      setTotalCompaniesCount(res?.total || 0);
+      setCompanyPage(pageNum);
     } catch (err) {
       setCompaniesError(err.message || 'Could not search companies.');
     } finally {
@@ -835,6 +846,28 @@ export default function EmailCampaign() {
                         );
                       })
                     )}
+                  <div className="flex items-center justify-between pt-1 text-xs">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={companyPage <= 1 || searchingCompanies}
+                        onClick={() => searchCompanies(companyQuery, companyPage - 1)}
+                        className="rounded-lg border border-slate-200 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 dark:border-navy-700 dark:text-slate-300 text-[11px]"
+                      >
+                        Prev
+                      </button>
+                      <span className="text-[11px] text-slate-500">
+                        Pg {companyPage}/{Math.max(1, Math.ceil(totalCompaniesCount / 20))} ({totalCompaniesCount.toLocaleString()} total)
+                      </span>
+                      <button
+                        type="button"
+                        disabled={companyPage >= Math.ceil(totalCompaniesCount / 20) || searchingCompanies}
+                        onClick={() => searchCompanies(companyQuery, companyPage + 1)}
+                        className="rounded-lg border border-slate-200 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 dark:border-navy-700 dark:text-slate-300 text-[11px]"
+                      >
+                        Next
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -844,13 +877,13 @@ export default function EmailCampaign() {
                 <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3 space-y-3 dark:border-navy-700 dark:bg-navy-900/50">
                   <h4 className="text-xs font-bold text-navy-900 dark:text-white uppercase tracking-wider">Recipient Details</h4>
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Recipient Email *</label>
+                    <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Recipient Email(s) * <span className="font-normal text-slate-400">(Supports multiple emails separated by comma)</span></label>
                     <input
-                      type="email"
+                      type="text"
                       required={sendMode === 'single'}
                       value={recipientEmail}
                       onChange={(e) => setRecipientEmail(e.target.value)}
-                      placeholder="E.g., procurement@client.com"
+                      placeholder="E.g., procurement@client.com, sarah@client.com"
                       className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
                     />
                   </div>
@@ -1186,7 +1219,32 @@ export default function EmailCampaign() {
                 )}
               </div>
 
-              <p className="text-[11px] text-slate-400">{Object.keys(selectedCompanies).length} selected</p>
+              <div className="flex items-center justify-between border-t border-slate-100 dark:border-navy-700 pt-3 text-xs">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={companyPage <= 1 || searchingCompanies}
+                    onClick={() => searchCompanies(companyQuery, companyPage - 1)}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 dark:border-navy-700 dark:text-slate-300"
+                  >
+                    Previous
+                  </button>
+                  <span className="text-slate-500 font-medium">
+                    Page {companyPage} of {Math.max(1, Math.ceil(totalCompaniesCount / 20))} ({totalCompaniesCount.toLocaleString()} total)
+                  </span>
+                  <button
+                    type="button"
+                    disabled={companyPage >= Math.ceil(totalCompaniesCount / 20) || searchingCompanies}
+                    onClick={() => searchCompanies(companyQuery, companyPage + 1)}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 dark:border-navy-700 dark:text-slate-300"
+                  >
+                    Next
+                  </button>
+                </div>
+                <span className="font-bold text-brand-600 dark:text-brand-400">
+                  {Object.keys(selectedCompanies).length} Selected
+                </span>
+              </div>
 
               <div className="flex justify-end gap-2 border-t border-slate-100 dark:border-navy-700 pt-4">
                 <button

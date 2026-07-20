@@ -139,10 +139,22 @@ export default function Newsletter() {
   const [manualRecipientEmails, setManualRecipientEmails] = useState('');
   const [selectedBroadcastCompanyIds, setSelectedBroadcastCompanyIds] = useState({});
   const [companySearchQuery, setCompanySearchQuery] = useState('');
+  const [companyPage, setCompanyPage] = useState(1);
+  const [companyTotalCount, setCompanyTotalCount] = useState(0);
   const [dbCompanies, setDbCompanies] = useState([]);
   const [subscribingUser, setSubscribingUser] = useState(false);
   const [userEmailInput, setUserEmailInput] = useState('');
   const [showSelfSubscribeModal, setShowSelfSubscribeModal] = useState(false);
+
+  const fetchDbCompanies = (q = '', pageNum = 1) => {
+    api.getCompanies({ query: q, page: pageNum, limit: 20 })
+      .then((res) => {
+        setDbCompanies(res?.companies || []);
+        setCompanyTotalCount(res?.total || 0);
+        setCompanyPage(pageNum);
+      })
+      .catch((err) => console.error(err));
+  };
 
   const handleSelfSubscribe = (e) => {
     e.preventDefault();
@@ -163,20 +175,14 @@ export default function Newsletter() {
 
   useEffect(() => {
     if (showComposeModal || showCompanyImport) {
-      const timer = setTimeout(() => {
-        api.getCompanies({ query: companySearchQuery, limit: 100 })
-          .then((res) => setDbCompanies(res?.companies || []))
-          .catch((err) => console.error(err));
-      }, 250);
+      const timer = setTimeout(() => fetchDbCompanies(companySearchQuery, 1), 250);
       return () => clearTimeout(timer);
     }
   }, [companySearchQuery, showComposeModal, showCompanyImport]);
 
   const openBroadcastModal = () => {
     setShowComposeModal(true);
-    api.getCompanies({ query: companySearchQuery, limit: 100 })
-      .then((res) => setDbCompanies(res?.companies || []))
-      .catch((err) => console.error(err));
+    fetchDbCompanies(companySearchQuery, 1);
   };
 
   return (
@@ -528,8 +534,30 @@ export default function Newsletter() {
                             onChange={(e) => setSelectedBroadcastCompanyIds({ ...selectedBroadcastCompanyIds, [c.id || c.uei]: e.target.checked })}
                             className="rounded border-slate-300 text-brand-500 focus:ring-brand-500"
                           />
-                        </label>
                       ))}
+                  </div>
+                  <div className="flex items-center justify-between pt-1 text-xs">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={companyPage <= 1}
+                        onClick={() => fetchDbCompanies(companySearchQuery, companyPage - 1)}
+                        className="rounded-lg border border-slate-200 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 text-[11px]"
+                      >
+                        Prev
+                      </button>
+                      <span className="text-[11px] text-slate-500">
+                        Pg {companyPage}/{Math.max(1, Math.ceil(companyTotalCount / 20))} ({companyTotalCount.toLocaleString()} total)
+                      </span>
+                      <button
+                        type="button"
+                        disabled={companyPage >= Math.ceil(companyTotalCount / 20)}
+                        onClick={() => fetchDbCompanies(companySearchQuery, companyPage + 1)}
+                        className="rounded-lg border border-slate-200 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 text-[11px]"
+                      >
+                        Next
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -640,7 +668,35 @@ export default function Newsletter() {
                 </label>
               ))}
             </div>
-            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-navy-700 mt-4">
+
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-navy-700 text-xs">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={companyPage <= 1}
+                  onClick={() => fetchDbCompanies(companySearchQuery, companyPage - 1)}
+                  className="rounded-lg border border-slate-200 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 text-[11px]"
+                >
+                  Prev
+                </button>
+                <span className="text-[11px] text-slate-500">
+                  Page {companyPage} of {Math.max(1, Math.ceil(companyTotalCount / 20))} ({companyTotalCount.toLocaleString()} total)
+                </span>
+                <button
+                  type="button"
+                  disabled={companyPage >= Math.ceil(companyTotalCount / 20)}
+                  onClick={() => fetchDbCompanies(companySearchQuery, companyPage + 1)}
+                  className="rounded-lg border border-slate-200 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 text-[11px]"
+                >
+                  Next
+                </button>
+              </div>
+              <span className="font-bold text-brand-600 dark:text-brand-400">
+                {Object.values(selectedCompanyIds).filter(Boolean).length} Selected
+              </span>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-3">
               <button type="button" onClick={() => setShowCompanyImport(false)} className="rounded-xl border px-4 py-2 text-xs font-semibold">Cancel</button>
               <button type="button" onClick={handleImportSelectedCompanies} disabled={importingCompanies} className="rounded-xl bg-brand-500 px-5 py-2 text-xs font-bold text-white">{importingCompanies ? <Loader2 className="animate-spin" size={14} /> : 'Import Selected'}</button>
             </div>
