@@ -30,6 +30,10 @@ export default function ProposalBuilder() {
   const [showEditCompanyModal, setShowEditCompanyModal] = useState(false);
   const [editForm, setEditForm] = useState({});
 
+  const [showAddInventoryModal, setShowAddInventoryModal] = useState(false);
+  const [inventoryMode, setInventoryMode] = useState('document');
+  const [inventoryForm, setInventoryForm] = useState({});
+
   const handleDownload = async (e, filename) => {
     e.preventDefault();
     try {
@@ -323,16 +327,12 @@ export default function ProposalBuilder() {
     });
   });
 
-  // Filter items based on selected tab
-  let filteredItems = renderedItems.filter(item => {
-    if (tab === 'all') return true;
-    if (tab === 'Completed') return item.status === 'Completed' || item.type === 'report';
-    if (tab === 'Draft') return item.status === 'Pending' || item.status === 'Processing' || item.type === 'task';
-    return true;
-  });
+  // Separate items into Drafts (Section 2) and History (Section 3)
+  let draftItems = renderedItems.filter(item => item.status === 'Pending' || item.status === 'Processing' || item.type === 'task');
+  let historyItems = renderedItems.filter(item => item.status === 'Completed' || item.type === 'report');
 
   if (proposalTypeFilter !== 'all') {
-    filteredItems = filteredItems.filter(item => item.mode === proposalTypeFilter);
+    draftItems = draftItems.filter(item => item.mode === proposalTypeFilter);
   }
 
   // Get CSS classes for the role badge
@@ -340,11 +340,14 @@ export default function ProposalBuilder() {
     if (mode === 'subcontract') {
       return { label: 'Subcontract Teaming', style: 'bg-violet-50 text-violet-700 dark:bg-violet-950/20 dark:text-violet-400 border border-violet-100 dark:border-violet-900/30' };
     }
+    if (mode === 'other') {
+      return { label: 'Product Match & Pitch', style: 'bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400 border border-amber-100 dark:border-amber-900/30' };
+    }
     return { label: 'Prime Responder', style: 'bg-blue-50 text-blue-700 dark:bg-blue-950/20 dark:text-blue-400 border border-blue-100 dark:border-blue-900/30' };
   };
 
   return (
-    <div>
+    <div className="pb-10">
       <PageHeader
         title="Proposal Builder"
         subtitle="Manage and build your direct RFP responses and subcontract pitches"
@@ -365,290 +368,328 @@ export default function ProposalBuilder() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-        {/* Left column: Company Inventory Panel */}
-        <div className="lg:col-span-1">
-          {/* ── Company Inventory Panel ── */}
-          <Card className="!p-0 overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-navy-800">
-              <div className="flex items-center gap-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-50 text-brand-600 dark:bg-navy-800 dark:text-brand-400">
-                  <Building2 size={18} />
-                </div>
-                <div>
-                  <h3 className="text-sm font-extrabold text-navy-900 dark:text-white">Our Company Profile</h3>
-                  <p className="text-xs text-slate-400 dark:text-slate-500">OrbitAvanya inventory used in proposals</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => {
-                    setEditForm({
-                      name: companyProfile?.name || 'OrbitAvanya Tech LLP',
-                      uei: companyProfile?.uei || 'ORBIT1234567',
-                      cage_code: companyProfile?.cage_code || '8A9B0',
-                      primary_naics: companyProfile?.primary_naics || '541512',
-                      primary_naics_desc: companyProfile?.primary_naics_desc || 'Computer Systems Design',
-                      city: companyProfile?.city || 'Dallas',
-                      state: companyProfile?.state || 'TX',
-                      country: companyProfile?.country || 'USA',
-                      email: companyProfile?.email || 'prasannadhamal982005@gmail.com',
-                      phone: companyProfile?.phone || '+1-214-555-0199',
-                      size: companyProfile?.size || 'Small',
-                      certifications: companyProfile?.certifications?.join(', ') || 'SBA 8(a), WOSB, HUBZone',
-                    });
-                    setShowEditCompanyModal(true);
-                  }}
-                  className="inline-flex items-center gap-1 rounded-xl bg-brand-500 px-3 py-1.5 text-xs font-bold text-white shadow-soft hover:bg-brand-600 transition-colors"
-                >
-                  Edit / Update Profile
-                </button>
-                {companyLoading && <Loader2 className="animate-spin text-brand-400" size={16} />}
-              </div>
+      <div className="flex flex-col gap-8">
+        {/* SECTION 1: Our Company Profile & Inventory */}
+        <section>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-bold text-navy-900 dark:text-white flex items-center gap-2">
+              <Building2 className="text-brand-500" size={20} />
+              Our Company Profile & Inventory
+            </h2>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setEditForm({
+                    name: companyProfile?.name || 'OrbitAvanya Tech LLP',
+                    uei: companyProfile?.uei || 'ORBIT1234567',
+                    cage_code: companyProfile?.cage_code || '8A9B0',
+                    primary_naics: companyProfile?.primary_naics || '541512',
+                    primary_naics_desc: companyProfile?.primary_naics_desc || 'Computer Systems Design',
+                    city: companyProfile?.city || 'Dallas',
+                    state: companyProfile?.state || 'TX',
+                    country: companyProfile?.country || 'USA',
+                    email: companyProfile?.email || 'prasannadhamal982005@gmail.com',
+                    phone: companyProfile?.phone || '+1-214-555-0199',
+                    size: companyProfile?.size || 'Small',
+                    certifications: companyProfile?.certifications?.join(', ') || 'SBA 8(a), WOSB, HUBZone',
+                  });
+                  setShowEditCompanyModal(true);
+                }}
+                className="flex items-center gap-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 px-4 py-2 text-xs font-bold text-slate-700 dark:bg-navy-800 dark:hover:bg-navy-700 dark:text-slate-300 transition-colors"
+              >
+                Edit / Update Profile
+              </button>
+              <button
+                onClick={() => {
+                  setInventoryForm({
+                    name: '',
+                    uei: '',
+                    cage_code: '',
+                    primary_naics: '',
+                  });
+                  setShowAddInventoryModal(true);
+                }}
+                className="flex items-center gap-1.5 rounded-xl bg-brand-50 hover:bg-brand-100 px-4 py-2 text-xs font-bold text-brand-700 dark:bg-brand-950/40 dark:text-brand-400 transition-colors"
+              >
+                <Database size={14} /> Add Inventory / Document Data
+              </button>
             </div>
-
+          </div>
+          
+          <Card className="!p-0 overflow-hidden">
             {companyProfile ? (
-              <div className="p-5 space-y-4">
-                {/* Basic Info */}
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { label: 'Company Name', value: companyProfile.name || companyProfile.company_name || 'OrbitAvanya Tech LLP' },
-                    { label: 'UEI', value: companyProfile.uei || 'N/A' },
-                    { label: 'CAGE Code', value: companyProfile.cage_code || 'N/A' },
-                    { label: 'NAICS', value: companyProfile.primary_naics || 'N/A' },
-                    { label: 'State', value: companyProfile.state || 'TX' },
-                    { label: 'Size', value: companyProfile.size || 'Small' },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="rounded-xl bg-slate-50 dark:bg-navy-900 p-3">
-                      <p className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500 font-semibold mb-0.5">{label}</p>
-                      <p className="text-sm font-bold text-navy-900 dark:text-white truncate">{value}</p>
-                    </div>
-                  ))}
+              <div className="p-6">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1">Company Name</p>
+                    <p className="text-sm font-bold text-navy-900 dark:text-white">{companyProfile.name || companyProfile.company_name || 'OrbitAvanya Tech LLP'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1">UEI</p>
+                    <p className="text-sm font-bold text-navy-900 dark:text-white">{companyProfile.uei || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1">CAGE Code</p>
+                    <p className="text-sm font-bold text-navy-900 dark:text-white">{companyProfile.cage_code || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1">Primary NAICS</p>
+                    <p className="text-sm font-bold text-navy-900 dark:text-white">{companyProfile.primary_naics || 'N/A'}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{companyProfile.primary_naics_desc}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1">State / Location</p>
+                    <p className="text-sm font-bold text-navy-900 dark:text-white">{companyProfile.state || 'TX'}, {companyProfile.country || 'USA'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1">Size</p>
+                    <p className="text-sm font-bold text-navy-900 dark:text-white">{companyProfile.size || 'Small'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1">Contact Email</p>
+                    <p className="text-sm font-bold text-navy-900 dark:text-white">{companyProfile.email || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1">Contact Phone</p>
+                    <p className="text-sm font-bold text-navy-900 dark:text-white">{companyProfile.phone || 'N/A'}</p>
+                  </div>
                 </div>
 
-                {/* NAICS codes */}
-                {companyProfile.naics_codes?.length > 0 && (
-                  <div>
-                    <p className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500 font-semibold mb-2">All NAICS Codes</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {companyProfile.naics_codes.slice(0, 8).map(code => (
-                        <span key={code} className="inline-flex items-center rounded-full bg-brand-50 text-brand-700 dark:bg-navy-800 dark:text-brand-300 px-2.5 py-0.5 text-xs font-semibold">
-                          {code}
-                        </span>
-                      ))}
+                <div className="mt-6 flex flex-wrap gap-x-8 gap-y-4 pt-6 border-t border-slate-100 dark:border-navy-800">
+                  {companyProfile.certifications?.length > 0 && (
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-2">Certifications</p>
+                      <div className="flex flex-wrap gap-2">
+                        {companyProfile.certifications.map(cert => (
+                          <span key={cert} className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 px-3 py-1 text-xs font-semibold">
+                            {cert}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Certifications */}
-                {companyProfile.certifications?.length > 0 && (
-                  <div>
-                    <p className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500 font-semibold mb-2">Certifications</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {companyProfile.certifications.map(cert => (
-                        <span key={cert} className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 px-2.5 py-0.5 text-xs font-semibold">
-                          {cert}
-                        </span>
-                      ))}
+                  {companyProfile.past_performance_count !== undefined && (
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-2">Experience</p>
+                      <div className="flex items-center gap-2">
+                        <Trophy className="text-amber-500" size={18} />
+                        <p className="text-sm font-bold text-navy-900 dark:text-white">
+                          {companyProfile.past_performance_count} Past Performance Records
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                )}
-
-                {/* Past performance count */}
-                {companyProfile.past_performance_count !== undefined && (
-                  <div className="flex items-center gap-2 rounded-xl bg-slate-50 dark:bg-navy-900 p-3">
-                    <Trophy className="text-amber-500" size={16} />
-                    <p className="text-sm font-semibold text-navy-900 dark:text-white">
-                      {companyProfile.past_performance_count} Past Performance Record{companyProfile.past_performance_count !== 1 ? 's' : ''}
-                    </p>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center py-10 text-center px-6">
-                <Building2 className="text-slate-300 dark:text-slate-600 mb-3" size={36} />
-                <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+              <div className="flex flex-col items-center justify-center py-12 text-center px-6">
+                <Building2 className="text-slate-300 dark:text-slate-600 mb-3" size={48} />
+                <p className="text-base font-semibold text-slate-500 dark:text-slate-400">
                   {companyLoading ? 'Loading company data...' : 'Company profile not found'}
                 </p>
-                <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                  Add your company details in the Companies section to see inventory here.
+                <p className="text-sm text-slate-400 dark:text-slate-500 mt-2 max-w-md">
+                  Add your company details to use them automatically in generated proposals.
                 </p>
               </div>
             )}
           </Card>
-        </div>
+        </section>
 
-        {/* Right column: list of active / completed proposals */}
-        <div className="flex flex-col gap-5 lg:col-span-2">
-          {/* Tabs bar */}
-          <div className="flex gap-2">
-            {[
-              { key: 'all', label: 'All Projects' },
-              { key: 'Draft', label: 'Drafts & Tasks' },
-              { key: 'Completed', label: 'Completed Reports' }
-            ].map((t) => (
-              <button
-                key={t.key}
-                onClick={() => setTab(t.key)}
-                className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors ${
-                  tab === t.key
-                    ? 'bg-brand-500 text-white'
-                    : 'bg-white text-slate-500 border border-slate-200 dark:bg-navy-800 dark:border-navy-700 dark:text-slate-400'
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
+        {/* SECTION 2: RFP & Proposal Drafts */}
+        <section>
+          <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <h2 className="text-lg font-bold text-navy-900 dark:text-white flex items-center gap-2">
+              <LayoutTemplate className="text-brand-500" size={20} />
+              RFP & Proposal Drafts
+            </h2>
+            
+            <div className="flex bg-slate-100 p-1 rounded-xl dark:bg-navy-800 self-start">
+              {[
+                { value: 'all', label: 'All Proposals' },
+                { value: 'prime', label: 'Prime RFP Response' },
+                { value: 'subcontract', label: 'Subcontract Response' },
+                { value: 'other', label: 'Product Match & Pitch' },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setProposalTypeFilter(opt.value)}
+                  className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                    proposalTypeFilter === opt.value
+                      ? 'bg-white text-brand-600 shadow-sm dark:bg-navy-700 dark:text-brand-400'
+                      : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* Proposal type filter tabs */}
-          <div className="mb-4 flex items-center gap-2 flex-wrap">
-            {[
-              { value: 'all', label: 'All' },
-              { value: 'prime', label: 'Prime Contract' },
-              { value: 'subcontract', label: 'Subcontract' },
-            ].map(opt => (
-              <button
-                key={opt.value}
-                onClick={() => setProposalTypeFilter(opt.value)}
-                className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold transition-all ${
-                  proposalTypeFilter === opt.value
-                    ? 'bg-brand-500 text-white shadow-sm'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-navy-800 dark:text-slate-300 dark:hover:bg-navy-700'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-            <span className="text-xs text-slate-400 dark:text-slate-500 ml-1">
-              {filteredItems.length} proposal{filteredItems.length !== 1 ? 's' : ''}
-            </span>
-          </div>
-
-          {/* Loading spinner */}
           {loading ? (
             <Card className="flex flex-col items-center justify-center py-20">
               <Loader2 className="animate-spin text-brand-500" size={32} />
               <p className="mt-4 text-sm text-slate-500 font-medium">Loading projects database...</p>
             </Card>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {filteredItems.map((p) => {
+          ) : draftItems.length > 0 ? (
+            <div className="flex flex-col gap-4">
+              {draftItems.map((p) => {
                 const badge = getModeBadge(p.mode);
                 return (
                   <Card key={p.id}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        {/* Role Badge and Solicitation badge */}
-                        <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
-                          <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase ${badge.style}`}>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ${badge.style}`}>
                             {badge.label}
                           </span>
                           {p.solicitation && (
-                            <span className="rounded-full bg-slate-100 dark:bg-navy-900 border border-slate-200 dark:border-navy-800 px-2 py-0.5 text-[9px] font-mono text-slate-500 dark:text-slate-400">
+                            <span className="rounded-full bg-slate-100 dark:bg-navy-900 border border-slate-200 dark:border-navy-800 px-2.5 py-1 text-[10px] font-mono text-slate-600 dark:text-slate-400">
                               RFP: {p.solicitation}
                             </span>
                           )}
+                          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold ${
+                            p.status === 'Processing' ? 'bg-brand-50 text-brand-700 dark:bg-brand-950/20 dark:text-brand-400 animate-pulse' :
+                            'bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400'
+                          }`}>
+                            {p.status}
+                          </span>
                         </div>
-                        <p className="text-sm font-bold text-navy-900 dark:text-white truncate" title={p.title}>
+                        <h3 className="text-base font-bold text-navy-900 dark:text-white truncate" title={p.title}>
                           {p.title}
+                        </h3>
+                        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                          Target Entity: {p.company} • Requested: {p.updated}
                         </p>
-                        <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-                          Target Entity: {p.company}
-                        </p>
                       </div>
-                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
-                        p.status === 'Completed' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400' :
-                        p.status === 'Processing' ? 'bg-brand-50 text-brand-700 dark:bg-brand-950/20 dark:text-brand-400 animate-pulse' :
-                        'bg-slate-100 text-slate-500 dark:bg-navy-900 dark:text-slate-500'
-                      }`}>
-                        {p.status}
-                      </span>
-                    </div>
 
-                    {/* Progress bar section */}
-                    <div className="mt-3">
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <span className="text-[11px] text-slate-400 font-medium truncate max-w-[280px]">
-                          {p.status === 'Processing' ? (p.message || 'Building proposal...') : 'Progress'}
-                        </span>
-                        <span className="text-xs font-bold text-navy-900 dark:text-white">{p.progress}%</span>
-                      </div>
-                      <div className="w-full h-2 bg-slate-100 dark:bg-navy-900 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-500 ${
-                            p.status === 'Completed' ? 'bg-emerald-500' :
-                            p.status === 'Processing' ? 'bg-brand-500 animate-pulse' :
-                            'bg-slate-400'
-                          }`}
-                          style={{ width: `${p.progress}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="mt-4 flex items-center justify-between border-t border-slate-50 dark:border-navy-900/50 pt-2.5">
-                      <p className="text-[11px] text-slate-400">{p.type === 'report' ? 'Generated' : 'Requested'} {p.updated}</p>
-                      
-                      <div className="flex items-center gap-1.5">
-                        {/* Show build or rebuild button for non-completed draft requests */}
-                        {p.type === 'draft_request' && p.status !== 'Completed' && (
+                      <div className="flex-shrink-0 w-full md:w-64">
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <span className="text-xs text-slate-500 font-medium truncate">
+                            {p.status === 'Processing' ? (p.message || 'Building proposal...') : 'Ready to Build'}
+                          </span>
+                          <span className="text-xs font-bold text-navy-900 dark:text-white">{p.progress}%</span>
+                        </div>
+                        <div className="w-full h-2.5 bg-slate-100 dark:bg-navy-900 rounded-full overflow-hidden mb-3">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              p.status === 'Processing' ? 'bg-brand-500 animate-pulse' : 'bg-slate-300 dark:bg-slate-600'
+                            }`}
+                            style={{ width: `${p.progress}%` }}
+                          />
+                        </div>
+                        <div className="flex justify-end">
                           <button
                             onClick={() => handleOpenWizard(p.rawDraft, p.id)}
                             disabled={p.isReallyRunning || triggeringId !== null}
-                            className="flex items-center gap-1 rounded-xl bg-brand-500 px-3.5 py-1.5 text-xs font-bold text-white shadow-soft hover:bg-brand-600 disabled:opacity-50 transition-colors"
+                            className="w-full md:w-auto flex items-center justify-center gap-1.5 rounded-xl bg-brand-500 px-4 py-2 text-sm font-bold text-white shadow-soft hover:bg-brand-600 disabled:opacity-50 transition-colors"
                           >
                             {p.isReallyRunning || triggeringId === p.id ? (
                               <>
-                                <Loader2 size={12} className="animate-spin" />
+                                <Loader2 size={14} className="animate-spin" />
                                 <span>Building...</span>
                               </>
                             ) : (
                               <>
-                                <Play size={12} />
+                                <Play size={14} />
                                 <span>{p.status === 'Pending' ? 'Build Proposal' : 'Rebuild Proposal'}</span>
                               </>
                             )}
                           </button>
-                        )}
-
-                        {/* View Document modal trigger button */}
-                        {p.filename && (
-                          <button
-                            onClick={() => setPreviewing(p)}
-                            className="flex items-center gap-1 rounded-xl bg-violet-50 hover:bg-violet-100 px-3.5 py-1.5 text-xs font-bold text-violet-700 dark:bg-violet-950/40 dark:text-violet-400 transition-colors"
-                            title="View proposal in viewer"
-                          >
-                            <Eye size={12} />
-                            View Document
-                          </button>
-                        )}
-
-                        {/* Download button for completed drafts */}
-                        {p.filename && (
-                           <button
-                             onClick={(e) => handleDownload(e, p.filename)}
-                             className="flex items-center gap-1 rounded-xl bg-brand-50 hover:bg-brand-100 px-3.5 py-1.5 text-xs font-bold text-brand-700 dark:bg-brand-950/40 dark:text-brand-400 transition-colors"
-                             title="Download PDF"
-                           >
-                             <FileDown size={12} />
-                             Download PDF
-                           </button>
-                        )}
+                        </div>
                       </div>
                     </div>
                   </Card>
                 );
               })}
-
-              {filteredItems.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-10 text-center text-slate-400 dark:text-slate-500">
-                  <Database size={28} className="mb-2 text-slate-300" />
-                  No proposals found for this category.
-                </div>
-              )}
             </div>
+          ) : (
+             <div className="flex flex-col items-center justify-center py-12 text-center text-slate-400 dark:text-slate-500 border-2 border-dashed border-slate-200 dark:border-navy-800 rounded-2xl">
+               <Database size={32} className="mb-3 text-slate-300" />
+               <p className="text-sm font-medium">No pending drafts or active tasks.</p>
+               <p className="text-xs mt-1">Start a new proposal from the Tenders page.</p>
+             </div>
           )}
-        </div>
+        </section>
+
+        {/* SECTION 3: Generated Reports & Proposals History */}
+        <section>
+          <div className="mb-4 flex items-center gap-2">
+            <h2 className="text-lg font-bold text-navy-900 dark:text-white flex items-center gap-2">
+              <FileDown className="text-brand-500" size={20} />
+              Generated Reports & Proposals History
+            </h2>
+          </div>
+
+          <Card className="!p-0 overflow-hidden">
+            {historyItems.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase text-slate-500 dark:bg-navy-900/50 dark:text-slate-400">
+                    <tr>
+                      <th className="px-6 py-4 font-bold">Proposal Title</th>
+                      <th className="px-6 py-4 font-bold">Solicitation</th>
+                      <th className="px-6 py-4 font-bold">Type</th>
+                      <th className="px-6 py-4 font-bold">Date Completed</th>
+                      <th className="px-6 py-4 font-bold text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-navy-800">
+                    {historyItems.map((p) => {
+                      const badge = getModeBadge(p.mode);
+                      return (
+                        <tr key={p.id} className="hover:bg-slate-50/50 dark:hover:bg-navy-800/50 transition-colors">
+                          <td className="px-6 py-4">
+                            <p className="font-bold text-navy-900 dark:text-white max-w-md truncate" title={p.title}>
+                              {p.title}
+                            </p>
+                            <p className="text-xs text-slate-500 mt-0.5">Entity: {p.company}</p>
+                          </td>
+                          <td className="px-6 py-4 font-mono text-xs text-slate-600 dark:text-slate-400">
+                            {p.solicitation || 'N/A'}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ${badge.style}`}>
+                              {badge.label}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-xs text-slate-500">
+                            {p.updated}
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center justify-end gap-2">
+                              {p.filename && (
+                                <>
+                                  <button
+                                    onClick={() => setPreviewing(p)}
+                                    className="flex items-center gap-1.5 rounded-xl bg-violet-50 hover:bg-violet-100 px-3 py-1.5 text-xs font-bold text-violet-700 dark:bg-violet-950/40 dark:text-violet-400 transition-colors"
+                                  >
+                                    <Eye size={14} /> View
+                                  </button>
+                                  <button
+                                    onClick={(e) => handleDownload(e, p.filename)}
+                                    className="flex items-center gap-1.5 rounded-xl bg-brand-50 hover:bg-brand-100 px-3 py-1.5 text-xs font-bold text-brand-700 dark:bg-brand-950/40 dark:text-brand-400 transition-colors"
+                                  >
+                                    <FileDown size={14} /> Download
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 text-center text-slate-400 dark:text-slate-500">
+                <FileDown size={32} className="mb-3 text-slate-300" />
+                <p className="text-sm font-medium">No completed proposals yet.</p>
+              </div>
+            )}
+          </Card>
+        </section>
       </div>
 
       {/* Inline Document Preview Modal */}
@@ -773,6 +814,195 @@ export default function ProposalBuilder() {
           </div>
         </div>
       )}
+
+      {/* Add Inventory Modal */}
+      {showAddInventoryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/70 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-2xl rounded-2xl bg-white shadow-soft dark:bg-navy-800 border border-slate-100 dark:border-navy-700 overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-navy-700">
+              <h3 className="text-sm font-bold text-navy-900 dark:text-white flex items-center gap-2">
+                <Database size={16} className="text-brand-500" />
+                Add Inventory / Document Data
+              </h3>
+              <button
+                onClick={() => setShowAddInventoryModal(false)}
+                className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-navy-900 dark:hover:bg-navy-700 dark:hover:text-white"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            
+            <div className="flex bg-slate-50 border-b border-slate-100 dark:bg-navy-900/50 dark:border-navy-700 px-5 pt-3">
+              {[
+                { id: 'document', label: 'MongoDB JSON Document' },
+                { id: 'manual', label: 'Manual Entry' },
+                { id: 'upload', label: 'File Upload (.json / .csv)' }
+              ].map(mode => (
+                <button
+                  key={mode.id}
+                  onClick={() => setInventoryMode(mode.id)}
+                  className={`px-4 py-2 text-xs font-bold border-b-2 transition-colors ${
+                    inventoryMode === mode.id
+                      ? 'border-brand-500 text-brand-600 dark:text-brand-400'
+                      : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'
+                  }`}
+                >
+                  {mode.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="p-5 overflow-y-auto flex-1">
+              {inventoryMode === 'manual' && (
+                <div className="grid grid-cols-2 gap-4">
+                  {['name', 'uei', 'cage_code', 'primary_naics', 'state', 'email', 'phone', 'size'].map(field => (
+                    <div key={field}>
+                      <label className="mb-1 block text-[10px] uppercase tracking-wide text-slate-500 font-semibold">{field.replace('_', ' ')}</label>
+                      <input
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                        value={inventoryForm[field] || ''}
+                        onChange={e => setInventoryForm({ ...inventoryForm, [field]: e.target.value })}
+                        placeholder={`Enter ${field.replace('_', ' ')}`}
+                      />
+                    </div>
+                  ))}
+                  <div className="col-span-2">
+                    <label className="mb-1 block text-[10px] uppercase tracking-wide text-slate-500 font-semibold">Additional Inventory Details</label>
+                    <textarea 
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white h-24"
+                      placeholder="Paste any additional products, services, or descriptions here..."
+                    />
+                  </div>
+                </div>
+              )}
+
+              {inventoryMode === 'upload' && (
+                <div className="flex flex-col items-center justify-center py-16 px-6 border-2 border-dashed border-slate-200 dark:border-navy-700 rounded-xl bg-slate-50/50 dark:bg-navy-900/20">
+                  <FileDown size={40} className="text-brand-400 mb-4" />
+                  <p className="text-sm font-bold text-navy-900 dark:text-white mb-1">Drag and drop your files here</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 text-center">
+                    Support for .json, .csv files containing company profile, NAICS lists, past performances, or product inventory.
+                  </p>
+                  <button className="rounded-xl bg-white border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700 shadow-sm dark:bg-navy-800 dark:border-navy-600 dark:text-slate-300">
+                    Browse Files
+                  </button>
+                </div>
+              )}
+
+              {inventoryMode === 'document' && (
+                <div className="font-mono text-sm">
+                  <div className="bg-slate-900 rounded-xl p-4 text-slate-300">
+                    <div><span className="text-pink-400">{"{"}</span></div>
+                    
+                    <div className="pl-4 flex items-center py-1 group">
+                      <span className="text-blue-300">"name"</span><span className="text-slate-500 mr-2">:</span>
+                      <input 
+                        className="bg-slate-800/50 border border-slate-700 text-green-300 px-2 py-0.5 rounded outline-none focus:border-brand-500 flex-1" 
+                        placeholder="OrbitAvanya Tech LLP"
+                        value={inventoryForm.name || ''}
+                        onChange={e => setInventoryForm({ ...inventoryForm, name: e.target.value })}
+                      />
+                      <span className="text-slate-500 ml-1">,</span>
+                      <span className="text-red-400 ml-2 font-bold" title="Required">*</span>
+                      <span className="text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-400 ml-2 hidden group-hover:inline-block">[string]</span>
+                    </div>
+
+                    <div className="pl-4 flex items-center py-1 group">
+                      <span className="text-blue-300">"uei"</span><span className="text-slate-500 mr-2">:</span>
+                      <input 
+                        className="bg-slate-800/50 border border-slate-700 text-green-300 px-2 py-0.5 rounded outline-none focus:border-brand-500 flex-1" 
+                        placeholder="ORBIT1234567"
+                        value={inventoryForm.uei || ''}
+                        onChange={e => setInventoryForm({ ...inventoryForm, uei: e.target.value })}
+                      />
+                      <span className="text-slate-500 ml-1">,</span>
+                      <span className="text-red-400 ml-2 font-bold" title="Required">*</span>
+                      <span className="text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-400 ml-2 hidden group-hover:inline-block">[string]</span>
+                    </div>
+
+                    <div className="pl-4 flex items-center py-1 group">
+                      <span className="text-blue-300">"cage_code"</span><span className="text-slate-500 mr-2">:</span>
+                      <input 
+                        className="bg-slate-800/50 border border-slate-700 text-green-300 px-2 py-0.5 rounded outline-none focus:border-brand-500 flex-1" 
+                        placeholder="8A9B0"
+                        value={inventoryForm.cage_code || ''}
+                        onChange={e => setInventoryForm({ ...inventoryForm, cage_code: e.target.value })}
+                      />
+                      <span className="text-slate-500 ml-1">,</span>
+                      <span className="text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-400 ml-2 hidden group-hover:inline-block">[string]</span>
+                    </div>
+                    
+                    <div className="pl-4 flex items-center py-1 group">
+                      <span className="text-blue-300">"primary_naics"</span><span className="text-slate-500 mr-2">:</span>
+                      <input 
+                        className="bg-slate-800/50 border border-slate-700 text-green-300 px-2 py-0.5 rounded outline-none focus:border-brand-500 flex-1" 
+                        placeholder="541512"
+                        value={inventoryForm.primary_naics || ''}
+                        onChange={e => setInventoryForm({ ...inventoryForm, primary_naics: e.target.value })}
+                      />
+                      <span className="text-slate-500 ml-1">,</span>
+                      <span className="text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-400 ml-2 hidden group-hover:inline-block">[string]</span>
+                    </div>
+
+                    <div className="pl-4 flex items-center py-1 group">
+                      <span className="text-blue-300">"size"</span><span className="text-slate-500 mr-2">:</span>
+                      <select 
+                        className="bg-slate-800/50 border border-slate-700 text-amber-300 px-2 py-0.5 rounded outline-none focus:border-brand-500 w-48"
+                        value={inventoryForm.size || ''}
+                        onChange={e => setInventoryForm({ ...inventoryForm, size: e.target.value })}
+                      >
+                        <option value="">Select Size...</option>
+                        <option value="Small">"Small"</option>
+                        <option value="Large">"Large"</option>
+                        <option value="Other">"Other"</option>
+                      </select>
+                      <span className="text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-400 ml-2 hidden group-hover:inline-block">[enum]</span>
+                    </div>
+
+                    <div className="pl-4 py-1">
+                      <span className="text-blue-300">"certifications"</span><span className="text-slate-500">: </span>
+                      <span className="text-yellow-300">["SBA 8(a)", "WOSB"]</span><span className="text-slate-500">,</span>
+                    </div>
+
+                    <div className="pl-4 py-1 text-slate-500 italic">
+                      // Add more nested objects or arrays here...
+                    </div>
+                    
+                    <div><span className="text-pink-400">{"}"}</span></div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-slate-100 px-5 py-4 dark:border-navy-700 bg-slate-50 dark:bg-navy-900/50 mt-auto">
+              <button
+                onClick={() => setShowAddInventoryModal(false)}
+                className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-navy-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    await api.updateOwnCompanyProfile({
+                      ...inventoryForm
+                    });
+                    fetchOwnCompany();
+                    setShowAddInventoryModal(false);
+                    notify('Inventory Updated', 'Company profile and inventory data successfully added.');
+                  } catch (err) {
+                    alert('Failed to save data: ' + err.message);
+                  }
+                }}
+                className="rounded-xl bg-brand-500 px-4 py-2 text-xs font-bold text-white hover:bg-brand-600 flex items-center gap-1.5"
+              >
+                <Database size={14} /> Add Document
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

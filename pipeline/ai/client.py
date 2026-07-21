@@ -90,6 +90,7 @@ class OllamaAIClient:
         self.host: str = getattr(_settings, "ollama_host", "") or ""
         self.api_key: str = getattr(_settings, "OLLAMA_API_KEY", "") or ""
         self.temperature: float = float(getattr(_settings, "OLLAMA_TEMPERATURE", 0.1) or 0.1)
+        self.timeout = getattr(_settings, "OLLAMA_TIMEOUT", 300)
 
         raw_fallbacks = getattr(_settings, "OLLAMA_MODEL_FALLBACKS", "") or ""
         parsed_fallbacks = [m.strip() for m in raw_fallbacks.split(",") if m.strip()]
@@ -100,7 +101,7 @@ class OllamaAIClient:
         try:
             if not _OLLAMA_AVAILABLE or _ollama_lib is None:
                 return False
-            client_kwargs = {}
+            client_kwargs: Dict[str, Any] = {"timeout": self.timeout}
             if self.host:
                 client_kwargs["host"] = self.host
             if self.api_key:
@@ -257,7 +258,7 @@ class OllamaAIClient:
     # ------------------------------------------------------------------
 
     def _call_ollama(self, messages: List[Dict[str, str]], model: str, json_mode: bool) -> str:
-        client_kwargs: Dict[str, Any] = {}
+        client_kwargs: Dict[str, Any] = {"timeout": self.timeout}
         if self.host:
             client_kwargs["host"] = self.host
         headers = {}
@@ -344,7 +345,7 @@ class OllamaAIClient:
             logger.info(f"[Gemini Fallback] -> Calling Gemini API ({model})...")
 
             try:
-                with httpx.Client(timeout=45) as client:
+                with httpx.Client(timeout=self.timeout) as client:
                     resp = client.post(url, json=payload, headers=headers)
 
                 if resp.status_code == 429:
@@ -394,7 +395,7 @@ class OllamaAIClient:
 
         logger.info(f"[OpenRouter Fallback] -> Calling OpenRouter ({model})...")
 
-        with httpx.Client(timeout=45) as client:
+        with httpx.Client(timeout=self.timeout) as client:
             resp = client.post(f"{base_url}/chat/completions", json=payload, headers=headers)
 
         if resp.status_code == 429:

@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
+import { useNotifications } from '../context/NotificationContext.jsx';
 import {
   Building2, FolderOpen, Target, Send, Users, DollarSign, Plus, ChevronDown,
   Calendar, Eye, FileText, MoreHorizontal, ArrowUp, Users2, Search, Heart, Handshake, Trophy, ExternalLink, Loader2, RefreshCw
@@ -32,6 +33,7 @@ export default function Dashboard() {
   const [error, setError] = useState('');
   const [syncing, setSyncing] = useState(false);
   const [lastSynced, setLastSynced] = useState(null);
+  const { createAlert } = useNotifications();
 
   const fetchDashboardData = () => {
     setLoading(true);
@@ -50,14 +52,25 @@ export default function Dashboard() {
 
   // Re-fetches live data from the database and refreshes everything on the
   // dashboard in place, without showing the full-page loading state.
-  const handleSyncNow = () => {
+  const handleSyncAll = () => {
     if (syncing) return;
     setSyncing(true);
     setError('');
-    api.getDashboardData()
+
+    Promise.all([
+      api.syncTenders(),
+      api.getReports(),
+      api.getAllDraftRequests(),
+      api.getCompanies(),
+      api.getCRMPipeline()
+    ])
+      .then(() => {
+        return api.getDashboardData();
+      })
       .then((res) => {
         setData(res);
         setLastSynced(new Date());
+        createAlert('Data Synced', 'Data synced successfully across SAM.gov, Tenders, Reports, and CRM!', '/dashboard');
       })
       .catch((err) => {
         setError(err.message || 'Failed to sync dashboard data.');
@@ -116,7 +129,7 @@ export default function Dashboard() {
             </span>
           )}
           <button
-            onClick={handleSyncNow}
+            onClick={handleSyncAll}
             disabled={syncing}
             className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-4 py-2.5 text-sm font-bold text-navy-900 dark:text-white shadow-soft hover:bg-slate-50 dark:hover:bg-navy-800 disabled:opacity-60 disabled:cursor-not-allowed"
           >
