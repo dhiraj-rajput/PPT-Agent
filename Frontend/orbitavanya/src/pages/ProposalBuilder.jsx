@@ -26,7 +26,7 @@ export default function ProposalBuilder() {
 
   // ----- Track individual triggering states -----
   const [triggeringId, setTriggeringId] = useState(null);
-  const [wizardModal, setWizardModal] = useState(null);
+  const [activeWizardItem, setActiveWizardItem] = useState(null);
   const [showEditCompanyModal, setShowEditCompanyModal] = useState(false);
   const [editForm, setEditForm] = useState({});
 
@@ -191,34 +191,30 @@ export default function ProposalBuilder() {
 
   // ----- Start building a pending draft manually -----
   const handleOpenWizard = (d, idKey) => {
-    setWizardModal({
+    setActiveWizardItem({
+      ...d,
       idKey: idKey,
-      d: d,
-      mode: d.mode,
       solicitation: d.solicitation_number || d.notice_id,
-      winner: d.target_company || d.award_awardee || '',
-      tender_title: d.tender_title || 'Tender Proposal'
+      title: d.tender_title || 'Tender Proposal',
+      mode: d.mode,
+      winner: d.target_company || d.award_awardee || ''
     });
   };
 
-  const handleConfirmWizard = (wizardConfig) => {
-    if (!wizardModal) return;
-    const { idKey, mode, solicitation, winner, tender_title } = wizardModal;
-    
-    setTriggeringId(idKey);
-    setWizardModal(null);
+  const startProposalGeneration = (item, wizardData) => {
+    setTriggeringId(item.idKey);
 
-    api.createProposal({
-      mode: mode,
-      solicitation: solicitation,
-      winner: winner,
-      tender_title: tender_title,
-      wizard_config: wizardConfig
+    api.generateProposal({
+      mode: item.mode,
+      solicitation: item.solicitation,
+      winner: item.winner,
+      tender_title: item.title,
+      wizard_data: wizardData
     })
       .then(() => {
         setTriggeringId(null);
         fetchData();
-        notify('Proposal build started', `Generating a draft for "${d.tender_title || solicitation || 'this opportunity'}".`, '/proposal-builder');
+        notify('Proposal build started', `Generating a draft for "${item.title || item.solicitation || 'this opportunity'}".`, '/proposal-builder');
       })
       .catch(err => {
         setTriggeringId(null);
@@ -333,6 +329,7 @@ export default function ProposalBuilder() {
 
   if (proposalTypeFilter !== 'all') {
     draftItems = draftItems.filter(item => item.mode === proposalTypeFilter);
+    historyItems = historyItems.filter(item => item.mode === proposalTypeFilter);
   }
 
   // Get CSS classes for the role badge
@@ -747,13 +744,16 @@ export default function ProposalBuilder() {
       )}
 
       {/* Pre-Generation Wizard Modal */}
-      {wizardModal && (
+      {activeWizardItem && (
         <PreGenerationWizard
-          tenderId={wizardModal.d?.id}
-          solicitationNumber={wizardModal.solicitation}
-          proposalType={wizardModal.mode}
-          onCancel={() => setWizardModal(null)}
-          onConfirmGenerate={handleConfirmWizard}
+          solicitationNumber={activeWizardItem.solicitation || activeWizardItem.title}
+          proposalType={activeWizardItem.mode || 'prime'}
+          onCancel={() => setActiveWizardItem(null)}
+          onConfirmGenerate={(wizardData) => {
+            const item = activeWizardItem;
+            setActiveWizardItem(null);
+            startProposalGeneration(item, wizardData);
+          }}
         />
       )}
 
@@ -890,86 +890,63 @@ export default function ProposalBuilder() {
               )}
 
               {inventoryMode === 'document' && (
-                <div className="font-mono text-sm">
-                  <div className="bg-slate-900 rounded-xl p-4 text-slate-300">
-                    <div><span className="text-pink-400">{"{"}</span></div>
-                    
-                    <div className="pl-4 flex items-center py-1 group">
-                      <span className="text-blue-300">"name"</span><span className="text-slate-500 mr-2">:</span>
-                      <input 
-                        className="bg-slate-800/50 border border-slate-700 text-green-300 px-2 py-0.5 rounded outline-none focus:border-brand-500 flex-1" 
-                        placeholder="OrbitAvanya Tech LLP"
-                        value={inventoryForm.name || ''}
-                        onChange={e => setInventoryForm({ ...inventoryForm, name: e.target.value })}
-                      />
-                      <span className="text-slate-500 ml-1">,</span>
-                      <span className="text-red-400 ml-2 font-bold" title="Required">*</span>
-                      <span className="text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-400 ml-2 hidden group-hover:inline-block">[string]</span>
-                    </div>
+                <div className="rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-900 p-4 font-mono text-xs shadow-sm overflow-x-auto space-y-2">
+                  <div className="text-slate-400 dark:text-slate-500 font-bold">{"{"}</div>
+                  <div className="pl-3 space-y-2.5">
+                    {[
+                      { key: 'name', type: 'string', required: true, placeholder: '"OrbitAvanya Tech LLP"' },
+                      { key: 'uei', type: 'string', required: true, placeholder: '"ORBIT1234567"' },
+                      { key: 'cage_code', type: 'string', required: false, placeholder: '"8A9B0"' },
+                      { key: 'primary_naics', type: 'string/int', required: false, placeholder: '"541512"' },
+                      { key: 'primary_naics_desc', type: 'string', required: false, placeholder: '"Computer Systems Design Services"' },
+                      { key: 'city', type: 'string', required: false, placeholder: '"Dallas"' },
+                      { key: 'state', type: 'string', required: false, placeholder: '"TX"' },
+                      { key: 'email', type: 'string', required: false, placeholder: '"contact@orbitavanya.com"' },
+                      { key: 'phone', type: 'string', required: false, placeholder: '"+1-214-555-0199"' },
+                    ].map(f => (
+                      <div key={f.key} className="flex flex-wrap items-center gap-2">
+                        <div className="w-36 shrink-0 flex items-center">
+                          <span className="text-brand-600 dark:text-brand-400 font-bold">"{f.key}"</span>
+                          {f.required ? (
+                            <span className="text-rose-500 font-extrabold ml-0.5" title="Required field">*</span>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 font-normal ml-1">(Optional)</span>
+                          )}
+                        </div>
+                        <span className="text-slate-400 font-bold">:</span>
+                        <span className="rounded bg-brand-50 dark:bg-navy-800 text-brand-700 dark:text-brand-300 border border-brand-200/60 dark:border-navy-700 px-1.5 py-0.5 text-[10px] font-semibold w-20 text-center shrink-0">
+                          [{f.type}]
+                        </span>
+                        <input 
+                          value={inventoryForm[f.key] || ''} 
+                          onChange={e => setInventoryForm({...inventoryForm, [f.key]: e.target.value})} 
+                          className="flex-1 min-w-[160px] rounded-lg border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-800 px-3 py-1.5 text-xs text-navy-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-brand-400 outline-none transition-colors" 
+                          placeholder={f.placeholder} 
+                        />
+                      </div>
+                    ))}
 
-                    <div className="pl-4 flex items-center py-1 group">
-                      <span className="text-blue-300">"uei"</span><span className="text-slate-500 mr-2">:</span>
-                      <input 
-                        className="bg-slate-800/50 border border-slate-700 text-green-300 px-2 py-0.5 rounded outline-none focus:border-brand-500 flex-1" 
-                        placeholder="ORBIT1234567"
-                        value={inventoryForm.uei || ''}
-                        onChange={e => setInventoryForm({ ...inventoryForm, uei: e.target.value })}
-                      />
-                      <span className="text-slate-500 ml-1">,</span>
-                      <span className="text-red-400 ml-2 font-bold" title="Required">*</span>
-                      <span className="text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-400 ml-2 hidden group-hover:inline-block">[string]</span>
-                    </div>
-
-                    <div className="pl-4 flex items-center py-1 group">
-                      <span className="text-blue-300">"cage_code"</span><span className="text-[10px] text-slate-400 font-normal ml-1">(Optional)</span><span className="text-slate-500 mr-2">:</span>
-                      <input 
-                        className="bg-slate-800/50 border border-slate-700 text-green-300 px-2 py-0.5 rounded outline-none focus:border-brand-500 flex-1" 
-                        placeholder="8A9B0"
-                        value={inventoryForm.cage_code || ''}
-                        onChange={e => setInventoryForm({ ...inventoryForm, cage_code: e.target.value })}
-                      />
-                      <span className="text-slate-500 ml-1">,</span>
-                      <span className="text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-400 ml-2 hidden group-hover:inline-block">[string]</span>
-                    </div>
-                    
-                    <div className="pl-4 flex items-center py-1 group">
-                      <span className="text-blue-300">"primary_naics"</span><span className="text-[10px] text-slate-400 font-normal ml-1">(Optional)</span><span className="text-slate-500 mr-2">:</span>
-                      <input 
-                        className="bg-slate-800/50 border border-slate-700 text-green-300 px-2 py-0.5 rounded outline-none focus:border-brand-500 flex-1" 
-                        placeholder="541512"
-                        value={inventoryForm.primary_naics || ''}
-                        onChange={e => setInventoryForm({ ...inventoryForm, primary_naics: e.target.value })}
-                      />
-                      <span className="text-slate-500 ml-1">,</span>
-                      <span className="text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-400 ml-2 hidden group-hover:inline-block">[string]</span>
-                    </div>
-
-                    <div className="pl-4 flex items-center py-1 group">
-                      <span className="text-blue-300">"size"</span><span className="text-[10px] text-slate-400 font-normal ml-1">(Optional)</span><span className="text-slate-500 mr-2">:</span>
+                    {/* Size Enum */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="w-36 shrink-0 flex items-center">
+                        <span className="text-brand-600 dark:text-brand-400 font-bold">"size"</span>
+                        <span className="text-[10px] text-slate-400 font-normal ml-1">(Optional)</span>
+                      </div>
+                      <span className="text-slate-400 font-bold">:</span>
+                      <span className="rounded bg-purple-50 dark:bg-navy-800 text-purple-700 dark:text-purple-300 border border-purple-200/60 dark:border-navy-700 px-1.5 py-0.5 text-[10px] font-semibold w-20 text-center shrink-0">
+                        [enum]
+                      </span>
                       <select 
-                        className="bg-slate-800/50 border border-slate-700 text-amber-300 px-2 py-0.5 rounded outline-none focus:border-brand-500 w-48"
-                        value={inventoryForm.size || ''}
-                        onChange={e => setInventoryForm({ ...inventoryForm, size: e.target.value })}
+                        value={inventoryForm.size || 'Small'} 
+                        onChange={e => setInventoryForm({...inventoryForm, size: e.target.value})} 
+                        className="flex-1 min-w-[160px] rounded-lg border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-800 px-3 py-1.5 text-xs font-semibold text-navy-900 dark:text-white focus:ring-2 focus:ring-brand-400 outline-none cursor-pointer"
                       >
-                        <option value="">Select Size...</option>
                         <option value="Small">"Small"</option>
                         <option value="Large">"Large"</option>
-                        <option value="Other">"Other"</option>
                       </select>
-                      <span className="text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-400 ml-2 hidden group-hover:inline-block">[enum]</span>
                     </div>
-
-                    <div className="pl-4 py-1">
-                      <span className="text-blue-300">"certifications"</span><span className="text-[10px] text-slate-400 font-normal ml-1">(Optional)</span><span className="text-slate-500">: </span>
-                      <span className="text-yellow-300">["SBA 8(a)", "WOSB"]</span><span className="text-slate-500">,</span>
-                    </div>
-
-                    <div className="pl-4 py-1 text-slate-500 italic">
-                      // Add more nested objects or arrays here...
-                    </div>
-                    
-                    <div><span className="text-pink-400">{"}"}</span></div>
                   </div>
+                  <div className="text-slate-400 dark:text-slate-500 font-bold">{"}"}</div>
                 </div>
               )}
             </div>

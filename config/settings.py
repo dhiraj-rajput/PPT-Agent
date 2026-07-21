@@ -290,8 +290,8 @@ class AppSettings(BaseSettings):
         description="DPI for rasterizing PDF pages for OCR (higher = better quality but slower).",
     )
     OLLAMA_TIMEOUT: int = Field(
-        default=300,
-        description="Timeout in seconds for Ollama API calls (set to 300s for remote Codespaces).",
+        default=600,
+        description="Timeout in seconds for Ollama API calls (set to 600s / 10 minutes for slow model generation like Gemma 4).",
     )
     CODESPACES: bool = Field(
         default=False,

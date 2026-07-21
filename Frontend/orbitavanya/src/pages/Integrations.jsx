@@ -101,11 +101,11 @@ function GoogleMeetCard({ notify }) {
         </div>
         <ConnectionPill connected={status.connected} checking={loading} />
       </div>
-      <p className="mt-3 text-sm font-bold text-navy-900 dark:text-white">Google Meet & Calendar</p>
+      <p className="mt-3 text-sm font-bold text-navy-900 dark:text-white">Google Meet (One-Click OAuth)</p>
       <p className="mt-1 text-xs text-slate-400 dark:text-slate-500 flex-1 mb-2">
         {status.connected
           ? `Linked${status.connectedEmail ? ` as ${status.connectedEmail}` : ''}. Meeting links are created automatically.`
-          : 'Auto-create Google Meet links when scheduling meetings.'}
+          : 'Browser consent for auto-generating meeting links.'}
       </p>
       {error && <p className="mt-2 text-xs text-tomato-600 mb-2">{error}</p>}
       <button
@@ -292,30 +292,26 @@ function SmtpCard({ onEdit }) {
   )
 }
 
-function DoclingCard({ onEdit }) {
+function DoclingCard() {
   return (
     <Card className="flex flex-col">
       <div className="flex items-start justify-between">
-         <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-50 text-orange-500 dark:bg-orange-500/10">
+         <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-purple-50 text-purple-500 dark:bg-purple-500/10">
            <FileText size={19} />
          </div>
+         <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-900/40">
+           Active (No API Key Required)
+         </span>
       </div>
-      <p className="mt-3 text-sm font-bold text-navy-900 dark:text-white">Docling & OCR Processing Engine</p>
-      <p className="mt-1 text-xs text-slate-400 dark:text-slate-500 mb-2 flex-1">
-        Configure document parsing and OCR engine settings.
+      <p className="mt-3 text-sm font-bold text-navy-900 dark:text-white">Docling OCR Engine</p>
+      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-3 flex-1">
+        Local CPU document processing for PDFs, tables, and forms by IBM Research. Runs 100% locally on your machine — <strong>no API key, account, or setup needed</strong>.
       </p>
-      <button onClick={() => onEdit({
-          name: 'docling',
-          label: 'Docling & OCR',
-          fields: [
-            { key: 'OCR_ENGINE', label: 'Engine (e.g., tesseract, docling)', type: 'text' },
-            { key: 'OCR_DPI', label: 'DPI Resolution', type: 'text', optional: true }
-          ]
-      })} className="mt-auto w-full rounded-lg py-2 text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-navy-800 dark:text-slate-300 dark:hover:bg-navy-700 transition-colors">
-        Edit / Configure
-      </button>
+      <div className="rounded-xl bg-slate-50 dark:bg-navy-900 p-2.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400 text-center border border-slate-100 dark:border-navy-800">
+        ✓ Built-in Local Engine (Installed & Ready)
+      </div>
     </Card>
-  )
+  );
 }
 
 function OllamaCard({ onEdit }) {
@@ -334,9 +330,10 @@ function OllamaCard({ onEdit }) {
           name: 'ollama',
           label: 'Ollama AI',
           fields: [
-            { key: 'OLLAMA_HOST', label: 'Host URL', type: 'text' },
-            { key: 'OLLAMA_MODEL', label: 'Model Name', type: 'text' },
-            { key: 'OLLAMA_TIMEOUT', label: 'Timeout (ms)', type: 'text', optional: true }
+            { key: 'OLLAMA_HOST', label: 'Host URL (e.g. https://humble-xylophone-gxqjr7g474pv29g6q-11434.app.github.dev)', type: 'text' },
+            { key: 'OLLAMA_MODEL', label: 'Model Name (e.g. gemma4:e4b)', type: 'text' },
+            { key: 'OLLAMA_API_KEY', label: 'API Key', type: 'password', optional: true },
+            { key: 'OLLAMA_TIMEOUT', label: 'Timeout in Seconds', type: 'text', optional: true }
           ]
       })} className="mt-auto w-full rounded-lg py-2 text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-navy-800 dark:text-slate-300 dark:hover:bg-navy-700 transition-colors">
         Edit / Configure
@@ -345,7 +342,60 @@ function OllamaCard({ onEdit }) {
   )
 }
 
-function WebSearchCard({ onEdit }) {
+function ZoomCard({ onEdit }) {
+  return (
+    <Card className="flex flex-col">
+      <div className="flex items-start justify-between">
+         <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-500 dark:bg-blue-500/10">
+           <Video size={19} />
+         </div>
+      </div>
+      <p className="mt-3 text-sm font-bold text-navy-900 dark:text-white">Zoom Video Meetings (Optional)</p>
+      <p className="mt-1 text-xs text-slate-400 dark:text-slate-500 mb-2 flex-1">
+        Zoom API integration for meetings.
+      </p>
+      <button onClick={() => onEdit({
+          name: 'zoom',
+          label: 'Zoom Video Meetings',
+          fields: [
+            { key: 'ZOOM_ACCOUNT_ID', label: 'ZOOM_ACCOUNT_ID (Optional)', type: 'text' },
+            { key: 'ZOOM_CLIENT_ID', label: 'ZOOM_CLIENT_ID (Optional)', type: 'text' },
+            { key: 'ZOOM_CLIENT_SECRET', label: 'ZOOM_CLIENT_SECRET (Optional)', type: 'password' }
+          ]
+      })} className="mt-auto w-full rounded-lg py-2 text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-navy-800 dark:text-slate-300 dark:hover:bg-navy-700 transition-colors">
+        Edit / Configure
+      </button>
+    </Card>
+  )
+}
+
+function GoogleCloudOAuthCard({ onEdit }) {
+  return (
+    <Card className="flex flex-col">
+      <div className="flex items-start justify-between">
+         <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-500 dark:bg-blue-500/10">
+           <Globe size={19} />
+         </div>
+      </div>
+      <p className="mt-3 text-sm font-bold text-navy-900 dark:text-white">Google Cloud OAuth Client Credentials</p>
+      <p className="mt-1 text-xs text-slate-400 dark:text-slate-500 mb-2 flex-1">
+        Manual GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET configuration.
+      </p>
+      <button onClick={() => onEdit({
+          name: 'google_workspace',
+          label: 'Google Cloud OAuth',
+          fields: [
+            { key: 'GOOGLE_CLIENT_ID', label: 'GOOGLE_CLIENT_ID', type: 'text' },
+            { key: 'GOOGLE_CLIENT_SECRET', label: 'GOOGLE_CLIENT_SECRET', type: 'password' }
+          ]
+      })} className="mt-auto w-full rounded-lg py-2 text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-navy-800 dark:text-slate-300 dark:hover:bg-navy-700 transition-colors">
+        Edit / Configure
+      </button>
+    </Card>
+  )
+}
+
+function SerpApiCard({ onEdit }) {
   return (
     <Card className="flex flex-col">
       <div className="flex items-start justify-between">
@@ -353,16 +403,116 @@ function WebSearchCard({ onEdit }) {
            <Search size={19} />
          </div>
       </div>
-      <p className="mt-3 text-sm font-bold text-navy-900 dark:text-white">Tavily & Firecrawl Web Search</p>
+      <p className="mt-3 text-sm font-bold text-navy-900 dark:text-white">SerpAPI Search Engine (Optional)</p>
       <p className="mt-1 text-xs text-slate-400 dark:text-slate-500 mb-2 flex-1">
-        Web search and intelligence scraping APIs.
+        Google search results via SerpAPI.
       </p>
       <button onClick={() => onEdit({
-          name: 'websearch',
-          label: 'Web Search APIs',
+          name: 'serpapi',
+          label: 'SerpAPI',
           fields: [
-            { key: 'TAVILY_API_KEY', label: 'Tavily API Key', type: 'password' },
-            { key: 'FIRECRAWL_API_KEY', label: 'Firecrawl API Key', type: 'password' }
+            { key: 'SERPAPI_API_KEY', label: 'SERPAPI_API_KEY (Optional)', type: 'password' }
+          ]
+      })} className="mt-auto w-full rounded-lg py-2 text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-navy-800 dark:text-slate-300 dark:hover:bg-navy-700 transition-colors">
+        Edit / Configure
+      </button>
+    </Card>
+  )
+}
+
+function FirecrawlCard({ onEdit }) {
+  return (
+    <Card className="flex flex-col">
+      <div className="flex items-start justify-between">
+         <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-50 text-orange-500 dark:bg-orange-500/10">
+           <Globe size={19} />
+         </div>
+      </div>
+      <p className="mt-3 text-sm font-bold text-navy-900 dark:text-white">Firecrawl Web Scraper (Optional)</p>
+      <p className="mt-1 text-xs text-slate-400 dark:text-slate-500 mb-2 flex-1">
+        Advanced web scraping capabilities.
+      </p>
+      <button onClick={() => onEdit({
+          name: 'firecrawl',
+          label: 'Firecrawl',
+          fields: [
+            { key: 'FIRECRAWL_API_KEY', label: 'FIRECRAWL_API_KEY (Optional)', type: 'password' }
+          ]
+      })} className="mt-auto w-full rounded-lg py-2 text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-navy-800 dark:text-slate-300 dark:hover:bg-navy-700 transition-colors">
+        Edit / Configure
+      </button>
+    </Card>
+  )
+}
+
+function TavilyCard({ onEdit }) {
+  return (
+    <Card className="flex flex-col">
+      <div className="flex items-start justify-between">
+         <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-indigo-500 dark:bg-indigo-500/10">
+           <Search size={19} />
+         </div>
+      </div>
+      <p className="mt-3 text-sm font-bold text-navy-900 dark:text-white">Tavily AI Search (Optional)</p>
+      <p className="mt-1 text-xs text-slate-400 dark:text-slate-500 mb-2 flex-1">
+        AI-optimized search engine API.
+      </p>
+      <button onClick={() => onEdit({
+          name: 'tavily',
+          label: 'Tavily',
+          fields: [
+            { key: 'TAVILY_API_KEY', label: 'TAVILY_API_KEY (Optional)', type: 'password' }
+          ]
+      })} className="mt-auto w-full rounded-lg py-2 text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-navy-800 dark:text-slate-300 dark:hover:bg-navy-700 transition-colors">
+        Edit / Configure
+      </button>
+    </Card>
+  )
+}
+
+function GeminiCard({ onEdit }) {
+  return (
+    <Card className="flex flex-col">
+      <div className="flex items-start justify-between">
+         <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-500 dark:bg-blue-500/10">
+           <Bot size={19} />
+         </div>
+      </div>
+      <p className="mt-3 text-sm font-bold text-navy-900 dark:text-white">Gemini AI LLM (Optional)</p>
+      <p className="mt-1 text-xs text-slate-400 dark:text-slate-500 mb-2 flex-1">
+        Google Gemini AI integration.
+      </p>
+      <button onClick={() => onEdit({
+          name: 'gemini',
+          label: 'Gemini AI',
+          fields: [
+            { key: 'GEMINI_API_KEY', label: 'GEMINI_API_KEY (Optional)', type: 'password' }
+          ]
+      })} className="mt-auto w-full rounded-lg py-2 text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-navy-800 dark:text-slate-300 dark:hover:bg-navy-700 transition-colors">
+        Edit / Configure
+      </button>
+    </Card>
+  )
+}
+
+function OpenRouterCard({ onEdit }) {
+  return (
+    <Card className="flex flex-col">
+      <div className="flex items-start justify-between">
+         <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-purple-50 text-purple-500 dark:bg-purple-500/10">
+           <Bot size={19} />
+         </div>
+      </div>
+      <p className="mt-3 text-sm font-bold text-navy-900 dark:text-white">OpenRouter AI LLM (Optional)</p>
+      <p className="mt-1 text-xs text-slate-400 dark:text-slate-500 mb-2 flex-1">
+        Access multiple LLMs via OpenRouter.
+      </p>
+      <button onClick={() => onEdit({
+          name: 'openrouter',
+          label: 'OpenRouter',
+          fields: [
+            { key: 'OPENROUTER_API_KEY', label: 'API Key', type: 'password' },
+            { key: 'OPENROUTER_MODEL', label: 'Model Name (e.g. nvidia/nemotron-3-ultra-550b-a55b:free)', type: 'text', optional: true }
           ]
       })} className="mt-auto w-full rounded-lg py-2 text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-navy-800 dark:text-slate-300 dark:hover:bg-navy-700 transition-colors">
         Edit / Configure
@@ -470,13 +620,19 @@ export default function Integrations() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-6">
         <GoogleMeetCard notify={notify} />
+        <GoogleCloudOAuthCard onEdit={handleEdit} />
+        <ZoomCard onEdit={handleEdit} />
         <SamGovCard notify={notify} onEdit={handleEdit} />
         <LinkedInCard notify={notify} onEdit={handleEdit} />
         <CompaniesHouseCard onEdit={handleEdit} />
         <SmtpCard onEdit={handleEdit} />
-        <DoclingCard onEdit={handleEdit} />
+        <DoclingCard />
         <OllamaCard onEdit={handleEdit} />
-        <WebSearchCard onEdit={handleEdit} />
+        <SerpApiCard onEdit={handleEdit} />
+        <FirecrawlCard onEdit={handleEdit} />
+        <TavilyCard onEdit={handleEdit} />
+        <GeminiCard onEdit={handleEdit} />
+        <OpenRouterCard onEdit={handleEdit} />
       </div>
 
       <EditIntegrationModal 

@@ -198,8 +198,14 @@ def sam_status(current_user: dict = Depends(get_current_user)):
     try:
         user_id = str(current_user["_id"])
         doc = get_collection("integrations").find_one({"service": "sam", "userId": user_id})
+        raw_key = ""
         if doc and doc.get("connected"):
             raw_key = doc.get("apiKey", "")
+        if not raw_key:
+            env_keys = read_env_file_keys()
+            raw_key = env_keys.get("SAM_GOV_API_KEY") or os.environ.get("SAM_GOV_API_KEY") or getattr(settings, "SAM_GOV_API_KEY", "") or ""
+            
+        if raw_key and not raw_key.startswith("your_") and len(raw_key) > 5:
             obfuscated = f"****{raw_key[-4:]}" if len(raw_key) >= 4 else "****"
             return {"connected": True, "apiKey": obfuscated}
         return {"connected": False, "apiKey": ""}
@@ -225,6 +231,10 @@ def sam_connect(payload: SamApiKeyPayload, current_user: dict = Depends(get_curr
             }},
             upsert=True
         )
+        
+        update_env_file({"SAM_GOV_API_KEY": api_key})
+        os.environ["SAM_GOV_API_KEY"] = api_key
+        
         return {"success": True, "message": "SAM.gov API Key saved successfully."}
     except HTTPException:
         raise

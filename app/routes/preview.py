@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from app.core.auth import get_current_user
 from utils.db_client import get_collection
+from pipeline.ai.client import get_ai_client
 
 router = APIRouter(prefix="/preview", tags=["preview"])
 
@@ -71,10 +72,15 @@ async def get_wizard_questions(
 
     title = tender_info.get("title", "Government Contracting Opportunity")
     naics = tender_info.get("naicsCode", "General")
-    set_aside = tender_info.get("typeOfSetAsideDescription", "Standard Procurement")
+    
+    # Get company profile
+    company_col = get_collection("own_company_profile")
+    company_profile = company_col.find_one({}) or {}
+    company_context = company_profile.get("company_name", "Our Company")
+    if company_profile.get("capabilities"):
+        company_context += f" - Capabilities: {company_profile.get('capabilities')}"
 
-    # Base questions with multiple choice options
-    questions = [
+    default_questions = [
         {
             "id": "strategy_focus",
             "question": f"What should be the primary value proposition focus for '{title[:60]}...'?",
@@ -82,21 +88,9 @@ async def get_wizard_questions(
             "is_multi_select": False,
             "recommended_option_id": "opt_cost_tech",
             "options": [
-                {
-                    "id": "opt_cost_tech",
-                    "label": "Best Value (Technical Superiority & Optimized Lifecycle Cost)",
-                    "description": "Highlights risk reduction, experienced team, and modern technology stack."
-                },
-                {
-                    "id": "opt_low_risk",
-                    "label": "Lowest Risk & Compliance First",
-                    "description": "Emphasizes strict FAR compliance, ISO standards, and zero transition risk."
-                },
-                {
-                    "id": "opt_innovation",
-                    "label": "Innovation & Rapid Execution",
-                    "description": "Focuses on automated workflows, modern AI/cloud capabilities, and fast delivery."
-                }
+                {"id": "opt_cost_tech", "label": "Best Value (Technical Superiority & Optimized Lifecycle Cost)", "description": "Highlights risk reduction, experienced team, and modern technology stack."},
+                {"id": "opt_low_risk", "label": "Lowest Risk & Compliance First", "description": "Emphasizes strict FAR compliance, ISO standards, and zero transition risk."},
+                {"id": "opt_innovation", "label": "Innovation & Rapid Execution", "description": "Focuses on automated workflows, modern AI/cloud capabilities, and fast delivery."}
             ]
         },
         {
@@ -106,67 +100,33 @@ async def get_wizard_questions(
             "is_multi_select": False,
             "recommended_option_id": "opt_firm_fixed",
             "options": [
-                {
-                    "id": "opt_firm_fixed",
-                    "label": "Firm-Fixed-Price (FFP) with Performance Guarantees",
-                    "description": "Predictable budget with milestone-based deliverable billing."
-                },
-                {
-                    "id": "opt_time_materials",
-                    "label": "Time & Materials (T&M) with Ceiling Cap",
-                    "description": "Flexible staffing and hourly rates for dynamic requirement scopes."
-                },
-                {
-                    "id": "opt_value_tiered",
-                    "label": "Tiered Volume Discount Model",
-                    "description": "Provides cost savings at higher volume tiers for multi-year contracts."
-                }
-            ]
-        },
-        {
-            "id": "past_performance_emphasis",
-            "question": "Which past performance evidence area should be highlighted first?",
-            "category": "Past Performance",
-            "is_multi_select": True,
-            "recommended_option_id": "opt_fed_agency",
-            "options": [
-                {
-                    "id": "opt_fed_agency",
-                    "label": "Direct Federal Agency Contracts",
-                    "description": "Reference active or past DoD / Civilian prime contract awards."
-                },
-                {
-                    "id": "opt_commercial_scale",
-                    "label": "High-Volume Commercial & Enterprise Scale",
-                    "description": "Showcase proven delivery for Fortune 500 or large commercial clients."
-                },
-                {
-                    "id": "opt_subcontract_tier1",
-                    "label": "Tier-1 Subcontracting Support for Prime Integrators",
-                    "description": "Highlight successful partnerships with major prime defense contractors."
-                }
-            ]
-        },
-        {
-            "id": "executive_tone",
-            "question": "Select the executive summary tone and presentation style:",
-            "category": "Style & Branding",
-            "is_multi_select": False,
-            "recommended_option_id": "opt_tone_executive",
-            "options": [
-                {
-                    "id": "opt_tone_executive",
-                    "label": "Executive & Formal (Corporate standard)",
-                    "description": "Data-driven, precise technical language, structured format."
-                },
-                {
-                    "id": "opt_tone_persuasive",
-                    "label": "Persuasive & Impact-Oriented",
-                    "description": "Direct, solution-focused with clear visual callout key points."
-                }
+                {"id": "opt_firm_fixed", "label": "Firm-Fixed-Price (FFP) with Performance Guarantees", "description": "Predictable budget with milestone-based deliverable billing."},
+                {"id": "opt_time_materials", "label": "Time & Materials (T&M) with Ceiling Cap", "description": "Flexible staffing and hourly rates for dynamic requirement scopes."},
+                {"id": "opt_value_tiered", "label": "Tiered Volume Discount Model", "description": "Provides cost savings at higher volume tiers for multi-year contracts."}
             ]
         }
     ]
+
+    try:
+        client = get_ai_client()
+        prompt = f"""
+You are an expert proposal manager. Based on the RFP/Tender Title: '{title}' (NAICS: {naics}) 
+and the bidding company profile: '{company_context}', generate 3 strategic multiple-choice questions 
+to ask the proposal team before generating the document.
+
+Output MUST be a JSON object with a 'questions' array. Each question must have:
+- 'id': short string
+- 'question': string
+- 'category': string
+- 'is_multi_select': boolean
+- 'recommended_option_id': string
+- 'options': array of objects with 'id', 'label', 'description'
+"""
+        res = client.chat_json([{"role": "user", "content": prompt}])
+        questions = res.get("questions", default_questions)
+    except Exception as e:
+        print(f"Error generating questions via AI: {e}")
+        questions = default_questions
 
     return {
         "tender_id": tender_id,
@@ -254,42 +214,44 @@ async def generate_proposal_outline(
                     "Security, quality control & risk mitigation strategy",
                     "Tools, technology stack & standards"
                 ]
-            },
-            {
-                "key": "management_plan",
-                "title": "3. Management Plan & Key Personnel",
-                "word_budget": 600,
-                "included": True,
-                "key_points": [
-                    "Organizational structure & PMO oversight",
-                    "Key personnel qualifications & resumes",
-                    "Quality assurance & SLA tracking"
-                ]
-            },
-            {
-                "key": "pricing_table",
-                "title": "4. Cost Proposal & Financial Plan",
-                "word_budget": 400,
-                "included": True,
-                "key_points": [
-                    "Itemized cost breakdown by CLIN",
-                    "CLIN schedule and basis of estimate (BOE)",
-                    "Assumptions & terms"
-                ]
-            },
-            {
-                "key": "past_performance",
-                "title": "5. Past Performance & References",
-                "word_budget": 500,
-                "included": True,
-                "key_points": [
-                    "Past performance references matching NAICS/Scope",
-                    "Measurable outcomes and metrics achieved"
-                ]
             }
         ]
 
-    total_words = sum(s["word_budget"] for s in default_sections if s.get("included", True))
+    # Try AI generation for outline based on RFP and Company
+    tender_info = {}
+    if payload.tender_id:
+        col = get_collection("tenders")
+        tender = col.find_one({"$or": [{"noticeId": payload.tender_id}, {"_id": payload.tender_id}]})
+        if tender:
+            tender_info = tender
+
+    title = tender_info.get("title", "Government Opportunity")
+    
+    company_col = get_collection("own_company_profile")
+    company_profile = company_col.find_one({}) or {}
+    company_context = company_profile.get("company_name", "Our Company")
+    
+    try:
+        client = get_ai_client()
+        prompt = f"""
+You are an expert proposal writer. Create a tailored document outline for a '{payload.proposal_type}' 
+for the RFP titled '{title}', bid by company '{company_context}'.
+User answers to strategy questions: {payload.answers}
+
+Output MUST be a JSON object with a 'sections' array. Each section must have:
+- 'key': short string
+- 'title': string
+- 'word_budget': integer
+- 'included': true
+- 'key_points': array of 2-3 short strings describing what this section will cover.
+"""
+        res = client.chat_json([{"role": "user", "content": prompt}])
+        sections = res.get("sections", default_sections)
+    except Exception as e:
+        print(f"Error generating outline via AI: {e}")
+        sections = default_sections
+
+    total_words = sum(s.get("word_budget", 500) for s in sections if s.get("included", True))
     estimated_pages = max(3, round(total_words / 450, 1))
 
     return {

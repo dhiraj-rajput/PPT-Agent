@@ -131,6 +131,33 @@ export default function PreGenerationWizard({ tenderId, solicitationNumber, prop
     });
   };
 
+  const updateSectionTitle = (index, newTitle) => {
+    setSections((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], title: newTitle };
+      return updated;
+    });
+  };
+
+  const updateSectionDescription = (index, newDesc) => {
+    setSections((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], description: newDesc };
+      return updated;
+    });
+  };
+
+  const deleteSection = (index) => {
+    setSections((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const addSection = () => {
+    setSections((prev) => [
+      ...prev,
+      { key: `custom_${Date.now()}`, title: 'New Section', word_budget: 300, key_points: [], description: '', included: true }
+    ]);
+  };
+
   const handleStartGeneration = () => {
     const wizardConfig = {
       answers,
@@ -258,29 +285,46 @@ export default function PreGenerationWizard({ tenderId, solicitationNumber, prop
                         : 'border-slate-100 dark:border-navy-900 bg-slate-50/50 opacity-60'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-start gap-3 w-full pr-2">
                         <input
                           type="checkbox"
                           checked={sec.included}
                           onChange={() => toggleSectionIncluded(idx)}
-                          className="h-4 w-4 rounded text-brand-500 focus:ring-brand-400"
+                          className="h-4 w-4 mt-1 rounded text-brand-500 focus:ring-brand-400"
                         />
-                        <div>
-                          <p className="text-xs font-bold text-navy-900 dark:text-white">{sec.title}</p>
+                        <div className="flex-1 space-y-2">
+                          <input
+                            type="text"
+                            value={sec.title}
+                            onChange={(e) => updateSectionTitle(idx, e.target.value)}
+                            className="w-full text-xs font-bold bg-transparent border-b border-transparent focus:border-brand-500 focus:outline-none text-navy-900 dark:text-white"
+                            placeholder="Section Title"
+                          />
                           <p className="text-[10px] text-slate-400 mt-0.5">Target budget: ~{sec.word_budget} words</p>
+                          <textarea
+                            value={sec.description ?? (sec.key_points ? sec.key_points.join('\n') : '')}
+                            onChange={(e) => updateSectionDescription(idx, e.target.value)}
+                            className="w-full text-[11px] text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-navy-700 rounded-md p-2 mt-2 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                            rows={3}
+                            placeholder="Enter section key points or description..."
+                          />
                         </div>
                       </div>
+                      <button onClick={() => deleteSection(idx)} className="p-1.5 text-slate-400 hover:text-red-500 transition-colors bg-slate-50 hover:bg-red-50 dark:bg-navy-700 dark:hover:bg-red-900/30 rounded-lg">
+                        <X size={14} />
+                      </button>
                     </div>
-                    {sec.key_points && sec.key_points.length > 0 && (
-                      <ul className="mt-2.5 ml-7 space-y-1 text-[11px] text-slate-500 dark:text-slate-400 list-disc">
-                        {sec.key_points.map((kp, i) => (
-                          <li key={i}>{kp}</li>
-                        ))}
-                      </ul>
-                    )}
                   </div>
                 ))}
+                
+                <button 
+                  onClick={addSection}
+                  className="w-full py-3 border-2 border-dashed border-slate-200 dark:border-navy-700 rounded-xl text-xs font-semibold text-slate-500 hover:text-brand-600 hover:border-brand-300 dark:hover:border-brand-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Layers size={14} />
+                  Add Custom Section
+                </button>
               </div>
             </div>
           ) : (

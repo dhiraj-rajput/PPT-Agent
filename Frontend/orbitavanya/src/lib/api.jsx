@@ -307,6 +307,9 @@ export const api = {
   async createProposal(data) {
     return post('/api/proposals', data);
   },
+  async generateProposal(data) {
+    return post('/api/proposals/generate', data);
+  },
   async getProposalStatus(taskId) {
     return get(`/api/proposals/status/${taskId}`);
   },
@@ -316,8 +319,11 @@ export const api = {
   async getRecentProposals(companyName) {
     return get(`/api/proposals/recent?company_name=${encodeURIComponent(companyName)}`);
   },
-  async generatePartnership(winner) {
-    return post('/api/proposals/generate-partnership', { winner });
+  async generatePartnership(winner, wizardData = null) {
+    return post('/api/proposals/generate-partnership', { 
+      winner, 
+      ...(wizardData ? { wizard_data: wizardData } : {}) 
+    });
   },
   async getProposalStatusByCompany(companyName) {
     return get(`/api/proposals/status?company_name=${encodeURIComponent(companyName)}`);

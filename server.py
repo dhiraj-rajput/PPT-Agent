@@ -190,4 +190,10 @@ if __name__ == "__main__":
     reload_enabled = (settings.ENV == "dev")
     # In GitHub Codespaces or Docker, bind to all interfaces so external traffic works
     host = "0.0.0.0" if (settings.CODESPACES or os.getenv("CODESPACES") == "true") else "127.0.0.1"
-    uvicorn.run("server:app", host=host, port=settings.PORT, reload=reload_enabled)
+    uvicorn.run(
+        "server:app",
+        host=host,
+        port=settings.PORT,
+        reload=reload_enabled,
+        timeout_keep_alive=600,
+    )

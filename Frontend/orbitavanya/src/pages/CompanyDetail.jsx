@@ -9,6 +9,7 @@ import { Card, MatchBadge, StatusBadge, ProgressBar } from '../components/ui/Com
 import { tenders } from '../data/tenders.jsx';
 import { api } from '../lib/api.jsx';
 import { useNotifications } from '../context/NotificationContext.jsx';
+import PreGenerationWizard from '../components/PreGenerationWizard.jsx';
 
 const cleanDescriptionText = (text) => {
   if (!text) return '';
@@ -51,6 +52,7 @@ export default function CompanyDetail() {
   const [previewingReport, setPreviewingReport] = useState(null);
   const [generationError, setGenerationError] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   // Send Email States
   const [showSendEmailModal, setShowSendEmailModal] = useState(false);
@@ -308,7 +310,7 @@ export default function CompanyDetail() {
   }, [company]); // runs once when company data arrives
 
   // Run partnership proposal generation pipeline with progress polling
-  const handleGenerateProposal = () => {
+  const handleGenerateProposal = (wizardData) => {
     if (!company) return;
     setIsGenerating(true);
     setGenerationError(null);
@@ -316,7 +318,7 @@ export default function CompanyDetail() {
     setGenerationMessage('Initializing pipeline...');
     setGenerationStatus('processing');
 
-    api.generatePartnership(company.name)
+    api.generatePartnership(company.name, wizardData)
       .then(() => {
         // Start polling status
         const pollInterval = setInterval(() => {
@@ -421,7 +423,7 @@ export default function CompanyDetail() {
             </button>
           )}
           <button 
-            onClick={handleGenerateProposal}
+            onClick={() => setWizardOpen(true)}
             disabled={isGenerating}
             className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-bold text-white shadow-soft hover:bg-brand-600 transition-colors disabled:opacity-70 shrink-0"
           >
@@ -743,6 +745,18 @@ export default function CompanyDetail() {
           )}
         </div>
       </div>
+
+      {wizardOpen && (
+        <PreGenerationWizard
+          solicitationNumber={company.uei || company.name}
+          proposalType="partnership"
+          onCancel={() => setWizardOpen(false)}
+          onConfirmGenerate={(wizardData) => {
+            setWizardOpen(false);
+            handleGenerateProposal(wizardData);
+          }}
+        />
+      )}
 
       {/* PDF View Modal Overlay */}
       {previewingReport && (

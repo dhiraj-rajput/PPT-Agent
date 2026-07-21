@@ -90,7 +90,7 @@ class OllamaAIClient:
         self.host: str = getattr(_settings, "ollama_host", "") or ""
         self.api_key: str = getattr(_settings, "OLLAMA_API_KEY", "") or ""
         self.temperature: float = float(getattr(_settings, "OLLAMA_TEMPERATURE", 0.1) or 0.1)
-        self.timeout = getattr(_settings, "OLLAMA_TIMEOUT", 300)
+        self.timeout: float = 600.0  # 10 minute timeout for Codespaces remote LLM
 
         raw_fallbacks = getattr(_settings, "OLLAMA_MODEL_FALLBACKS", "") or ""
         parsed_fallbacks = [m.strip() for m in raw_fallbacks.split(",") if m.strip()]

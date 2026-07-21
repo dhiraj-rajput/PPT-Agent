@@ -17,7 +17,15 @@ export function NotificationProvider({ children }) {
     try {
       setLoading(true);
       const data = await api.listNotifications();
-      setNotifications(data.notifications || []);
+      let notifs = data.notifications || [];
+      notifs = notifs.map(n => {
+        let link = n.link || '';
+        if (link.startsWith('/api/')) {
+          link = link.replace('/api/', '/');
+        }
+        return { ...n, link };
+      });
+      setNotifications(notifs);
       setUnreadCount(data.unreadCount || 0);
     } catch {
       // Silent — polling shouldn't surface errors to the user.
@@ -65,6 +73,11 @@ export function NotificationProvider({ children }) {
     const { notification } = await api.createNotification(title, message, link, userId);
     // Only reflect it locally if it landed in our own list (i.e. we alerted ourselves).
     if (!userId) {
+      let safeLink = notification.link || '';
+      if (safeLink.startsWith('/api/')) {
+        safeLink = safeLink.replace('/api/', '/');
+        notification.link = safeLink;
+      }
       setNotifications((prev) => [notification, ...prev]);
       setUnreadCount((c) => c + 1);
     }

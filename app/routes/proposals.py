@@ -356,7 +356,7 @@ def generate_partnership(
 ):
     """Legacy B2B endpoint — maps to the generic generate endpoint."""
     payload["mode"] = "partnership"
-    return trigger_proposal_generation(payload, background_tasks)
+    return trigger_proposal_generation(payload, background_tasks, current_user)
 
 
 @router.get("")
@@ -368,15 +368,13 @@ def list_proposal_tasks(current_user: dict = Depends(get_current_user)):
 @router.get("/status")
 def get_task_status(
     company_name: Optional[str] = None,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user)
 ):
-    """Check task status and progress for a specific company, or return all active tasks for the current user."""
-    user_id = str(current_user["_id"])
-    user_tasks = get_user_proposal_tasks_dict(user_id)
+    """Get overall task status for a company."""
     if not company_name:
-        return user_tasks
+        return {"progress": 0, "status": "idle", "message": "No company name provided."}
         
-    # Check if any task key contains the company_name as a substring
+    user_tasks = get_user_proposal_tasks_dict(str(current_user["_id"]))
     for key, task in user_tasks.items():
         if company_name.lower() in key.lower():
             return task
@@ -387,12 +385,14 @@ def get_task_status(
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = None):
     if not token:
+        await websocket.accept()
         await websocket.close(code=1008)
         return
     
     from app.core.auth import decode_and_get_user
     user = decode_and_get_user(token)
     if not user:
+        await websocket.accept()
         await websocket.close(code=1008)
         return
 
