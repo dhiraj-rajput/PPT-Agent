@@ -3,8 +3,12 @@ import { Link } from 'react-router-dom';
 import { Search, Plus, SlidersHorizontal, Eye, FileText, X, Upload, Check, Loader2, AlertOctagon, Calendar } from 'lucide-react';
 import { PageHeader, Card, MatchBadge, StatusBadge } from '../components/ui/Common.jsx';
 import { api } from '../lib/api.jsx';
+import { useNotifications } from '../context/NotificationContext.jsx';
 
 export default function Companies() {
+  const { createAlert } = useNotifications();
+  const notify = (title, message, link) => createAlert(title, message, link).catch(() => {});
+
   // Query & Filters States
   const [query, setQuery] = useState('');
   const [sizeFilter, setSizeFilter] = useState('All');
@@ -122,6 +126,7 @@ export default function Companies() {
           status: 'Active'
         });
         fetchCompanies();
+        notify('Company added', `${manualForm.name || 'A new company'} was added to your directory.`, '/companies');
       })
       .catch((err) => {
         setIsSubmitting(false);

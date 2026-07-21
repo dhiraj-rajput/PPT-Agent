@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { Check, X, Loader2, ShieldCheck, KeyRound } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Check, X, Loader2, ShieldCheck, KeyRound, Camera } from 'lucide-react';
 import { PageHeader, Card } from '../components/ui/Common.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useNotifications } from '../context/NotificationContext.jsx';
 import { api } from '../lib/api.jsx';
 import { checkPasswordRules, strengthLabel } from '../lib/passwordStrength.jsx';
 
@@ -68,8 +69,104 @@ function PasswordStrengthMeter({ password }) {
   );
 }
 
+function AvatarCard() {
+  const { user, updateUser } = useAuth();
+  const { createAlert } = useNotifications();
+  const notify = (title, message, link) => createAlert(title, message, link).catch(() => {});
+  const name = user?.name || '';
+  const email = user?.email || '';
+
+  const fileInputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+  const [preview, setPreview] = useState('');
+
+  const avatarSrc =
+    preview ||
+    (user?.avatarUrl
+      ? api.getAvatarUrl(user.avatarUrl)
+      : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name || email || 'User')}`);
+
+  function handlePickPhoto() {
+    setError('');
+    fileInputRef.current?.click();
+  }
+
+  async function handleFileSelected(e) {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file later
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setError('Please choose an image file.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Image is too large. Max size is 5MB.');
+      return;
+    }
+
+    setError('');
+    const localUrl = URL.createObjectURL(file);
+    setPreview(localUrl);
+    setUploading(true);
+    try {
+      const { user: updated } = await api.uploadAvatar(file);
+      updateUser(updated);
+      notify('Profile photo updated', 'Your new profile photo has been assigned to your account.', '/settings');
+    } catch (err) {
+      setError(err.message || 'Failed to upload photo.');
+      setPreview('');
+    } finally {
+      setUploading(false);
+      URL.revokeObjectURL(localUrl);
+    }
+  }
+
+  return (
+    <Card className="lg:col-span-1">
+      <div className="flex flex-col items-center text-center">
+        <div className="relative">
+          <img
+            src={avatarSrc}
+            className="h-20 w-20 rounded-full border border-slate-200 object-cover dark:border-navy-700"
+            alt={name || 'User'}
+          />
+          {uploading && (
+            <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40">
+              <Loader2 size={18} className="animate-spin text-white" />
+            </div>
+          )}
+        </div>
+        <p className="mt-3 text-sm font-bold text-navy-900 dark:text-white">{name}</p>
+        <p className="text-xs text-slate-400 dark:text-slate-500">{email}</p>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png, image/jpeg, image/gif, image/webp"
+          onChange={handleFileSelected}
+          className="hidden"
+        />
+        <button
+          type="button"
+          onClick={handlePickPhoto}
+          disabled={uploading}
+          className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 dark:border-navy-700 py-2 text-xs font-semibold text-navy-900 dark:text-white hover:bg-slate-50 dark:hover:bg-navy-800 disabled:opacity-60"
+        >
+          <Camera size={13} />
+          {uploading ? 'Uploading…' : 'Change Photo'}
+        </button>
+        {error && <p className="mt-2 text-xs font-medium text-tomato-600">{error}</p>}
+      </div>
+    </Card>
+  );
+}
+
 function ProfileCard() {
   const { user, updateUser } = useAuth();
+  const { createAlert } = useNotifications();
+  const notify = (title, message, link) => createAlert(title, message, link).catch(() => {});
 
   const [form, setForm] = useState({
     name: user?.name || '',
@@ -96,6 +193,7 @@ function ProfileCard() {
       const { user: updated } = await api.updateProfile(form);
       updateUser(updated);
       setSuccess('Profile updated successfully.');
+      notify('Profile updated', 'Your account details were changed.', '/settings');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -198,6 +296,8 @@ function ProfileCard() {
 }
 
 function ChangePasswordCard() {
+  const { createAlert } = useNotifications();
+  const notify = (title, message, link) => createAlert(title, message, link).catch(() => {});
   // step: 'idle' | 'verify' | 'done'
   const [step, setStep] = useState('idle');
   const [otp, setOtp] = useState('');
@@ -269,6 +369,7 @@ function ChangePasswordCard() {
       const { changeToken } = await api.verifyChangePasswordOtp(otp);
       await api.confirmChangePassword(changeToken, newPassword, confirmPassword);
       setStep('done');
+      notify('Password changed', 'Your account password was updated.', '/settings');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -408,20 +509,7 @@ export default function Settings() {
       <PageHeader title="Settings" subtitle="Manage your account and workspace preferences" />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-        <Card className="lg:col-span-1">
-          <div className="flex flex-col items-center text-center">
-            <img
-              src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name || email || 'User')}`}
-              className="h-20 w-20 rounded-full border border-slate-200 dark:border-navy-700"
-              alt={name || 'User'}
-            />
-            <p className="mt-3 text-sm font-bold text-navy-900 dark:text-white">{name}</p>
-            <p className="text-xs text-slate-400 dark:text-slate-500">{email}</p>
-            <button className="mt-4 w-full rounded-lg border border-slate-200 dark:border-navy-700 py-2 text-xs font-semibold text-navy-900 dark:text-white">
-              Change Photo
-            </button>
-          </div>
-        </Card>
+        <AvatarCard />
 
         <ProfileCard />
 

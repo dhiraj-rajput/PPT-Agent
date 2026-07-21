@@ -91,23 +91,6 @@ export default function Sidebar({ collapsed, onToggle }) {
         <NavSection title="Settings" items={settingsNav} collapsed={collapsed} />
       </div>
 
-      {/* AI Credits */}
-      {!collapsed ? (
-        <div className="mx-3 mb-3 rounded-xl bg-white/5 p-3.5">
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold text-white">AI Credits</span>
-            <span className="text-slate-400 dark:text-slate-500">12,450 / 20,000</span>
-          </div>
-          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-            <div className="h-full w-[62%] rounded-full bg-gradient-to-r from-brand-500 to-accent-sky" />
-          </div>
-          <button className="mt-3 w-full rounded-lg bg-white/10 py-2 text-xs font-semibold text-white transition-colors hover:bg-white/20">
-            Upgrade Plan
-          </button>
-        </div>
-      ) : (
-        <div className="mx-auto mb-3 h-2 w-8 rounded-full bg-white/10" />
-      )}
 
       <button
         onClick={onToggle}

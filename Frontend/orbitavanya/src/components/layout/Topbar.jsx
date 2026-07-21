@@ -23,6 +23,20 @@ function NotificationBell() {
   const { notifications, unreadCount, markRead, markAllRead } = useNotifications();
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef(null);
+  const navigate = useNavigate();
+
+  function handleNotificationClick(n) {
+    if (!n.read) markRead(n.id);
+    setOpen(false);
+    if (n.link) {
+      // Support both in-app paths ("/tenders/123") and absolute URLs.
+      if (/^https?:\/\//i.test(n.link)) {
+        window.open(n.link, '_blank', 'noopener,noreferrer');
+      } else {
+        navigate(n.link);
+      }
+    }
+  }
 
   useEffect(() => {
     function clickOutside(e) {
@@ -69,7 +83,8 @@ function NotificationBell() {
                 return (
                   <div
                     key={n.id}
-                    onClick={() => !n.read && markRead(n.id)}
+                    onClick={() => handleNotificationClick(n)}
+                    title={n.link ? 'Click to open' : ''}
                     className={`flex items-start gap-3 rounded-xl p-2.5 transition-all cursor-pointer ${
                       n.read ? 'opacity-60' : 'bg-slate-50/50 hover:bg-slate-50 dark:bg-navy-900/40 dark:hover:bg-navy-900/60'
                     }`}
@@ -78,6 +93,9 @@ function NotificationBell() {
                       <Icon size={15} />
                     </div>
                     <div className="min-w-0 flex-1 leading-normal">
+                      {n.title && (
+                        <p className="text-xs font-bold text-navy-900 dark:text-white break-words">{n.title}</p>
+                      )}
                       <p className="text-xs font-semibold text-navy-900 dark:text-white break-words">{n.message}</p>
                       <p className="mt-1 text-[10px] text-slate-400">
                         {n.createdAt ? new Date(n.createdAt).toLocaleDateString() : ''}
@@ -363,9 +381,13 @@ export default function Topbar({ onMenuClick }) {
             className="flex items-center gap-2.5 rounded-lg py-1 pr-1 hover:bg-slate-100 dark:hover:bg-navy-800"
           >
             <img
-              src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user?.name || user?.email || 'User')}`}
+              src={
+                user?.avatarUrl
+                  ? api.getAvatarUrl(user.avatarUrl)
+                  : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user?.name || user?.email || 'User')}`
+              }
               alt={user?.name || 'User'}
-              className="h-9 w-9 rounded-full border border-slate-200 bg-slate-100 dark:border-navy-700 dark:bg-navy-800"
+              className="h-9 w-9 rounded-full border border-slate-200 bg-slate-100 object-cover dark:border-navy-700 dark:bg-navy-800"
             />
             <div className="hidden text-left leading-tight sm:block">
               <p className="text-sm font-semibold text-navy-900 dark:text-white">{user?.name || 'Account'}</p>

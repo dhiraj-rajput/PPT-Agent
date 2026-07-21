@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Plus, Calendar, Clock, Video, MapPin, X, Mail, Loader2, ExternalLink, Ban, Search, Check } from 'lucide-react';
 import { PageHeader, Card, StatusBadge } from '../components/ui/Common.jsx';
 import { api } from '../lib/api.jsx';
+import { useNotifications } from '../context/NotificationContext.jsx';
 
 const PROVIDERS = [
   { value: 'jitsi', label: 'Jitsi (instant, no account needed)' },
@@ -24,6 +25,8 @@ function isValidEmail(email) {
 }
 
 export default function Meetings() {
+  const { createAlert } = useNotifications();
+  const notify = (title, message, link) => createAlert(title, message, link).catch(() => {});
   const [meetings, setMeetings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -134,6 +137,7 @@ export default function Meetings() {
         setOpen(false);
         setCreateNotice('');
       }, 2000);
+      notify('Meeting scheduled', `"${meeting.title}" was added to your calendar.`, '/meetings');
     } catch (err) {
       setCreateError(err.message || 'Could not schedule meeting.');
     } finally {
@@ -146,6 +150,7 @@ export default function Meetings() {
     try {
       const { meeting } = await api.cancelMeeting(id);
       setMeetings((prev) => prev.map((m) => (m.id === meeting.id ? meeting : m)));
+      notify('Meeting cancelled', `"${meeting.title}" was cancelled.`, '/meetings');
     } catch (err) {
       setLoadError(err.message || 'Could not cancel meeting.');
     } finally {

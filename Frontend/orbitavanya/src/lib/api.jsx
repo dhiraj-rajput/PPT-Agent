@@ -189,6 +189,12 @@ export const api = {
   async disconnectSam() {
     return del('/api/integrations/sam');
   },
+  async getEnvKeys() {
+    return get('/api/integrations/env-keys');
+  },
+  async saveEnvKeys(keys) {
+    return post('/api/integrations/env-keys', keys);
+  },
 
   // ---------- NAICS Codes ----------
   async getNaicsCodes(params = {}) {
@@ -497,6 +503,17 @@ export const api = {
   // Settings page — profile update
   async updateProfile(data) {
     return patch('/api/auth/me/profile', data);
+  },
+
+  // Settings page — upload/assign a profile photo
+  async uploadAvatar(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return _upload('/api/auth/me/avatar', formData);
+  },
+  getAvatarUrl(filename) {
+    if (!filename) return '';
+    return `${BASE_URL}/api/auth/avatar/${filename}`;
   },
 
   // Settings page — change password via OTP flow (same as change-password route)

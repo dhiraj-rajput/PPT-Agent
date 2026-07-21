@@ -27,7 +27,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, status, Response
+from fastapi import APIRouter, Depends, HTTPException, status, Response, File, UploadFile
+from fastapi.responses import FileResponse
 import bcrypt
 from pydantic import BaseModel
 
@@ -112,6 +113,7 @@ def _to_public_user(u: Optional[dict]) -> dict:
         "isVerified": u.get("isVerified", False),
         "mustChangePassword": u.get("mustChangePassword", False),
         "createdAt": u.get("createdAt", ""),
+        "avatarUrl": u.get("avatarUrl", ""),
     }
 
 
@@ -418,6 +420,88 @@ def update_profile(
         get_collection("users").update_one({"_id": current_user["_id"]}, {"$set": updates})
     updated = get_collection("users").find_one({"_id": current_user["_id"]})
     return {"user": _to_public_user(updated)}
+
+
+_AVATAR_DIR = "private/avatars"
+_ALLOWED_AVATAR_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/png": ".png",
+    "image/gif": ".gif",
+    "image/webp": ".webp",
+}
+_MAX_AVATAR_BYTES = 5 * 1024 * 1024  # 5 MB
+
+
+@router.post("/me/avatar")
+async def upload_avatar(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+):
+    """Upload/replace the authenticated user's profile photo and assign it to their account."""
+    from pathlib import Path
+    import uuid
+
+    content_type = (file.content_type or "").lower()
+    ext = _ALLOWED_AVATAR_TYPES.get(content_type)
+    if not ext:
+        # Fall back to checking the filename extension if the content-type header is unreliable.
+        suffix = Path(file.filename).suffix.lower() if file.filename else ""
+        if suffix in (".jpg", ".jpeg", ".png", ".gif", ".webp"):
+            ext = ".jpg" if suffix == ".jpeg" else suffix
+        else:
+            raise HTTPException(400, "Unsupported image type. Use JPG, PNG, GIF, or WEBP.")
+
+    content = await file.read()
+    if len(content) > _MAX_AVATAR_BYTES:
+        raise HTTPException(400, "Image is too large. Max size is 5MB.")
+    if not content:
+        raise HTTPException(400, "Uploaded file is empty.")
+
+    upload_dir = Path(_AVATAR_DIR)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    # Remove any previous avatar file(s) for this user before saving the new one.
+    user_id = str(current_user["_id"])
+    for old_file in upload_dir.glob(f"{user_id}_*"):
+        try:
+            old_file.unlink()
+        except OSError:
+            pass
+
+    unique_name = f"{user_id}_{uuid.uuid4().hex}{ext}"
+    dest_path = upload_dir / unique_name
+    with open(dest_path, "wb") as f:
+        f.write(content)
+
+    get_collection("users").update_one(
+        {"_id": current_user["_id"]},
+        {"$set": {"avatarUrl": unique_name, "updatedAt": datetime.now(tz=timezone.utc)}},
+    )
+    updated = get_collection("users").find_one({"_id": current_user["_id"]})
+    return {"user": _to_public_user(updated)}
+
+
+@router.get("/avatar/{filename}")
+def serve_avatar(filename: str):
+    """Serve an uploaded profile photo by filename."""
+    from pathlib import Path
+
+    safe_filename = Path(filename).name  # strip any path components to prevent traversal
+    avatar_path = Path(_AVATAR_DIR) / safe_filename
+    if not avatar_path.exists():
+        raise HTTPException(status_code=404, detail="Avatar not found")
+
+    content_type = "image/jpeg"
+    lower_name = safe_filename.lower()
+    if lower_name.endswith(".png"):
+        content_type = "image/png"
+    elif lower_name.endswith(".gif"):
+        content_type = "image/gif"
+    elif lower_name.endswith(".webp"):
+        content_type = "image/webp"
+
+    return FileResponse(avatar_path, media_type=content_type)
 
 
 @router.post("/logout")
