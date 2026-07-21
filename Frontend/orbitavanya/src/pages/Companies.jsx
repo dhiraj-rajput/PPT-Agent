@@ -431,7 +431,7 @@ export default function Companies() {
                     </div>
                     {/* CAGE Code */}
                     <div>
-                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">CAGE Code</label>
+                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">CAGE Code <span className="text-[10px] text-slate-400 font-normal ml-1">(Optional)</span></label>
                       <input 
                         value={manualForm.cage_code}
                         onChange={(e) => setManualForm({...manualForm, cage_code: e.target.value})}
@@ -441,7 +441,7 @@ export default function Companies() {
                     </div>
                     {/* Size */}
                     <div>
-                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">Business Size</label>
+                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">Business Size <span className="text-[10px] text-slate-400 font-normal ml-1">(Optional)</span></label>
                       <select 
                         value={manualForm.size}
                         onChange={(e) => setManualForm({...manualForm, size: e.target.value})}
@@ -456,7 +456,7 @@ export default function Companies() {
                   <div className="border-t border-slate-100 dark:border-navy-700 pt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Primary NAICS */}
                     <div>
-                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">Primary NAICS Code</label>
+                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">Primary NAICS Code <span className="text-[10px] text-slate-400 font-normal ml-1">(Optional)</span></label>
                       <input 
                         value={manualForm.primary_naics}
                         onChange={(e) => setManualForm({...manualForm, primary_naics: e.target.value})}
@@ -466,7 +466,7 @@ export default function Companies() {
                     </div>
                     {/* NAICS Desc */}
                     <div>
-                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">NAICS Description</label>
+                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">NAICS Description <span className="text-[10px] text-slate-400 font-normal ml-1">(Optional)</span></label>
                       <input 
                         value={manualForm.primary_naics_desc}
                         onChange={(e) => setManualForm({...manualForm, primary_naics_desc: e.target.value})}
@@ -479,7 +479,7 @@ export default function Companies() {
                   <div className="border-t border-slate-100 dark:border-navy-700 pt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
                     {/* City */}
                     <div>
-                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">City</label>
+                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">City <span className="text-[10px] text-slate-400 font-normal ml-1">(Optional)</span></label>
                       <input 
                         value={manualForm.city}
                         onChange={(e) => setManualForm({...manualForm, city: e.target.value})}
@@ -489,7 +489,7 @@ export default function Companies() {
                     </div>
                     {/* State */}
                     <div>
-                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">State / Province</label>
+                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">State / Province <span className="text-[10px] text-slate-400 font-normal ml-1">(Optional)</span></label>
                       <input 
                         value={manualForm.state}
                         onChange={(e) => setManualForm({...manualForm, state: e.target.value})}
@@ -499,7 +499,7 @@ export default function Companies() {
                     </div>
                     {/* Country */}
                     <div>
-                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">Country</label>
+                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">Country <span className="text-[10px] text-slate-400 font-normal ml-1">(Optional)</span></label>
                       <input 
                         value={manualForm.country}
                         onChange={(e) => setManualForm({...manualForm, country: e.target.value})}
@@ -512,7 +512,7 @@ export default function Companies() {
                   <div className="border-t border-slate-100 dark:border-navy-700 pt-4 grid grid-cols-1 md:grid-cols-4 gap-4">
                     {/* Contact Name */}
                     <div>
-                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">Contact Name</label>
+                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">Contact Name <span className="text-[10px] text-slate-400 font-normal ml-1">(Optional)</span></label>
                       <input 
                         value={manualForm.contact}
                         onChange={(e) => setManualForm({...manualForm, contact: e.target.value})}
@@ -522,7 +522,7 @@ export default function Companies() {
                     </div>
                     {/* Contact Post / Role */}
                     <div>
-                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">Post / Role</label>
+                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">Post / Role <span className="text-[10px] text-slate-400 font-normal ml-1">(Optional)</span></label>
                       <select
                         value={['Procurement Officer', 'Chief Technology Officer (CTO)', 'Director of Procurement', 'EBiz Contact', 'Managing Partner', 'Executive VP'].includes(manualForm.contact_role) ? manualForm.contact_role : 'Custom'}
                         onChange={(e) => {
@@ -549,7 +549,7 @@ export default function Companies() {
                     </div>
                     {/* Email */}
                     <div>
-                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">Contact Email</label>
+                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">Contact Email <span className="text-[10px] text-slate-400 font-normal ml-1">(Optional)</span></label>
                       <input 
                         type="email"
                         value={manualForm.email}
@@ -560,7 +560,7 @@ export default function Companies() {
                     </div>
                     {/* Phone */}
                     <div>
-                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">Contact Phone</label>
+                      <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">Contact Phone <span className="text-[10px] text-slate-400 font-normal ml-1">(Optional)</span></label>
                       <input 
                         value={manualForm.phone}
                         onChange={(e) => setManualForm({...manualForm, phone: e.target.value})}
@@ -639,6 +639,7 @@ export default function Companies() {
                               <div className="w-36 shrink-0 flex items-center">
                                 <span className="text-brand-600 dark:text-brand-400 font-bold">"{f.key}"</span>
                                 {f.required && <span className="text-rose-500 font-extrabold ml-0.5" title="Required field">*</span>}
+                                {!f.required && <span className="text-[10px] text-slate-400 font-normal ml-1">(Optional)</span>}
                               </div>
                               <span className="text-slate-400 font-bold">:</span>
                               <span className="rounded bg-brand-50 dark:bg-navy-800 text-brand-700 dark:text-brand-300 border border-brand-200/60 dark:border-navy-700 px-1.5 py-0.5 text-[10px] font-semibold w-20 text-center shrink-0">
@@ -657,6 +658,7 @@ export default function Companies() {
                           <div className="flex flex-wrap items-center gap-2">
                             <div className="w-36 shrink-0 flex items-center">
                               <span className="text-brand-600 dark:text-brand-400 font-bold">"size"</span>
+                              <span className="text-[10px] text-slate-400 font-normal ml-1">(Optional)</span>
                             </div>
                             <span className="text-slate-400 font-bold">:</span>
                             <span className="rounded bg-purple-50 dark:bg-navy-800 text-purple-700 dark:text-purple-300 border border-purple-200/60 dark:border-navy-700 px-1.5 py-0.5 text-[10px] font-semibold w-20 text-center shrink-0">
@@ -676,6 +678,7 @@ export default function Companies() {
                           <div className="flex flex-wrap items-center gap-2">
                             <div className="w-36 shrink-0 flex items-center">
                               <span className="text-brand-600 dark:text-brand-400 font-bold">"status"</span>
+                              <span className="text-[10px] text-slate-400 font-normal ml-1">(Optional)</span>
                             </div>
                             <span className="text-slate-400 font-bold">:</span>
                             <span className="rounded bg-emerald-50 dark:bg-navy-800 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-navy-700 px-1.5 py-0.5 text-[10px] font-semibold w-20 text-center shrink-0">

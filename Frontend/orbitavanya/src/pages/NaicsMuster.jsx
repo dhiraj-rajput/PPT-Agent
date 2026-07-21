@@ -457,7 +457,7 @@ export default function NaicsMuster() {
               <form onSubmit={handleManualSubmit} className="mt-4 space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide dark:text-slate-400">
-                    NAICS Code
+                    NAICS Code <span className="text-rose-500 font-extrabold ml-0.5">*</span>
                   </label>
                   <input
                     type="text"
@@ -471,7 +471,7 @@ export default function NaicsMuster() {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide dark:text-slate-400">
-                    Title
+                    Title <span className="text-rose-500 font-extrabold ml-0.5">*</span>
                   </label>
                   <input
                     type="text"
@@ -485,7 +485,7 @@ export default function NaicsMuster() {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide dark:text-slate-400">
-                    Description
+                    Description <span className="text-[10px] text-slate-400 font-normal ml-1 flex-inline normal-case tracking-normal">(Optional)</span>
                   </label>
                   <textarea
                     rows={3}
@@ -586,6 +586,7 @@ export default function NaicsMuster() {
                           <div className="flex flex-wrap items-start gap-2">
                             <div className="w-32 shrink-0 flex items-center pt-1.5">
                               <span className="text-brand-600 dark:text-brand-400 font-bold">"description"</span>
+                              <span className="text-[10px] text-slate-400 font-normal ml-1">(Optional)</span>
                             </div>
                             <span className="text-slate-400 font-bold pt-1.5">:</span>
                             <span className="rounded bg-brand-50 dark:bg-navy-800 text-brand-700 dark:text-brand-300 border border-brand-200/60 dark:border-navy-700 px-1.5 py-0.5 text-[10px] font-semibold w-24 text-center shrink-0 mt-1">

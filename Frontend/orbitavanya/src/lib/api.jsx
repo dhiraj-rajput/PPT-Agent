@@ -195,6 +195,12 @@ export const api = {
   async saveEnvKeys(keys) {
     return post('/api/integrations/env-keys', keys);
   },
+  async getLinkedinStatus() {
+    return get('/api/integrations/linkedin/status');
+  },
+  async saveIntegrationConfig(name, data) {
+    return post('/api/integrations/env-keys', data);
+  },
 
   // ---------- NAICS Codes ----------
   async getNaicsCodes(params = {}) {

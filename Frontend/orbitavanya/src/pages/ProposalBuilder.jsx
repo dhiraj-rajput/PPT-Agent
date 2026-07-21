@@ -774,7 +774,7 @@ export default function ProposalBuilder() {
               <div className="grid grid-cols-2 gap-4">
                 {['name', 'uei', 'cage_code', 'primary_naics', 'state', 'email', 'phone', 'size', 'certifications'].map(field => (
                   <div key={field} className={field === 'certifications' || field === 'name' ? 'col-span-2' : ''}>
-                    <label className="mb-1 block text-[10px] uppercase tracking-wide text-slate-500 font-semibold">{field.replace('_', ' ')}</label>
+                    <label className="mb-1 block text-[10px] uppercase tracking-wide text-slate-500 font-semibold">{field.replace('_', ' ')} {['name', 'uei'].includes(field) ? <span className="text-rose-500 font-extrabold ml-0.5">*</span> : <span className="text-[10px] text-slate-400 font-normal ml-1 flex-inline normal-case tracking-normal">(Optional)</span>}</label>
                     <input
                       className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
                       value={editForm[field] || ''}
@@ -857,7 +857,7 @@ export default function ProposalBuilder() {
                 <div className="grid grid-cols-2 gap-4">
                   {['name', 'uei', 'cage_code', 'primary_naics', 'state', 'email', 'phone', 'size'].map(field => (
                     <div key={field}>
-                      <label className="mb-1 block text-[10px] uppercase tracking-wide text-slate-500 font-semibold">{field.replace('_', ' ')}</label>
+                      <label className="mb-1 block text-[10px] uppercase tracking-wide text-slate-500 font-semibold">{field.replace('_', ' ')} {['name', 'uei'].includes(field) ? <span className="text-rose-500 font-extrabold ml-0.5">*</span> : <span className="text-[10px] text-slate-400 font-normal ml-1 flex-inline normal-case tracking-normal">(Optional)</span>}</label>
                       <input
                         className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
                         value={inventoryForm[field] || ''}
@@ -867,7 +867,7 @@ export default function ProposalBuilder() {
                     </div>
                   ))}
                   <div className="col-span-2">
-                    <label className="mb-1 block text-[10px] uppercase tracking-wide text-slate-500 font-semibold">Additional Inventory Details</label>
+                    <label className="mb-1 block text-[10px] uppercase tracking-wide text-slate-500 font-semibold">Additional Inventory Details <span className="text-[10px] text-slate-400 font-normal ml-1 flex-inline normal-case tracking-normal">(Optional)</span></label>
                     <textarea 
                       className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white h-24"
                       placeholder="Paste any additional products, services, or descriptions here..."
@@ -921,7 +921,7 @@ export default function ProposalBuilder() {
                     </div>
 
                     <div className="pl-4 flex items-center py-1 group">
-                      <span className="text-blue-300">"cage_code"</span><span className="text-slate-500 mr-2">:</span>
+                      <span className="text-blue-300">"cage_code"</span><span className="text-[10px] text-slate-400 font-normal ml-1">(Optional)</span><span className="text-slate-500 mr-2">:</span>
                       <input 
                         className="bg-slate-800/50 border border-slate-700 text-green-300 px-2 py-0.5 rounded outline-none focus:border-brand-500 flex-1" 
                         placeholder="8A9B0"
@@ -933,7 +933,7 @@ export default function ProposalBuilder() {
                     </div>
                     
                     <div className="pl-4 flex items-center py-1 group">
-                      <span className="text-blue-300">"primary_naics"</span><span className="text-slate-500 mr-2">:</span>
+                      <span className="text-blue-300">"primary_naics"</span><span className="text-[10px] text-slate-400 font-normal ml-1">(Optional)</span><span className="text-slate-500 mr-2">:</span>
                       <input 
                         className="bg-slate-800/50 border border-slate-700 text-green-300 px-2 py-0.5 rounded outline-none focus:border-brand-500 flex-1" 
                         placeholder="541512"
@@ -945,7 +945,7 @@ export default function ProposalBuilder() {
                     </div>
 
                     <div className="pl-4 flex items-center py-1 group">
-                      <span className="text-blue-300">"size"</span><span className="text-slate-500 mr-2">:</span>
+                      <span className="text-blue-300">"size"</span><span className="text-[10px] text-slate-400 font-normal ml-1">(Optional)</span><span className="text-slate-500 mr-2">:</span>
                       <select 
                         className="bg-slate-800/50 border border-slate-700 text-amber-300 px-2 py-0.5 rounded outline-none focus:border-brand-500 w-48"
                         value={inventoryForm.size || ''}
@@ -960,7 +960,7 @@ export default function ProposalBuilder() {
                     </div>
 
                     <div className="pl-4 py-1">
-                      <span className="text-blue-300">"certifications"</span><span className="text-slate-500">: </span>
+                      <span className="text-blue-300">"certifications"</span><span className="text-[10px] text-slate-400 font-normal ml-1">(Optional)</span><span className="text-slate-500">: </span>
                       <span className="text-yellow-300">["SBA 8(a)", "WOSB"]</span><span className="text-slate-500">,</span>
                     </div>
 

@@ -342,6 +342,24 @@ def get_env_keys(current_user: dict = Depends(get_current_user)):
         raise HTTPException(500, f"Failed to retrieve environment API keys: {exc}")
 
 
+@router.get("/linkedin/status")
+def linkedin_status(current_user: dict = Depends(get_current_user)):
+    try:
+        user_id = str(current_user["_id"])
+        env_keys = read_env_file_keys()
+        li_at = env_keys.get("LINKEDIN_LI_AT") or os.environ.get("LINKEDIN_LI_AT") or ""
+        
+        doc = get_collection("integrations").find_one({"service": "linkedin", "userId": user_id})
+        
+        if not li_at or "EXPIRED" in li_at.upper() or (doc and doc.get("expired")):
+            return {"connected": False, "expired": True, "status": "expired"}
+            
+        return {"connected": True, "expired": False, "status": "connected"}
+    except Exception as exc:
+        return {"connected": False, "expired": True, "status": "expired"}
+
+
+
 @router.post("/env-keys")
 def save_env_keys(payload: dict, current_user: dict = Depends(get_current_user)):
     try:
@@ -378,6 +396,14 @@ def save_env_keys(payload: dict, current_user: dict = Depends(get_current_user))
                     except Exception as e:
                         logger.error(f"Failed to cast env variable {k} to type {current_type}: {e}")
                         setattr(settings, k, v)
+                
+                if k == "LINKEDIN_LI_AT" and v:
+                    user_id = str(current_user["_id"])
+                    get_collection("integrations").update_one(
+                        {"service": "linkedin", "userId": user_id},
+                        {"$set": {"connected": True, "expired": False, "status": "connected", "li_at": v}},
+                        upsert=True
+                    )
                         
         return {"status": "success", "message": "API keys updated successfully."}
     except Exception as exc:
