@@ -130,15 +130,15 @@ class AppSettings(BaseSettings):
         description="Ollama host URL. Leave empty to use local Ollama (http://localhost:11434).",
     )
     OLLAMA_MODEL: str = Field(
-        default="gemma4:31b-cloud",
-        description="Ollama model to use for LLM compaction and RFP response generation.",
+        default="gemma4:e4b",
+        description="Ollama model to use for LLM generation. Default is gemma4:e4b (edge-optimized, runs on 8GB RAM).",
     )
     OLLAMA_API_KEY: str = Field(
         default="",
         description="Optional API key for authenticated hosted Ollama cloud endpoints.",
     )
     OLLAMA_MODEL_FALLBACKS: str = Field(
-        default="gemma4:31b-cloud,gemma3:27b,llama3.1:8b",
+        default="gemma4:e4b,gemma3:4b,gemma4:31b-cloud,llama3.1:8b",
         description="Comma-separated Ollama model fallback chain, tried in order after OLLAMA_MODEL.",
     )
     OLLAMA_TEMPERATURE: float = Field(
@@ -225,7 +225,7 @@ class AppSettings(BaseSettings):
                 return int(v_clean)
             except ValueError:
                 pass
-        return v
+        return int(v)
     OTP_TTL_MINUTES: int = Field(default=10, description="OTP lifetime in minutes.")
     OTP_LENGTH: int = Field(default=6, description="Length of generated OTP.")
     DEBUG_OTP: bool = Field(default=False, description="Enable printing OTPs to console for development.")
@@ -276,6 +276,26 @@ class AppSettings(BaseSettings):
     OCR_MIN_CHARS_PER_PAGE: int = Field(
         default=40,
         description="A page with fewer extracted characters than this is treated as scanned/image-only and sent to OCR.",
+    )
+    OCR_ENGINE: str = Field(
+        default="auto",
+        description=(
+            "OCR engine to use for scanned PDF processing. "
+            "'auto' = try Docling first, then PaddleOCR, then Tesseract. "
+            "'docling' = force Docling. 'paddleocr' = force PaddleOCR. 'tesseract' = force Tesseract."
+        ),
+    )
+    OCR_DPI: int = Field(
+        default=300,
+        description="DPI for rasterizing PDF pages for OCR (higher = better quality but slower).",
+    )
+    OLLAMA_TIMEOUT: int = Field(
+        default=120,
+        description="Timeout in seconds for Ollama API calls.",
+    )
+    CODESPACES: bool = Field(
+        default=False,
+        description="Set to True when running in GitHub Codespaces (enables 0.0.0.0 binding and adjusted paths).",
     )
 
     # ------------------------------------------------------------------

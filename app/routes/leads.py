@@ -83,7 +83,7 @@ def _assert_campaign_ownership(campaign_id: ObjectId, user_id: ObjectId) -> bool
     return bool(campaign)
 
 
-def _normalize_company_key(name: str, uei: str = "") -> str:
+def _normalize_company_key(name: Optional[str], uei: Optional[str] = "") -> str:
     """Normalize a company identifier so the same company can be matched
     consistently across campaigns, regardless of casing/whitespace."""
     if uei:
@@ -119,6 +119,8 @@ def _find_company_conflict(company_key: str, user_id: ObjectId, exclude_campaign
 
 
 def _format_lead(l: dict) -> dict:
+    if not l:
+        return {}
     return {
         "id": str(l["_id"]),
         "companyName": l.get("companyName", ""),
@@ -134,15 +136,15 @@ def _format_lead(l: dict) -> dict:
         "sendAttempts": l.get("sendAttempts", 0),
         "resendCount": l.get("resendCount", 0),
         "lastSendError": l.get("lastSendError", ""),
-        "sentAt": l.get("sentAt").isoformat() if l.get("sentAt") else None,
-        "openedAt": l.get("openedAt").isoformat() if l.get("openedAt") else None,
-        "clickedAt": l.get("clickedAt").isoformat() if l.get("clickedAt") else None,
-        "repliedAt": l.get("repliedAt").isoformat() if l.get("repliedAt") else None,
-        "bouncedAt": l.get("bouncedAt").isoformat() if l.get("bouncedAt") else None,
-        "unsubscribedAt": l.get("unsubscribedAt").isoformat() if l.get("unsubscribedAt") else None,
+        "sentAt": l.get("sentAt").isoformat() if hasattr(l.get("sentAt"), "isoformat") else None,
+        "openedAt": l.get("openedAt").isoformat() if hasattr(l.get("openedAt"), "isoformat") else None,
+        "clickedAt": l.get("clickedAt").isoformat() if hasattr(l.get("clickedAt"), "isoformat") else None,
+        "repliedAt": l.get("repliedAt").isoformat() if hasattr(l.get("repliedAt"), "isoformat") else None,
+        "bouncedAt": l.get("bouncedAt").isoformat() if hasattr(l.get("bouncedAt"), "isoformat") else None,
+        "unsubscribedAt": l.get("unsubscribedAt").isoformat() if hasattr(l.get("unsubscribedAt"), "isoformat") else None,
         "replyPreview": l.get("replyPreview", ""),
-        "createdAt": l.get("createdAt").isoformat() if l.get("createdAt") else None,
-        "updatedAt": l.get("updatedAt").isoformat() if l.get("updatedAt") else None,
+        "createdAt": l.get("createdAt").isoformat() if hasattr(l.get("createdAt"), "isoformat") else None,
+        "updatedAt": l.get("updatedAt").isoformat() if hasattr(l.get("updatedAt"), "isoformat") else None,
     }
 
 
@@ -401,7 +403,7 @@ def get_companies_in_use(current_user: dict = Depends(get_current_user)):
     if not campaign_ids:
         return {"inUse": []}
 
-    campaign_names = {c["_id"]: c.get("name", "") for c in campaigns_col.find({"_id": {"$in": campaign_ids}}, {"name": 1})}
+    campaign_names = {str(c["_id"]): c.get("name", "") for c in campaigns_col.find({"_id": {"$in": campaign_ids}}, {"name": 1})}
 
     rows = leads_col.find(
         {"campaignId": {"$in": campaign_ids}, "companyKey": {"$ne": ""}},
@@ -419,7 +421,7 @@ def get_companies_in_use(current_user: dict = Depends(get_current_user)):
             "companyKey": key,
             "companyName": r.get("companyName", ""),
             "campaignId": str(r["campaignId"]),
-            "campaignName": campaign_names.get(r["campaignId"], ""),
+            "campaignName": campaign_names.get(str(r["campaignId"]), ""),
         })
 
     return {"inUse": in_use}

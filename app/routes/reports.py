@@ -111,6 +111,21 @@ def sync_reports_with_mongo():
         else:
             file_size = f"{file_size_bytes / 1024:.0f} KB"
             
+        # Determine source (SAM.gov vs RFP Auto-Respond vs System)
+        source = "System"
+        if lower_filename.startswith("n0") or lower_filename.startswith("w9") or lower_filename.startswith("fa") or lower_filename.startswith("doc"):
+            source = "SAM.gov"
+        elif "rfp" in lower_filename or "auto" in lower_filename:
+            source = "RFP Auto-Respond"
+        else:
+            # Check draft request or tender collection
+            try:
+                tenders_col = get_collection("tenders")
+                if tenders_col.find_one({"solicitationNumber": solicitation_number}):
+                    source = "SAM.gov"
+            except Exception:
+                pass
+
         report_record = {
             "filename": filename,
             "company_name": company_name,
@@ -122,6 +137,7 @@ def sync_reports_with_mongo():
             "size": file_size,
             "ref": ref,
             "type": "PDF",
+            "source": source,
             "mtime": mtime,
             "createdAt": datetime.fromtimestamp(mtime),
             "filepath": str(pdf_path.resolve())

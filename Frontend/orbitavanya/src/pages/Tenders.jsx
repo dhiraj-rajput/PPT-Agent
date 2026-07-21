@@ -47,6 +47,11 @@ export default function Tenders() {
   const [syncResult, setSyncResult] = useState(null);
   const [syncMeta, setSyncMeta] = useState(null);
 
+  // Document viewer states
+  const [docsModal, setDocsModal] = useState(null); // noticeId | null
+  const [tenderDocs, setTenderDocs] = useState([]);
+  const [docsLoading, setDocsLoading] = useState(false);
+
   // Sync Form -----
   const [syncForm, setSyncForm] = useState({
     naicsCode: '',
@@ -55,6 +60,7 @@ export default function Tenders() {
     active: 'Yes',
     limit: 25,
     offset: 0,
+    api_source: 'sam_gov', // 'sam_gov' | 'companies_house_uk'
   });
 
   // ----- Fetch cached tenders from backend -----
@@ -95,6 +101,21 @@ export default function Tenders() {
     api.getTendersMeta()
       .then(data => setSyncMeta(data))
       .catch(() => {});
+  };
+
+  const fetchTenderDocs = async (noticeId) => {
+    setDocsLoading(true);
+    setTenderDocs([]);
+    setDocsModal(noticeId);
+    try {
+      const data = await api.getTenderDocuments(noticeId);
+      setTenderDocs(data.documents || []);
+    } catch (err) {
+      console.warn('Could not fetch tender documents:', err);
+      setTenderDocs([]);
+    } finally {
+      setDocsLoading(false);
+    }
   };
 
   useEffect(() => { fetchTenders(); fetchMeta(); }, [fetchTenders]);
@@ -404,6 +425,16 @@ export default function Tenders() {
                         </a>
                       </div>
                     )}
+                    
+                    <div className="mt-4 pt-3 border-t border-slate-100 dark:border-navy-700/50 flex justify-end">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); fetchTenderDocs(id); }}
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-navy-700 dark:bg-navy-800 dark:text-slate-200 dark:hover:bg-navy-700 transition-colors"
+                        title="View downloaded documents"
+                      >
+                        <FileText size={12} /> Docs
+                      </button>
+                    </div>
                   </Card>
                 </div>
               );
@@ -574,6 +605,25 @@ export default function Tenders() {
                 Results are <strong>upserted</strong> into MongoDB — existing records are refreshed, not duplicated.
               </div>
 
+              <div className="mb-4">
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
+                  Data Source
+                </label>
+                <select
+                  id="sync-api-source"
+                  value={syncForm.api_source}
+                  onChange={e => setSyncForm(f => ({ ...f, api_source: e.target.value }))}
+                  className="w-full rounded-lg border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-400"
+                >
+                  <option value="sam_gov">SAM.gov (USA Federal Tenders)</option>
+                  <option value="companies_house_uk" disabled>Companies House UK (Coming Soon)</option>
+                  <option value="find_a_tender_uk" disabled>Find a Tender UK (Coming Soon)</option>
+                </select>
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
+                  Additional sources (UK, EU) will be available in future updates.
+                </p>
+              </div>
+
               <div className="flex justify-end gap-3 pt-1 border-t border-slate-100 dark:border-navy-700">
                 <button
                   type="button"
@@ -592,6 +642,63 @@ export default function Tenders() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Tender Documents Modal */}
+      {docsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/80 p-4 backdrop-blur-md" onClick={() => setDocsModal(null)}>
+          <div className="w-full max-w-2xl rounded-2xl bg-white dark:bg-navy-800 shadow-2xl overflow-hidden border border-slate-100 dark:border-navy-700" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-navy-700 p-5">
+              <div>
+                <h3 className="text-base font-extrabold text-navy-900 dark:text-white">Tender Documents</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Downloaded attachments and requirements</p>
+              </div>
+              <button onClick={() => setDocsModal(null)} className="rounded-lg p-2 text-slate-400 hover:text-navy-950 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-navy-900 transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-5 max-h-[60vh] overflow-y-auto">
+              {docsLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="animate-spin text-brand-500" size={28} />
+                  <p className="ml-3 text-sm text-slate-500">Loading documents...</p>
+                </div>
+              ) : tenderDocs.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 text-center">
+                  <FileText className="text-slate-300 dark:text-slate-600 mb-3" size={36} />
+                  <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">No documents downloaded yet</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                    Documents are downloaded when you sync this tender. Try syncing again.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {tenderDocs.map((doc) => (
+                    <div key={doc.filename} className="flex items-center justify-between rounded-xl border border-slate-100 dark:border-navy-700 bg-slate-50 dark:bg-navy-900 p-3.5 hover:bg-slate-100 dark:hover:bg-navy-800 transition-colors">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600 dark:bg-navy-800 dark:text-brand-400">
+                          <FileText size={16} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-navy-900 dark:text-white truncate">{doc.filename}</p>
+                          <p className="text-xs text-slate-400 dark:text-slate-500">{doc.type} · {doc.size}</p>
+                        </div>
+                      </div>
+                      <a
+                        href={api.getTenderDocumentUrl ? api.getTenderDocumentUrl(docsModal, doc.filename) : '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-3 shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-brand-600 transition-colors"
+                      >
+                        <Eye size={12} /> View
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

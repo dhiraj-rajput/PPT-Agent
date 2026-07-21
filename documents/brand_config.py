@@ -3,15 +3,112 @@ documents/brand_config.py
 --------------------------
 Centralized branding configuration and shared document constants.
 Eliminates duplicated brand dicts and confidentiality text across all generators.
+Now includes: asset validation, font availability detection, pathlib-based paths.
 """
 
 from __future__ import annotations
 
-import os
+import logging
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+# Font fallback chain for cross-OS compatibility
+# We try fonts in order; first available font on the system wins.
+FONT_FALLBACK_CHAIN: List[str] = [
+    "Fira Sans",
+    "Calibri",
+    "Arial",
+    "Helvetica",
+    "Liberation Sans",
+    "DejaVu Sans",
+]
+
+_detected_font: Optional[str] = None
+
+
+def detect_available_font(preferred_fonts: List[str] = None) -> str:
+    """
+    Detect the first available font from the preferred list.
+    Falls back through FONT_FALLBACK_CHAIN if none are available.
+    """
+    global _detected_font
+    if _detected_font is not None:
+        return _detected_font
+
+    fonts_to_try = list(preferred_fonts or []) + FONT_FALLBACK_CHAIN
+
+    try:
+        # python-docx doesn't expose font enumeration, but we can check
+        # via matplotlib (if installed) or just return the first in the chain
+        try:
+            import matplotlib.font_manager as fm
+            available = {f.name for f in fm.fontManager.ttflist}
+            for font in fonts_to_try:
+                if font in available:
+                    _detected_font = font
+                    return font
+        except ImportError:
+            pass
+
+        # No matplotlib - use system-level checks
+        import subprocess
+        import sys
+        if sys.platform == "win32":
+            # Windows: check if font name appears in registry or system fonts
+            import os
+            fonts_dir = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts"
+            for font in fonts_to_try:
+                # Check for common font file patterns
+                font_lower = font.lower().replace(" ", "")
+                for f in fonts_dir.glob("*.ttf"):
+                    if font_lower in f.stem.lower():
+                        _detected_font = font
+                        return font
+        elif sys.platform == "darwin":
+            # macOS
+            result = subprocess.run(["fc-list"], capture_output=True, text=True, timeout=5)
+            for font in fonts_to_try:
+                if font.lower() in result.stdout.lower():
+                    _detected_font = font
+                    return font
+        else:
+            # Linux
+            result = subprocess.run(["fc-list"], capture_output=True, text=True, timeout=5)
+            for font in fonts_to_try:
+                if font.lower() in result.stdout.lower():
+                    _detected_font = font
+                    return font
+    except Exception as e:
+        logger.debug(f"Font detection error (non-critical): {e}")
+
+    # Last resort: Calibri is bundled with Office, Arial is universal
+    _detected_font = "Calibri"
+    return _detected_font
+
+
+def _resolve_asset(path_str: str) -> str:
+    """
+    Resolve an asset path to absolute. Returns empty string if the asset
+    file doesn't exist, with a warning log.
+    """
+    if not path_str:
+        return ""
+    p = Path(path_str)
+    if not p.is_absolute():
+        p = PROJECT_ROOT / p
+    p = p.resolve()
+    if not p.exists():
+        logger.warning(
+            f"Brand asset not found: {p}. "
+            f"Document generation will continue without this asset."
+        )
+        return ""  # Return empty so downstream code can skip gracefully
+    return str(p)
+
 
 DEFAULT_BRAND: Dict[str, Any] = {
     "company_name": "OrbitAvanya Tech LLP",
@@ -37,16 +134,33 @@ DEFAULT_CONFIDENTIALITY_TEXT: str = (
 )
 
 
-def get_brand_config(overrides: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """Returns a fresh copy of DEFAULT_BRAND with optional key overrides applied."""
+def get_brand_config(overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """
+    Returns a fresh copy of DEFAULT_BRAND with optional key overrides applied.
+    Validates asset paths exist; logs warnings for missing assets.
+    Auto-detects available system fonts.
+    """
     cfg = dict(DEFAULT_BRAND)
     if overrides:
         cfg.update(overrides)
-    # Ensure asset paths exist or resolve correctly
+
+    # Validate and resolve asset paths
     for key in ("logo_path", "cover_graphic_path"):
-        val = cfg.get(key)
-        if val and not Path(val).is_absolute():
-            cfg[key] = str((PROJECT_ROOT / val).resolve())
+        cfg[key] = _resolve_asset(cfg.get(key, ""))
+
+    # Auto-detect available font if Fira Sans is requested but may not be installed
+    body_font = cfg.get("body_font", "Fira Sans Light")
+    heading_font = cfg.get("heading_font", "Fira Sans SemiBold")
+    
+    # Check if font names contain "Fira Sans" and detect availability
+    if "fira" in body_font.lower():
+        available = detect_available_font(["Fira Sans"])
+        if available != "Fira Sans":
+            # Fira Sans not installed, use the detected fallback
+            cfg["body_font"] = available
+            cfg["heading_font"] = available
+            logger.info(f"Fira Sans not available, using '{available}' instead.")
+
     return cfg
 
 

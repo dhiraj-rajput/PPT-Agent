@@ -1276,9 +1276,16 @@ export default function EmailCampaign() {
                             </button>
                           )}
                           <div>
-                            <p className="text-xs font-semibold text-navy-900 dark:text-white">{company.name}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-xs font-semibold text-navy-900 dark:text-white">{company.name}</p>
+                              {(company.hasResearchedProfile || company.is_researched) && (
+                                <span className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 px-1.5 py-0.2 text-[9px] font-extrabold">
+                                  Researched
+                                </span>
+                              )}
+                            </div>
                             <p className="text-[11px] text-slate-400">
-                              {company.email || (isResearching ? '⏳ Research in progress...' : '❌ No email (requires research)')}
+                              {company.email || (isResearching ? '⏳ Research in progress...' : '❌ No contact data found')}
                               {company.contact ? ` · ${company.contact}` : ''}
                             </p>
                           </div>

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Upload, FileText, Loader2, CheckCircle, AlertCircle, Download, X, Zap, FileCheck } from 'lucide-react';
 import { api } from '../lib/api.jsx';
-
+import PreGenerationWizard from '../components/PreGenerationWizard.jsx';
 /**
  * RFPAutoRespond.jsx
  * -------------------
@@ -22,6 +22,7 @@ export default function RFPAutoRespond() {
   const [taskState, setTaskState] = useState(null); // { progress, status, message, filename }
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+  const [wizardModal, setWizardModal] = useState(null);
   const rfpRef = useRef(null);
   const tplRef = useRef(null);
   const pollRef = useRef(null);
@@ -71,11 +72,22 @@ export default function RFPAutoRespond() {
       return;
     }
     setError('');
+    
+    // Open the pre-generation wizard
+    setWizardModal({
+      mode: 'prime', // Assuming direct RFP response is acting as prime
+      solicitation: rfpFiles.map(f => f.name).join(', '),
+      tender_title: 'RFP Auto-Respond',
+    });
+  }
+
+  async function handleWizardConfirm(wizardConfig) {
+    setWizardModal(null);
     setUploading(true);
     setTaskId(null);
     setTaskState(null);
     try {
-      const { task_id } = await api.uploadRfp(rfpFiles, templateFile);
+      const { task_id } = await api.uploadRfp(rfpFiles, templateFile, wizardConfig);
       setTaskId(task_id);
       localStorage.setItem('rfp_active_task_id', task_id);
       setTaskState({ progress: 0, status: 'processing', message: 'Upload received, queuing pipeline...', filename: null });
@@ -439,6 +451,16 @@ export default function RFPAutoRespond() {
             </div>
           )}
         </div>
+      )}
+
+      {wizardModal && (
+        <PreGenerationWizard
+          mode={wizardModal.mode}
+          solicitation={wizardModal.solicitation}
+          tender_title={wizardModal.tender_title}
+          onClose={() => setWizardModal(null)}
+          onConfirmGenerate={handleWizardConfirm}
+        />
       )}
     </div>
   );

@@ -366,10 +366,12 @@ def check_incoming_replies():
                                         if msg.is_multipart():
                                             for part in msg.walk():
                                                 if part.get_content_type() == "text/plain":
-                                                    body_text = part.get_payload(decode=True).decode(errors="ignore")
+                                                    payload = part.get_payload(decode=True)
+                                                    body_text = payload.decode(errors="ignore") if isinstance(payload, bytes) else str(payload)
                                                     break
                                         else:
-                                            body_text = msg.get_payload(decode=True).decode(errors="ignore")
+                                            payload = msg.get_payload(decode=True)
+                                            body_text = payload.decode(errors="ignore") if isinstance(payload, bytes) else str(payload)
 
                                         body_text = body_text.strip() or "Reply received."
                                         reply_subj = str(msg.get("Subject") or "Re: Outreach").strip()

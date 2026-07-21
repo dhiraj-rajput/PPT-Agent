@@ -47,6 +47,9 @@ from app.routes.integrations import router as integrations_router
 # ---- RFP Auto-Respond (formerly BidForge) ----
 from app.routes.rfp_respond import router as rfp_respond_router
 
+# ---- Preview / Pre-generation wizard ----
+from app.routes.preview import router as preview_router
+
 # ---- Email Outreach & Campaign Module ----
 from app.routes.campaigns import router as campaigns_router
 from app.routes.leads import router as leads_router
@@ -136,6 +139,7 @@ app.include_router(reports_router, prefix="/api")
 app.include_router(proposals_router, prefix="/api")
 app.include_router(tenders_router, prefix="/api")
 app.include_router(rfp_respond_router, prefix="/api")
+app.include_router(preview_router, prefix="/api")
 
 # Campaign & Outreach module routers
 app.include_router(campaigns_router, prefix="/api")
@@ -145,6 +149,14 @@ app.include_router(analytics_router, prefix="/api")
 app.include_router(website_events_router, prefix="/api")
 app.include_router(naics_router, prefix="/api")
 app.include_router(newsletters_router, prefix="/api")
+
+# Serve downloaded tender documents statically (needed for DocumentViewer)
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
+_downloads_dir = Path("downloads")
+_downloads_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/downloads", StaticFiles(directory=str(_downloads_dir)), name="downloads")
+
 @app.get("/tracker.js")
 def get_root_tracker_js():
     from app.routes.tracking import TRACKER_JS
@@ -176,4 +188,6 @@ async def health():
 if __name__ == "__main__":
     from config.settings import settings
     reload_enabled = (settings.ENV == "dev")
-    uvicorn.run("server:app", host="127.0.0.1", port=settings.PORT, reload=reload_enabled)
+    # In GitHub Codespaces or Docker, bind to all interfaces so external traffic works
+    host = "0.0.0.0" if (settings.CODESPACES or os.getenv("CODESPACES") == "true") else "127.0.0.1"
+    uvicorn.run("server:app", host=host, port=settings.PORT, reload=reload_enabled)

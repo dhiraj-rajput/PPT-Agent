@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Sparkles, FileDown, LayoutTemplate, Loader2, Database, AlertCircle, RefreshCw, Play, Eye, X } from 'lucide-react';
+import { Plus, Sparkles, FileDown, LayoutTemplate, Loader2, Database, AlertCircle, RefreshCw, Play, Eye, X, Building2, Trophy } from 'lucide-react';
 import { PageHeader, Card } from '../components/ui/Common.jsx';
 import { api } from '../lib/api.jsx';
-
+import PreGenerationWizard from '../components/PreGenerationWizard.jsx';
 export default function ProposalBuilder() {
   const [tab, setTab] = useState('all');
 
@@ -16,8 +16,16 @@ export default function ProposalBuilder() {
   const [previewing, setPreviewing] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
 
+  // Company inventory states
+  const [companyProfile, setCompanyProfile] = useState(null);
+  const [companyLoading, setCompanyLoading] = useState(false);
+  const [proposalTypeFilter, setProposalTypeFilter] = useState('all');
+
   // ----- Track individual triggering states -----
   const [triggeringId, setTriggeringId] = useState(null);
+  const [wizardModal, setWizardModal] = useState(null);
+  const [showEditCompanyModal, setShowEditCompanyModal] = useState(false);
+  const [editForm, setEditForm] = useState({});
 
   const handleDownload = async (e, filename) => {
     e.preventDefault();
@@ -100,6 +108,23 @@ export default function ProposalBuilder() {
     fetchData();
   }, [fetchData]);
 
+  // Fetch own company inventory (OrbitAvanya)
+  const fetchOwnCompany = useCallback(() => {
+    setCompanyLoading(true);
+    api.getOwnCompanyProfile()
+      .then(data => {
+        setCompanyProfile(data || null);
+        setCompanyLoading(false);
+      })
+      .catch(() => {
+        setCompanyLoading(false);
+      });
+  }, []);
+
+  useEffect(() => {
+    fetchOwnCompany();
+  }, [fetchOwnCompany]);
+
   // ----- WebSocket Realtime Tracking -----
   useEffect(() => {
     let ws;
@@ -158,16 +183,30 @@ export default function ProposalBuilder() {
   }, [fetchData]);
 
   // ----- Start building a pending draft manually -----
-  const handleBuildDraft = (d, idKey) => {
+  const handleOpenWizard = (d, idKey) => {
+    setWizardModal({
+      idKey: idKey,
+      d: d,
+      mode: d.mode,
+      solicitation: d.solicitation_number || d.notice_id,
+      winner: d.target_company || d.award_awardee || '',
+      tender_title: d.tender_title || 'Tender Proposal'
+    });
+  };
+
+  const handleConfirmWizard = (wizardConfig) => {
+    if (!wizardModal) return;
+    const { idKey, mode, solicitation, winner, tender_title } = wizardModal;
+    
     setTriggeringId(idKey);
-    const solicitation = d.solicitation_number || d.notice_id;
-    const winner = d.target_company || d.award_awardee || '';
+    setWizardModal(null);
 
     api.createProposal({
-      mode: d.mode,
+      mode: mode,
       solicitation: solicitation,
       winner: winner,
-      tender_title: d.tender_title
+      tender_title: tender_title,
+      wizard_config: wizardConfig
     })
       .then(() => {
         setTriggeringId(null);
@@ -281,12 +320,16 @@ export default function ProposalBuilder() {
   });
 
   // Filter items based on selected tab
-  const filteredItems = renderedItems.filter(item => {
+  let filteredItems = renderedItems.filter(item => {
     if (tab === 'all') return true;
     if (tab === 'Completed') return item.status === 'Completed' || item.type === 'report';
     if (tab === 'Draft') return item.status === 'Pending' || item.status === 'Processing' || item.type === 'task';
     return true;
   });
+
+  if (proposalTypeFilter !== 'all') {
+    filteredItems = filteredItems.filter(item => item.mode === proposalTypeFilter);
+  }
 
   // Get CSS classes for the role badge
   const getModeBadge = (mode) => {
@@ -319,74 +362,117 @@ export default function ProposalBuilder() {
       )}
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-        {/* Left column: Action guidance & Post-generation Summary */}
-        <Card className="lg:col-span-1 space-y-4">
-          <div className="flex items-center gap-2 border-b border-slate-100 dark:border-navy-700 pb-3">
-            <LayoutTemplate size={16} className="text-brand-500" />
-            <h3 className="text-sm font-bold text-navy-900 dark:text-white">Pipeline Summary & Guide</h3>
-          </div>
-
-          {/* Generated Proposals Summary Stats */}
-          <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3.5 dark:border-navy-700 dark:bg-navy-900/50 space-y-2">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Generated Documents</p>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="rounded-lg bg-white p-2.5 shadow-2xs dark:bg-navy-800">
-                <p className="text-[10px] text-slate-400 font-medium">Completed</p>
-                <p className="text-base font-extrabold text-emerald-600 dark:text-emerald-400">
-                  {reports.length}
-                </p>
+        {/* Left column: Company Inventory Panel */}
+        <div className="lg:col-span-1">
+          {/* ── Company Inventory Panel ── */}
+          <Card className="!p-0 overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-navy-800">
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-50 text-brand-600 dark:bg-navy-800 dark:text-brand-400">
+                  <Building2 size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-navy-900 dark:text-white">Our Company Profile</h3>
+                  <p className="text-xs text-slate-400 dark:text-slate-500">OrbitAvanya inventory used in proposals</p>
+                </div>
               </div>
-              <div className="rounded-lg bg-white p-2.5 shadow-2xs dark:bg-navy-800">
-                <p className="text-[10px] text-slate-400 font-medium">Draft Requests</p>
-                <p className="text-base font-extrabold text-brand-600 dark:text-brand-400">
-                  {draftRequests.length}
-                </p>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    setEditForm({
+                      name: companyProfile?.name || 'OrbitAvanya Tech LLP',
+                      uei: companyProfile?.uei || 'ORBIT1234567',
+                      cage_code: companyProfile?.cage_code || '8A9B0',
+                      primary_naics: companyProfile?.primary_naics || '541512',
+                      primary_naics_desc: companyProfile?.primary_naics_desc || 'Computer Systems Design',
+                      city: companyProfile?.city || 'Dallas',
+                      state: companyProfile?.state || 'TX',
+                      country: companyProfile?.country || 'USA',
+                      email: companyProfile?.email || 'prasannadhamal982005@gmail.com',
+                      phone: companyProfile?.phone || '+1-214-555-0199',
+                      size: companyProfile?.size || 'Small',
+                      certifications: companyProfile?.certifications?.join(', ') || 'SBA 8(a), WOSB, HUBZone',
+                    });
+                    setShowEditCompanyModal(true);
+                  }}
+                  className="inline-flex items-center gap-1 rounded-xl bg-brand-500 px-3 py-1.5 text-xs font-bold text-white shadow-soft hover:bg-brand-600 transition-colors"
+                >
+                  Edit / Update Profile
+                </button>
+                {companyLoading && <Loader2 className="animate-spin text-brand-400" size={16} />}
               </div>
             </div>
-            {reports.length > 0 && (
-              <div className="pt-2 border-t border-slate-200/60 dark:border-navy-700">
-                <p className="text-[11px] font-bold text-navy-900 dark:text-white line-clamp-1">Latest: {reports[0].title || reports[0].filename}</p>
-                <button
-                  onClick={() => setPreviewing(reports[0])}
-                  className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg bg-brand-500 py-1.5 text-xs font-bold text-white shadow-soft hover:bg-brand-600 transition-colors"
-                >
-                  <Eye size={13} /> View Latest Proposal
-                </button>
+
+            {companyProfile ? (
+              <div className="p-5 space-y-4">
+                {/* Basic Info */}
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { label: 'Company Name', value: companyProfile.name || companyProfile.company_name || 'OrbitAvanya Tech LLP' },
+                    { label: 'UEI', value: companyProfile.uei || 'N/A' },
+                    { label: 'CAGE Code', value: companyProfile.cage_code || 'N/A' },
+                    { label: 'NAICS', value: companyProfile.primary_naics || 'N/A' },
+                    { label: 'State', value: companyProfile.state || 'TX' },
+                    { label: 'Size', value: companyProfile.size || 'Small' },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="rounded-xl bg-slate-50 dark:bg-navy-900 p-3">
+                      <p className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500 font-semibold mb-0.5">{label}</p>
+                      <p className="text-sm font-bold text-navy-900 dark:text-white truncate">{value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* NAICS codes */}
+                {companyProfile.naics_codes?.length > 0 && (
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500 font-semibold mb-2">All NAICS Codes</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {companyProfile.naics_codes.slice(0, 8).map(code => (
+                        <span key={code} className="inline-flex items-center rounded-full bg-brand-50 text-brand-700 dark:bg-navy-800 dark:text-brand-300 px-2.5 py-0.5 text-xs font-semibold">
+                          {code}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Certifications */}
+                {companyProfile.certifications?.length > 0 && (
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500 font-semibold mb-2">Certifications</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {companyProfile.certifications.map(cert => (
+                        <span key={cert} className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 px-2.5 py-0.5 text-xs font-semibold">
+                          {cert}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Past performance count */}
+                {companyProfile.past_performance_count !== undefined && (
+                  <div className="flex items-center gap-2 rounded-xl bg-slate-50 dark:bg-navy-900 p-3">
+                    <Trophy className="text-amber-500" size={16} />
+                    <p className="text-sm font-semibold text-navy-900 dark:text-white">
+                      {companyProfile.past_performance_count} Past Performance Record{companyProfile.past_performance_count !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-10 text-center px-6">
+                <Building2 className="text-slate-300 dark:text-slate-600 mb-3" size={36} />
+                <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+                  {companyLoading ? 'Loading company data...' : 'Company profile not found'}
+                </p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                  Add your company details in the Companies section to see inventory here.
+                </p>
               </div>
             )}
-          </div>
-          
-          <div className="space-y-3 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
-            <div>
-              <p className="font-bold text-navy-900 dark:text-slate-300">1. Select RFP Opportunity</p>
-              <p>Search active opportunities cached from SAM.gov on the Tenders page.</p>
-            </div>
-            <div>
-              <p className="font-bold text-navy-900 dark:text-slate-300">2. Select Response Mode</p>
-              <p>Click "Respond as Prime" for direct bidding or "Seek Subcontract" for Teaming.</p>
-            </div>
-            <div>
-              <p className="font-bold text-navy-900 dark:text-slate-300">3. Execute Compilation</p>
-              <p>Click "Build Proposal" to trigger the template engine and view generated documents online.</p>
-            </div>
-          </div>
-
-          <div className="mt-6 rounded-xl bg-brand-50 p-4 dark:bg-navy-900">
-            <div className="flex items-center gap-2">
-              <Sparkles size={15} className="text-brand-600" />
-              <p className="text-sm font-bold text-brand-700">Need new projects?</p>
-            </div>
-            <p className="mt-2 text-xs text-brand-700/80 dark:text-slate-400">
-              Search live opportunities matching your company NAICS codes.
-            </p>
-            <Link
-              to="/tenders"
-              className="mt-3 block w-full text-center rounded-lg bg-brand-500 py-2 text-xs font-bold text-white hover:bg-brand-600"
-            >
-              Go to Tenders Page
-            </Link>
-          </div>
-        </Card>
+          </Card>
+        </div>
 
         {/* Right column: list of active / completed proposals */}
         <div className="flex flex-col gap-5 lg:col-span-2">
@@ -409,6 +495,30 @@ export default function ProposalBuilder() {
                 {t.label}
               </button>
             ))}
+          </div>
+
+          {/* Proposal type filter tabs */}
+          <div className="mb-4 flex items-center gap-2 flex-wrap">
+            {[
+              { value: 'all', label: 'All' },
+              { value: 'prime', label: 'Prime Contract' },
+              { value: 'subcontract', label: 'Subcontract' },
+            ].map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setProposalTypeFilter(opt.value)}
+                className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold transition-all ${
+                  proposalTypeFilter === opt.value
+                    ? 'bg-brand-500 text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-navy-800 dark:text-slate-300 dark:hover:bg-navy-700'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+            <span className="text-xs text-slate-400 dark:text-slate-500 ml-1">
+              {filteredItems.length} proposal{filteredItems.length !== 1 ? 's' : ''}
+            </span>
           </div>
 
           {/* Loading spinner */}
@@ -479,7 +589,7 @@ export default function ProposalBuilder() {
                         {/* Show build or rebuild button for non-completed draft requests */}
                         {p.type === 'draft_request' && p.status !== 'Completed' && (
                           <button
-                            onClick={() => handleBuildDraft(p.rawDraft, p.id)}
+                            onClick={() => handleOpenWizard(p.rawDraft, p.id)}
                             disabled={p.isReallyRunning || triggeringId !== null}
                             className="flex items-center gap-1 rounded-xl bg-brand-500 px-3.5 py-1.5 text-xs font-bold text-white shadow-soft hover:bg-brand-600 disabled:opacity-50 transition-colors"
                           >
@@ -586,6 +696,75 @@ export default function ProposalBuilder() {
                   <p className="text-xs font-medium">Loading document viewer...</p>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pre-Generation Wizard Modal */}
+      {wizardModal && (
+        <PreGenerationWizard
+          tenderId={wizardModal.d?.id}
+          solicitationNumber={wizardModal.solicitation}
+          proposalType={wizardModal.mode}
+          onCancel={() => setWizardModal(null)}
+          onConfirmGenerate={handleConfirmWizard}
+        />
+      )}
+
+      {/* Edit Company Profile Modal */}
+      {showEditCompanyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/70 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-soft dark:bg-navy-800 border border-slate-100 dark:border-navy-700 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-navy-700">
+              <h3 className="text-sm font-bold text-navy-900 dark:text-white">Edit Company Profile</h3>
+              <button
+                onClick={() => setShowEditCompanyModal(false)}
+                className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-navy-900 dark:hover:bg-navy-700 dark:hover:text-white"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5">
+              <div className="grid grid-cols-2 gap-4">
+                {['name', 'uei', 'cage_code', 'primary_naics', 'state', 'email', 'phone', 'size', 'certifications'].map(field => (
+                  <div key={field} className={field === 'certifications' || field === 'name' ? 'col-span-2' : ''}>
+                    <label className="mb-1 block text-[10px] uppercase tracking-wide text-slate-500 font-semibold">{field.replace('_', ' ')}</label>
+                    <input
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                      value={editForm[field] || ''}
+                      onChange={e => setEditForm({ ...editForm, [field]: e.target.value })}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 border-t border-slate-100 px-5 py-4 dark:border-navy-700 bg-slate-50 dark:bg-navy-900/50">
+              <button
+                onClick={() => setShowEditCompanyModal(false)}
+                className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-navy-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    await api.updateOwnCompanyProfile({
+                      ...editForm,
+                      certifications: typeof editForm.certifications === 'string' 
+                        ? editForm.certifications.split(',').map(s => s.trim()).filter(Boolean)
+                        : editForm.certifications
+                    });
+                    fetchOwnCompany();
+                    setShowEditCompanyModal(false);
+                  } catch (err) {
+                    alert('Failed to update: ' + err.message);
+                  }
+                }}
+                className="rounded-xl bg-brand-500 px-4 py-2 text-xs font-bold text-white hover:bg-brand-600"
+              >
+                Save Changes
+              </button>
             </div>
           </div>
         </div>

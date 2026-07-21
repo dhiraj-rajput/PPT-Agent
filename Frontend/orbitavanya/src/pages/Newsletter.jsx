@@ -855,7 +855,14 @@ export default function Newsletter() {
                 return (
                   <label key={key} className="flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-navy-700/50 cursor-pointer">
                     <div>
-                      <p className="text-xs font-bold text-navy-900 dark:text-white">{c.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-bold text-navy-900 dark:text-white">{c.name}</p>
+                        {(c.hasResearchedProfile || c.is_researched) && (
+                          <span className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 px-1.5 py-0.2 text-[9px] font-extrabold">
+                            Researched
+                          </span>
+                        )}
+                      </div>
                       <p className="text-[11px] text-slate-400">
                         {c.email || (isResearching ? '⏳ Research in progress...' : '❌ No email (requires research)')}
                       </p>

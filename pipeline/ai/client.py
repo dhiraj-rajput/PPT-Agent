@@ -80,20 +80,40 @@ class OllamaAIClient:
     #: Fallback chain tried (in order) whenever the configured primary
     #: model fails for a non-rate-limit reason. Overridable via
     #: settings.OLLAMA_MODEL_FALLBACKS (comma-separated).
-    DEFAULT_FALLBACKS = ["gemma4:31b-cloud", "gemma3:27b", "llama3.1:8b"]
+    DEFAULT_FALLBACKS = ["gemma4:e4b", "gemma3:4b", "gemma4:31b-cloud", "llama3.1:8b"]
 
     def __init__(self) -> None:
         from config.settings import settings as _settings
         self._settings = _settings
 
-        self.model: str = getattr(_settings, "OLLAMA_MODEL", "gemma4:31b-cloud") or "gemma4:31b-cloud"
-        self.host: str = getattr(_settings, "OLLAMA_HOST", "") or ""
+        self.model: str = getattr(_settings, "OLLAMA_MODEL", "gemma4:e4b") or "gemma4:e4b"
+        self.host: str = getattr(_settings, "ollama_host", "") or ""
         self.api_key: str = getattr(_settings, "OLLAMA_API_KEY", "") or ""
         self.temperature: float = float(getattr(_settings, "OLLAMA_TEMPERATURE", 0.1) or 0.1)
 
         raw_fallbacks = getattr(_settings, "OLLAMA_MODEL_FALLBACKS", "") or ""
         parsed_fallbacks = [m.strip() for m in raw_fallbacks.split(",") if m.strip()]
         self.fallback_models: List[str] = parsed_fallbacks or list(self.DEFAULT_FALLBACKS)
+
+    def ping_ollama(self) -> bool:
+        """Check if Ollama is available and responding. Returns True if healthy."""
+        try:
+            if not _OLLAMA_AVAILABLE or _ollama_lib is None:
+                return False
+            client_kwargs = {}
+            if self.host:
+                client_kwargs["host"] = self.host
+            if self.api_key:
+                client_kwargs["headers"] = {"Authorization": f"Bearer {self.api_key}"}
+            if client_kwargs:
+                client = _ollama_lib.Client(**client_kwargs)
+                client.list()
+            else:
+                _ollama_lib.list()
+            return True
+        except Exception as e:
+            logger.warning(f"[AI] Ollama ping failed: {e}")
+            return False
 
     # ------------------------------------------------------------------
     # Public API
@@ -277,7 +297,7 @@ class OllamaAIClient:
             raise ValueError("GEMINI_API_KEY is not set.")
 
         # Robust list of models to try in order. Cleaned up obsolete/deprecated models.
-        gemini_models = ["gemini-3.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"]
+        gemini_models = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"]
         
         last_error = None
         saw_rate_limit = False
@@ -400,12 +420,15 @@ class OllamaAIClient:
         try:
             parsed = json.loads(text)
         except json.JSONDecodeError:
-            match = re.search(r"(\{.*\})", text, re.DOTALL)
+            match = re.search(r"(\{.*\}|\[.*\])", text, re.DOTALL)
             if not match:
-                raise ValueError(f"No JSON object found in AI response. First 500 chars: {text[:500]}")
+                raise ValueError(f"No JSON found in AI response. First 500 chars: {text[:500]}")
             parsed = json.loads(match.group(1))
+        # Wrap arrays in a dict for backwards compatibility
+        if isinstance(parsed, list):
+            return {"items": parsed}
         if not isinstance(parsed, dict):
-            raise ValueError("AI response must be a JSON object.")
+            raise ValueError(f"AI response must be a JSON object or array, got {type(parsed).__name__}.")
         return parsed
 
 

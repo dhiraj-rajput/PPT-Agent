@@ -20,6 +20,7 @@ import re
 import subprocess
 import sys
 import uuid
+import os
 from pathlib import Path
 from typing import Optional
 

@@ -1,5 +1,5 @@
 from datetime import datetime, timezone, timedelta
-from typing import Optional
+from typing import Optional , Any
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File
 from pydantic import BaseModel, Field
@@ -38,7 +38,15 @@ class CampaignUpdateBody(BaseModel):
     attachmentFilename: Optional[str] = None
 
 
-def _format_campaign(c: dict) -> dict:
+def _iso(val: Any) -> Optional[str]:
+    if val is not None and hasattr(val, "isoformat"):
+        return val.isoformat()
+    return None
+
+
+def _format_campaign(c: Optional[dict]) -> dict:
+    if not c:
+        return {}
     stats = c.get("stats", {}) or {}
     return {
         "id": str(c["_id"]),
@@ -51,7 +59,7 @@ def _format_campaign(c: dict) -> dict:
         "senderName": c.get("senderName", ""),
         "dailyLimit": c.get("dailyLimit", 200),
         "timezone": c.get("timezone", "America/Chicago"),
-        "scheduleStart": c.get("scheduleStart").isoformat() if c.get("scheduleStart") else None,
+        "scheduleStart": _iso(c.get("scheduleStart")),
         "attachmentPath": c.get("attachmentPath", ""),
         "attachmentFilename": c.get("attachmentFilename", ""),
         "campaignNumber": c.get("campaignNumber", 0),
@@ -64,8 +72,8 @@ def _format_campaign(c: dict) -> dict:
             "totalUnsubscribed": stats.get("totalUnsubscribed", 0),
             "totalResent": stats.get("totalResent", 0),
         },
-        "createdAt": c.get("createdAt").isoformat() if c.get("createdAt") else None,
-        "updatedAt": c.get("updatedAt").isoformat() if c.get("updatedAt") else None,
+        "createdAt": _iso(c.get("createdAt")),
+        "updatedAt": _iso(c.get("updatedAt")),
     }
 
 
@@ -434,8 +442,9 @@ def resume_campaign(id: str, current_user: dict = Depends(get_current_user)):
 
     col.update_one({"_id": oid}, {"$set": {"status": "running", "updatedAt": datetime.now(timezone.utc)}})
     campaign = col.find_one({"_id": oid})
+    daily_limit = (campaign or {}).get("dailyLimit", 200)
 
-    queued = _queue_pending_leads(oid, campaign.get("dailyLimit", 200))
+    queued = _queue_pending_leads(oid, daily_limit)
     return {"campaign": _format_campaign(campaign), "queuedLeads": queued}
 
 
@@ -456,8 +465,9 @@ def launch_campaign(id: str, current_user: dict = Depends(get_current_user)):
 
     col.update_one({"_id": oid}, {"$set": {"status": "running", "updatedAt": datetime.now(timezone.utc)}})
     campaign = col.find_one({"_id": oid})
+    daily_limit = (campaign or {}).get("dailyLimit", 200)
 
-    queued = _queue_pending_leads(oid, campaign.get("dailyLimit", 200))
+    queued = _queue_pending_leads(oid, daily_limit)
 
     # Log action
     get_collection("audit_logs").insert_one({

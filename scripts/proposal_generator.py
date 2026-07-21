@@ -56,6 +56,9 @@ import subprocess
 import argparse
 from pathlib import Path
 from typing import Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor, Emu
@@ -126,6 +129,55 @@ def _add_toc_field(paragraph):
     r.append(fld_end)
 
 
+def _add_page_number_field(paragraph, cfg):
+    """Insert 'Page X of Y' using Word field codes."""
+    run = paragraph.add_run("Page ")
+    _font(run, cfg, size=8)
+    
+    # PAGE field
+    r = OxmlElement("w:r")
+    fld = OxmlElement("w:fldChar")
+    fld.set(qn("w:fldCharType"), "begin")
+    r.append(fld)
+    paragraph._p.append(r)
+    
+    r2 = OxmlElement("w:r")
+    instr = OxmlElement("w:instrText")
+    instr.set(qn("xml:space"), "preserve")
+    instr.text = " PAGE "
+    r2.append(instr)
+    paragraph._p.append(r2)
+    
+    r3 = OxmlElement("w:r")
+    fld3 = OxmlElement("w:fldChar")
+    fld3.set(qn("w:fldCharType"), "end")
+    r3.append(fld3)
+    paragraph._p.append(r3)
+    
+    run_of = paragraph.add_run(" of ")
+    _font(run_of, cfg, size=8)
+    
+    # NUMPAGES field
+    r4 = OxmlElement("w:r")
+    fld4 = OxmlElement("w:fldChar")
+    fld4.set(qn("w:fldCharType"), "begin")
+    r4.append(fld4)
+    paragraph._p.append(r4)
+    
+    r5 = OxmlElement("w:r")
+    instr5 = OxmlElement("w:instrText")
+    instr5.set(qn("xml:space"), "preserve")
+    instr5.text = " NUMPAGES "
+    r5.append(instr5)
+    paragraph._p.append(r5)
+    
+    r6 = OxmlElement("w:r")
+    fld6 = OxmlElement("w:fldChar")
+    fld6.set(qn("w:fldCharType"), "end")
+    r6.append(fld6)
+    paragraph._p.append(r6)
+
+
 def _force_update_fields_on_open(doc):
     """Tell Word (and LibreOffice on conversion) to recompute fields --
     e.g. the TOC page numbers -- as soon as the file is opened/rendered."""
@@ -140,9 +192,17 @@ def _force_update_fields_on_open(doc):
 # --------------------------------------------------------------------------
 
 def _font(run, cfg, name=None, size: float = 11, bold=False, italic=False, color=None):
-    run.font.name = name or cfg["brand"]["body_font"]
+    # Use configured font or fall back gracefully
+    font_name = name or cfg["brand"].get("body_font", "Calibri")
+    # If font name has 'Light' or 'SemiBold' variants that Word may not recognise
+    # as separate fonts (vs weight settings), strip the variant and use weight flags
+    base_name = font_name.replace(" Light", "").replace(" SemiBold", "").replace(" Bold", "")
+    is_semibold = "SemiBold" in font_name or "Bold" in font_name
+    is_light = "Light" in font_name
+    
+    run.font.name = base_name
     run.font.size = Pt(size)
-    run.font.bold = bold
+    run.font.bold = bold or is_semibold
     run.font.italic = italic
     if color:
         run.font.color.rgb = RGBColor.from_string(color)
@@ -153,7 +213,9 @@ def _font(run, cfg, name=None, size: float = 11, bold=False, italic=False, color
     if rFonts is None:
         rFonts = OxmlElement("w:rFonts")
         rPr.append(rFonts)
-    rFonts.set(qn("w:eastAsia"), name or cfg["brand"]["body_font"])
+    rFonts.set(qn("w:eastAsia"), base_name)
+    rFonts.set(qn("w:ascii"), base_name)
+    rFonts.set(qn("w:hAnsi"), base_name)
 
 
 def _accent(cfg):
@@ -463,7 +525,13 @@ def setup_headers_footers(doc, cfg):
     logo = brand.get("logo_path")
     if logo and Path(logo).exists():
         f_left_run = f_left.paragraphs[0].add_run()
-        f_left_run.add_picture(logo, width=Inches(1.1))
+        try:
+            f_left_run.add_picture(logo, width=Inches(1.1))
+        except Exception:
+            pass  # Logo file missing or corrupt — skip gracefully
+    # Add page number below logo
+    pn_para = f_left.add_paragraph()
+    _add_page_number_field(pn_para, cfg)
 
     f_right.paragraphs[0].text = ""
     f_p = f_right.paragraphs[0]
@@ -485,12 +553,30 @@ def setup_page(doc):
     section.page_height = Inches(11)
     section.left_margin = Inches(0.75)
     section.right_margin = Inches(0.75)
-    section.top_margin = Inches(0.75)
-    section.bottom_margin = Inches(0.75)
+    section.top_margin = Inches(0.9)   # Slightly more top margin for header
+    section.bottom_margin = Inches(0.9)  # Slightly more bottom margin for footer
     section.header_distance = Inches(0.35)
     section.footer_distance = Inches(0.35)
+    # Enable widow/orphan control for cleaner pagination
+    for style_name in ("Normal", "List Bullet", "List Number"):
+        try:
+            style = doc.styles[style_name]
+            style.paragraph_format.widow_control = True
+            # keep_with_next prevents a heading from being orphaned at page bottom
+        except Exception:
+            pass
+    # Enable widow control at the document level via XML
     try:
-        doc.styles["Normal"].paragraph_format.widow_control = True
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+        settings_elem = doc.settings.element
+        compat = OxmlElement("w:compat")
+        no_extra_spacing = OxmlElement("w:compatSetting")
+        no_extra_spacing.set(qn("w:name"), "useWord2013TrackBottomHyphenation")
+        no_extra_spacing.set(qn("w:uri"), "http://schemas.microsoft.com/office/word")
+        no_extra_spacing.set(qn("w:val"), "0")
+        compat.append(no_extra_spacing)
+        settings_elem.append(compat)
     except Exception:
         pass
 
@@ -533,21 +619,40 @@ def convert_to_pdf(docx_path: str, outdir: Optional[str] = None) -> str:
     if sys.platform == "win32":
         try:
             import comtypes.client
+            import threading
             logger.info("Attempting Word COM conversion to PDF...")
-            word = comtypes.client.CreateObject('Word.Application')
-            word.Visible = False
-            word.DisplayAlerts = 0 # Suppress popups
-            try:
-                doc = word.Documents.Open(docx_abs)
-                doc.SaveAs(pdf_abs, FileFormat=17) # 17 is wdFormatPDF
-                doc.Close()
-                logger.info(f"PDF created via Word COM: {pdf_path}")
-                if os.path.exists(pdf_path):
-                    return pdf_path
-            finally:
-                word.Quit()
+            
+            result_holder: dict[str, str | None] = {"pdf_path": None, "error": None}
+            
+            def _com_convert():
+                try:
+                    word = comtypes.client.CreateObject('Word.Application')
+                    word.Visible = False
+                    word.DisplayAlerts = 0
+                    try:
+                        doc = word.Documents.Open(docx_abs)
+                        doc.SaveAs(pdf_abs, FileFormat=17)
+                        doc.Close()
+                        if os.path.exists(pdf_path):
+                            result_holder["pdf_path"] = pdf_path
+                    finally:
+                        word.Quit()
+                except Exception as e:
+                    result_holder["error"] = str(e)
+
+            t = threading.Thread(target=_com_convert, daemon=True)
+            t.start()
+            t.join(timeout=60)  # 60 second timeout
+            
+            if t.is_alive():
+                logger.warning("Word COM conversion timed out after 60s. Falling back to LibreOffice.")
+            elif result_holder["pdf_path"]:
+                logger.info(f"PDF created via Word COM: {result_holder['pdf_path']}")
+                return result_holder["pdf_path"]
+            elif result_holder["error"]:
+                logger.warning(f"Word COM conversion failed: {result_holder['error']}. Trying LibreOffice...")
         except Exception as e:
-            logger.warning(f"Word COM conversion failed or not available: {e}. Trying LibreOffice...")
+            logger.warning(f"Word COM not available: {e}. Trying LibreOffice...")
 
     # 2. Try to find LibreOffice/soffice on PATH or in common directories
     soffice = shutil.which("soffice") or shutil.which("libreoffice")
@@ -579,9 +684,14 @@ def convert_to_pdf(docx_path: str, outdir: Optional[str] = None) -> str:
     # LibreOffice saves it under the same stem with .pdf extension in outdir
     generated_pdf = Path(outdir) / (Path(docx_path).stem + ".pdf")
     if generated_pdf.exists():
-        # Move it to pdf_abs if they are not matching (though they should be)
-        if os.path.abspath(str(generated_pdf)) != pdf_abs:
-            shutil.move(str(generated_pdf), pdf_abs)
+        # Use normcase() to handle Windows drive-letter casing differences (E:\ vs e:\)
+        gen_resolved = os.path.normcase(os.path.abspath(str(generated_pdf)))
+        pdf_resolved = os.path.normcase(pdf_abs)
+        if gen_resolved != pdf_resolved:
+            try:
+                shutil.move(str(generated_pdf), pdf_abs)
+            except shutil.Error:
+                pass  # Same file or move failed — the file exists at generated_pdf
         return pdf_path
     
     raise FileNotFoundError(f"LibreOffice succeeded but PDF was not found at {pdf_path}")

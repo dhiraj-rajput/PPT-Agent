@@ -47,7 +47,12 @@ export default function NaicsMuster() {
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState('');
   const [modalSuccess, setModalSuccess] = useState('');
-
+  const [naicsImportMode, setNaicsImportMode] = useState('document'); // 'document' | 'file'
+  const [naicsDocEditor, setNaicsDocEditor] = useState({
+    code: '',
+    title: '',
+    description: ''
+  });
   async function fetchNaics() {
     setLoading(true);
     try {
@@ -141,23 +146,46 @@ export default function NaicsMuster() {
   // File upload submission
   async function handleUploadSubmit(e) {
     e.preventDefault();
-    if (!selectedFile) return;
-
     setModalError('');
     setModalSuccess('');
     setModalLoading(true);
 
-    try {
-      const res = await api.importNaicsFile(selectedFile);
-      setModalSuccess(res.message || 'File successfully imported!');
-      setTimeout(() => {
-        closeModal();
-        fetchNaics();
-      }, 1500);
-    } catch (err) {
-      setModalError(err.message || 'Failed to import file.');
-    } finally {
-      setModalLoading(false);
+    if (naicsImportMode === 'document') {
+      try {
+        if (!naicsDocEditor.code || !naicsDocEditor.title) {
+            throw new Error("Code and Title are required");
+        }
+        const parsed = [naicsDocEditor];
+        await api.importNaicsCodes({ items: parsed, format: 'json' });
+        setModalSuccess(`Successfully imported NAICS code.`);
+        setNaicsDocEditor({ code: '', title: '', description: '' });
+        setTimeout(() => {
+          closeModal();
+          fetchNaics();
+        }, 1500);
+      } catch (err) {
+        setModalError('Invalid Input: ' + err.message);
+      } finally {
+        setModalLoading(false);
+      }
+    } else {
+      if (!selectedFile) {
+        setModalError('Please select a file to upload');
+        setModalLoading(false);
+        return;
+      }
+      try {
+        const res = await api.importNaicsFile(selectedFile);
+        setModalSuccess(res.message || 'File successfully imported!');
+        setTimeout(() => {
+          closeModal();
+          fetchNaics();
+        }, 1500);
+      } catch (err) {
+        setModalError(err.message || 'Failed to import file.');
+      } finally {
+        setModalLoading(false);
+      }
     }
   }
 
@@ -487,23 +515,112 @@ export default function NaicsMuster() {
               </form>
             ) : (
               <form onSubmit={handleUploadSubmit} className="mt-4 space-y-4">
-                <div className="rounded-xl border-2 border-dashed border-slate-200 p-6 text-center dark:border-navy-800">
-                  <input
-                    type="file"
-                    id="naics-file-input"
-                    accept=".csv,.json"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                  <label htmlFor="naics-file-input" className="cursor-pointer space-y-2 block">
-                    <Upload className="mx-auto h-8 w-8 text-slate-400 dark:text-slate-500" />
-                    <p className="text-sm font-semibold text-navy-900 dark:text-white">
-                      {selectedFile ? selectedFile.name : 'Select CSV or JSON file'}
-                    </p>
-                    <p className="text-xs text-slate-400">
-                      Files must match NAICS format containing Code, Title, Description
-                    </p>
-                  </label>
+                <div className="space-y-3">
+                  {/* Import method selection */}
+                  <div className="flex items-center gap-2 mb-3">
+                    <button
+                      type="button"
+                      onClick={() => setNaicsImportMode('document')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                        naicsImportMode === 'document'
+                          ? 'bg-brand-500 text-white'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-navy-800 dark:text-slate-300'
+                      }`}
+                    >
+                      Document Editor
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNaicsImportMode('file')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                        naicsImportMode === 'file'
+                          ? 'bg-brand-500 text-white'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-navy-800 dark:text-slate-300'
+                      }`}
+                    >
+                      Upload File
+                    </button>
+                  </div>
+
+                  {naicsImportMode === 'document' ? (
+                      <div className="rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-900 p-4 font-mono text-xs shadow-sm overflow-x-auto space-y-2 mb-2">
+                        <div className="text-slate-400 dark:text-slate-500 font-bold">{"{"}</div>
+                        <div className="pl-3 space-y-2.5">
+                          {/* Code */}
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="w-32 shrink-0 flex items-center">
+                              <span className="text-brand-600 dark:text-brand-400 font-bold">"code"</span>
+                              <span className="text-rose-500 font-extrabold ml-0.5" title="Required field">*</span>
+                            </div>
+                            <span className="text-slate-400 font-bold">:</span>
+                            <span className="rounded bg-brand-50 dark:bg-navy-800 text-brand-700 dark:text-brand-300 border border-brand-200/60 dark:border-navy-700 px-1.5 py-0.5 text-[10px] font-semibold w-24 text-center shrink-0">
+                              [string/int]
+                            </span>
+                            <input 
+                              value={naicsDocEditor.code} 
+                              onChange={e => setNaicsDocEditor({...naicsDocEditor, code: e.target.value})} 
+                              className="flex-1 min-w-[160px] rounded-lg border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-800 px-3 py-1.5 text-xs text-navy-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-brand-400 outline-none" 
+                              placeholder='"541512"' 
+                            />
+                          </div>
+
+                          {/* Title */}
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="w-32 shrink-0 flex items-center">
+                              <span className="text-brand-600 dark:text-brand-400 font-bold">"title"</span>
+                              <span className="text-rose-500 font-extrabold ml-0.5" title="Required field">*</span>
+                            </div>
+                            <span className="text-slate-400 font-bold">:</span>
+                            <span className="rounded bg-brand-50 dark:bg-navy-800 text-brand-700 dark:text-brand-300 border border-brand-200/60 dark:border-navy-700 px-1.5 py-0.5 text-[10px] font-semibold w-24 text-center shrink-0">
+                              [string]
+                            </span>
+                            <input 
+                              value={naicsDocEditor.title} 
+                              onChange={e => setNaicsDocEditor({...naicsDocEditor, title: e.target.value})} 
+                              className="flex-1 min-w-[160px] rounded-lg border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-800 px-3 py-1.5 text-xs text-navy-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-brand-400 outline-none" 
+                              placeholder='"Computer Systems Design Services"' 
+                            />
+                          </div>
+
+                          {/* Description */}
+                          <div className="flex flex-wrap items-start gap-2">
+                            <div className="w-32 shrink-0 flex items-center pt-1.5">
+                              <span className="text-brand-600 dark:text-brand-400 font-bold">"description"</span>
+                            </div>
+                            <span className="text-slate-400 font-bold pt-1.5">:</span>
+                            <span className="rounded bg-brand-50 dark:bg-navy-800 text-brand-700 dark:text-brand-300 border border-brand-200/60 dark:border-navy-700 px-1.5 py-0.5 text-[10px] font-semibold w-24 text-center shrink-0 mt-1">
+                              [string]
+                            </span>
+                            <textarea 
+                              rows={3}
+                              value={naicsDocEditor.description} 
+                              onChange={e => setNaicsDocEditor({...naicsDocEditor, description: e.target.value})} 
+                              className="flex-1 min-w-[160px] rounded-lg border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-800 px-3 py-1.5 text-xs text-navy-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-brand-400 outline-none resize-y" 
+                              placeholder='"Establishments primarily engaged in planning and designing computer systems..."' 
+                            />
+                          </div>
+                        </div>
+                        <div className="text-slate-400 dark:text-slate-500 font-bold">{"}"}</div>
+                      </div>
+                  ) : (
+                    <div
+                      className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 dark:border-navy-600 p-8 text-center cursor-pointer hover:border-brand-400 transition-colors"
+                      onClick={() => document.getElementById('naics-file-input').click()}
+                    >
+                      <Upload className="text-slate-300 dark:text-slate-600 mb-2" size={32} />
+                      <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+                        {selectedFile ? selectedFile.name : 'Click to upload CSV or JSON file'}
+                      </p>
+                      <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Supports .csv, .json</p>
+                      <input
+                        id="naics-file-input"
+                        type="file"
+                        accept=".csv,.json"
+                        className="hidden"
+                        onChange={handleFileChange}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-6 flex justify-end gap-3">

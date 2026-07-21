@@ -25,7 +25,6 @@ Endpoints:
 """
 
 import re
-import random
 import httpx
 from datetime import datetime, timezone, timedelta
 from typing import Optional
@@ -33,6 +32,11 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from utils.db_client import get_collection
 from config.settings import settings
 from app.core.auth import get_current_user
+
+def _sanitize_path_component(value: str) -> str:
+    """Sanitize a string for safe use as a filesystem path component."""
+    import re
+    return re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', str(value)).strip('_. ')
 
 router = APIRouter(prefix="/tenders", tags=["tenders"])
 
@@ -52,8 +56,7 @@ def _compute_match_score(notice_id: str, naics_code: str = "", title: str = "", 
         from app.core.match_engine import compute_tender_match_score
         return compute_tender_match_score(notice_id=notice_id, title=title, summary=summary, naics_code=naics_code)
     except Exception:
-        random.seed(notice_id)
-        return random.randint(70, 95)
+        return 0
 
 
 def _compute_lifecycle(
@@ -966,6 +969,7 @@ def get_all_draft_requests(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
 def ensure_rfp_downloaded(notice_id: str, solicitation_number: str) -> None:
     """
     Checks if RFP PDF/document files are already downloaded for this solicitation.
@@ -1017,3 +1021,130 @@ def ensure_rfp_downloaded(notice_id: str, solicitation_number: str) -> None:
         print(f"[Tenders] Warning: Could not find raw opportunity for {solicitation_number} to download RFP.")
 
 
+# ---------------------------------------------------------------------------
+# Tender document serving endpoints
+# ---------------------------------------------------------------------------
+
+@router.get("/{notice_id}/documents")
+async def list_tender_documents(
+    notice_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    List all downloaded documents for a specific tender.
+    Returns file metadata: name, size, type, path key for viewing.
+    """
+    import os
+    from pathlib import Path
+
+    # Look up the tender to get solicitation number
+    col = get_collection("tenders")
+    tender = col.find_one({"noticeId": notice_id}, {"solicitationNumber": 1, "title": 1})
+    if not tender:
+        raise HTTPException(status_code=404, detail="Tender not found")
+
+    sol_num = _sanitize_path_component(tender.get("solicitationNumber") or notice_id)
+    rfp_docs_dir = Path("downloads") / "opportunities" / sol_num / "rfp_docs"
+    
+    documents = []
+    if rfp_docs_dir.exists():
+        for f in sorted(rfp_docs_dir.iterdir()):
+            if f.is_file():
+                ext = f.suffix.lower()
+                file_type = {
+                    ".pdf": "PDF",
+                    ".png": "Image (PNG)",
+                    ".jpg": "Image (JPEG)",
+                    ".jpeg": "Image (JPEG)",
+                    ".gif": "Image (GIF)",
+                    ".webp": "Image (WebP)",
+                    ".docx": "Word Document",
+                    ".doc": "Word Document",
+                    ".xlsx": "Spreadsheet",
+                    ".xls": "Spreadsheet",
+                    ".txt": "Text File",
+                    ".html": "HTML Document",
+                    ".zip": "Archive",
+                }.get(ext, "File")
+                stat = f.stat()
+                size_bytes = stat.st_size
+                if size_bytes > 1024 * 1024:
+                    size_str = f"{size_bytes / (1024*1024):.1f} MB"
+                elif size_bytes > 1024:
+                    size_str = f"{size_bytes / 1024:.1f} KB"
+                else:
+                    size_str = f"{size_bytes} B"
+                
+                documents.append({
+                    "filename": f.name,
+                    "type": file_type,
+                    "size": size_str,
+                    "size_bytes": size_bytes,
+                    "modified": stat.st_mtime,
+                    "path_key": f"opportunities/{sol_num}/rfp_docs/{f.name}",
+                })
+
+    return {
+        "notice_id": notice_id,
+        "solicitation_number": sol_num,
+        "total": len(documents),
+        "documents": documents,
+    }
+
+
+@router.get("/{notice_id}/documents/{filename}")
+async def serve_tender_document(
+    notice_id: str,
+    filename: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Stream/serve a specific downloaded tender document.
+    Prevents path traversal attacks by validating the filename.
+    """
+    import os
+    from pathlib import Path
+    from fastapi.responses import FileResponse
+
+    # Security: prevent path traversal
+    safe_filename = Path(filename).name
+    if not safe_filename or safe_filename != filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    col = get_collection("tenders")
+    tender = col.find_one({"noticeId": notice_id}, {"solicitationNumber": 1})
+    if not tender:
+        raise HTTPException(status_code=404, detail="Tender not found")
+
+    sol_num = _sanitize_path_component(tender.get("solicitationNumber") or notice_id)
+    file_path = Path("downloads") / "opportunities" / sol_num / "rfp_docs" / safe_filename
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # Determine media type
+    ext = file_path.suffix.lower()
+    media_types = {
+        ".pdf": "application/pdf",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".gif": "image/gif",
+        ".svg": "image/svg+xml",
+        ".webp": "image/webp",
+        ".bmp": "image/bmp",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".doc": "application/msword",
+        ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ".txt": "text/plain",
+        ".html": "text/html",
+        ".zip": "application/zip",
+    }
+    media_type = media_types.get(ext, "application/octet-stream")
+
+    return FileResponse(
+        path=str(file_path),
+        media_type=media_type,
+        filename=safe_filename,
+        headers={"Content-Disposition": f'inline; filename="{safe_filename}"'},
+    )

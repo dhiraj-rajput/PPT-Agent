@@ -9,8 +9,64 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from pydantic import BaseModel
 from utils.db_client import get_collection
 from app.core.auth import get_current_user, require_admin
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/companies", tags=["companies"])
+
+DEFAULT_OWN_COMPANY = {
+    "name": "OrbitAvanya Tech LLP",
+    "uei": "ORBIT1234567",
+    "cage_code": "8A9B0",
+    "primary_naics": "541512",
+    "primary_naics_desc": "Computer Systems Design Services",
+    "naics_codes": ["541511", "541512", "541519", "541330", "541611"],
+    "city": "Dallas",
+    "state": "TX",
+    "country": "USA",
+    "contact": "Prasanna Dhamal",
+    "contact_role": "Managing Director",
+    "email": "prasannadhamal982005@gmail.com",
+    "phone": "+1-214-555-0199",
+    "size": "Small",
+    "status": "Active",
+    "certifications": ["SBA 8(a) Certified", "WOSB", "HUBZone", "ISO 27001"],
+    "past_performance_count": 12,
+    "last_updated": datetime.now(timezone.utc).isoformat()
+}
+
+@router.get("/own-profile")
+def get_own_company_profile(current_user: dict = Depends(get_current_user)):
+    """Retrieve own company profile for ProposalBuilder inventory."""
+    try:
+        col = get_collection("own_company_profile")
+        profile = col.find_one({}, {"_id": 0})
+        if not profile:
+            # Seed default profile if empty
+            col.insert_one(dict(DEFAULT_OWN_COMPANY))
+            return DEFAULT_OWN_COMPANY
+        return profile
+    except Exception as e:
+        logger.error(f"Error fetching own company profile: {e}")
+        return DEFAULT_OWN_COMPANY
+
+@router.post("/own-profile")
+def update_own_company_profile(
+    body: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create or update own company profile inventory."""
+    try:
+        col = get_collection("own_company_profile")
+        body["last_updated"] = datetime.now(timezone.utc).isoformat()
+        if "_id" in body:
+            del body["_id"]
+        col.update_one({}, {"$set": body}, upsert=True)
+        updated = col.find_one({}, {"_id": 0})
+        return updated or body
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update company profile: {str(e)}")
 
 def import_sam_entities_csv():
     """Load sam_entities.csv into MongoDB 'companies' collection if empty."""
@@ -251,19 +307,24 @@ def get_companies(
         active_tasks = {t["task_id"].lower(): t["status"] for t in tasks_col.find({"type": "company_research"})}
 
         for c in results:
-            # Fallback for email
-            if not c.get("email") or not c.get("email").strip():
-                profile = profiles_col.find_one({
-                    "company_name": {"$regex": f"^{re.escape(c['name'])}$", "$options": "i"}
-                })
-                if profile and profile.get("emails"):
-                    c["email"] = profile["emails"][0]
-                    c["hasResearchedProfile"] = True
-                else:
-                    c["hasResearchedProfile"] = False
-            else:
-                c["hasResearchedProfile"] = True
+            profile = profiles_col.find_one({
+                "$or": [
+                    {"company_name": {"$regex": f"^{re.escape(c['name'])}$", "$options": "i"}},
+                    {"company_slug": re.sub(r"[^a-z0-9]+", "-", c['name'].lower()).strip("-")},
+                ]
+            })
+            is_researched_flag = bool(c.get("is_researched")) or c.get("research_status") == "completed" or bool(profile)
 
+            if profile:
+                if (not c.get("email") or not c["email"].strip()) and profile.get("emails"):
+                    c["email"] = profile["emails"][0]
+                if (not c.get("phone") or not c["phone"].strip()) and profile.get("phone_numbers"):
+                    c["phone"] = profile["phone_numbers"][0]
+                if (not c.get("contact") or c.get("contact") == "N/A") and profile.get("leadership"):
+                    c["contact"] = profile["leadership"][0]
+
+            c["hasResearchedProfile"] = is_researched_flag
+            c["is_researched"] = is_researched_flag
             c["isResearching"] = active_tasks.get(c["name"].lower()) == "processing"
 
         # Get list of unique NAICS descriptions for dropdown filters in the frontend
@@ -474,6 +535,40 @@ def run_company_research_sync(company_input: str, force_rescrape: bool = False):
             p.wait()
             if p.returncode == 0:
                 update_research_task(task_key, 100, "completed", "Research completed successfully!", resolved_slug=resolved_slug)
+                # Sync research results directly into companies collection
+                try:
+                    profiles_col = get_collection("company_profiles")
+                    search_slug = resolved_slug or re.sub(r"[^a-z0-9]+", "-", task_key.lower()).strip("-")
+                    prof = profiles_col.find_one({
+                        "$or": [
+                            {"company_slug": search_slug},
+                            {"company_name_slug": search_slug},
+                            {"company_name": {"$regex": f"^{re.escape(task_key)}$", "$options": "i"}},
+                        ]
+                    })
+                    if prof:
+                        comp_col = get_collection("companies")
+                        upd = {
+                            "is_researched": True,
+                            "research_status": "completed",
+                            "last_researched_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                        if prof.get("emails") and len(prof["emails"]) > 0:
+                            upd["email"] = prof["emails"][0]
+                        if prof.get("phone_numbers") and len(prof["phone_numbers"]) > 0:
+                            upd["phone"] = prof["phone_numbers"][0]
+                        if prof.get("leadership") and len(prof["leadership"]) > 0:
+                            upd["contact"] = prof["leadership"][0]
+
+                        comp_col.update_many(
+                            {"$or": [
+                                {"name": {"$regex": f"^{re.escape(task_key)}$", "$options": "i"}},
+                                {"uei": task_key}
+                            ]},
+                            {"$set": upd}
+                        )
+                except Exception as sync_err:
+                    print(f"Error syncing researched profile to companies DB: {sync_err}")
             else:
                 update_research_task(task_key, 80, "failed", f"Pipeline failed with exit code {p.returncode}")
     except Exception as e:

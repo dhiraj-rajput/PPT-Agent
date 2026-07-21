@@ -269,9 +269,11 @@ async def send_company_email_with_attachments(
     to_email: str,
     subject: str,
     body_html: str,
-    attachments: list[dict] = None
+    attachments: Optional[list[dict]] = None
 ) -> None:
     """Send a custom email to a company with optional attachments."""
+    if attachments is None:
+        attachments = []
     if not _is_smtp_configured():
         logger.warning(
             f"[Mailer] SMTP not configured — skipping email to {to_email}: {subject}"

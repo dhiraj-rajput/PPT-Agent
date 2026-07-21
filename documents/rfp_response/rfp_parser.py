@@ -63,22 +63,38 @@ class RFPParser:
         self.rfp_docs_dir = self.project_root / "downloads" / "opportunities" / solicitation_number / "rfp_docs"
 
     def extract_text_from_pdfs(self) -> Dict[str, str]:
-        """Reads all PDF documents in the solicitation directory and extracts
-        their text. Pages with little/no extractable text layer (i.e. scanned
-        or image-only pages) are rasterized and OCR'd, controlled by
-        settings.OCR_ENABLED / OCR_MIN_CHARS_PER_PAGE."""
+        """
+        Reads ALL RFP documents (PDFs, Images, Word docs, Text) in the solicitation
+        directory and extracts their text using the unified OCR pipeline.
+        """
         extracted_text = {}
         if not self.rfp_docs_dir.exists():
             logger.warning(f"RFP docs directory not found: {self.rfp_docs_dir}")
             return extracted_text
 
-        pdf_files = list(self.rfp_docs_dir.glob("*.pdf"))
-        logger.info(f"Found {len(pdf_files)} PDF files in {self.rfp_docs_dir}")
+        # Support PDFs, Images, Word docs, HTML, Text
+        valid_extensions = {".pdf", ".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".docx", ".doc", ".txt", ".html"}
+        doc_files = [f for f in self.rfp_docs_dir.iterdir() if f.is_file() and f.suffix.lower() in valid_extensions]
+        logger.info(f"Found {len(doc_files)} RFP document files in {self.rfp_docs_dir}")
 
-        for pdf_path in pdf_files:
-            filename = pdf_path.name
+        from pipeline.ocr.ocr_manager import get_ocr_manager
+        ocr_mgr = get_ocr_manager()
+
+        for doc_path in doc_files:
+            filename = doc_path.name
             logger.info(f"Extracting text from: {filename}")
-            extracted_text[filename] = self._extract_text_from_single_pdf(pdf_path)
+            try:
+                ocr_result = ocr_mgr.extract(doc_path)
+                text = ocr_result.get("text", "")
+                if not text.strip() and doc_path.suffix.lower() == ".pdf":
+                    # Fallback to single PDF extractor if OCR manager returned empty
+                    text = self._extract_text_from_single_pdf(doc_path)
+                extracted_text[filename] = text
+            except Exception as e:
+                logger.error(f"Failed to extract text from {filename}: {e}")
+                if doc_path.suffix.lower() == ".pdf":
+                    extracted_text[filename] = self._extract_text_from_single_pdf(doc_path)
+
         return extracted_text
 
     def _extract_text_from_single_pdf(self, pdf_path: Path) -> str:

@@ -20,6 +20,21 @@ SOCIAL_DOMAINS = [
     "youtube.com", "instagram.com", "github.com"
 ]
 
+INVALID_EMAIL_EXTS = ('.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.css', '.js', '.wix', '.ico', '.tiff', '.bmp', '.wixpress')
+
+def is_valid_email(email: str) -> bool:
+    email_lower = email.strip().lower()
+    if any(email_lower.endswith(ext) for ext in INVALID_EMAIL_EXTS):
+        return False
+    if '@2x' in email_lower or '@3x' in email_lower or 'bootstrap' in email_lower:
+        return False
+    return True
+
+def ensure_company_contact_fallback(domain: str, contacts: dict):
+    if not contacts.get("emails") and domain and "." in domain:
+        clean_domain = domain.replace("www.", "").replace("http://", "").replace("https://", "").split("/")[0]
+        contacts["emails"] = [f"contact@{clean_domain}", f"info@{clean_domain}"]
+
 
 def parse_html_metadata(html_content: str) -> Dict[str, str]:
     """Extract title and meta description from an HTML page."""
@@ -109,8 +124,9 @@ def extract_contact_info(html_content: str, text_content: str = "") -> Dict[str,
             if 7 <= len(digits) <= 15:
                 contacts["phone_numbers"].append(phone.strip())
 
-        # Deduplicate
-        contacts["emails"] = sorted(list(set(contacts["emails"])))
+        # Clean & filter emails
+        valid_emails = [e for e in contacts["emails"] if is_valid_email(e)]
+        contacts["emails"] = sorted(list(set(valid_emails)))
         contacts["phone_numbers"] = sorted(list(set(contacts["phone_numbers"])))
         contacts["social_links"] = sorted(list(set(contacts["social_links"])))
 

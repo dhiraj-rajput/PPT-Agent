@@ -37,8 +37,24 @@ export default function Companies() {
     size: 'Small',
     status: 'Active'
   });
-  const [importFormat, setImportFormat] = useState('csv'); // 'csv' | 'json'
-  const [importData, setImportData] = useState('');
+  const [importMode, setImportMode] = useState('document'); // 'document' | 'file'
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [docEditor, setDocEditor] = useState({
+    name: '',
+    uei: '',
+    cage_code: '',
+    primary_naics: '',
+    primary_naics_desc: '',
+    city: '',
+    state: '',
+    country: 'USA',
+    contact: '',
+    contact_role: 'Procurement Manager',
+    email: '',
+    phone: '',
+    size: 'Small',
+    status: 'Active'
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
 
@@ -114,23 +130,34 @@ export default function Companies() {
   };
 
   // Handle bulk import submission
-  const handleImportSubmit = (e) => {
+  const handleImportSubmit = async (e) => {
     e.preventDefault();
-    if (!importData || !importData.trim()) return;
     setIsSubmitting(true);
     setSubmitError(null);
 
-    api.importCompanies(importFormat, importData)
-      .then(() => {
-        setIsSubmitting(false);
-        setShowAddModal(false);
-        setImportData('');
-        fetchCompanies();
-      })
-      .catch((err) => {
-        setIsSubmitting(false);
-        setSubmitError(err.message);
-      });
+    try {
+      if (importMode === 'document') {
+        const importData = JSON.stringify([docEditor]);
+        await api.importCompanies({ data: importData, format: 'json' });
+      } else {
+        if (!selectedFile) throw new Error("Please select a file to upload");
+        const format = selectedFile.name.toLowerCase().endsWith('.json') ? 'json' : 'csv';
+        const text = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = e => resolve(e.target.result);
+          reader.onerror = e => reject(new Error("Failed to read file"));
+          reader.readAsText(selectedFile);
+        });
+        await api.importCompanies({ data: text, format });
+      }
+      setIsSubmitting(false);
+      setShowAddModal(false);
+      setSelectedFile(null);
+      fetchCompanies();
+    } catch (err) {
+      setIsSubmitting(false);
+      setSubmitError(err.message || 'Import failed');
+    }
   };
 
   return (
@@ -559,43 +586,137 @@ export default function Companies() {
                 </form>
               ) : (
                 <form onSubmit={handleImportSubmit} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">Import Format</label>
-                    <div className="flex gap-4">
-                      <label className="flex items-center gap-1.5 text-xs font-medium text-navy-900 dark:text-white cursor-pointer">
-                        <input 
-                          type="radio" 
-                          checked={importFormat === 'csv'}
-                          onChange={() => setImportFormat('csv')}
-                          className="text-brand-500 focus:ring-brand-500" 
-                        />
-                        CSV String (with headers)
-                      </label>
-                      <label className="flex items-center gap-1.5 text-xs font-medium text-navy-900 dark:text-white cursor-pointer">
-                        <input 
-                          type="radio" 
-                          checked={importFormat === 'json'}
-                          onChange={() => setImportFormat('json')}
-                          className="text-brand-500 focus:ring-brand-500" 
-                        />
-                        JSON Array of Objects
-                      </label>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <button
+                        type="button"
+                        onClick={() => setImportMode('document')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                          importMode === 'document'
+                            ? 'bg-brand-500 text-white'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-navy-800 dark:text-slate-300'
+                        }`}
+                      >
+                        Document Editor
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setImportMode('file')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                          importMode === 'file'
+                            ? 'bg-brand-500 text-white'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-navy-800 dark:text-slate-300'
+                        }`}
+                      >
+                        Upload File
+                      </button>
                     </div>
-                  </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">Paste Data Here *</label>
-                    <textarea 
-                      required
-                      value={importData}
-                      onChange={(e) => setImportData(e.target.value)}
-                      rows={10}
-                      placeholder={importFormat === 'csv' 
-                        ? "UEI,Legal_Business_Name,Registration_Status,Primary_NAICS_Code,Primary_NAICS_Description,Is_Small_Business,Gov_Contact_Name,Gov_Contact_Email\nXYZ123,Hope Pulse,Active,541511,Computer Programming,Y,John,john@hope.com" 
-                        : "[\n  {\n    \"uei\": \"XYZ123\",\n    \"name\": \"Hope Pulse\",\n    \"status\": \"Active\",\n    \"primary_naics\": \"541511\",\n    \"primary_naics_desc\": \"Computer Programming\"\n  }\n]"
-                      }
-                      className="w-full text-xs font-mono rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 outline-none focus:border-brand-400 focus:bg-white dark:border-navy-700 dark:bg-navy-900 dark:text-white"
-                    />
+                    {importMode === 'document' ? (
+                      <div className="rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-900 p-4 font-mono text-xs shadow-sm overflow-x-auto space-y-2">
+                        <div className="text-slate-400 dark:text-slate-500 font-bold">{"{"}</div>
+                        <div className="pl-3 space-y-2.5">
+                          {[
+                            { key: 'name', type: 'string', required: true, placeholder: '"Acme Corp"' },
+                            { key: 'uei', type: 'string', required: true, placeholder: '"ABC123456789"' },
+                            { key: 'cage_code', type: 'string', required: false, placeholder: '"1A2B3"' },
+                            { key: 'primary_naics', type: 'string/int', required: false, placeholder: '"541512"' },
+                            { key: 'primary_naics_desc', type: 'string', required: false, placeholder: '"Computer Systems Design"' },
+                            { key: 'city', type: 'string', required: false, placeholder: '"Dallas"' },
+                            { key: 'state', type: 'string', required: false, placeholder: '"TX"' },
+                            { key: 'country', type: 'string', required: false, placeholder: '"USA"' },
+                            { key: 'contact', type: 'string', required: false, placeholder: '"John Doe"' },
+                            { key: 'contact_role', type: 'string', required: false, placeholder: '"Procurement Manager"' },
+                            { key: 'email', type: 'string', required: false, placeholder: '"contact@acme.com"' },
+                            { key: 'phone', type: 'string', required: false, placeholder: '"+1-214-555-0100"' },
+                          ].map(f => (
+                            <div key={f.key} className="flex flex-wrap items-center gap-2">
+                              <div className="w-36 shrink-0 flex items-center">
+                                <span className="text-brand-600 dark:text-brand-400 font-bold">"{f.key}"</span>
+                                {f.required && <span className="text-rose-500 font-extrabold ml-0.5" title="Required field">*</span>}
+                              </div>
+                              <span className="text-slate-400 font-bold">:</span>
+                              <span className="rounded bg-brand-50 dark:bg-navy-800 text-brand-700 dark:text-brand-300 border border-brand-200/60 dark:border-navy-700 px-1.5 py-0.5 text-[10px] font-semibold w-20 text-center shrink-0">
+                                [{f.type}]
+                              </span>
+                              <input 
+                                value={docEditor[f.key] || ''} 
+                                onChange={e => setDocEditor({...docEditor, [f.key]: e.target.value})} 
+                                className="flex-1 min-w-[160px] rounded-lg border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-800 px-3 py-1.5 text-xs text-navy-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-brand-400 outline-none transition-colors" 
+                                placeholder={f.placeholder} 
+                              />
+                            </div>
+                          ))}
+                          
+                          {/* Size Enum */}
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="w-36 shrink-0 flex items-center">
+                              <span className="text-brand-600 dark:text-brand-400 font-bold">"size"</span>
+                            </div>
+                            <span className="text-slate-400 font-bold">:</span>
+                            <span className="rounded bg-purple-50 dark:bg-navy-800 text-purple-700 dark:text-purple-300 border border-purple-200/60 dark:border-navy-700 px-1.5 py-0.5 text-[10px] font-semibold w-20 text-center shrink-0">
+                              [enum]
+                            </span>
+                            <select 
+                              value={docEditor.size || 'Small'} 
+                              onChange={e => setDocEditor({...docEditor, size: e.target.value})} 
+                              className="flex-1 min-w-[160px] rounded-lg border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-800 px-3 py-1.5 text-xs font-semibold text-navy-900 dark:text-white focus:ring-2 focus:ring-brand-400 outline-none cursor-pointer"
+                            >
+                              <option value="Small">"Small"</option>
+                              <option value="Large">"Large"</option>
+                            </select>
+                          </div>
+
+                          {/* Status Enum */}
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="w-36 shrink-0 flex items-center">
+                              <span className="text-brand-600 dark:text-brand-400 font-bold">"status"</span>
+                            </div>
+                            <span className="text-slate-400 font-bold">:</span>
+                            <span className="rounded bg-emerald-50 dark:bg-navy-800 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-navy-700 px-1.5 py-0.5 text-[10px] font-semibold w-20 text-center shrink-0">
+                              [enum]
+                            </span>
+                            <select 
+                              value={docEditor.status || 'Active'} 
+                              onChange={e => setDocEditor({...docEditor, status: e.target.value})} 
+                              className="flex-1 min-w-[160px] rounded-lg border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-800 px-3 py-1.5 text-xs font-semibold text-navy-900 dark:text-white focus:ring-2 focus:ring-brand-400 outline-none cursor-pointer"
+                            >
+                              <option value="Active">"Active"</option>
+                              <option value="Inactive">"Inactive"</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="text-slate-400 dark:text-slate-500 font-bold">{"}"}</div>
+                      </div>
+                    ) : (
+                      <div
+                        className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 dark:border-navy-600 p-8 text-center cursor-pointer hover:border-brand-400 transition-colors"
+                        onClick={() => document.getElementById('company-file-input').click()}
+                      >
+                        <Upload className="text-slate-300 dark:text-slate-600 mb-2" size={32} />
+                        <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+                          {selectedFile ? selectedFile.name : 'Click to upload CSV or JSON file'}
+                        </p>
+                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Supports .csv, .json</p>
+                        <input
+                          id="company-file-input"
+                          type="file"
+                          accept=".csv,.json"
+                          className="hidden"
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files[0]) {
+                              setSelectedFile(e.target.files[0]);
+                            }
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {submitError && (
+                      <div className="rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/30 p-3 text-xs text-red-600 dark:text-red-400">
+                        {submitError}
+                      </div>
+                    )}
                   </div>
 
                   {/* Import Footer */}

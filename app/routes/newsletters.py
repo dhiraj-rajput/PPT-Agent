@@ -58,6 +58,8 @@ class CreateEditionBody(BaseModel):
 
 
 def _format_newsletter(n: dict) -> dict:
+    if not n:
+        return {}
     stats = n.get("stats", {}) or {}
     return {
         "id": str(n["_id"]),
@@ -72,12 +74,14 @@ def _format_newsletter(n: dict) -> dict:
             "totalClicked": stats.get("totalClicked", 0),
             "totalUnsubscribed": stats.get("totalUnsubscribed", 0),
         },
-        "createdAt": n.get("createdAt").isoformat() if n.get("createdAt") else None,
-        "updatedAt": n.get("updatedAt").isoformat() if n.get("updatedAt") else None,
+        "createdAt": n.get("createdAt").isoformat() if hasattr(n.get("createdAt"), "isoformat") else None,
+        "updatedAt": n.get("updatedAt").isoformat() if hasattr(n.get("updatedAt"), "isoformat") else None,
     }
 
 
 def _format_subscriber(s: dict) -> dict:
+    if not s:
+        return {}
     return {
         "id": str(s["_id"]),
         "newsletterId": str(s["newsletterId"]),
@@ -86,12 +90,14 @@ def _format_subscriber(s: dict) -> dict:
         "companyName": s.get("companyName", ""),
         "source": s.get("source", "manual"),
         "status": s.get("status", "subscribed"),
-        "subscribedAt": s.get("subscribedAt").isoformat() if s.get("subscribedAt") else None,
-        "createdAt": s.get("createdAt").isoformat() if s.get("createdAt") else None,
+        "subscribedAt": s.get("subscribedAt").isoformat() if hasattr(s.get("subscribedAt"), "isoformat") else None,
+        "createdAt": s.get("createdAt").isoformat() if hasattr(s.get("createdAt"), "isoformat") else None,
     }
 
 
 def _format_edition(e: dict) -> dict:
+    if not e:
+        return {}
     stats = e.get("stats", {}) or {}
     return {
         "id": str(e["_id"]),
@@ -100,14 +106,14 @@ def _format_edition(e: dict) -> dict:
         "body": e.get("body", ""),
         "imageUrl": e.get("imageUrl"),
         "status": e.get("status", "draft"),
-        "sentAt": e.get("sentAt").isoformat() if e.get("sentAt") else None,
+        "sentAt": e.get("sentAt").isoformat() if hasattr(e.get("sentAt"), "isoformat") else None,
         "stats": {
             "sent": stats.get("sent", 0),
             "opened": stats.get("opened", 0),
             "clicked": stats.get("clicked", 0),
             "unsubscribed": stats.get("unsubscribed", 0),
         },
-        "createdAt": e.get("createdAt").isoformat() if e.get("createdAt") else None,
+        "createdAt": e.get("createdAt").isoformat() if hasattr(e.get("createdAt"), "isoformat") else None,
     }
 
 

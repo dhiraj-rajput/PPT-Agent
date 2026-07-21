@@ -205,6 +205,8 @@ export const api = {
   },
 
   // ---------- Companies ----------
+  getOwnCompanyProfile: () => get('/api/companies/own-profile'),
+  updateOwnCompanyProfile: (data) => post('/api/companies/own-profile', data),
   async getCompanies(params = {}) {
     const qs = new URLSearchParams(params).toString();
     return get(`/api/companies${qs ? `?${qs}` : ''}`);
@@ -267,6 +269,25 @@ export const api = {
     return get('/api/tenders/draft-requests/all');
   },
 
+  // List downloaded documents for a tender
+  getTenderDocuments: (noticeId) => get(`/api/tenders/${encodeURIComponent(noticeId)}/documents`),
+
+  // Serve/stream a specific tender document  
+  getTenderDocumentUrl: (noticeId, filename) =>
+    `${BASE_URL}/api/tenders/${encodeURIComponent(noticeId)}/documents/${encodeURIComponent(filename)}`,
+
+  // Download a tender document as blob
+  downloadTenderDocument: async (noticeId, filename) => {
+    const token = localStorage.getItem('orbitavanya_token');
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const res = await fetch(
+      `${BASE_URL}/api/tenders/${encodeURIComponent(noticeId)}/documents/${encodeURIComponent(filename)}`,
+      { headers }
+    );
+    if (!res.ok) throw new Error(`Download failed (${res.status})`);
+    return res.blob();
+  },
+
   // ---------- Proposals ----------
   async getProposals() {
     return get('/api/proposals');
@@ -310,7 +331,7 @@ export const api = {
   },
 
   // ---------- RFP Auto-Respond ----------
-  async uploadRfp(rfpFiles, templateFile = null) {
+  async uploadRfp(rfpFiles, templateFile = null, wizardConfig = null) {
     const formData = new FormData();
     if (Array.isArray(rfpFiles)) {
       rfpFiles.forEach(file => {
@@ -320,6 +341,7 @@ export const api = {
       formData.append('rfp_files', rfpFiles);
     }
     if (templateFile) formData.append('template_file', templateFile);
+    if (wizardConfig) formData.append('wizard_config', JSON.stringify(wizardConfig));
     return _upload('/api/rfp-respond/upload', formData);
   },
   async getRfpRespondStatus(taskId) {
