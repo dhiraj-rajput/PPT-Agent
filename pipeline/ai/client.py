@@ -137,29 +137,37 @@ class OllamaAIClient:
         """
         models_to_try: List[str] = []
         primary_model = model or self.model
-        
-        # 1. Primary Ollama model
-        if _OLLAMA_AVAILABLE and primary_model:
-            models_to_try.append(primary_model)
-            
-        # 2. Instant fallback: Gemini API
+
         gemini_api_key = getattr(self._settings, "GEMINI_API_KEY", "")
-        if gemini_api_key:
-            models_to_try.append("gemini-fallback")
-
-        # 2b. OpenRouter API
         openrouter_api_key = getattr(self._settings, "OPENROUTER_API_KEY", "")
-        if openrouter_api_key:
-            models_to_try.append("openrouter-fallback")
 
-        # 3. Other Ollama models
+        raw_order = (getattr(self._settings, "AI_PROVIDER_ORDER", "") or "auto").strip().lower()
+        # "auto" prefers fast cloud APIs over local/Codespaces Ollama, which has no GPU
+        # and is typically 10-30x slower for the same request. Set AI_PROVIDER_ORDER to
+        # e.g. "ollama,gemini,openrouter" to force local-first instead.
+        provider_order = (
+            ["gemini", "openrouter", "ollama"]
+            if raw_order in ("", "auto")
+            else [p.strip() for p in raw_order.split(",") if p.strip()]
+        )
+
+        for provider in provider_order:
+            if provider == "gemini" and gemini_api_key and "gemini-fallback" not in models_to_try:
+                models_to_try.append("gemini-fallback")
+            elif provider == "openrouter" and openrouter_api_key and "openrouter-fallback" not in models_to_try:
+                models_to_try.append("openrouter-fallback")
+            elif provider == "ollama" and _OLLAMA_AVAILABLE and primary_model and primary_model not in models_to_try:
+                models_to_try.append(primary_model)
+
+        # Remaining Ollama fallback models stay available as a last resort even when
+        # Ollama isn't first in the preference order.
         if _OLLAMA_AVAILABLE:
             for m in self.fallback_models:
                 if m not in models_to_try:
                     models_to_try.append(m)
 
         if not models_to_try:
-            raise AIUnavailableError("No AI providers (Ollama or Gemini API key) are configured/available.")
+            raise AIUnavailableError("No AI providers (Ollama, Gemini, or OpenRouter) are configured/available.")
 
         last_error: Optional[Exception] = None
         saw_rate_limit = False
@@ -297,8 +305,10 @@ class OllamaAIClient:
         if not api_key:
             raise ValueError("GEMINI_API_KEY is not set.")
 
-        # Robust list of models to try in order. Cleaned up obsolete/deprecated models.
-        gemini_models = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"]
+        # 2.0-flash/2.0-flash-lite were retired June 1, 2026 and 1.5-flash is fully
+        # shut down — kept updated here (July 2026) with "flash-latest" first since
+        # it's an auto-updating alias that survives Google's next model migration.
+        gemini_models = ["gemini-flash-latest", "gemini-3.5-flash", "gemini-3.1-flash-lite"]
         
         last_error = None
         saw_rate_limit = False

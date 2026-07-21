@@ -261,11 +261,17 @@ def get_companies(
     query: Optional[str] = None,
     size: Optional[str] = None,
     naics: Optional[str] = None,
+    researched: Optional[str] = None,
     page: int = 1,
     limit: int = 20,
     current_user: dict = Depends(get_current_user),
 ):
-    """Query companies from MongoDB with search, filters, and pagination."""
+    """Query companies from MongoDB with search, filters, and pagination.
+
+    `researched` accepts "true"/"researched" or "false"/"not_researched" to filter
+    the AI Research list down to companies that do/don't have a completed research
+    profile yet. Omit (or pass "all") to return everything.
+    """
     try:
         col = get_collection("companies")
         filter_query = {}
@@ -297,14 +303,48 @@ def get_companies(
             else:
                 filter_query.update(naics_condition)
 
-        total = col.count_documents(filter_query)
-        skip = (page - 1) * limit
-        results = list(col.find(filter_query, {"_id": 0}).skip(skip).limit(limit))
-
         # Look up profiles and active tasks
         profiles_col = get_collection("company_profiles")
         tasks_col = get_collection("task_statuses")
         active_tasks = {t["task_id"].lower(): t["status"] for t in tasks_col.find({"type": "company_research"})}
+
+        # Identity sets used to decide whether a company has a research profile —
+        # cheap to pull once (name/slug only) rather than a find_one() per company.
+        profile_names = set()
+        profile_slugs = set()
+        for p in profiles_col.find({}, {"company_name": 1, "company_slug": 1}):
+            if p.get("company_name"):
+                profile_names.add(p["company_name"].strip().lower())
+            if p.get("company_slug"):
+                profile_slugs.add(p["company_slug"])
+
+        def _slugify(name: str) -> str:
+            return re.sub(r"[^a-z0-9]+", "-", (name or "").lower()).strip("-")
+
+        def _is_researched(c: dict) -> bool:
+            if bool(c.get("is_researched")) or c.get("research_status") == "completed":
+                return True
+            name = (c.get("name") or "").strip().lower()
+            return name in profile_names or _slugify(c.get("name")) in profile_slugs
+
+        researched_norm = (researched or "").strip().lower()
+        wants_researched_filter = researched_norm in ("true", "false", "researched", "not_researched")
+
+        if wants_researched_filter:
+            want_true = researched_norm in ("true", "researched")
+            # The researched flag depends on a second collection (company_profiles),
+            # so it can't be pushed into the Mongo filter_query directly — compute it
+            # for every company matching the search/size/naics filters first, *then*
+            # filter and paginate, so `total` and pages stay accurate.
+            all_matching = list(col.find(filter_query, {"_id": 0}))
+            filtered = [c for c in all_matching if _is_researched(c) == want_true]
+            total = len(filtered)
+            skip = (page - 1) * limit
+            results = filtered[skip:skip + limit]
+        else:
+            total = col.count_documents(filter_query)
+            skip = (page - 1) * limit
+            results = list(col.find(filter_query, {"_id": 0}).skip(skip).limit(limit))
 
         for c in results:
             profile = profiles_col.find_one({
@@ -313,7 +353,7 @@ def get_companies(
                     {"company_slug": re.sub(r"[^a-z0-9]+", "-", c['name'].lower()).strip("-")},
                 ]
             })
-            is_researched_flag = bool(c.get("is_researched")) or c.get("research_status") == "completed" or bool(profile)
+            is_researched_flag = _is_researched(c) or bool(profile)
 
             if profile:
                 if (not c.get("email") or not c["email"].strip()) and profile.get("emails"):

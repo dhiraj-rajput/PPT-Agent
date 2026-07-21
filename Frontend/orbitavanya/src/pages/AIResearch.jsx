@@ -37,6 +37,7 @@ export default function AIResearch() {
   // Pagination state for the company list
   const [currentPage, setCurrentPage] = useState(1);
   const [taskStatusMap, setTaskStatusMap] = useState({});
+  const [researchFilter, setResearchFilter] = useState('all'); // 'all' | 'researched' | 'not_researched'
 
   // ─── Fetch helpers ───────────────────────────────────────────────────────────
 
@@ -335,17 +336,21 @@ export default function AIResearch() {
 
   // ─── Derived state ────────────────────────────────────────────────────────────
 
-  const filteredCompanies = companiesList.filter(c =>
-    c.name.toLowerCase().includes(searchInput.toLowerCase()) ||
-    (c.industry && c.industry.toLowerCase().includes(searchInput.toLowerCase()))
-  );
+  const filteredCompanies = companiesList.filter(c => {
+    const matchesSearch = c.name.toLowerCase().includes(searchInput.toLowerCase()) ||
+      (c.industry && c.industry.toLowerCase().includes(searchInput.toLowerCase()));
+    if (!matchesSearch) return false;
+    if (researchFilter === 'all') return true;
+    const isResearched = !!matchProfile(c, profiles);
+    return researchFilter === 'researched' ? isResearched : !isResearched;
+  });
 
   const totalPages = Math.ceil(filteredCompanies.length / PAGE_SIZE);
   const safePage = Math.min(currentPage, totalPages || 1);
   const pagedCompanies = filteredCompanies.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
-  // Reset to page 1 when search changes
-  useEffect(() => { setCurrentPage(1); }, [searchInput]);
+  // Reset to page 1 when search or research-status filter changes
+  useEffect(() => { setCurrentPage(1); }, [searchInput, researchFilter]);
 
   const autocompleteSuggestions = newCompanyInput.trim().length > 1
     ? companiesList.filter(c => c.name.toLowerCase().includes(newCompanyInput.toLowerCase())).slice(0, 5)
@@ -445,6 +450,28 @@ export default function AIResearch() {
                 onChange={(e) => setSearchInput(e.target.value)}
                 className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400 dark:text-white"
               />
+            </div>
+
+            {/* Researched / Not Researched filter */}
+            <div className="mt-2.5 grid grid-cols-3 gap-1.5">
+              {[
+                { key: 'all', label: 'All' },
+                { key: 'researched', label: 'Researched' },
+                { key: 'not_researched', label: 'Not Researched' },
+              ].map(opt => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => setResearchFilter(opt.key)}
+                  className={`rounded-lg py-1.5 text-[10.5px] font-bold transition-colors ${
+                    researchFilter === opt.key
+                      ? 'bg-brand-500 text-white'
+                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-navy-800 dark:text-slate-400 dark:hover:bg-navy-700'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
 
             {/* Company Entries */}

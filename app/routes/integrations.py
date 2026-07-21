@@ -307,6 +307,16 @@ def update_env_file(updates: dict) -> None:
         f.writelines(new_lines)
 
 
+# Keys that hold real secrets and must always be masked before leaving the server.
+# Everything else in TARGET_KEYS (hosts, model names, ports, usernames, account ids)
+# is not sensitive and is returned in full so the UI can actually show/prefill it.
+_SECRET_KEY_SUFFIXES = ("_API_KEY", "_SECRET", "_PASS", "_KEY", "_TOKEN", "_LI_AT")
+
+
+def _is_secret_key(key: str) -> bool:
+    return key.endswith(_SECRET_KEY_SUFFIXES) or key == "LINKEDIN_LI_AT"
+
+
 def obfuscate_key(val: str) -> str:
     if not val:
         return ""
@@ -316,37 +326,46 @@ def obfuscate_key(val: str) -> str:
     return f"****{val[-4:]}"
 
 
+# Every field any integration card on the frontend can submit. Kept in sync with
+# Frontend/orbitavanya/src/pages/Integrations.jsx — a key missing here can be saved
+# but will never be reported back as "connected" or shown for editing.
+TARGET_KEYS = [
+    "TAVILY_API_KEY",
+    "SAM_GOV_API_KEY",
+    "SERPAPI_API_KEY",
+    "FIRECRAWL_API_KEY",
+    "OLLAMA_API_KEY",
+    "OLLAMA_HOST",
+    "OLLAMA_MODEL",
+    "OLLAMA_TIMEOUT",
+    "GEMINI_API_KEY",
+    "OPENROUTER_API_KEY",
+    "OPENROUTER_MODEL",
+    "LINKEDIN_LI_AT",
+    "COMPANIES_HOUSE_KEY",
+    "ZOOM_ACCOUNT_ID",
+    "ZOOM_CLIENT_ID",
+    "ZOOM_CLIENT_SECRET",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
+    "SMTP_HOST",
+    "SMTP_PORT",
+    "SMTP_USER",
+    "SMTP_PASS",
+    "SMTP_FROM",
+]
+
+
 @router.get("/env-keys")
 def get_env_keys(current_user: dict = Depends(get_current_user)):
     try:
         env_keys = read_env_file_keys()
-        
-        target_keys = [
-            "TAVILY_API_KEY",
-            "SAM_GOV_API_KEY",
-            "SERPAPI_API_KEY",
-            "FIRECRAWL_API_KEY",
-            "OLLAMA_API_KEY",
-            "GEMINI_API_KEY",
-            "OPENROUTER_API_KEY",
-            "LINKEDIN_LI_AT",
-            "ZOOM_ACCOUNT_ID",
-            "ZOOM_CLIENT_ID",
-            "ZOOM_CLIENT_SECRET",
-            "GOOGLE_CLIENT_ID",
-            "GOOGLE_CLIENT_SECRET",
-            "SMTP_HOST",
-            "SMTP_PORT",
-            "SMTP_USER",
-            "SMTP_PASS",
-            "SMTP_FROM"
-        ]
-        
+
         response = {}
-        for k in target_keys:
+        for k in TARGET_KEYS:
             val = env_keys.get(k) or os.environ.get(k) or str(getattr(settings, k, "")) or ""
-            response[k] = obfuscate_key(val)
-            
+            response[k] = obfuscate_key(val) if _is_secret_key(k) else val
+
         return response
     except Exception as exc:
         raise HTTPException(500, f"Failed to retrieve environment API keys: {exc}")

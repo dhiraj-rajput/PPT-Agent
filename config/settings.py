@@ -161,6 +161,16 @@ class AppSettings(BaseSettings):
         default="https://openrouter.ai/api/v1",
         description="OpenRouter base URL.",
     )
+    AI_PROVIDER_ORDER: str = Field(
+        default="auto",
+        description=(
+            "Comma-separated provider preference order, e.g. 'gemini,openrouter,ollama'. "
+            "'auto' (default) prefers whichever fast cloud API is configured (Gemini, then "
+            "OpenRouter) over local/Codespaces Ollama — CPU-only Ollama on a Codespace has no "
+            "GPU and is typically 10-30x slower than a hosted API for the same document-generation "
+            "workload. Set to 'ollama,gemini,openrouter' to force local-first instead."
+        ),
+    )
 
     # ------------------------------------------------------------------
     # Global AI / rule-based master switch
