@@ -30,6 +30,8 @@ export default function Dashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [syncing, setSyncing] = useState(false);
+  const [lastSynced, setLastSynced] = useState(null);
 
   const fetchDashboardData = () => {
     setLoading(true);
@@ -38,10 +40,30 @@ export default function Dashboard() {
       .then((res) => {
         setData(res);
         setLoading(false);
+        setLastSynced(new Date());
       })
       .catch((err) => {
         setError(err.message || 'Failed to load dashboard data.');
         setLoading(false);
+      });
+  };
+
+  // Re-fetches live data from the database and refreshes everything on the
+  // dashboard in place, without showing the full-page loading state.
+  const handleSyncNow = () => {
+    if (syncing) return;
+    setSyncing(true);
+    setError('');
+    api.getDashboardData()
+      .then((res) => {
+        setData(res);
+        setLastSynced(new Date());
+      })
+      .catch((err) => {
+        setError(err.message || 'Failed to sync dashboard data.');
+      })
+      .finally(() => {
+        setSyncing(false);
       });
   };
 
@@ -58,7 +80,7 @@ export default function Dashboard() {
     );
   }
 
-  if (error) {
+  if (error && !data) {
     return (
       <div className="flex h-[50vh] flex-col items-center justify-center text-center p-4">
         <p className="text-sm font-semibold text-rose-600">{error}</p>
@@ -88,11 +110,30 @@ export default function Dashboard() {
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Here is what is happening with your business today.</p>
         </div>
         <div className="flex items-center gap-3">
+          {lastSynced && (
+            <span className="hidden text-[11px] font-medium text-slate-400 dark:text-slate-500 sm:block">
+              Last synced {lastSynced.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+          <button
+            onClick={handleSyncNow}
+            disabled={syncing}
+            className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-4 py-2.5 text-sm font-bold text-navy-900 dark:text-white shadow-soft hover:bg-slate-50 dark:hover:bg-navy-800 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
+            {syncing ? 'Syncing…' : 'Sync Now'}
+          </button>
           <Link to="/proposal-builder" className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-bold text-white shadow-soft hover:bg-brand-600">
             <Plus size={16} /> New Proposal
           </Link>
         </div>
       </div>
+
+      {error && data && (
+        <div className="rounded-xl bg-tomato-50 dark:bg-tomato-500/10 px-3.5 py-2.5 text-sm text-tomato-700 dark:text-tomato-400">
+          {error}
+        </div>
+      )}
 
       {/* Middle row (Urgent Tenders & Actions) */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">

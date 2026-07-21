@@ -8,6 +8,7 @@ import {
 import { Card, MatchBadge, StatusBadge, ProgressBar } from '../components/ui/Common.jsx';
 import { tenders } from '../data/tenders.jsx';
 import { api } from '../lib/api.jsx';
+import { useNotifications } from '../context/NotificationContext.jsx';
 
 const cleanDescriptionText = (text) => {
   if (!text) return '';
@@ -23,6 +24,8 @@ const cleanDescriptionText = (text) => {
 
 export default function CompanyDetail() {
   const { id: uei } = useParams();
+  const { createAlert } = useNotifications();
+  const notify = (title, message, link) => createAlert(title, message, link).catch(() => {});
 
   // Data States
   const [company, setCompany] = useState(null);
@@ -118,6 +121,7 @@ export default function CompanyDetail() {
       await api.sendCompanyEmail(emailForm);
       setEmailSuccess(true);
       setTimeout(() => setShowSendEmailModal(false), 2000);
+      notify('Outreach email sent', `Capability proposal emailed to ${emailForm.to_email}.`, `/companies/${uei}`);
     } catch (err) {
       setEmailError(err.message || "Failed to send email outreach.");
     } finally {

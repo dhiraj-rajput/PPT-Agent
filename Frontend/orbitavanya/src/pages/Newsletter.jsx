@@ -2,8 +2,11 @@ import { useState, useEffect } from 'react';
 import { Mail, Plus, Users, Send, Check, Loader2, Sparkles, Building2, Search, AlertCircle, Trash2, Image, Edit2 } from 'lucide-react';
 import { PageHeader, Card, StatusBadge } from '../components/ui/Common.jsx';
 import { api, BASE_URL } from '../lib/api.jsx';
+import { useNotifications } from '../context/NotificationContext.jsx';
 
 export default function Newsletter() {
+  const { createAlert } = useNotifications();
+  const notify = (title, message, link) => createAlert(title, message, link).catch(() => {});
   const [newsletters, setNewsletters] = useState([]);
   const [selectedNewsletter, setSelectedNewsletter] = useState(null);
   const [subscribers, setSubscribers] = useState([]);
@@ -76,6 +79,7 @@ export default function Newsletter() {
         setNewNewsletterForm({ name: '', description: '', senderName: 'OrbitAvanya Tech', senderEmail: 'newsletter@orbitavanyatech.com' });
         fetchNewsletters();
         if (res?.newsletter) setSelectedNewsletter(res.newsletter);
+        notify('Newsletter created', `"${newNewsletterForm.name}" is ready for subscribers.`, '/newsletter');
       })
       .catch((err) => {
         setSubmitting(false);
@@ -125,6 +129,11 @@ export default function Newsletter() {
       setSelectedBroadcastCompanyIds({});
       setManualRecipientEmails('');
       fetchNewsletterDetails(selectedNewsletter);
+      notify(
+        editingEditionId ? 'Edition updated' : 'Newsletter edition sent',
+        `"${editionForm.subject}" ${editingEditionId ? 'was updated' : `was sent to ${selectedNewsletter.name} subscribers`}.`,
+        '/newsletter'
+      );
     } catch (err) {
       setSubmitting(false);
       setMessage(err.message || 'Failed to process edition');

@@ -1,7 +1,8 @@
 import asyncio
 import logging
 import re
-from datetime import datetime, timezone
+import zoneinfo
+from datetime import datetime, timezone, timedelta
 from bson import ObjectId
 from config.settings import settings
 from utils.db_client import get_collection
@@ -13,6 +14,44 @@ from app.core.tracking_helpers import (
 )
 
 logger = logging.getLogger("email_worker")
+
+
+def is_within_working_hours(tz_str: str) -> bool:
+    """Check if local time in tz_str is Monday-Friday 9:00 AM to 5:00 PM."""
+    try:
+        tz = zoneinfo.ZoneInfo(tz_str)
+    except Exception:
+        tz = zoneinfo.ZoneInfo("UTC")
+    
+    local_time = datetime.now(tz)
+    weekday = local_time.weekday()
+    if weekday > 4:  # 5 is Saturday, 6 is Sunday
+        return False
+        
+    hour = local_time.hour
+    if 9 <= hour < 17:
+        return True
+    return False
+
+
+def get_next_working_hour(tz_str: str) -> datetime:
+    """Calculate the next working hour window start in UTC."""
+    try:
+        tz = zoneinfo.ZoneInfo(tz_str)
+    except Exception:
+        tz = zoneinfo.ZoneInfo("UTC")
+        
+    local_now = datetime.now(tz)
+    candidate = local_now + timedelta(hours=1)
+    candidate = candidate.replace(minute=0, second=0, microsecond=0)
+    
+    for _ in range(24 * 7):  # check hourly up to 1 week
+        if candidate.weekday() < 5 and 9 <= candidate.hour < 17:
+            return candidate.astimezone(timezone.utc)
+        candidate += timedelta(hours=1)
+        
+    return datetime.now(timezone.utc) + timedelta(minutes=15)
+
 
 SCORE_RULES = {
     "emailSent": 5,
@@ -465,6 +504,14 @@ async def start_email_worker_loop():
                 for lead in pending_leads:
                     campaign = campaign_map.get(lead["campaignId"])
                     if campaign:
+                        if campaign.get("workingHoursOnly") and not is_within_working_hours(campaign.get("timezone", "America/Chicago")):
+                            next_send = get_next_working_hour(campaign.get("timezone", "America/Chicago"))
+                            leads_col.update_one(
+                                {"_id": lead["_id"]},
+                                {"$set": {"send_after": next_send, "updatedAt": datetime.now(timezone.utc)}}
+                            )
+                            logger.info(f"[Email Worker] Lead {lead['email']} postponed to {next_send.isoformat()} (outside working hours for timezone {campaign.get('timezone')})")
+                            continue
                         await process_lead_send(campaign, lead)
         except Exception as e:
             logger.error(f"Email worker loop encountered an error: {e}")

@@ -240,3 +240,145 @@ def sam_disconnect(current_user: dict = Depends(get_current_user)):
         return {"success": True, "message": "SAM.gov API Key disconnected."}
     except Exception as exc:
         raise HTTPException(500, f"Could not disconnect SAM.gov: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# General Environment Key Editor
+# ---------------------------------------------------------------------------
+
+def read_env_file_keys() -> dict:
+    env_path = ".env"
+    if not os.path.exists(env_path):
+        return {}
+    
+    keys = {}
+    with open(env_path, "r", encoding="utf-8") as f:
+        for line in f:
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#") and "=" in line:
+                parts = line.split("=", 1)
+                k = parts[0].strip()
+                v = parts[1].strip()
+                # strip potential quotes around value
+                if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+                    v = v[1:-1]
+                keys[k] = v
+    return keys
+
+
+def update_env_file(updates: dict) -> None:
+    env_path = ".env"
+    if not os.path.exists(env_path):
+        with open(env_path, "w", encoding="utf-8") as f:
+            pass
+            
+    with open(env_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+        
+    updated_keys = set()
+    new_lines = []
+    
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in line:
+            parts = line.split("=", 1)
+            key = parts[0].strip()
+            if key in updates:
+                new_lines.append(f"{key}={updates[key]}\n")
+                updated_keys.add(key)
+                continue
+        new_lines.append(line)
+        
+    for key, value in updates.items():
+        if key not in updated_keys:
+            new_lines.append(f"{key}={value}\n")
+            
+    with open(env_path, "w", encoding="utf-8") as f:
+        f.writelines(new_lines)
+
+
+def obfuscate_key(val: str) -> str:
+    if not val:
+        return ""
+    # Don't obfuscate short values if they are placeholders/ports/hosts
+    if len(val) <= 6:
+        return val
+    return f"****{val[-4:]}"
+
+
+@router.get("/env-keys")
+def get_env_keys(current_user: dict = Depends(get_current_user)):
+    try:
+        env_keys = read_env_file_keys()
+        
+        target_keys = [
+            "TAVILY_API_KEY",
+            "SAM_GOV_API_KEY",
+            "SERPAPI_API_KEY",
+            "FIRECRAWL_API_KEY",
+            "OLLAMA_API_KEY",
+            "GEMINI_API_KEY",
+            "OPENROUTER_API_KEY",
+            "LINKEDIN_LI_AT",
+            "ZOOM_ACCOUNT_ID",
+            "ZOOM_CLIENT_ID",
+            "ZOOM_CLIENT_SECRET",
+            "GOOGLE_CLIENT_ID",
+            "GOOGLE_CLIENT_SECRET",
+            "SMTP_HOST",
+            "SMTP_PORT",
+            "SMTP_USER",
+            "SMTP_PASS",
+            "SMTP_FROM"
+        ]
+        
+        response = {}
+        for k in target_keys:
+            val = env_keys.get(k) or os.environ.get(k) or str(getattr(settings, k, "")) or ""
+            response[k] = obfuscate_key(val)
+            
+        return response
+    except Exception as exc:
+        raise HTTPException(500, f"Failed to retrieve environment API keys: {exc}")
+
+
+@router.post("/env-keys")
+def save_env_keys(payload: dict, current_user: dict = Depends(get_current_user)):
+    try:
+        current_keys = read_env_file_keys()
+        
+        updates = {}
+        for k, new_val in payload.items():
+            if new_val is None:
+                continue
+            new_val = str(new_val).strip()
+            # If new_val contains ****, it is obfuscated and unchanged.
+            if "****" in new_val:
+                continue
+            updates[k] = new_val
+            
+        if updates:
+            update_env_file(updates)
+            
+            # Load and update in-memory settings & os.environ
+            from config.settings import settings
+            for k, v in updates.items():
+                os.environ[k] = v
+                if hasattr(settings, k):
+                    current_type = type(getattr(settings, k))
+                    try:
+                        if current_type is int:
+                            setattr(settings, k, int(v))
+                        elif current_type is float:
+                            setattr(settings, k, float(v))
+                        elif current_type is bool:
+                            setattr(settings, k, v.lower() in ("true", "1", "yes"))
+                        else:
+                            setattr(settings, k, v)
+                    except Exception as e:
+                        logger.error(f"Failed to cast env variable {k} to type {current_type}: {e}")
+                        setattr(settings, k, v)
+                        
+        return {"status": "success", "message": "API keys updated successfully."}
+    except Exception as exc:
+        raise HTTPException(500, f"Failed to save environment API keys: {exc}")

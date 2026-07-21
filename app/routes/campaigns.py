@@ -19,6 +19,7 @@ class CampaignCreateBody(BaseModel):
     senderName: Optional[str] = ""
     dailyLimit: Optional[int] = 200
     timezone: Optional[str] = "America/Chicago"
+    workingHoursOnly: Optional[bool] = False
     scheduleStart: Optional[str] = None
     attachmentPath: Optional[str] = None
     attachmentFilename: Optional[str] = None
@@ -33,6 +34,7 @@ class CampaignUpdateBody(BaseModel):
     senderName: Optional[str] = None
     dailyLimit: Optional[int] = None
     timezone: Optional[str] = None
+    workingHoursOnly: Optional[bool] = None
     scheduleStart: Optional[str] = None
     attachmentPath: Optional[str] = None
     attachmentFilename: Optional[str] = None
@@ -51,6 +53,7 @@ def _format_campaign(c: dict) -> dict:
         "senderName": c.get("senderName", ""),
         "dailyLimit": c.get("dailyLimit", 200),
         "timezone": c.get("timezone", "America/Chicago"),
+        "workingHoursOnly": c.get("workingHoursOnly", False),
         "scheduleStart": c.get("scheduleStart").isoformat() if c.get("scheduleStart") else None,
         "attachmentPath": c.get("attachmentPath", ""),
         "attachmentFilename": c.get("attachmentFilename", ""),
@@ -165,6 +168,7 @@ def create_campaign(
         "senderName": body.senderName or "",
         "dailyLimit": body.dailyLimit or 200,
         "timezone": body.timezone or "America/Chicago",
+        "workingHoursOnly": body.workingHoursOnly or False,
         "scheduleStart": sched_start,
         "attachmentPath": body.attachmentPath or "",
         "attachmentFilename": body.attachmentFilename or "",
@@ -310,6 +314,8 @@ def update_campaign(
                 updates["scheduleStart"] = datetime.fromisoformat(body.scheduleStart.replace("Z", "+00:00"))
             except Exception:
                 raise HTTPException(status_code=400, detail="Invalid scheduleStart format.")
+    if body.workingHoursOnly is not None:
+        updates["workingHoursOnly"] = body.workingHoursOnly
     if body.attachmentPath is not None:
         updates["attachmentPath"] = body.attachmentPath
     if body.attachmentFilename is not None:

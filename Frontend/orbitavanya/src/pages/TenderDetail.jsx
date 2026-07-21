@@ -10,6 +10,7 @@ import { Card, MatchBadge, StatusBadge } from '../components/ui/Common.jsx';
 import { tenders as staticTenders, daysUntilClosing } from '../data/tenders.jsx';
 import { companies as staticCompanies } from '../data/companies.jsx';
 import { api } from '../lib/api.jsx';
+import { useNotifications } from '../context/NotificationContext.jsx';
 
 // ---------------------------------------------------------------------------
 // Mode config — drives button appearance + backend payload for every status
@@ -50,6 +51,8 @@ const MODES_FOR_STATUS = {
 
 export default function TenderDetail() {
   const { id } = useParams();
+  const { createAlert } = useNotifications();
+  const notify = (title, message, link) => createAlert(title, message, link).catch(() => {});
   const [tender, setTender] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -180,6 +183,13 @@ export default function TenderDetail() {
         setModeMessages(m => ({ ...m, [mode]: data.message }));
         // Refresh drafts state to get latest IDs and completed filenames
         fetchDraftRequests();
+        if (data.status !== 'already_requested') {
+          notify(
+            `${MODE_CONFIG[mode].label} requested`,
+            `Draft generation started for "${tender?.title || 'this tender'}".`,
+            `/tenders/${id}`
+          );
+        }
       })
       .catch(err => {
         setModeStates(s => ({ ...s, [mode]: 'error' }));

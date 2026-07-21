@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Upload, FileText, Loader2, CheckCircle, AlertCircle, Download, X, Zap, FileCheck } from 'lucide-react';
 import { api } from '../lib/api.jsx';
+import { useNotifications } from '../context/NotificationContext.jsx';
 
 /**
  * RFPAutoRespond.jsx
@@ -16,6 +17,8 @@ import { api } from '../lib/api.jsx';
 const POLL_INTERVAL_MS = 2500;
 
 export default function RFPAutoRespond() {
+  const { createAlert } = useNotifications();
+  const notify = (title, message, link) => createAlert(title, message, link).catch(() => {});
   const [rfpFiles, setRfpFiles] = useState([]);
   const [templateFile, setTemplateFile] = useState(null);
   const [taskId, setTaskId] = useState(null);
@@ -52,6 +55,11 @@ export default function RFPAutoRespond() {
         setTaskState(state);
         if (state.status === 'completed' || state.status === 'failed') {
           clearInterval(pollRef.current);
+          if (state.status === 'completed') {
+            notify('RFP response ready', `Your generated proposal${state.filename ? ` (${state.filename})` : ''} is ready to download.`, '/rfp-auto-respond');
+          } else {
+            notify('RFP response failed', state.message || 'The auto-respond pipeline failed to complete.', '/rfp-auto-respond');
+          }
         }
       } catch {
         clearInterval(pollRef.current);

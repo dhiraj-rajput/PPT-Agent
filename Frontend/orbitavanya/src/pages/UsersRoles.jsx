@@ -2,10 +2,13 @@ import { useEffect, useState } from 'react';
 import { Plus, MoreHorizontal, X, Loader2 } from 'lucide-react';
 import { PageHeader, Card, StatusBadge } from '../components/ui/Common.jsx';
 import { api } from '../lib/api.jsx';
+import { useNotifications } from '../context/NotificationContext.jsx';
 
 const ROLES = ['Administrator', 'Proposal Writer', 'Contract Specialist', 'Business Development', 'Team Member'];
 
 export default function UsersRoles() {
+  const { createAlert } = useNotifications();
+  const notify = (title, message, link) => createAlert(title, message, link).catch(() => {});
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -52,6 +55,7 @@ export default function UsersRoles() {
         setOpen(false);
         setInviteSuccess('');
       }, 1600);
+      notify('Teammate invited', `${user.name || user.email} was invited as ${user.role}.`, '/settings/users');
     } catch (err) {
       setInviteError(err.message || 'Could not invite user.');
     } finally {
@@ -65,6 +69,8 @@ export default function UsersRoles() {
     setUsers((p) => p.map((u) => (u.id === id ? { ...u, role } : u)));
     try {
       await api.updateUserRole(id, role);
+      const target = users.find((u) => u.id === id);
+      notify('Role updated', `${target?.name || target?.email || 'A teammate'} is now ${role}.`, '/settings/users');
     } catch (err) {
       setUsers(prev);
       setLoadError(err.message || 'Could not update role.');

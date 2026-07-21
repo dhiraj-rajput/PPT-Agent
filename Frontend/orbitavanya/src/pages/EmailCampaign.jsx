@@ -3,6 +3,7 @@ import { Plus, Send, MousePointerClick, MailOpen, Reply, Clock, Globe, X, Play, 
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { PageHeader, Card, StatusBadge } from '../components/ui/Common.jsx';
 import { api } from '../lib/api.jsx';
+import { useNotifications } from '../context/NotificationContext.jsx';
 
 const SUMMARY_CARDS = [
   { key: 'totalSent', label: 'Total Sent', icon: Send, bg: 'bg-sky-50', fg: 'text-sky-600', format: (v) => (v || 0).toLocaleString() },
@@ -17,17 +18,33 @@ function titleCase(s) {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
+const TIMEZONES = [
+  { value: 'America/New_York', label: 'US Eastern (New York)' },
+  { value: 'America/Chicago', label: 'US Central (Chicago)' },
+  { value: 'America/Denver', label: 'US Mountain (Denver)' },
+  { value: 'America/Los_Angeles', label: 'US Pacific (Los Angeles)' },
+  { value: 'Europe/London', label: 'United Kingdom (London)' },
+  { value: 'Europe/Paris', label: 'Europe Central (Paris)' },
+  { value: 'Asia/Kolkata', label: 'India (Kolkata)' },
+  { value: 'Asia/Tokyo', label: 'Japan (Tokyo)' },
+  { value: 'Australia/Sydney', label: 'Australia (Sydney)' },
+  { value: 'UTC', label: 'Coordinated Universal Time (UTC)' },
+];
+
 const emptyForm = {
   name: '',
   subject: '',
   body: '',
   dailyLimit: 200,
   timezone: 'America/Chicago',
+  workingHoursOnly: false,
   senderEmail: 'prasannadhamal982005@gmail.com',
   senderName: 'OrbitAvanya Outreach'
 };
 
 export default function EmailCampaign() {
+  const { createAlert } = useNotifications();
+  const notify = (title, message, link) => createAlert(title, message, link).catch(() => {});
   const [overview, setOverview] = useState(null);
   const [trends, setTrends] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
@@ -259,6 +276,7 @@ export default function EmailCampaign() {
       setAttachedPath('');
       setAttachedFilename('');
       await loadAll();
+      notify('Campaign created', `"${campaignData.name}" was created${sendMode === 'single' ? ' and launched' : ''}.`, '/email-campaign');
     } catch (err) {
       setFormError(err.message || 'Could not create campaign.');
     } finally {
@@ -278,6 +296,8 @@ export default function EmailCampaign() {
         await api.deleteCampaign(campaignId);
       }
       await loadAll();
+      if (action === 'launch') notify('Campaign launched', 'Your email campaign has started sending.', '/email-campaign');
+      if (action === 'delete') notify('Campaign deleted', 'The campaign and its leads were removed.', '/email-campaign');
     } catch (err) {
       setActionError(err.message || `Could not ${action} campaign.`);
     }
@@ -578,7 +598,17 @@ export default function EmailCampaign() {
                     </button>
                   </td>
                   <td className="px-5 py-3.5 text-slate-400 dark:text-slate-500 font-mono text-xs">{c.campaignNumber ? `#${c.campaignNumber}` : '—'}</td>
-                  <td className="px-5 py-3.5 font-semibold text-navy-900 dark:text-white">{c.name}</td>
+                  <td className="px-5 py-3.5 font-semibold text-navy-900 dark:text-white">
+                    <div>{c.name}</div>
+                    <div className="text-[10px] text-slate-400 font-normal mt-0.5 flex items-center gap-1.5">
+                      <span className="inline-flex items-center gap-0.5"><Globe size={10} /> {c.timezone}</span>
+                      {c.workingHoursOnly && (
+                        <span className="rounded bg-brand-500/10 px-1 py-0.5 text-[9px] font-bold text-brand-600 dark:text-brand-400">
+                          9am-5pm limit
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-5 py-3.5"><StatusBadge status={titleCase(c.status)} /></td>
                   <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{(c.stats?.totalSent || 0).toLocaleString()}</td>
                   <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{(c.stats?.totalOpened || 0).toLocaleString()}</td>
@@ -1050,6 +1080,50 @@ export default function EmailCampaign() {
                   placeholder="E.g., Business partnership proposal"
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400 font-bold">Campaign Timezone</label>
+                  <select
+                    value={form.timezone || 'America/Chicago'}
+                    onChange={(e) => setForm({ ...form, timezone: e.target.value })}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                  >
+                    {TIMEZONES.map((tz) => (
+                      <option key={tz.value} value={tz.value}>{tz.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400 font-bold">Daily Send Limit</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="2000"
+                    value={form.dailyLimit}
+                    onChange={(e) => setForm({ ...form, dailyLimit: parseInt(e.target.value) || 200 })}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 rounded-xl bg-slate-50/50 p-3.5 border border-slate-100 dark:border-navy-700 dark:bg-navy-900/50">
+                <input
+                  type="checkbox"
+                  id="workingHoursOnly"
+                  checked={form.workingHoursOnly || false}
+                  onChange={(e) => setForm({ ...form, workingHoursOnly: e.target.checked })}
+                  className="h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-500"
+                />
+                <div className="leading-tight">
+                  <label htmlFor="workingHoursOnly" className="text-xs font-bold text-navy-900 dark:text-white cursor-pointer">
+                    Restrict to Working Hours
+                  </label>
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    Only deliver emails Monday-Friday between 9:00 AM and 5:00 PM local time of the selected timezone.
+                  </p>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

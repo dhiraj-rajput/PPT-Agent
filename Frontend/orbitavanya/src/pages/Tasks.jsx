@@ -2,8 +2,11 @@ import { useEffect, useState } from 'react';
 import { Plus, X, Loader2 } from 'lucide-react';
 import { PageHeader, Card, StatusBadge } from '../components/ui/Common.jsx';
 import { api } from '../lib/api.jsx';
+import { useNotifications } from '../context/NotificationContext.jsx';
 
 export default function Tasks() {
+  const { createAlert } = useNotifications();
+  const notify = (title, message, link) => createAlert(title, message, link).catch(() => {});
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -71,6 +74,7 @@ export default function Tasks() {
       const { task } = await api.createTask(form.title, form.due, form.priority, form.assigneeId || null);
       setTasks((prev) => [task, ...prev]);
       setCreateNotice(task.assignee ? `Task created and ${task.assignee.name} was emailed.` : 'Task created.');
+      notify('Task created', `"${task.title}" was added${task.assignee ? ` and assigned to ${task.assignee.name}` : ''}.`, '/tasks');
       setForm({ title: '', due: '', priority: 'Medium', assigneeId: users[0]?.id || '' });
       setTimeout(() => {
         setOpen(false);

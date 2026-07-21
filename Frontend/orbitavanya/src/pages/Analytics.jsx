@@ -63,10 +63,10 @@ export default function Analytics() {
     || '0';
 
   const kpis = [
-    { label: 'Active Tenders Tracked', value: tendersVal, icon: FolderOpen, bg: 'bg-brand-50', fg: 'text-brand-600' },
-    { label: 'Prospect Companies Registered', value: companiesVal, icon: Building2, bg: 'bg-amber-50', fg: 'text-amber-600' },
-    { label: 'Qualified High Match Score', value: highMatchVal, icon: Target, bg: 'bg-violet-50', fg: 'text-violet-600' },
-    { label: 'Companies Contacted', value: contactedVal, icon: Users2, bg: 'bg-cyan-50', fg: 'text-cyan-600' },
+    { label: 'Active Tenders Tracked', value: tendersVal, icon: FolderOpen, bg: 'bg-brand-50', fg: 'text-brand-600', path: '/tenders' },
+    { label: 'Prospect Companies Registered', value: companiesVal, icon: Building2, bg: 'bg-amber-50', fg: 'text-amber-600', path: '/companies' },
+    { label: 'Qualified High Match Score', value: highMatchVal, icon: Target, bg: 'bg-violet-50', fg: 'text-violet-600', path: '/companies' },
+    { label: 'Companies Contacted', value: contactedVal, icon: Users2, bg: 'bg-cyan-50', fg: 'text-cyan-600', path: '/crm-pipeline' },
   ];
 
   // Map pipeline stages for the conversion funnel with normalized visual bar height
@@ -99,13 +99,17 @@ export default function Analytics() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         {kpis.map((k) => (
-          <Card key={k.label}>
-            <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${k.bg} ${k.fg}`}>
+          <div
+            key={k.label}
+            onClick={() => navigate(k.path)}
+            className="cursor-pointer group rounded-2xl border border-slate-100 bg-white p-5 shadow-soft hover:shadow-md hover:border-brand-200 transition-all duration-200 dark:border-navy-800 dark:bg-navy-900"
+          >
+            <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${k.bg} ${k.fg} group-hover:scale-110 transition-transform duration-200`}>
               <k.icon size={17} />
             </div>
-            <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">{k.label}</p>
-            <p className="text-xl font-extrabold text-navy-900 dark:text-white">{k.value}</p>
-          </Card>
+            <p className="mt-3 text-xs text-slate-500 dark:text-slate-400 group-hover:text-brand-600 transition-colors duration-200">{k.label}</p>
+            <p className="text-xl font-extrabold text-navy-900 dark:text-white mt-0.5">{k.value}</p>
+          </div>
         ))}
       </div>
 

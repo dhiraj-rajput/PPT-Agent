@@ -3,8 +3,11 @@ import { Link } from 'react-router-dom';
 import { Plus, Sparkles, FileDown, LayoutTemplate, Loader2, Database, AlertCircle, RefreshCw, Play, Eye, X } from 'lucide-react';
 import { PageHeader, Card } from '../components/ui/Common.jsx';
 import { api } from '../lib/api.jsx';
+import { useNotifications } from '../context/NotificationContext.jsx';
 
 export default function ProposalBuilder() {
+  const { createAlert } = useNotifications();
+  const notify = (title, message, link) => createAlert(title, message, link).catch(() => {});
   const [tab, setTab] = useState('all');
 
   // ----- Data States -----
@@ -172,6 +175,7 @@ export default function ProposalBuilder() {
       .then(() => {
         setTriggeringId(null);
         fetchData();
+        notify('Proposal build started', `Generating a draft for "${d.tender_title || solicitation || 'this opportunity'}".`, '/proposal-builder');
       })
       .catch(err => {
         setTriggeringId(null);
