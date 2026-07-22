@@ -1,12 +1,7 @@
 """
 app/routes/rfp_respond.py
 --------------------------
-RFP Auto-Respond — upload an RFP document, get back a fully-written proposal.
-
-This is the OrbitAvanya-integrated version of what was called "BidForge" in
-the standalone project. It uses the same pipeline (bidforge/ package at the
-project root) but is surfaced under /api/rfp-respond to match the project
-naming conventions.
+RFP Auto-Respond — upload an RFP document, get back a fully-written proposal using Motor async.
 
 Endpoints:
   POST /api/rfp-respond/upload              — upload RFP + optional template, kick off pipeline
@@ -16,18 +11,28 @@ Endpoints:
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import re
 import subprocess
 import sys
 import uuid
-import os
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-from app.core.auth import get_current_user
 
+from app.core.auth import get_current_user
+from utils.db_client import (
+    update_task_status,
+    get_task_status_db,
+    update_task_status_async,
+    get_task_status_async,
+    get_async_collection,
+)
+
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/rfp-respond", tags=["rfp-respond"])
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -35,8 +40,6 @@ UPLOAD_DIR = PROJECT_ROOT / "private" / "rfp_respond_uploads"
 OUTPUT_DIR = PROJECT_ROOT / "output" / "rfp_respond"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-
-from utils.db_client import update_task_status, get_task_status_db, get_collection
 
 
 def _safe_name(name: str) -> str:
@@ -52,7 +55,7 @@ def _run_pipeline_sync(
     output_name: str,
     template_path: Optional[Path],
 ) -> None:
-    """Run bidforge_cli.py as a subprocess and update progress in-memory."""
+    """Run bidforge_cli.py as a subprocess and update progress in MongoDB."""
 
     def update(progress: int, message: str, status: str = "processing", filename: Optional[str] = None):
         update_task_status(task_id, "rfp_respond", progress, status, message, filename)
@@ -67,64 +70,45 @@ def _run_pipeline_sync(
         cmd += ["--template", str(template_path)]
 
     try:
-        from utils.helpers import SUBPROCESS_SEMAPHORE
-        update(4, "Waiting in queue for resources...")
-        with SUBPROCESS_SEMAPHORE:
-            update(5, "Starting RFP Auto-Respond pipeline...")
-            proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                cwd=str(PROJECT_ROOT),
-                text=True,
-                encoding="utf-8",
-                errors="ignore",
-            )
-            final_path = None
-            if proc.stdout:
-                for line in proc.stdout:
-                    safe_line = line.strip()
-                    print(f"[RFP-Respond] {safe_line}")
-                    if "Step 1" in safe_line:
-                        update(15, "Parsing uploaded RFP document...")
-                    elif "checking inventory" in safe_line.lower():
-                        update(35, "Checking our inventory against requirements...")
-                    elif "competitor" in safe_line.lower() and "market pricing" in safe_line.lower():
-                        update(50, "Gathering competitor / market pricing intelligence...")
-                    elif "Step 3" in safe_line:
-                        update(65, "Synthesizing pricing strategy...")
-                    elif "Step 4" in safe_line:
-                        update(80, "Generating final proposal document...")
-                    elif safe_line.startswith("SUCCESS:"):
-                        final_path = safe_line.split("SUCCESS:", 1)[1].strip()
-                    elif safe_line.startswith("FAILED:"):
-                        update(0, safe_line.split("FAILED:", 1)[1].strip(), "failed")
+        update(5, "Starting RFP Auto-Respond pipeline...")
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            cwd=str(PROJECT_ROOT),
+            text=True,
+            encoding="utf-8",
+            errors="ignore",
+        )
+        final_path = None
+        if proc.stdout:
+            for line in proc.stdout:
+                safe_line = line.strip()
+                print(f"[RFP-Respond] {safe_line}")
+                if "Step 1" in safe_line:
+                    update(15, "Parsing uploaded RFP document...")
+                elif "checking inventory" in safe_line.lower():
+                    update(35, "Checking our inventory against requirements...")
+                elif "competitor" in safe_line.lower() and "market pricing" in safe_line.lower():
+                    update(50, "Gathering competitor / market pricing intelligence...")
+                elif "Step 3" in safe_line:
+                    update(65, "Synthesizing pricing strategy...")
+                elif "Step 4" in safe_line:
+                    update(80, "Generating final proposal document...")
+                elif safe_line.startswith("SUCCESS:"):
+                    final_path = safe_line.split("SUCCESS:", 1)[1].strip()
+                elif safe_line.startswith("FAILED:"):
+                    update(0, safe_line.split("FAILED:", 1)[1].strip(), "failed")
 
-            proc.wait()
-            if proc.returncode != 0 or not final_path:
-                existing = get_task_status_db(task_id)
-                if not existing or existing.get("status") != "failed":
-                    update(0, f"Pipeline exited with code {proc.returncode}", "failed")
-                return
+        proc.wait()
+        if proc.returncode != 0 or not final_path:
+            existing = get_task_status_db(task_id)
+            if not existing or existing.get("status") != "failed":
+                update(0, f"Pipeline exited with code {proc.returncode}", "failed")
+            return
 
-            # Convert generated docx to PDF
-            filename = Path(final_path).name
-            if filename.endswith(".docx"):
-                try:
-                    update(95, "Converting proposal to PDF...")
-                    from scripts.proposal_generator import convert_to_pdf
-                    pdf_path = convert_to_pdf(final_path, str(OUTPUT_DIR))
-                    if pdf_path and Path(pdf_path).exists():
-                        filename = Path(pdf_path).name
-                        try:
-                            os.unlink(final_path)
-                        except Exception:
-                            pass
-                except Exception as pdf_err:
-                    import logging
-                    logging.getLogger(__name__).warning(f"Failed to convert RFP response to PDF: {pdf_err}")
-
-            update(100, "Proposal document generated successfully!", "completed", filename)
+        filename = Path(final_path).name
+        update(100, "Proposal document generated successfully!", "completed", filename)
     except Exception as exc:
         update(0, f"Pipeline failed: {exc}", "failed")
 
@@ -138,6 +122,7 @@ async def upload_rfp(
     background_tasks: BackgroundTasks,
     rfp_files: list[UploadFile] = File(...),
     template_file: Optional[UploadFile] = File(None),
+    wizard_config: Optional[str] = Form(None),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -160,8 +145,12 @@ async def upload_rfp(
             if len(content) > MAX_FILE_SIZE:
                 raise HTTPException(status_code=400, detail=f"File '{file.filename}' exceeds the 10MB size limit.")
             dest = task_dir / _safe_name(file.filename)
-            with open(dest, "wb") as f:
-                f.write(content)
+
+            def write_rfp_file(path_target, file_content):
+                with open(path_target, "wb") as f:
+                    f.write(file_content)
+
+            await asyncio.to_thread(write_rfp_file, dest, content)
             rfp_dests.append(str(dest))
 
     if not rfp_dests:
@@ -177,19 +166,23 @@ async def upload_rfp(
         if len(content) > MAX_FILE_SIZE:
             raise HTTPException(status_code=400, detail="Template file exceeds the 10MB size limit.")
         template_dest = task_dir / _safe_name(template_file.filename)
-        with open(template_dest, "wb") as f:
-            f.write(content)
+
+        def write_tmpl_file(path_target, file_content):
+            with open(path_target, "wb") as f:
+                f.write(file_content)
+
+        await asyncio.to_thread(write_tmpl_file, template_dest, content)
 
     output_name = f"rfp_respond_{task_id}"
     user_id = str(current_user["_id"])
-    update_task_status(
+    await update_task_status_async(
         task_id,
         "rfp_respond",
         0,
         "processing",
         "Upload received, queuing pipeline...",
         None,
-        extra={"userId": user_id}
+        extra={"userId": user_id, "wizardConfig": wizard_config}
     )
 
     background_tasks.add_task(
@@ -199,11 +192,11 @@ async def upload_rfp(
 
 
 @router.get("/status/{task_id}")
-def get_status(task_id: str, current_user: dict = Depends(get_current_user)):
-    task = get_task_status_db(task_id)
+async def get_status(task_id: str, current_user: dict = Depends(get_current_user)):
+    task = await get_task_status_async(task_id)
     if not task:
         raise HTTPException(404, "Unknown task_id")
-    
+
     user_id = str(current_user["_id"])
     if task.get("userId") and str(task.get("userId")) != user_id:
         raise HTTPException(403, "Access denied: You do not own this task.")
@@ -211,22 +204,23 @@ def get_status(task_id: str, current_user: dict = Depends(get_current_user)):
 
 
 @router.get("/download/{filename}")
-def download_result(filename: str, current_user: dict = Depends(get_current_user)):
-    safe_filename = Path(filename).name  # prevent path traversal
-    
-    # Ownership Check
-    col = get_collection("task_statuses")
-    task = col.find_one({"filename": safe_filename})
+async def download_result(filename: str, current_user: dict = Depends(get_current_user)):
+    safe_filename = Path(filename).name
+
+    col = get_async_collection("task_statuses")
+    task = await col.find_one({"filename": safe_filename})
     if task:
         user_id = str(current_user["_id"])
         if task.get("userId") and str(task.get("userId")) != user_id:
             raise HTTPException(403, "Access denied: You do not own this file.")
 
-    for media_type in [
-        "application/pdf",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ]:
-        path = OUTPUT_DIR / safe_filename
-        if path.exists():
-            return FileResponse(path, media_type=media_type, filename=safe_filename)
+    path = OUTPUT_DIR / safe_filename
+    if path.exists():
+        suffix = path.suffix.lower()
+        media_type = (
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            if suffix == ".docx"
+            else "application/pdf" if suffix == ".pdf" else "application/octet-stream"
+        )
+        return FileResponse(path, media_type=media_type, filename=safe_filename)
     raise HTTPException(404, "File not found")

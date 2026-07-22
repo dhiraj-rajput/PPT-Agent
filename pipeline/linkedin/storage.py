@@ -96,34 +96,24 @@ class LinkedInStorage:
             The MongoDB ObjectId (as a string) of the upserted document.
         """
         collection = get_collection(COLLECTION_STRUCTURED_LINKEDIN)
-
         document = company_data.model_dump()
+        filter_doc = {"company_slug": company_data.company_slug}
 
-        # Upsert: update if company_slug exists, insert if not
         result = collection.update_one(
-            filter={"company_slug": company_data.company_slug},
+            filter=filter_doc,
             update={"$set": document},
             upsert=True,
         )
 
-        # Get the ID: either the newly inserted document or the existing one
-        if result.upserted_id:
+        if getattr(result, "upserted_id", None):
             document_id = str(result.upserted_id)
-            logger.info(
-                f"Inserted structured data | company='{company_data.company_slug}' "
-                f"| doc_id='{document_id}'"
-            )
         else:
-            existing_document = collection.find_one(
-                {"company_slug": company_data.company_slug},
-                {"_id": 1},
-            )
-            document_id = str(existing_document["_id"]) if existing_document else "unknown"
-            logger.info(
-                f"Updated structured data | company='{company_data.company_slug}' "
-                f"| doc_id='{document_id}'"
-            )
-
+            existing = collection.find_one(filter_doc, {"_id": 1})
+            document_id = str(existing["_id"]) if existing and "_id" in existing else "unknown"
+        logger.info(
+            f"Saved structured data | company='{company_data.company_slug}' "
+            f"| doc_id='{document_id}'"
+        )
         return document_id
 
     def get_structured_company_data(

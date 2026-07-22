@@ -240,7 +240,7 @@ export default function RFPAutoRespond() {
           { icon: FileText, label: 'Parse RFP', desc: 'Extract requirements & scope' },
           { icon: FileCheck, label: 'Inventory Check', desc: 'Match our offerings' },
           { icon: Zap, label: 'Market Intel', desc: 'Competitor pricing analysis' },
-          { icon: Download, label: 'Generate Proposal', desc: 'Professional PDF' },
+          { icon: Download, label: 'Generate Proposal', desc: 'Professional DOCX' },
         ].map(({ icon: Icon, label, desc }, i) => {
           const styles = getStepStyles(i, Icon);
           const RenderedIcon = styles.icon;
@@ -463,10 +463,9 @@ export default function RFPAutoRespond() {
 
       {wizardModal && (
         <PreGenerationWizard
-          mode={wizardModal.mode}
-          solicitation={wizardModal.solicitation}
-          tender_title={wizardModal.tender_title}
-          onClose={() => setWizardModal(null)}
+          proposalType="Prime RFP Response"
+          solicitationNumber={wizardModal.solicitation}
+          onCancel={() => setWizardModal(null)}
           onConfirmGenerate={handleWizardConfirm}
         />
       )}
