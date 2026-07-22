@@ -7,6 +7,7 @@ Restores the complete MongoDB database state from company_scraper_db.zip.
 import zipfile
 from pathlib import Path
 from bson import json_util
+import shutil
 
 from config.settings import settings
 

@@ -90,21 +90,28 @@ def _format_campaign(c: Optional[dict]) -> dict:
     }
 
 
-async def _queue_pending_leads_async(campaign_id: ObjectId, daily_limit: int):
-    """Calculate and assign send_after timestamps spacing out leads across the day."""
+async def _queue_pending_leads_async(campaign_id: ObjectId, daily_limit: int, base_time: Optional[datetime] = None):
+    """Calculate and assign send_after timestamps spacing out leads across the day.
+
+    base_time is the earliest moment the first email may go out. Pass a
+    campaign's scheduleStart here (if it's in the future) to get exact-time
+    scheduling — the worker loop won't send anything until send_after is
+    reached, so nothing goes out before base_time.
+    """
     leads_col = get_async_collection("leads")
     pending = await leads_col.find({"campaignId": campaign_id, "status": "pending"}, {"_id": 1}).to_list(length=10000)
     if not pending:
         return 0
 
     now = datetime.now(timezone.utc)
+    start = base_time if (base_time and base_time > now) else now
     limit = daily_limit or 200
     spacing_ms = max(int((24 * 60 * 60 * 1000) / limit), 1000)
 
     for i, lead in enumerate(pending):
         if i >= limit:
             break
-        send_after = now + timedelta(milliseconds=i * spacing_ms)
+        send_after = start + timedelta(milliseconds=i * spacing_ms)
         await leads_col.update_one(
             {"_id": lead["_id"]},
             {"$set": {"send_after": send_after}}
@@ -451,8 +458,9 @@ async def resume_campaign(id: str, current_user: dict = Depends(get_current_user
     await col.update_one({"_id": oid}, {"$set": {"status": "running", "updatedAt": datetime.now(timezone.utc)}})
     campaign = await col.find_one({"_id": oid})
     daily_limit = (campaign or {}).get("dailyLimit", 200)
+    schedule_start = (campaign or {}).get("scheduleStart")
 
-    queued = await _queue_pending_leads_async(oid, daily_limit)
+    queued = await _queue_pending_leads_async(oid, daily_limit, base_time=schedule_start)
     return {"campaign": _format_campaign(campaign), "queuedLeads": queued}
 
 
@@ -474,8 +482,9 @@ async def launch_campaign(id: str, current_user: dict = Depends(get_current_user
     await col.update_one({"_id": oid}, {"$set": {"status": "running", "updatedAt": datetime.now(timezone.utc)}})
     campaign = await col.find_one({"_id": oid})
     daily_limit = (campaign or {}).get("dailyLimit", 200)
+    schedule_start = (campaign or {}).get("scheduleStart")
 
-    queued = await _queue_pending_leads_async(oid, daily_limit)
+    queued = await _queue_pending_leads_async(oid, daily_limit, base_time=schedule_start)
 
     audit_col = get_async_collection("audit_logs")
     await audit_col.insert_one({

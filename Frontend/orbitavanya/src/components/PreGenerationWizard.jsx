@@ -11,6 +11,18 @@ export default function PreGenerationWizard({ tenderId, solicitationNumber, prop
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({}); // { question_id: [selected_option_ids] }
 
+  // Company selection states
+  const [ownCompany, setOwnCompany] = useState(null);
+  const [selectedCompanyId, setSelectedCompanyId] = useState('parent');
+
+  useEffect(() => {
+    api.getOwnCompanyProfile()
+      .then(data => {
+        setOwnCompany(data || null);
+      })
+      .catch(err => console.error("Error loading company profile for wizard:", err));
+  }, []);
+
   // Outline state
   const [outline, setOutline] = useState(null);
   const [sections, setSections] = useState([]);
@@ -65,11 +77,29 @@ export default function PreGenerationWizard({ tenderId, solicitationNumber, prop
       selected_option_ids: answers[qId] || [],
     }));
 
+    const selectedProfile = selectedCompanyId === 'parent'
+      ? {
+          name: ownCompany?.name,
+          description: ownCompany?.description,
+          uei: ownCompany?.uei,
+          cage_code: ownCompany?.cage_code,
+          primary_naics: ownCompany?.primary_naics,
+          primary_naics_desc: ownCompany?.primary_naics_desc,
+          city: ownCompany?.city,
+          state: ownCompany?.state,
+          email: ownCompany?.email,
+          phone: ownCompany?.phone,
+          size: ownCompany?.size,
+          certifications: ownCompany?.certifications
+        }
+      : ownCompany?.sub_companies?.[parseInt(selectedCompanyId)];
+
     const payload = {
       tender_id: tenderId,
       solicitation_number: solicitationNumber,
       proposal_type: proposalType,
       answers: formattedAnswers,
+      company_profile: selectedProfile
     };
 
     api.getPreviewOutline(payload)
@@ -122,9 +152,27 @@ export default function PreGenerationWizard({ tenderId, solicitationNumber, prop
   };
 
   const handleStartGeneration = () => {
+    const selectedProfile = selectedCompanyId === 'parent'
+      ? {
+          name: ownCompany?.name,
+          description: ownCompany?.description,
+          uei: ownCompany?.uei,
+          cage_code: ownCompany?.cage_code,
+          primary_naics: ownCompany?.primary_naics,
+          primary_naics_desc: ownCompany?.primary_naics_desc,
+          city: ownCompany?.city,
+          state: ownCompany?.state,
+          email: ownCompany?.email,
+          phone: ownCompany?.phone,
+          size: ownCompany?.size,
+          certifications: ownCompany?.certifications
+        }
+      : ownCompany?.sub_companies?.[parseInt(selectedCompanyId)];
+
     const wizardConfig = {
       answers,
       sections: sections.filter((s) => s.included),
+      company_profile: selectedProfile
     };
     onConfirmGenerate(wizardConfig);
   };
@@ -176,6 +224,68 @@ export default function PreGenerationWizard({ tenderId, solicitationNumber, prop
           ) : step === 1 ? (
             /* STEP 1: Questions */
             <div className="space-y-6">
+              {ownCompany && (
+                <div className="rounded-xl border border-slate-200 dark:border-navy-700 p-4 bg-slate-50 dark:bg-navy-900/60 shadow-sm">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-navy-800 px-2 py-0.5 rounded">
+                    Entity Selection
+                  </span>
+                  <h4 className="text-sm font-bold text-navy-900 dark:text-white mt-1 mb-3">Select Bidding Company / Sub-Company Entity</h4>
+                  <div className="grid grid-cols-1 gap-2.5">
+                    {/* Parent Company Option */}
+                    <div
+                      onClick={() => setSelectedCompanyId('parent')}
+                      className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer transition-all ${
+                        selectedCompanyId === 'parent'
+                          ? 'border-brand-500 bg-brand-50/30 dark:bg-brand-950/20 shadow-sm'
+                          : 'border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-800 hover:border-brand-300'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        checked={selectedCompanyId === 'parent'}
+                        onChange={() => {}}
+                        className="mt-1 text-brand-500 focus:ring-brand-400"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs font-bold text-navy-900 dark:text-white">{ownCompany.name} (Parent Company)</p>
+                          <span className="inline-flex items-center gap-0.5 text-[9px] font-extrabold bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 px-1.5 py-0.2 rounded">
+                            Main
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-0.5">UEI: {ownCompany.uei} · CAGE: {ownCompany.cage_code || 'N/A'} · NAICS: {ownCompany.primary_naics || 'N/A'}</p>
+                      </div>
+                    </div>
+
+                    {/* Sub-companies Options */}
+                    {(ownCompany.sub_companies || []).map((sub, idx) => (
+                      <div
+                        key={idx}
+                        onClick={() => setSelectedCompanyId(idx.toString())}
+                        className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer transition-all ${
+                          selectedCompanyId === idx.toString()
+                            ? 'border-brand-500 bg-brand-50/30 dark:bg-brand-950/20 shadow-sm'
+                            : 'border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-800 hover:border-brand-300'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          checked={selectedCompanyId === idx.toString()}
+                          onChange={() => {}}
+                          className="mt-1 text-brand-500 focus:ring-brand-400"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs font-bold text-navy-900 dark:text-white">{sub.name} (Subsidiary)</p>
+                          </div>
+                          <p className="text-[10px] text-slate-500 mt-0.5">UEI: {sub.uei} · CAGE: {sub.cage_code || 'N/A'} · NAICS: {sub.primary_naics || 'N/A'}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {questions.map((q) => (
                 <div key={q.id} className="rounded-xl border border-slate-100 dark:border-navy-700 p-4 bg-slate-50/50 dark:bg-navy-900/50">
                   <div className="flex items-center justify-between mb-2">

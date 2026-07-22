@@ -37,6 +37,36 @@ export default function NaicsMuster() {
   const [copiedCode, setCopiedCode] = useState(null);
   const [expandedCodes, setExpandedCodes] = useState({});
 
+  // Own company description matching states
+  const [matchCompanyDescription, setMatchCompanyDescription] = useState(false);
+  const [ownCompanyProfile, setOwnCompanyProfile] = useState(null);
+  const [customDescription, setCustomDescription] = useState('');
+  // Which entity (parent company or a subsidiary) to pull the description from
+  const [matchEntityId, setMatchEntityId] = useState('parent');
+
+  useEffect(() => {
+    api.getOwnCompanyProfile()
+      .then(data => setOwnCompanyProfile(data))
+      .catch(err => console.error("Error loading own company profile:", err));
+  }, []);
+
+  // Build the list of selectable entities: the parent/main company plus any registered subsidiaries
+  const entityOptions = ownCompanyProfile
+    ? [
+        { id: 'parent', name: ownCompanyProfile.name || 'Main Company', description: ownCompanyProfile.description, isParent: true },
+        ...(ownCompanyProfile.sub_companies || []).map((sub, idx) => ({
+          id: String(idx),
+          name: sub.name,
+          description: sub.description,
+          isParent: false,
+        })),
+      ]
+    : [];
+
+  function getSelectedEntity() {
+    return entityOptions.find((ent) => ent.id === matchEntityId) || entityOptions[0];
+  }
+
   // Modal States
   const [showModal, setShowModal] = useState(false);
   const [modalTab, setModalTab] = useState('manual'); // 'manual' | 'upload'
@@ -59,6 +89,8 @@ export default function NaicsMuster() {
       const res = await api.getNaicsCodes({
         search,
         sector,
+        match_company_description: matchCompanyDescription,
+        custom_description: customDescription,
         page,
         limit,
       });
@@ -77,12 +109,12 @@ export default function NaicsMuster() {
       fetchNaics();
     }, 250); // 250ms debounce
     return () => clearTimeout(timer);
-  }, [page, search, sector]);
+  }, [page, search, sector, matchCompanyDescription, customDescription]);
 
   // Reset page to 1 on filter or search changes
   useEffect(() => {
     setPage(1);
-  }, [search, sector]);
+  }, [search, sector, matchCompanyDescription, customDescription]);
 
   // Copy code to clipboard
   function handleCopy(code) {
@@ -213,7 +245,7 @@ export default function NaicsMuster() {
       </div>
 
       {/* Filter / Search Bar Card */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft dark:border-navy-800 dark:bg-navy-900">
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft dark:border-navy-800 dark:bg-navy-900 space-y-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           {/* Search box */}
           <div className="relative flex-1">
@@ -244,6 +276,43 @@ export default function NaicsMuster() {
               </select>
             </div>
 
+            {/* Entity selector: choose whether to match against the parent/main company or a subsidiary */}
+            {entityOptions.length > 1 && (
+              <select
+                value={matchEntityId}
+                onChange={(e) => setMatchEntityId(e.target.value)}
+                className="rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm font-semibold text-slate-600 outline-none transition-all focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 dark:border-navy-800 dark:bg-navy-900 dark:text-slate-300"
+                title="Choose which company entity's description to match"
+              >
+                {entityOptions.map((ent) => (
+                  <option key={ent.id} value={ent.id}>
+                    {ent.name} {ent.isParent ? '(Main Company)' : '(Subsidiary)'}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {/* Company Description Toggle */}
+            <button
+              onClick={() => {
+                const entity = getSelectedEntity();
+                if (!entity?.description) {
+                  alert(
+                    entity && !entity.isParent
+                      ? `No description registered for ${entity.name}. Go to the Proposal Builder page and add a description for this subsidiary first!`
+                      : "No company description registered. Go to the Proposal Builder page and register a description of what your company does first!"
+                  );
+                  return;
+                }
+                setCustomDescription(entity.description);
+              }}
+              className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-bold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:bg-navy-900 dark:text-slate-400 dark:border-navy-800 dark:hover:bg-navy-800 transition-all"
+              title="Populate filter with the selected entity's registered description"
+            >
+              <BookOpen size={16} />
+              Match {entityOptions.length > 1 ? getSelectedEntity()?.name || 'Company' : 'Company'} Description
+            </button>
+
             {/* Top Pagination Control next to sector filter */}
             {total > 0 && (
               <div className="flex items-center gap-3 bg-slate-50/70 px-4 py-2 rounded-xl border border-slate-200 dark:border-navy-800 dark:bg-navy-950/40">
@@ -269,6 +338,27 @@ export default function NaicsMuster() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Second Row: Custom Description / Capabilities search input */}
+        <div className="relative">
+          <BookOpen className="absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+          <input
+            type="text"
+            placeholder="Search by Custom Description / Capabilities..."
+            value={customDescription}
+            onChange={(e) => setCustomDescription(e.target.value)}
+            className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-11 pr-10 text-sm font-medium outline-none transition-all focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-500/20 dark:border-navy-800 dark:bg-navy-950 dark:focus:border-brand-500 dark:focus:bg-navy-900"
+          />
+          {customDescription && (
+            <button
+              onClick={() => setCustomDescription('')}
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white transition-all"
+              title="Clear Custom Description"
+            >
+              <X size={16} />
+            </button>
+          )}
         </div>
       </div>
 

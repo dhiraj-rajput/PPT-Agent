@@ -48,10 +48,28 @@ def ensure_naics_populated():
 # Call populate function on module load
 ensure_naics_populated()
 
+import re
+
+def extract_keywords(description: str) -> list[str]:
+    if not description:
+        return []
+    words = re.findall(r"\b[a-zA-Z]{3,}\b", description.lower())
+    stop_words = {
+        "our", "company", "specializes", "in", "and", "the", "for", "with",
+        "services", "products", "related", "work", "we", "are", "provides",
+        "providing", "based", "solutions", "business", "clients", "customers",
+        "llp", "tech", "technology", "development", "systems", "design", "management",
+        "developing", "develop", "developer", "developers"
+    }
+    keywords = [w for w in words if w not in stop_words]
+    return list(dict.fromkeys(keywords))
+
 @router.get("")
 def list_naics_codes(
     search: Optional[str] = None,
     sector: Optional[str] = None,
+    match_company_description: Optional[bool] = False,
+    custom_description: Optional[str] = None,
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=100),
     current_user: dict = Depends(get_current_user)
@@ -89,6 +107,30 @@ def list_naics_codes(
                     {"description": {"$regex": search, "$options": "i"}}
                 ]
             })
+
+    # Check description filter
+    desc_to_match = ""
+    if custom_description:
+        desc_to_match = custom_description.strip()
+    elif match_company_description:
+        own_col = get_collection("own_company_profile")
+        profile = own_col.find_one({}, {"_id": 0})
+        # Fallback to default description if own company profile does not exist
+        if profile:
+            desc_to_match = profile.get("description", "")
+        else:
+            from app.routes.companies import DEFAULT_OWN_COMPANY
+            desc_to_match = DEFAULT_OWN_COMPANY.get("description", "")
+
+    if desc_to_match:
+        keywords = extract_keywords(desc_to_match)
+        if keywords:
+            kw_conditions = []
+            for kw in keywords:
+                kw_conditions.append({"title": {"$regex": kw, "$options": "i"}})
+                kw_conditions.append({"description": {"$regex": kw, "$options": "i"}})
+            if kw_conditions:
+                and_conditions.append({"$or": kw_conditions})
 
     if and_conditions:
         query["$and"] = and_conditions

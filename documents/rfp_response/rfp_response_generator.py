@@ -992,16 +992,20 @@ class RFPResponseGenerator:
         ]
         return get_ai_client().chat_json(messages)
 
-    def _load_our_profile(self) -> Dict[str, Any]:
-        """Load OrbitAvanya's own company profile.
-
-        Primary source: the real services/add-ons catalog (MongoDB, seeded via
-        scripts/import_company_catalog.py from OrbitAvanya_Services_ADD.xlsx).
-        private/orbit_avanya_detailed_profiles.json — if present — can still
-        supply extra fields (certifications, past_performance) layered on top.
-        """
+        """Load OrbitAvanya's own company profile, prioritizing any dynamically selected bidding profile."""
         if self._our_profile is not None:
             return self._our_profile
+
+        # Load dynamically selected bidding profile if present
+        active_bidding_path = self.project_root / "private" / "active_bidding_company.json"
+        if active_bidding_path.exists():
+            try:
+                with open(active_bidding_path, encoding="utf-8") as f:
+                    self._our_profile = json.load(f)
+                    logger.info("[RFPResponseGen] Loaded active bidding company profile from active_bidding_company.json")
+                    return self._our_profile
+            except Exception as exc:
+                logger.warning(f"[RFPResponseGen] Could not load active bidding profile: {exc}")
 
         profile: Dict[str, Any] = {}
 

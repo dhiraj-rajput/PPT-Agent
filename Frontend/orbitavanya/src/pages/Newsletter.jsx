@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Mail, Plus, Users, Send, Check, Loader2, Sparkles, Building2, Search, AlertCircle, Trash2, Image, Edit2 } from 'lucide-react';
+import { Mail, Plus, Users, Send, Check, Loader2, Sparkles, Building2, Search, AlertCircle, Trash2, Image, Edit2, Clock, Code, Eye, Type } from 'lucide-react';
 import { PageHeader, Card, StatusBadge } from '../components/ui/Common.jsx';
 import { api, BASE_URL } from '../lib/api.jsx';
 import { useNotifications } from '../context/NotificationContext.jsx';
@@ -18,9 +18,12 @@ export default function Newsletter() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newNewsletterForm, setNewNewsletterForm] = useState({ name: '', description: '', senderName: 'OrbitAvanya Tech', senderEmail: 'newsletter@orbitavanyatech.com' });
   const [showComposeModal, setShowComposeModal] = useState(false);
-  const [editionForm, setEditionForm] = useState({ subject: '', body: '', imageUrl: '', sendNow: true });
+  const [editionForm, setEditionForm] = useState({ subject: '', body: '', imageUrl: '', sendNow: true, scheduledAt: '' });
+  const [sendTiming, setSendTiming] = useState('now'); // 'now' | 'schedule'
   const [editingEditionId, setEditingEditionId] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [bodyContentMode, setBodyContentMode] = useState('write'); // 'write' | 'html'
+  const [showBodyPreview, setShowBodyPreview] = useState(false);
 
   // Company import modal
   const [showCompanyImport, setShowCompanyImport] = useState(false);
@@ -101,6 +104,17 @@ export default function Newsletter() {
   const handleSendEdition = async (e) => {
     e.preventDefault();
     if (!selectedNewsletter) return;
+
+    const isScheduling = sendTiming === 'schedule';
+    if (isScheduling && !editionForm.scheduledAt) {
+      setMessage('Please pick a date and time to schedule this edition.');
+      return;
+    }
+    if (isScheduling && new Date(editionForm.scheduledAt).getTime() <= Date.now()) {
+      setMessage('Scheduled time must be in the future.');
+      return;
+    }
+
     setSubmitting(true);
     try {
       if (editingEditionId) {
@@ -108,6 +122,8 @@ export default function Newsletter() {
           subject: editionForm.subject,
           body: editionForm.body,
           imageUrl: editionForm.imageUrl,
+          scheduledAt: isScheduling ? new Date(editionForm.scheduledAt).toISOString() : null,
+          clearSchedule: !isScheduling,
         });
       } else {
         if (recipientTargetMode === 'companies') {
@@ -119,19 +135,24 @@ export default function Newsletter() {
           await api.addNewsletterSubscribersFromCompanies(selectedNewsletter.id, [], manualRecipientEmails.trim());
         }
 
-        await api.createNewsletterEdition(selectedNewsletter.id, editionForm);
+        await api.createNewsletterEdition(selectedNewsletter.id, {
+          ...editionForm,
+          sendNow: !isScheduling,
+          scheduledAt: isScheduling ? new Date(editionForm.scheduledAt).toISOString() : null,
+        });
       }
 
       setSubmitting(false);
       setShowComposeModal(false);
       setEditingEditionId(null);
-      setEditionForm({ subject: '', body: '', imageUrl: '', sendNow: true });
+      setEditionForm({ subject: '', body: '', imageUrl: '', sendNow: true, scheduledAt: '' });
+      setSendTiming('now');
       setSelectedBroadcastCompanyIds({});
       setManualRecipientEmails('');
       fetchNewsletterDetails(selectedNewsletter);
       notify(
-        editingEditionId ? 'Edition updated' : 'Newsletter edition sent',
-        `"${editionForm.subject}" ${editingEditionId ? 'was updated' : `was sent to ${selectedNewsletter.name} subscribers`}.`,
+        editingEditionId ? 'Edition updated' : (isScheduling ? 'Newsletter edition scheduled' : 'Newsletter edition sent'),
+        `"${editionForm.subject}" ${editingEditionId ? 'was updated' : (isScheduling ? `is scheduled for ${new Date(editionForm.scheduledAt).toLocaleString()}` : `was sent to ${selectedNewsletter.name} subscribers`)}.`,
         '/newsletter'
       );
     } catch (err) {
@@ -213,9 +234,20 @@ export default function Newsletter() {
 
   const openBroadcastModal = () => {
     setEditingEditionId(null);
-    setEditionForm({ subject: '', body: '', imageUrl: '', sendNow: true });
+    setEditionForm({ subject: '', body: '', imageUrl: '', sendNow: true, scheduledAt: '' });
+    setSendTiming('now');
     setShowComposeModal(true);
     fetchDbCompanies(companySearchQuery, 1);
+  };
+
+  // Convert a stored UTC ISO timestamp into the local value a
+  // <input type="datetime-local"> expects (YYYY-MM-DDTHH:mm).
+  const toDatetimeLocalValue = (isoString) => {
+    if (!isoString) return '';
+    const d = new Date(isoString);
+    if (Number.isNaN(d.getTime())) return '';
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   };
 
   const handleEditEdition = (edition) => {
@@ -225,7 +257,9 @@ export default function Newsletter() {
       body: edition.body,
       imageUrl: edition.imageUrl || '',
       sendNow: edition.status === 'sent' ? false : edition.sendNow,
+      scheduledAt: toDatetimeLocalValue(edition.scheduledAt),
     });
+    setSendTiming(edition.status === 'scheduled' ? 'schedule' : 'now');
     setShowComposeModal(true);
   };
 
@@ -456,9 +490,15 @@ export default function Newsletter() {
                           <div className="flex items-center justify-between">
                             <h4 className="text-sm font-bold text-navy-900 dark:text-white">{e.subject}</h4>
                             <div className="flex items-center gap-2">
-                              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400">
-                                {e.stats?.sent || 0} Delivered
-                              </span>
+                              {e.status === 'scheduled' ? (
+                                <span className="flex items-center gap-1 rounded-full bg-tuscan-sun-50 px-2.5 py-1 text-[10px] font-bold text-tuscan-sun-700 dark:bg-tuscan-sun-950/30 dark:text-tuscan-sun-400">
+                                  <Clock size={10} /> Scheduled
+                                </span>
+                              ) : (
+                                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400">
+                                  {e.stats?.sent || 0} Delivered
+                                </span>
+                              )}
                               <button
                                 onClick={() => handleEditEdition(e)}
                                 className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-navy-800 transition-colors"
@@ -478,7 +518,11 @@ export default function Newsletter() {
                           <p className="mt-2 line-clamp-3 text-xs text-slate-600 dark:text-slate-300 font-mono bg-slate-50 dark:bg-navy-900 p-3 rounded-xl whitespace-pre-wrap">{e.body}</p>
                           <div className="mt-3 flex items-center justify-between text-[11px] text-slate-400">
                             <span>Status: {e.status}</span>
-                            <span>Sent at: {e.sentAt || 'N/A'}</span>
+                            {e.status === 'scheduled' ? (
+                              <span>Scheduled for: {e.scheduledAt ? new Date(e.scheduledAt).toLocaleString() : 'N/A'}</span>
+                            ) : (
+                              <span>Sent at: {e.sentAt ? new Date(e.sentAt).toLocaleString() : 'N/A'}</span>
+                            )}
                           </div>
                         </Card>
                       ))
@@ -766,15 +810,156 @@ export default function Newsletter() {
                 )}
               </div>
               <div>
-                <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1">Newsletter Content *</label>
+                <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+                  <label className="block text-xs font-bold text-navy-900 dark:text-white">Newsletter Content *</label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const banner = `<div style="background:linear-gradient(135deg,#1c151e 0%,#533f5a 45%,#236576 100%);border-radius:14px;padding:28px 24px;margin-bottom:20px;text-align:center;">
+  <div style="display:inline-block;width:40px;height:4px;background:#f7b708;border-radius:2px;margin-bottom:12px;"></div>
+  <p style="margin:0;color:#f9c639;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;">${selectedNewsletter?.name || 'Newsletter'}</p>
+  <h1 style="margin:8px 0 0;color:#ffffff;font-size:22px;font-weight:800;line-height:1.3;">${editionForm.subject || 'Your Headline Here'}</h1>
+</div>
+
+`;
+                        setEditionForm(prev => ({ ...prev, body: banner + prev.body }));
+                      }}
+                      className="flex items-center gap-1 text-[10px] font-bold text-brand-600 hover:text-brand-700 dark:text-brand-400"
+                    >
+                      <Sparkles size={11} /> Insert Beautiful Banner
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowBodyPreview(true)}
+                      className="flex items-center gap-1 text-[10px] font-bold text-slate-500 hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400"
+                      title="Preview how this HTML will render in the email"
+                    >
+                      <Eye size={11} /> Preview
+                    </button>
+                  </div>
+                </div>
+
+                {/* Write vs raw HTML code mode toggle */}
+                <div className="flex items-center gap-2 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setBodyContentMode('write')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${
+                      bodyContentMode === 'write'
+                        ? 'bg-brand-500 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-navy-700 dark:text-slate-300 dark:hover:bg-navy-600'
+                    }`}
+                  >
+                    <Type size={12} /> Write
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBodyContentMode('html')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${
+                      bodyContentMode === 'html'
+                        ? 'bg-brand-500 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-navy-700 dark:text-slate-300 dark:hover:bg-navy-600'
+                    }`}
+                  >
+                    <Code size={12} /> HTML Code
+                  </button>
+                </div>
+
+                {bodyContentMode === 'html' && (
+                  <p className="text-[10px] text-slate-400 mb-1.5">
+                    Paste your own full HTML markup below — it will be inserted directly into the email body exactly as written.
+                  </p>
+                )}
+
                 <textarea
                   required
-                  rows={6}
+                  rows={bodyContentMode === 'html' ? 14 : 6}
                   value={editionForm.body}
                   onChange={(e) => setEditionForm({ ...editionForm, body: e.target.value })}
-                  placeholder="Write your newsletter edition broadcast text here..."
+                  placeholder={
+                    bodyContentMode === 'html'
+                      ? '<div style="font-family:sans-serif;">\n  <h1>Your Headline</h1>\n  <p>Your custom HTML content here...</p>\n</div>'
+                      : 'Write your newsletter edition broadcast text here...'
+                  }
+                  spellCheck={bodyContentMode !== 'html'}
                   className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-xs font-mono outline-none focus:border-brand-500 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
                 />
+              </div>
+
+              {/* HTML Preview Modal */}
+              {showBodyPreview && (
+                <div
+                  className="fixed inset-0 z-[60] flex items-center justify-center bg-navy-900/70 p-4 backdrop-blur-sm"
+                  onClick={() => setShowBodyPreview(false)}
+                >
+                  <div
+                    className="w-full max-w-2xl rounded-2xl bg-white dark:bg-navy-800 shadow-2xl max-h-[85vh] flex flex-col overflow-hidden"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 dark:border-navy-700">
+                      <h4 className="text-sm font-bold text-navy-900 dark:text-white flex items-center gap-2">
+                        <Eye size={14} /> Email Body Preview
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={() => setShowBodyPreview(false)}
+                        className="text-slate-400 hover:text-slate-600 dark:hover:text-white text-sm font-bold"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <iframe
+                      title="newsletter-body-preview"
+                      srcDoc={editionForm.body || '<p style="font-family:sans-serif;color:#94a3b8;">Nothing to preview yet.</p>'}
+                      className="w-full flex-1 min-h-[400px] bg-white"
+                      sandbox=""
+                    />
+                  </div>
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1">When should this send?</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSendTiming('now')}
+                    className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl border px-3.5 py-2.5 text-xs font-bold transition-all ${
+                      sendTiming === 'now'
+                        ? 'border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300'
+                        : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-400 dark:hover:bg-navy-900'
+                    }`}
+                  >
+                    <Send size={13} /> Send Now
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSendTiming('schedule')}
+                    className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl border px-3.5 py-2.5 text-xs font-bold transition-all ${
+                      sendTiming === 'schedule'
+                        ? 'border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300'
+                        : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-400 dark:hover:bg-navy-900'
+                    }`}
+                  >
+                    <Clock size={13} /> Schedule for Later
+                  </button>
+                </div>
+                {sendTiming === 'schedule' && (
+                  <div className="mt-2 rounded-xl border border-slate-100 bg-slate-50/50 p-3 dark:border-navy-700 dark:bg-navy-900/50">
+                    <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1">Exact Send Date &amp; Time *</label>
+                    <input
+                      type="datetime-local"
+                      required={sendTiming === 'schedule'}
+                      value={editionForm.scheduledAt}
+                      min={toDatetimeLocalValue(new Date().toISOString())}
+                      onChange={(e) => setEditionForm({ ...editionForm, scheduledAt: e.target.value })}
+                      className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-xs outline-none focus:border-brand-500 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                    />
+                    <p className="mt-1.5 text-[10px] text-slate-400">
+                      This edition will be delivered automatically at this exact date and time (your local timezone).
+                    </p>
+                  </div>
+                )}
               </div>
               <div className="flex justify-end gap-3 pt-3">
                 <button
@@ -793,10 +978,12 @@ export default function Newsletter() {
                     <Loader2 className="animate-spin" size={14} />
                   ) : editingEditionId ? (
                     <Edit2 size={14} />
+                  ) : sendTiming === 'schedule' ? (
+                    <Clock size={14} />
                   ) : (
                     <Send size={14} />
                   )}
-                  {editingEditionId ? 'Update Broadcast' : 'Send Broadcast'}
+                  {editingEditionId ? 'Update Broadcast' : sendTiming === 'schedule' ? 'Schedule Broadcast' : 'Send Broadcast'}
                 </button>
               </div>
             </form>
