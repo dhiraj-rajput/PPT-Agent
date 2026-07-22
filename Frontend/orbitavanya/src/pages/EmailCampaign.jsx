@@ -39,7 +39,8 @@ const emptyForm = {
   timezone: 'America/Chicago',
   workingHoursOnly: false,
   senderEmail: 'prasannadhamal982005@gmail.com',
-  senderName: 'OrbitAvanya Outreach'
+  senderName: 'OrbitAvanya Outreach',
+  scheduleStart: ''
 };
 
 export default function EmailCampaign() {
@@ -210,6 +211,10 @@ export default function EmailCampaign() {
       setFormError('Recipient Email is required in Single Lead mode.');
       return;
     }
+    if (form.scheduleStart && new Date(form.scheduleStart).getTime() <= Date.now()) {
+      setFormError('Scheduled send time must be in the future.');
+      return;
+    }
     setCreating(true);
     try {
       let campaignBody = form.body;
@@ -221,6 +226,7 @@ export default function EmailCampaign() {
       const campaignData = {
         ...form,
         body: campaignBody,
+        scheduleStart: form.scheduleStart ? new Date(form.scheduleStart).toISOString() : null,
         attachmentPath: attachmentType !== 'none' ? attachedPath : '',
         attachmentFilename: attachmentType !== 'none' ? attachedFilename : ''
       };
@@ -600,11 +606,16 @@ export default function EmailCampaign() {
                   <td className="px-5 py-3.5 text-slate-400 dark:text-slate-500 font-mono text-xs">{c.campaignNumber ? `#${c.campaignNumber}` : '—'}</td>
                   <td className="px-5 py-3.5 font-semibold text-navy-900 dark:text-white">
                     <div>{c.name}</div>
-                    <div className="text-[10px] text-slate-400 font-normal mt-0.5 flex items-center gap-1.5">
+                    <div className="text-[10px] text-slate-400 font-normal mt-0.5 flex items-center gap-1.5 flex-wrap">
                       <span className="inline-flex items-center gap-0.5"><Globe size={10} /> {c.timezone}</span>
                       {c.workingHoursOnly && (
                         <span className="rounded bg-brand-500/10 px-1 py-0.5 text-[9px] font-bold text-brand-600 dark:text-brand-400">
                           9am-5pm limit
+                        </span>
+                      )}
+                      {c.scheduleStart && new Date(c.scheduleStart).getTime() > Date.now() && (
+                        <span className="inline-flex items-center gap-0.5 rounded bg-tuscan-sun-500/10 px-1 py-0.5 text-[9px] font-bold text-tuscan-sun-700 dark:text-tuscan-sun-400">
+                          <Clock size={9} /> {new Date(c.scheduleStart).toLocaleString()}
                         </span>
                       )}
                     </div>
@@ -1106,6 +1117,34 @@ export default function EmailCampaign() {
                     className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400 font-bold">
+                  Schedule Exact Send Time (Optional)
+                </label>
+                <div className="flex items-center gap-2">
+                  <Clock size={14} className="text-slate-400 shrink-0" />
+                  <input
+                    type="datetime-local"
+                    value={form.scheduleStart || ''}
+                    min={new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)}
+                    onChange={(e) => setForm({ ...form, scheduleStart: e.target.value })}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                  />
+                  {form.scheduleStart && (
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, scheduleStart: '' })}
+                      className="shrink-0 rounded-lg border border-slate-200 px-2.5 py-2 text-[10px] font-bold text-slate-500 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-300 dark:hover:bg-navy-800"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <p className="mt-1 text-[10px] text-slate-400">
+                  Leave blank to launch immediately. When set, no email in this campaign will go out before this exact date and time.
+                </p>
               </div>
 
               <div className="flex items-center gap-2 rounded-xl bg-slate-50/50 p-3.5 border border-slate-100 dark:border-navy-700 dark:bg-navy-900/50">

@@ -55,6 +55,7 @@ class CreateEditionBody(BaseModel):
     body: str
     imageUrl: Optional[str] = None
     sendNow: Optional[bool] = True
+    scheduledAt: Optional[str] = None
 
 
 def _format_newsletter(n: dict) -> dict:
@@ -107,6 +108,7 @@ def _format_edition(e: dict) -> dict:
         "imageUrl": e.get("imageUrl"),
         "status": e.get("status", "draft"),
         "sentAt": e.get("sentAt").isoformat() if hasattr(e.get("sentAt"), "isoformat") else None,
+        "scheduledAt": e.get("scheduledAt").isoformat() if hasattr(e.get("scheduledAt"), "isoformat") else None,
         "stats": {
             "sent": stats.get("sent", 0),
             "opened": stats.get("opened", 0),
@@ -437,13 +439,31 @@ async def _send_newsletter_background(
     subscribers = list(subs_col.find({"newsletterId": n_oid, "status": {"$ne": "unsubscribed"}}))
     sent_count = 0
 
-    # Header Image HTML if present
-    header_img_html = ""
+    newsletter_doc = newsletters_col.find_one({"_id": n_oid}, {"name": 1})
+    newsletter_name = (newsletter_doc or {}).get("name") or "OrbitAvanya Tech"
+
+    # Beautiful gradient banner. If a header image was uploaded, it's layered on
+    # top of the gradient card; otherwise the gradient + newsletter name/subject
+    # alone forms a polished banner so every edition looks branded.
     if image_url:
         img_url = f"{base_url}api/newsletters/images/{image_url}"
         header_img_html = (
-            f'<div style="text-align:center;margin-bottom:20px;">'
-            f'  <img src="{img_url}" alt="Newsletter Header Banner" style="max-width:100%;height:auto;border-radius:8px;display:block;margin:0 auto;" />'
+            f'<div style="background:linear-gradient(135deg,#1c151e 0%,#382a3c 45%,#236576 100%);'
+            f'border-radius:14px;padding:6px;margin-bottom:24px;box-shadow:0 8px 24px rgba(28,21,30,0.25);">'
+            f'  <img src="{img_url}" alt="Newsletter Header Banner" '
+            f'style="max-width:100%;height:auto;border-radius:10px;display:block;margin:0 auto;" />'
+            f'</div>'
+        )
+    else:
+        header_img_html = (
+            f'<div style="background:linear-gradient(135deg,#1c151e 0%,#533f5a 45%,#236576 100%);'
+            f'border-radius:14px;padding:32px 28px;margin-bottom:24px;text-align:center;'
+            f'box-shadow:0 8px 24px rgba(28,21,30,0.25);">'
+            f'  <div style="display:inline-block;width:40px;height:4px;background:#f7b708;border-radius:2px;margin-bottom:14px;"></div>'
+            f'  <p style="margin:0;color:#f9c639;font-size:11px;font-weight:700;letter-spacing:2px;'
+            f'text-transform:uppercase;font-family:sans-serif;">{newsletter_name}</p>'
+            f'  <h1 style="margin:10px 0 0;color:#ffffff;font-size:22px;font-weight:800;'
+            f'font-family:sans-serif;line-height:1.3;">{subject}</h1>'
             f'</div>'
         )
 
@@ -458,14 +478,21 @@ async def _send_newsletter_background(
         # 1. Rewrite HTML links for click tracking
         html_body, click_links = rewrite_links_for_tracking(body_text)
 
-        # 2. Append open tracking pixel & unsubscribe link in clean 600px wrapper
+        # 2. Append open tracking pixel & unsubscribe link in a polished card wrapper
         pixel = open_pixel_tag(tracking_id)
         body_with_unsub = (
-            f'<div style="max-width:600px;margin:0 auto;font-family:sans-serif;color:#334155;line-height:1.6;font-size:14px;">'
-            f"  {header_img_html}"
-            f"  <div style=\"padding:10px 0;\">{html_body}</div>"
-            f'  <hr style="border:none;border-top:1px solid #e2e8f0;margin:25px 0;" />'
-            f'  <p style="font-size:11px;color:#94a3b8;text-align:center;">To unsubscribe from this newsletter, <a href="{unsub_link}" style="color:#3b82f6;text-decoration:underline;">click here</a>.</p>'
+            f'<div style="background:#f1f5f9;padding:28px 12px;font-family:sans-serif;">'
+            f'  <div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:16px;'
+            f'overflow:hidden;box-shadow:0 4px 18px rgba(28,21,30,0.08);">'
+            f'    <div style="padding:20px 24px 4px;">{header_img_html}</div>'
+            f'    <div style="padding:4px 28px 24px;color:#334155;line-height:1.65;font-size:14px;">{html_body}</div>'
+            f'    <div style="background:#f8fafc;padding:18px 24px;border-top:1px solid #e2e8f0;">'
+            f'      <p style="margin:0;font-size:11px;color:#94a3b8;text-align:center;">'
+            f'You are receiving this because you subscribed to {newsletter_name}. '
+            f'<a href="{unsub_link}" style="color:#236576;text-decoration:underline;font-weight:600;">Unsubscribe</a>'
+            f'      </p>'
+            f'    </div>'
+            f'  </div>'
             f"</div>"
             f"{pixel}"
         )
@@ -551,21 +578,41 @@ async def create_edition(
 
     editions_col = get_collection("editions")
 
+    now = datetime.now(timezone.utc)
+    scheduled_dt: Optional[datetime] = None
+    if body.scheduledAt:
+        try:
+            scheduled_dt = datetime.fromisoformat(body.scheduledAt.replace("Z", "+00:00"))
+            if scheduled_dt.tzinfo is None:
+                scheduled_dt = scheduled_dt.replace(tzinfo=timezone.utc)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid scheduledAt timestamp format.")
+
+    is_scheduled = bool(scheduled_dt and scheduled_dt > now)
+
+    if is_scheduled:
+        status = "scheduled"
+    elif body.sendNow:
+        status = "sending"
+    else:
+        status = "draft"
+
     edition_doc = {
         "newsletterId": n_oid,
         "subject": body.subject.strip(),
         "body": body.body.strip(),
         "imageUrl": body.imageUrl.strip() if body.imageUrl else None,
-        "status": "sending" if body.sendNow else "draft",
-        "sentAt": datetime.now(timezone.utc) if body.sendNow else None,
+        "status": status,
+        "sentAt": now if status == "sending" else None,
+        "scheduledAt": scheduled_dt if is_scheduled else None,
         "stats": {"sent": 0, "opened": 0, "clicked": 0, "unsubscribed": 0},
         "createdBy": current_user["_id"],
-        "createdAt": datetime.now(timezone.utc),
+        "createdAt": now,
     }
     e_res = editions_col.insert_one(edition_doc)
     e_id = e_res.inserted_id
 
-    if body.sendNow:
+    if status == "sending":
         base_url = str(request.base_url)
         background_tasks.add_task(
             _send_newsletter_background,
@@ -597,6 +644,8 @@ class UpdateEditionBody(BaseModel):
     subject: str
     body: str
     imageUrl: Optional[str] = None
+    scheduledAt: Optional[str] = None
+    clearSchedule: Optional[bool] = False
 
 
 @router.put("/editions/{edition_id}")
@@ -619,15 +668,33 @@ def update_edition(
     if edition.get("createdBy") != current_user["_id"]:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    editions_col.update_one(
-        {"_id": e_oid},
-        {"$set": {
-            "subject": body.subject.strip(),
-            "body": body.body.strip(),
-            "imageUrl": body.imageUrl.strip() if body.imageUrl else None,
-            "updatedAt": datetime.now(timezone.utc)
-        }}
-    )
+    updates: Dict[str, Any] = {
+        "subject": body.subject.strip(),
+        "body": body.body.strip(),
+        "imageUrl": body.imageUrl.strip() if body.imageUrl else None,
+        "updatedAt": datetime.now(timezone.utc),
+    }
+
+    if body.clearSchedule:
+        updates["scheduledAt"] = None
+        if edition.get("status") == "scheduled":
+            updates["status"] = "draft"
+    elif body.scheduledAt:
+        try:
+            scheduled_dt = datetime.fromisoformat(body.scheduledAt.replace("Z", "+00:00"))
+            if scheduled_dt.tzinfo is None:
+                scheduled_dt = scheduled_dt.replace(tzinfo=timezone.utc)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid scheduledAt timestamp format.")
+
+        if scheduled_dt <= datetime.now(timezone.utc):
+            raise HTTPException(status_code=400, detail="scheduledAt must be in the future.")
+
+        updates["scheduledAt"] = scheduled_dt
+        if edition.get("status") in ("draft", "scheduled"):
+            updates["status"] = "scheduled"
+
+    editions_col.update_one({"_id": e_oid}, {"$set": updates})
     return {"status": "success"}
 
 

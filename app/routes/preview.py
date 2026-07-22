@@ -52,6 +52,7 @@ class CustomAnswersPayload(BaseModel):
     proposal_type: str = "Prime RFP Response"  # or Subcontract Response
     answers: List[QuestionResponse] = []
     custom_sections: Optional[List[OutlineSection]] = None
+    company_profile: Optional[dict] = None
 
 
 @router.get("/questions")
@@ -227,9 +228,11 @@ async def generate_proposal_outline(
 
     title = tender_info.get("title", "Government Opportunity")
     
-    company_col = get_collection("own_company_profile")
-    company_profile = company_col.find_one({}) or {}
-    company_context = company_profile.get("company_name", "Our Company")
+    company_profile = payload.company_profile
+    if not company_profile:
+        company_col = get_collection("own_company_profile")
+        company_profile = company_col.find_one({}) or {}
+    company_context = company_profile.get("name") or company_profile.get("company_name", "Our Company")
     
     try:
         client = get_ai_client()

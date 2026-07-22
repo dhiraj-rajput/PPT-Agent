@@ -33,6 +33,8 @@ DEFAULT_OWN_COMPANY = {
     "status": "Active",
     "certifications": ["SBA 8(a) Certified", "WOSB", "HUBZone", "ISO 27001"],
     "past_performance_count": 12,
+    "description": "Our company specializes in IT consulting, software development, cloud systems migration, and cyber security services.",
+    "sub_companies": [],
     "last_updated": datetime.now(timezone.utc).isoformat()
 }
 
@@ -256,12 +258,29 @@ async def send_company_email(body: SendCompanyEmailBody, current_user: dict = De
     return {"ok": True, "message": "Email sent successfully!"}
 
 
+def extract_keywords(description: str) -> list[str]:
+    if not description:
+        return []
+    words = re.findall(r"\b[a-zA-Z]{3,}\b", description.lower())
+    stop_words = {
+        "our", "company", "specializes", "in", "and", "the", "for", "with",
+        "services", "products", "related", "work", "we", "are", "provides",
+        "providing", "based", "solutions", "business", "clients", "customers",
+        "llp", "tech", "technology", "development", "systems", "design", "management",
+        "developing", "develop", "developer", "developers"
+    }
+    keywords = [w for w in words if w not in stop_words]
+    return list(dict.fromkeys(keywords))
+
+
 @router.get("")
 def get_companies(
     query: Optional[str] = None,
     size: Optional[str] = None,
     naics: Optional[str] = None,
     researched: Optional[str] = None,
+    match_company_description: Optional[bool] = False,
+    custom_description: Optional[str] = None,
     page: int = 1,
     limit: int = 20,
     current_user: dict = Depends(get_current_user),
@@ -302,6 +321,54 @@ def get_companies(
                 ]
             else:
                 filter_query.update(naics_condition)
+
+        # Check description filter
+        desc_to_match = ""
+        if custom_description:
+            desc_to_match = custom_description.strip()
+        elif match_company_description:
+            own_col = get_collection("own_company_profile")
+            profile = own_col.find_one({}, {"_id": 0}) or DEFAULT_OWN_COMPANY
+            desc_to_match = profile.get("description", "")
+
+        if desc_to_match:
+            keywords = extract_keywords(desc_to_match)
+            if keywords:
+                # 1. Match keywords on naics_codes collection first to find related numeric codes
+                naics_coll = get_collection("naics_codes")
+                naics_kw_conditions = []
+                for kw in keywords:
+                    naics_kw_conditions.append({"title": {"$regex": kw, "$options": "i"}})
+                    naics_kw_conditions.append({"description": {"$regex": kw, "$options": "i"}})
+                
+                matched_naics_codes = []
+                if naics_kw_conditions:
+                    naics_cursor = naics_coll.find({"$or": naics_kw_conditions}, {"code": 1})
+                    matched_naics_codes = [doc["code"] for doc in naics_cursor if "code" in doc]
+
+                desc_conditions = []
+                # 2. Filter companies whose primary_naics or secondary_naics matches those NAICS codes
+                if matched_naics_codes:
+                    desc_conditions.append({"primary_naics": {"$in": matched_naics_codes}})
+                    naics_regex = "|".join([re.escape(c) for c in matched_naics_codes])
+                    desc_conditions.append({"secondary_naics": {"$regex": naics_regex}})
+
+                # 3. Add keyword matches in company name and primary description (primary_naics_desc)
+                for kw in keywords:
+                    desc_conditions.append({"name": {"$regex": kw, "$options": "i"}})
+                    desc_conditions.append({"primary_naics_desc": {"$regex": kw, "$options": "i"}})
+
+                if desc_conditions:
+                    desc_condition = {"$or": desc_conditions}
+                    if "$or" in filter_query:
+                        filter_query["$and"] = [
+                            {"$or": filter_query.pop("$or")},
+                            desc_condition
+                        ]
+                    elif "$and" in filter_query:
+                        filter_query["$and"].append(desc_condition)
+                    else:
+                        filter_query.update(desc_condition)
 
         # Look up profiles and active tasks
         profiles_col = get_collection("company_profiles")

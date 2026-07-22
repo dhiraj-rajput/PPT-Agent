@@ -14,6 +14,36 @@ export default function Companies() {
   const [sizeFilter, setSizeFilter] = useState('All');
   const [naicsFilter, setNaicsFilter] = useState('All');
   const [naicsCodes, setNaicsCodes] = useState([]);
+
+  // Description filters states
+  const [matchCompanyDescription, setMatchCompanyDescription] = useState(false);
+  const [customDescription, setCustomDescription] = useState('');
+  const [ownCompanyProfile, setOwnCompanyProfile] = useState(null);
+  // Which entity (parent company or a subsidiary) to pull the description from
+  const [matchEntityId, setMatchEntityId] = useState('parent');
+
+  useEffect(() => {
+    api.getOwnCompanyProfile()
+      .then(data => setOwnCompanyProfile(data))
+      .catch(err => console.error("Error loading own company profile:", err));
+  }, []);
+
+  // Build the list of selectable entities: the parent/main company plus any registered subsidiaries
+  const entityOptions = ownCompanyProfile
+    ? [
+        { id: 'parent', name: ownCompanyProfile.name || 'Main Company', description: ownCompanyProfile.description, isParent: true },
+        ...(ownCompanyProfile.sub_companies || []).map((sub, idx) => ({
+          id: String(idx),
+          name: sub.name,
+          description: sub.description,
+          isParent: false,
+        })),
+      ]
+    : [];
+
+  function getSelectedEntity() {
+    return entityOptions.find((ent) => ent.id === matchEntityId) || entityOptions[0];
+  }
   
   // Data States
   const [allCompanies, setAllCompanies] = useState([]);
@@ -72,6 +102,8 @@ export default function Companies() {
     if (query) params.query = query;
     if (sizeFilter !== 'All') params.size = sizeFilter;
     if (naicsFilter !== 'All') params.naics = naicsFilter;
+    if (matchCompanyDescription) params.match_company_description = 'true';
+    if (customDescription) params.custom_description = customDescription;
 
     api.getCompanies(params)
       .then((data) => {
@@ -90,12 +122,12 @@ export default function Companies() {
 
   useEffect(() => {
     fetchCompanies();
-  }, [currentPage, query, sizeFilter, naicsFilter]);
+  }, [currentPage, query, sizeFilter, naicsFilter, matchCompanyDescription, customDescription]);
 
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [query, sizeFilter, naicsFilter]);
+  }, [query, sizeFilter, naicsFilter, matchCompanyDescription, customDescription]);
 
   const pageCount = Math.ceil(totalCompanies / itemsPerPage);
 
@@ -181,7 +213,7 @@ export default function Companies() {
       />
 
       {/* Filters Bar */}
-      <Card className="!p-4">
+      <Card className="!p-4 space-y-3">
         <div className="flex flex-wrap items-center gap-3">
           {/* Search Bar */}
           <div className="flex flex-1 min-w-[240px] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 dark:border-navy-700 dark:bg-navy-800">
@@ -216,6 +248,75 @@ export default function Companies() {
               <option key={code} value={code}>{code}</option>
             ))}
           </select>
+        </div>
+
+        {/* Description Keyword Search Row */}
+        <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-100 dark:border-navy-800">
+          <div className="flex flex-1 min-w-[280px] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 dark:border-navy-700 dark:bg-navy-800">
+            <FileText size={16} className="text-slate-400 dark:text-slate-500" />
+            <input
+              value={customDescription}
+              onChange={(e) => {
+                setCustomDescription(e.target.value);
+                if (matchCompanyDescription) setMatchCompanyDescription(false);
+              }}
+              placeholder="Search by description keywords (e.g. cloud security, systems implementation)..."
+              className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-white"
+            />
+          </div>
+
+          {/* Entity selector: choose whether to match against the parent/main company or a subsidiary */}
+          {entityOptions.length > 1 && (
+            <select
+              value={matchEntityId}
+              onChange={(e) => {
+                setMatchEntityId(e.target.value);
+                // If matching is currently active, refresh the description to the newly selected entity
+                if (matchCompanyDescription) {
+                  const ent = entityOptions.find((opt) => opt.id === e.target.value);
+                  setCustomDescription(ent?.description || '');
+                }
+              }}
+              className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-600 outline-none focus:border-brand-500 dark:border-navy-700 dark:bg-navy-800 dark:text-slate-300 cursor-pointer"
+              title="Choose which company entity's description to match"
+            >
+              {entityOptions.map((ent) => (
+                <option key={ent.id} value={ent.id}>
+                  {ent.name} {ent.isParent ? '(Main Company)' : '(Subsidiary)'}
+                </option>
+              ))}
+            </select>
+          )}
+
+          <button
+            onClick={() => {
+              const entity = getSelectedEntity();
+              if (!entity?.description) {
+                alert(
+                  entity && !entity.isParent
+                    ? `No description registered for ${entity.name}. Go to the Proposal Builder page and add a description for this subsidiary first!`
+                    : "No company description registered. Go to the Proposal Builder page and register a description of what your company does first!"
+                );
+                return;
+              }
+              const nextVal = !matchCompanyDescription;
+              setMatchCompanyDescription(nextVal);
+              if (nextVal) {
+                setCustomDescription(entity.description);
+              } else {
+                setCustomDescription('');
+              }
+            }}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold border transition-all ${
+              matchCompanyDescription
+                ? 'bg-brand-500 text-white border-brand-500 shadow-md shadow-brand-500/20'
+                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-navy-900 dark:text-slate-400 dark:border-navy-800 dark:hover:bg-navy-800'
+            }`}
+            title="Automatically matches companies related to the selected entity's profile description"
+          >
+            <SlidersHorizontal size={14} />
+            Match {entityOptions.length > 1 ? getSelectedEntity()?.name || 'My Company' : 'My Company'} Description
+          </button>
         </div>
       </Card>
 

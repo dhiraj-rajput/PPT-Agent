@@ -34,6 +34,70 @@ export default function ProposalBuilder() {
   const [inventoryMode, setInventoryMode] = useState('document');
   const [inventoryForm, setInventoryForm] = useState({});
 
+  // Sub-companies states
+  const [showSubCompanyModal, setShowSubCompanyModal] = useState(false);
+  const [subCompanyEditingIndex, setSubCompanyEditingIndex] = useState(null);
+  const [subCompanyForm, setSubCompanyForm] = useState({
+    name: '',
+    description: '',
+    uei: '',
+    cage_code: '',
+    primary_naics: '',
+    primary_naics_desc: '',
+    city: '',
+    state: '',
+    country: 'USA',
+    email: '',
+    phone: '',
+    size: 'Small',
+    certifications: ''
+  });
+
+  const handleSaveSubCompany = async () => {
+    if (!subCompanyForm.name || !subCompanyForm.uei) {
+      alert("Name and UEI are required for the sub-company");
+      return;
+    }
+    const updatedSubCompanies = [...(companyProfile?.sub_companies || [])];
+    const subCompanyData = {
+      ...subCompanyForm,
+      certifications: typeof subCompanyForm.certifications === 'string'
+        ? subCompanyForm.certifications.split(',').map(s => s.trim()).filter(Boolean)
+        : subCompanyForm.certifications
+    };
+
+    if (subCompanyEditingIndex !== null) {
+      updatedSubCompanies[subCompanyEditingIndex] = subCompanyData;
+    } else {
+      updatedSubCompanies.push(subCompanyData);
+    }
+
+    try {
+      await api.updateOwnCompanyProfile({
+        ...companyProfile,
+        sub_companies: updatedSubCompanies
+      });
+      fetchOwnCompany();
+      setShowSubCompanyModal(false);
+    } catch (err) {
+      alert("Failed to save sub-company: " + err.message);
+    }
+  };
+
+  const handleDeleteSubCompany = async (index) => {
+    if (!window.confirm("Are you sure you want to delete this sub-company?")) return;
+    const updatedSubCompanies = (companyProfile?.sub_companies || []).filter((_, i) => i !== index);
+    try {
+      await api.updateOwnCompanyProfile({
+        ...companyProfile,
+        sub_companies: updatedSubCompanies
+      });
+      fetchOwnCompany();
+    } catch (err) {
+      alert("Failed to delete sub-company: " + err.message);
+    }
+  };
+
   const handleDownload = async (e, filename) => {
     e.preventDefault();
     try {
@@ -378,10 +442,11 @@ export default function ProposalBuilder() {
                 onClick={() => {
                   setEditForm({
                     name: companyProfile?.name || 'OrbitAvanya Tech LLP',
+                    description: companyProfile?.description || '',
                     uei: companyProfile?.uei || 'ORBIT1234567',
                     cage_code: companyProfile?.cage_code || '8A9B0',
                     primary_naics: companyProfile?.primary_naics || '541512',
-                    primary_naics_desc: companyProfile?.primary_naics_desc || 'Computer Systems Design',
+                    primary_naics_desc: companyProfile?.primary_naics_desc || 'Computer Systems Design Services',
                     city: companyProfile?.city || 'Dallas',
                     state: companyProfile?.state || 'TX',
                     country: companyProfile?.country || 'USA',
@@ -452,6 +517,14 @@ export default function ProposalBuilder() {
                   </div>
                 </div>
 
+                {/* Company Description Block */}
+                <div className="mt-5 border-t border-slate-100 dark:border-navy-800 pt-5">
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1">Company Description / Capabilities</p>
+                  <p className="text-sm font-medium text-slate-750 dark:text-slate-300 bg-slate-50 dark:bg-navy-950/40 p-3 rounded-xl border border-slate-200 dark:border-navy-800">
+                    {companyProfile.description || 'No company description registered yet. Update your profile to add a description.'}
+                  </p>
+                </div>
+
                 <div className="mt-6 flex flex-wrap gap-x-8 gap-y-4 pt-6 border-t border-slate-100 dark:border-navy-800">
                   {companyProfile.certifications?.length > 0 && (
                     <div>
@@ -491,6 +564,118 @@ export default function ProposalBuilder() {
               </div>
             )}
           </Card>
+
+          {/* Sub-Companies Section */}
+          <section className="mt-6 border-t border-slate-200 dark:border-navy-800 pt-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-navy-900 dark:text-white flex items-center gap-2">
+                <Building2 className="text-brand-500" size={18} />
+                Sub-Companies / Subsidiaries
+              </h3>
+              <button
+                onClick={() => {
+                  setSubCompanyForm({
+                    name: '',
+                    uei: '',
+                    cage_code: '',
+                    primary_naics: '',
+                    primary_naics_desc: '',
+                    city: '',
+                    state: '',
+                    country: 'USA',
+                    email: '',
+                    phone: '',
+                    size: 'Small',
+                    certifications: '',
+                    description: ''
+                  });
+                  setSubCompanyEditingIndex(null);
+                  setShowSubCompanyModal(true);
+                }}
+                className="flex items-center gap-1.5 rounded-xl bg-brand-50 hover:bg-brand-100 px-4 py-2 text-xs font-bold text-brand-700 dark:bg-brand-950/40 dark:text-brand-400 transition-colors"
+              >
+                <Plus size={14} /> Add Sub-Company
+              </button>
+            </div>
+
+            {(companyProfile?.sub_companies || []).length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {companyProfile.sub_companies.map((sub, idx) => (
+                  <div key={idx} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft dark:border-navy-800 dark:bg-navy-900 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-start justify-between gap-4 mb-3">
+                        <div>
+                          <h4 className="text-sm font-bold text-navy-900 dark:text-white">{sub.name}</h4>
+                          <span className="mt-1 inline-flex items-center rounded-full bg-indigo-50 text-indigo-700 dark:bg-indigo-950/20 dark:text-indigo-400 px-2 py-0.5 text-[10px] font-semibold">
+                            Sub-Company Entity
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => {
+                              setSubCompanyForm({
+                                name: sub.name || '',
+                                uei: sub.uei || '',
+                                cage_code: sub.cage_code || '',
+                                primary_naics: sub.primary_naics || '',
+                                primary_naics_desc: sub.primary_naics_desc || '',
+                                city: sub.city || '',
+                                state: sub.state || '',
+                                country: sub.country || 'USA',
+                                email: sub.email || '',
+                                phone: sub.phone || '',
+                                size: sub.size || 'Small',
+                                certifications: Array.isArray(sub.certifications) ? sub.certifications.join(', ') : sub.certifications || '',
+                                description: sub.description || ''
+                              });
+                              setSubCompanyEditingIndex(idx);
+                              setShowSubCompanyModal(true);
+                            }}
+                            className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-navy-900 dark:hover:bg-navy-800 dark:hover:text-white text-xs font-semibold px-2 py-1 border border-slate-200 dark:border-navy-700"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteSubCompany(idx)}
+                            className="rounded-lg p-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-xs font-semibold px-2 py-1 border border-rose-200 dark:border-rose-900/30"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 text-xs text-slate-500 dark:text-slate-400">
+                        <div>
+                          <span className="font-semibold text-slate-400 mr-1">UEI:</span> {sub.uei}
+                        </div>
+                        <div>
+                          <span className="font-semibold text-slate-400 mr-1">CAGE:</span> {sub.cage_code || 'N/A'}
+                        </div>
+                        <div>
+                          <span className="font-semibold text-slate-400 mr-1">NAICS:</span> {sub.primary_naics || 'N/A'}
+                        </div>
+                        <div>
+                          <span className="font-semibold text-slate-400 mr-1">Location:</span> {sub.state || 'N/A'}
+                        </div>
+                      </div>
+
+                      {sub.description && (
+                        <p className="mt-3 text-xs text-slate-600 dark:text-slate-400 line-clamp-2 bg-slate-50 dark:bg-navy-950 p-2 rounded-lg">
+                          {sub.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-8 text-center text-slate-400 dark:text-slate-500 border-2 border-dashed border-slate-200 dark:border-navy-800 rounded-2xl">
+                <Building2 size={24} className="mb-2 text-slate-300" />
+                <p className="text-xs font-semibold">No sub-companies added yet.</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">Add sub-entities to generate custom proposals for them.</p>
+              </div>
+            )}
+          </section>
         </section>
 
         {/* SECTION 2: RFP & Proposal Drafts */}
@@ -772,14 +957,23 @@ export default function ProposalBuilder() {
             </div>
             <div className="p-5">
               <div className="grid grid-cols-2 gap-4">
-                {['name', 'uei', 'cage_code', 'primary_naics', 'state', 'email', 'phone', 'size', 'certifications'].map(field => (
-                  <div key={field} className={field === 'certifications' || field === 'name' ? 'col-span-2' : ''}>
+                {['name', 'description', 'uei', 'cage_code', 'primary_naics', 'primary_naics_desc', 'state', 'email', 'phone', 'size', 'certifications'].map(field => (
+                  <div key={field} className={field === 'certifications' || field === 'name' || field === 'description' || field === 'primary_naics_desc' ? 'col-span-2' : ''}>
                     <label className="mb-1 block text-[10px] uppercase tracking-wide text-slate-500 font-semibold">{field.replace('_', ' ')} {['name', 'uei'].includes(field) ? <span className="text-rose-500 font-extrabold ml-0.5">*</span> : <span className="text-[10px] text-slate-400 font-normal ml-1 flex-inline normal-case tracking-normal">(Optional)</span>}</label>
-                    <input
-                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
-                      value={editForm[field] || ''}
-                      onChange={e => setEditForm({ ...editForm, [field]: e.target.value })}
-                    />
+                    {field === 'description' ? (
+                      <textarea
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white h-24"
+                        value={editForm[field] || ''}
+                        onChange={e => setEditForm({ ...editForm, [field]: e.target.value })}
+                        placeholder="Describe what your company does to auto-match NAICS codes and find related companies..."
+                      />
+                    ) : (
+                      <input
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                        value={editForm[field] || ''}
+                        onChange={e => setEditForm({ ...editForm, [field]: e.target.value })}
+                      />
+                    )}
                   </div>
                 ))}
               </div>
@@ -974,6 +1168,63 @@ export default function ProposalBuilder() {
                 className="rounded-xl bg-brand-500 px-4 py-2 text-xs font-bold text-white hover:bg-brand-600 flex items-center gap-1.5"
               >
                 <Database size={14} /> Add Document
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Sub Company Modal */}
+      {showSubCompanyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/70 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-soft dark:bg-navy-800 border border-slate-100 dark:border-navy-700 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-navy-700">
+              <h3 className="text-sm font-bold text-navy-900 dark:text-white">
+                {subCompanyEditingIndex !== null ? 'Edit Sub-Company' : 'Add Sub-Company'}
+              </h3>
+              <button
+                onClick={() => setShowSubCompanyModal(false)}
+                className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-navy-900 dark:hover:bg-navy-700 dark:hover:text-white"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5 max-h-[60vh] overflow-y-auto">
+              <div className="grid grid-cols-2 gap-4">
+                {['name', 'description', 'uei', 'cage_code', 'primary_naics', 'primary_naics_desc', 'state', 'email', 'phone', 'size', 'certifications'].map(field => (
+                  <div key={field} className={field === 'certifications' || field === 'name' || field === 'description' || field === 'primary_naics_desc' ? 'col-span-2' : ''}>
+                    <label className="mb-1 block text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
+                      {field.replace('_', ' ')} {['name', 'uei'].includes(field) ? <span className="text-rose-500 font-extrabold ml-0.5">*</span> : <span className="text-[10px] text-slate-400 font-normal ml-1 flex-inline normal-case tracking-normal">(Optional)</span>}
+                    </label>
+                    {field === 'description' ? (
+                      <textarea
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white h-20"
+                        value={subCompanyForm[field] || ''}
+                        onChange={e => setSubCompanyForm({ ...subCompanyForm, [field]: e.target.value })}
+                        placeholder="Describe what this sub-company does..."
+                      />
+                    ) : (
+                      <input
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                        value={subCompanyForm[field] || ''}
+                        onChange={e => setSubCompanyForm({ ...subCompanyForm, [field]: e.target.value })}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 border-t border-slate-100 px-5 py-4 dark:border-navy-700 bg-slate-50 dark:bg-navy-900/50">
+              <button
+                onClick={() => setShowSubCompanyModal(false)}
+                className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-navy-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveSubCompany}
+                className="rounded-xl bg-brand-500 px-4 py-2 text-xs font-bold text-white hover:bg-brand-600"
+              >
+                Save Sub-Company
               </button>
             </div>
           </div>

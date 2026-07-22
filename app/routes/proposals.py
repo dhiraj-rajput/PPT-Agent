@@ -296,6 +296,24 @@ def trigger_proposal_generation(
     winner = payload.get("winner")
     tender_title = payload.get("tender_title") or "Tender Proposal"
 
+    # Write selected company profile to active_bidding_company.json if provided
+    wizard_data = payload.get("wizard_data")
+    if wizard_data and "company_profile" in wizard_data:
+        company_profile = wizard_data["company_profile"]
+        private_dir = PROJECT_ROOT / "private"
+        private_dir.mkdir(parents=True, exist_ok=True)
+        import json
+        with open(private_dir / "active_bidding_company.json", "w", encoding="utf-8") as f:
+            json.dump(company_profile, f, indent=2)
+    else:
+        # Remove active bidding company profile to fallback to default
+        active_bidding_path = PROJECT_ROOT / "private" / "active_bidding_company.json"
+        if active_bidding_path.exists():
+            try:
+                active_bidding_path.unlink()
+            except Exception:
+                pass
+
     if mode in ("prime", "subcontract", "reference") and not solicitation:
         raise HTTPException(status_code=400, detail="solicitation number is required for this mode")
     if mode in ("subcontract", "partnership") and not winner:
