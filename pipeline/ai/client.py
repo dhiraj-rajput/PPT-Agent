@@ -90,11 +90,32 @@ class OllamaAIClient:
         self.host: str = getattr(_settings, "ollama_host", "") or ""
         self.api_key: str = getattr(_settings, "OLLAMA_API_KEY", "") or ""
         self.temperature: float = float(getattr(_settings, "OLLAMA_TEMPERATURE", 0.1) or 0.1)
-        self.timeout: float = 600.0  # 10 minute timeout for Codespaces remote LLM
+        # Was hardcoded to 600.0 regardless of OLLAMA_TIMEOUT in .env — that setting
+        # was silently ignored. Now actually reads it (still defaults to 600s).
+        self.timeout: float = float(getattr(_settings, "OLLAMA_TIMEOUT", 600) or 600)
 
         raw_fallbacks = getattr(_settings, "OLLAMA_MODEL_FALLBACKS", "") or ""
         parsed_fallbacks = [m.strip() for m in raw_fallbacks.split(",") if m.strip()]
         self.fallback_models: List[str] = parsed_fallbacks or list(self.DEFAULT_FALLBACKS)
+
+    def _is_direct_cloud_host(self) -> bool:
+        """True when self.host points straight at ollama.com (no local Ollama
+        daemon in between — which is what happens whenever OLLAMA_HOST is left
+        blank but OLLAMA_API_KEY is set, since ollama_host then resolves to
+        "https://ollama.com" itself)."""
+        return bool(self.host) and "ollama.com" in self.host
+
+    def _normalize_model_for_host(self, model: str) -> str:
+        """The '-cloud' suffix (e.g. 'gemma4:31b-cloud') is a *local-daemon*
+        routing convention: it tells a locally-running Ollama to proxy that
+        request to Ollama Cloud. When we're calling https://ollama.com
+        directly — no local daemon involved — the direct API already only
+        serves cloud models and expects the bare id ('gemma4:31b'), so a
+        '-cloud' suffixed name 404s. This was the actual reason the
+        configured cloud Gemma model wasn't responding."""
+        if self._is_direct_cloud_host() and model.endswith("-cloud"):
+            return model[: -len("-cloud")]
+        return model
 
     def ping_ollama(self) -> bool:
         """Check if Ollama is available and responding. Returns True if healthy."""
@@ -266,6 +287,7 @@ class OllamaAIClient:
     # ------------------------------------------------------------------
 
     def _call_ollama(self, messages: List[Dict[str, str]], model: str, json_mode: bool) -> str:
+        model = self._normalize_model_for_host(model)
         client_kwargs: Dict[str, Any] = {"timeout": self.timeout}
         if self.host:
             client_kwargs["host"] = self.host
@@ -305,9 +327,10 @@ class OllamaAIClient:
         if not api_key:
             raise ValueError("GEMINI_API_KEY is not set.")
 
-        # 2.0-flash/2.0-flash-lite were retired June 1, 2026 and 1.5-flash is fully
-        # shut down — kept updated here (July 2026) with "flash-latest" first since
-        # it's an auto-updating alias that survives Google's next model migration.
+        # gemini-2.0-flash / gemini-2.0-flash-lite were retired June 1, 2026, and the
+        # 1.5 family is fully shut down — both 404 if tried. gemini-flash-latest is
+        # an auto-updating alias (survives Google's next migration too), so it goes
+        # first; gemini-3.5-flash and gemini-3.1-flash-lite are named as a backstop.
         gemini_models = ["gemini-flash-latest", "gemini-3.5-flash", "gemini-3.1-flash-lite"]
         
         last_error = None
@@ -381,11 +404,22 @@ class OllamaAIClient:
     def _call_openrouter(self, messages: List[Dict[str, str]], json_mode: bool) -> str:
         import httpx
         api_key = getattr(self._settings, "OPENROUTER_API_KEY", "")
-        model = getattr(self._settings, "OPENROUTER_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free")
         base_url = getattr(self._settings, "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
         
         if not api_key:
             raise ValueError("OPENROUTER_API_KEY is not set.")
+
+        # Primary model + fallback chain.
+        # nvidia/nemotron frequently unavailable; google/gemma-3-27b-it:free and
+        # llama-3.3-70b are more consistently online for structured JSON output.
+        primary_model = getattr(self._settings, "OPENROUTER_MODEL", "google/gemma-3-27b-it:free")
+        raw_fallbacks = getattr(self._settings, "OPENROUTER_MODEL_FALLBACKS", "") or ""
+        fallback_models = [m.strip() for m in raw_fallbacks.split(",") if m.strip()] or [
+            "meta-llama/llama-3.3-70b-instruct:free",
+            "mistralai/mistral-7b-instruct:free",
+            "openrouter/auto",
+        ]
+        models_to_try = [primary_model] + [m for m in fallback_models if m != primary_model]
 
         referer = getattr(self._settings, "CLIENT_URL", "http://localhost:5173")
         headers = {
@@ -395,52 +429,168 @@ class OllamaAIClient:
             "X-Title": "OrbitAvanya",
         }
 
-        payload = {
-            "model": model,
-            "messages": messages,
-            "temperature": self.temperature,
-        }
-        if json_mode:
-            payload["response_format"] = {"type": "json_object"}
+        last_error: Exception | None = None
+        for model in models_to_try:
+            payload = {
+                "model": model,
+                "messages": messages,
+                "temperature": self.temperature,
+            }
+            if json_mode:
+                payload["response_format"] = {"type": "json_object"}
 
-        logger.info(f"[OpenRouter Fallback] -> Calling OpenRouter ({model})...")
+            logger.info(f"[OpenRouter] -> Calling OpenRouter ({model})...")
 
-        with httpx.Client(timeout=self.timeout) as client:
-            resp = client.post(f"{base_url}/chat/completions", json=payload, headers=headers)
+            try:
+                with httpx.Client(timeout=self.timeout) as client:
+                    resp = client.post(f"{base_url}/chat/completions", json=payload, headers=headers)
 
-        if resp.status_code == 429:
-            raise RateLimitError(f"OpenRouter ({model}) rate limited (429).")
-        if not resp.is_success:
-            raise ValueError(f"OpenRouter ({model}) returned {resp.status_code}: {resp.text}")
+                if resp.status_code == 429:
+                    raise RateLimitError(f"OpenRouter ({model}) rate limited (429).")
+                if resp.status_code == 503 or resp.status_code == 404:
+                    # Model unavailable or not found — try next
+                    logger.warning(f"[OpenRouter] Model {model} returned {resp.status_code} — trying next.")
+                    last_error = ValueError(f"OpenRouter ({model}) returned {resp.status_code}")
+                    continue
+                if not resp.is_success:
+                    raise ValueError(f"OpenRouter ({model}) returned {resp.status_code}: {resp.text}")
 
-        res_data = resp.json()
-        choices = res_data.get("choices", [])
-        if not choices:
-            raise ValueError(f"No choices returned from OpenRouter ({model}).")
-        
-        content = choices[0]["message"]["content"]
-        if not content:
-            raise ValueError(f"OpenRouter ({model}) returned an empty response.")
-        return str(content)
+                res_data = resp.json()
+                choices = res_data.get("choices", [])
+                if not choices:
+                    raise ValueError(f"No choices returned from OpenRouter ({model}).")
+                
+                content = choices[0]["message"]["content"]
+                if not content:
+                    raise ValueError(f"OpenRouter ({model}) returned an empty response.")
+                return str(content)
+
+            except RateLimitError:
+                raise  # Propagate rate limit immediately
+            except Exception as exc:
+                last_error = exc
+                logger.warning(f"[OpenRouter] Model {model} failed: {exc}. Trying next model...")
+                continue
+
+        raise last_error or ValueError("All OpenRouter models failed.")
 
     def _parse_json_from_response(self, text: str) -> Dict[str, Any]:
+        """Robustly parse a JSON response from an LLM.
+        
+        Handles common LLM output quirks:
+        - Markdown code fences (```json ... ```)
+        - Trailing commas in objects/arrays
+        - Single-line JavaScript-style comments (// ...)
+        - Leading/trailing whitespace and newlines
+        - Partial JSON wrapped in extra text
+        - Unescaped double quotes inside string values
+        """
         text = text.strip()
+        
+        # Strip markdown code fences
         fenced = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
         if fenced:
             text = fenced.group(1).strip()
+        
+        # Remove JavaScript-style single-line comments (// ...)
+        text = re.sub(r"//[^\n]*\n", "\n", text)
+        
+        # Remove trailing commas before } or ] (common LLM mistake)
+        text = re.sub(r",\s*([}\]])", r"\1", text)
+        
+        # Sanitize literal unescaped control characters in JSON strings
+        text_clean = re.sub(r"[\x00-\x08\x0b-\x1f]", " ", text)
+
         try:
-            parsed = json.loads(text)
-        except json.JSONDecodeError:
-            match = re.search(r"(\{.*\}|\[.*\])", text, re.DOTALL)
-            if not match:
-                raise ValueError(f"No JSON found in AI response. First 500 chars: {text[:500]}")
-            parsed = json.loads(match.group(1))
+            parsed = json.loads(text_clean, strict=False)
+        except json.JSONDecodeError as exc:
+            # 1. Try json_repair library
+            try:
+                import json_repair
+                repaired_str = json_repair.repair_json(text_clean, return_objects=False)
+                parsed = json.loads(repaired_str, strict=False)
+            except Exception:
+                try:
+                    # 2. Try escaping inner quotes and regex fixing
+                    repaired = self._escape_inner_quotes(text_clean)
+                    parsed = json.loads(repaired, strict=False)
+                except Exception:
+                    # 3. Try to extract the first JSON object or array from the text
+                    match = re.search(r"(\{.*\}|\[.*\])", text_clean, re.DOTALL)
+                    if not match:
+                        raise ValueError(f"No JSON found in AI response. First 500 chars: {text[:500]}") from exc
+                    try:
+                        parsed = json.loads(match.group(1), strict=False)
+                    except json.JSONDecodeError:
+                        try:
+                            import json_repair
+                            parsed = json_repair.repair_json(match.group(1), return_objects=True)
+                        except Exception as inner_exc:
+                            raise ValueError(f"Extracted JSON is malformed: {inner_exc}. First 500 chars: {text[:500]}") from exc
+        
         # Wrap arrays in a dict for backwards compatibility
         if isinstance(parsed, list):
             return {"items": parsed}
         if not isinstance(parsed, dict):
             raise ValueError(f"AI response must be a JSON object or array, got {type(parsed).__name__}.")
         return parsed
+
+    def _escape_inner_quotes(self, json_str: str) -> str:
+        """Resiliently escape unescaped double quotes inside JSON string values.
+        
+        Boundary quotes are double quotes preceded or followed by JSON delimiters
+        (e.g. {, }, [, ], :, ,). Non-boundary quotes inside string values are escaped.
+        """
+        result = []
+        i = 0
+        n = len(json_str)
+        while i < n:
+            char = json_str[i]
+            if char == '"':
+                # Check if this quote is already escaped
+                is_escaped = False
+                k = i - 1
+                while k >= 0 and json_str[k] == '\\':
+                    is_escaped = not is_escaped
+                    k -= 1
+                
+                if not is_escaped:
+                    # Find previous non-whitespace char
+                    left_char = ""
+                    k = i - 1
+                    while k >= 0:
+                        if not json_str[k].isspace():
+                            left_char = json_str[k]
+                            break
+                        k -= 1
+                    
+                    # Find next non-whitespace char
+                    right_char = ""
+                    k = i + 1
+                    while k < n:
+                        if not json_str[k].isspace():
+                            right_char = json_str[k]
+                            break
+                        k += 1
+                    
+                    # A quote is a JSON delimiter if:
+                    # - left_char in ('{', '[', ',', ':') OR
+                    # - right_char in ('}', ']', ',', ':') OR
+                    # - start/end of the string
+                    is_delimiter = (
+                        left_char in ('{', '[', ',', ':') or
+                        right_char in ('}', ']', ',', ':') or
+                        left_char == "" or
+                        right_char == ""
+                    )
+                    
+                    if not is_delimiter:
+                        result.append('\\"')
+                        i += 1
+                        continue
+            result.append(char)
+            i += 1
+        return "".join(result)
 
 
 _client_singleton: Optional[OllamaAIClient] = None

@@ -49,6 +49,7 @@ async function _request(method, path, body, opts = {}) {
 const get = (path, opts) => _request('GET', path, undefined, opts);
 const post = (path, body, opts) => _request('POST', path, body, opts);
 const patch = (path, body, opts) => _request('PATCH', path, body, opts);
+const put = (path, body, opts) => _request('PUT', path, body, opts);
 const del = (path, opts) => _request('DELETE', path, undefined, opts);
 
 // ---------------------------------------------------------------------------
@@ -333,6 +334,12 @@ export const api = {
   async getReports() {
     return get('/api/reports');
   },
+  async updateReportStatus(filename, status) {
+    return patch(`/api/reports/${encodeURIComponent(filename)}/status`, { status });
+  },
+  async sendReportEmail(payload) {
+    return post('/api/reports/send-email', payload);
+  },
   async downloadReport(filename) {
     const token = localStorage.getItem(TOKEN_KEY);
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
@@ -497,6 +504,25 @@ export const api = {
     return get('/api/health');
   },
 
+  // ---------- Generic request helper ----------
+  async request(path, opts = {}) {
+    const method = opts.method || 'GET';
+    let body = opts.body;
+    if (body && typeof body === 'string') {
+      try { body = JSON.parse(body); } catch {}
+    }
+    return _request(method, path, body, opts);
+  },
+
+  // ---------- Preview / Wizard endpoints ----------
+  async getPreviewQuestions(params = {}) {
+    const q = new URLSearchParams(params).toString();
+    return get(`/api/preview/questions${q ? `?${q}` : ''}`);
+  },
+  async getPreviewOutline(payload) {
+    return post('/api/preview/outline', payload);
+  },
+
   // ---------- WebSocket Helper ----------
   getWebSocketUrl(path) {
     const url = new URL(path, BASE_URL);
@@ -530,14 +556,11 @@ export const api = {
 
   // Settings page — change password via OTP flow (same as change-password route)
   async requestChangePasswordOtp() {
-    // The settings page re-uses the /forgot-password flow seeded with the current user's email.
-    // We get the current user first, then request a reset OTP.
     const { user } = await this.me();
     return post('/api/auth/forgot-password', { email: user.email });
   },
   async verifyChangePasswordOtp(otp) {
     const { user } = await this.me();
-    // Use reset-password purpose to get an action token
     const result = await post('/api/auth/verify-otp', { email: user.email, otp, purpose: 'reset-password' });
     return { changeToken: result.actionToken };
   },

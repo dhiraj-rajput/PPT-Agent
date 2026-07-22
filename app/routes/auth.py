@@ -19,8 +19,8 @@ Endpoints:
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
-import os
 import re
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -39,7 +39,7 @@ from app.core.auth import (
     verify_action_token,
 )
 from app.core.mailer import send_otp_email, send_invite_email
-from utils.db_client import get_collection
+from utils.db_client import get_async_collection
 
 from config.settings import settings
 
@@ -84,7 +84,6 @@ def _is_valid_phone(phone: str) -> bool:
 
 
 def _generate_otp() -> str:
-    from config.settings import settings
     length = getattr(settings, "OTP_LENGTH", 6)
     if not isinstance(length, int) or length < 4 or length > 10:
         length = 6
@@ -118,11 +117,11 @@ def _to_public_user(u: Optional[dict]) -> dict:
 
 
 async def _send_otp_for_user(user_id: str, email: str, purpose: str) -> None:
-    """Generate, store, and email an OTP for the given purpose."""
-    otps_col = get_collection("otps")
+    """Generate, store, and email an OTP for the given purpose via Motor."""
+    otps_col = get_async_collection("otps")
     otp = _generate_otp()
-    otps_col.delete_many({"userId": str(user_id), "purpose": purpose})
-    otps_col.insert_one({
+    await otps_col.delete_many({"userId": str(user_id), "purpose": purpose})
+    await otps_col.insert_one({
         "userId": str(user_id),
         "purpose": purpose,
         "otpHash": _hash_otp(otp),
@@ -132,7 +131,6 @@ async def _send_otp_for_user(user_id: str, email: str, purpose: str) -> None:
     })
     if settings.DEBUG_OTP:
         print(f"\n[DEVELOPMENT] Generated OTP for {email} ({purpose}): {otp}\n")
-    import asyncio
     asyncio.create_task(send_otp_email(email, otp, purpose))
 
 
@@ -195,16 +193,16 @@ async def register(body: RegisterBody):
             "Password is too weak. Use at least 8 characters with uppercase, lowercase, a number, and a special character.",
         )
 
-    users_col = get_collection("users")
+    users_col = get_async_collection("users")
     normalized = body.email.lower().strip()
-    existing = users_col.find_one({"email": normalized})
+    existing = await users_col.find_one({"email": normalized})
 
     if existing and existing.get("isVerified"):
         raise HTTPException(409, "An account with this email already exists.")
 
-    pw_hash = _hash_password(body.password)
+    pw_hash = await asyncio.to_thread(_hash_password, body.password)
     if existing:
-        users_col.update_one(
+        await users_col.update_one(
             {"_id": existing["_id"]},
             {"$set": {
                 "name": body.name.strip(),
@@ -216,7 +214,7 @@ async def register(body: RegisterBody):
         )
         user_id = str(existing["_id"])
     else:
-        result = users_col.insert_one({
+        result = await users_col.insert_one({
             "name": body.name.strip(),
             "email": normalized,
             "phone": body.phone.strip(),
@@ -238,21 +236,23 @@ async def login(body: LoginBody):
         raise HTTPException(400, "Email and password are required.")
 
     normalized_email = body.email.lower().strip()
-    login_failures_col = get_collection("login_failures")
+    login_failures_col = get_async_collection("login_failures")
     now = datetime.now(tz=timezone.utc)
     cutoff = now - timedelta(minutes=15)
 
-    failures_count = login_failures_col.count_documents({
+    failures_count = await login_failures_col.count_documents({
         "email": normalized_email,
         "timestamp": {"$gte": cutoff}
     })
     if failures_count >= 5:
         raise HTTPException(429, "Too many failed login attempts. Please try again in 15 minutes.")
 
-    users_col = get_collection("users")
-    user = users_col.find_one({"email": normalized_email})
-    if not user or not _verify_password(body.password, user.get("passwordHash", "")):
-        login_failures_col.insert_one({
+    users_col = get_async_collection("users")
+    user = await users_col.find_one({"email": normalized_email})
+    is_valid_pw = await asyncio.to_thread(_verify_password, body.password, user.get("passwordHash", "")) if user else False
+
+    if not user or not is_valid_pw:
+        await login_failures_col.insert_one({
             "email": normalized_email,
             "timestamp": datetime.now(tz=timezone.utc),
             "createdAt": datetime.now(tz=timezone.utc)
@@ -260,7 +260,7 @@ async def login(body: LoginBody):
         raise HTTPException(401, "Incorrect email or password.")
 
     # Successful login — clear failure count
-    login_failures_col.delete_many({"email": normalized_email})
+    await login_failures_col.delete_many({"email": normalized_email})
 
     if not user.get("isVerified"):
         raise HTTPException(403, "Account not yet verified. Check your email for the verification OTP.")
@@ -270,16 +270,16 @@ async def login(body: LoginBody):
 
 
 @router.post("/verify-otp")
-def verify_otp(body: VerifyOtpBody, response: Response):
-    users_col = get_collection("users")
-    otps_col = get_collection("otps")
+async def verify_otp(body: VerifyOtpBody, response: Response):
+    users_col = get_async_collection("users")
+    otps_col = get_async_collection("otps")
 
-    user = users_col.find_one({"email": body.email.lower().strip()})
+    user = await users_col.find_one({"email": body.email.lower().strip()})
     if not user:
         raise HTTPException(404, "No account found for this email.")
 
     user_id = str(user["_id"])
-    otp_doc = otps_col.find_one({"userId": user_id, "purpose": body.purpose})
+    otp_doc = await otps_col.find_one({"userId": user_id, "purpose": body.purpose})
 
     if not otp_doc:
         raise HTTPException(400, "No OTP was requested. Please start over.")
@@ -295,7 +295,7 @@ def verify_otp(body: VerifyOtpBody, response: Response):
     ):
         raise HTTPException(400, "OTP has expired. Please request a new code.")
 
-    otps_col.update_one({"_id": otp_doc["_id"]}, {"$inc": {"attempts": 1}})
+    await otps_col.update_one({"_id": otp_doc["_id"]}, {"$inc": {"attempts": 1}})
 
     import hmac
     is_valid = hmac.compare_digest(otp_doc.get("otpHash", ""), _hash_otp(body.otp.strip()))
@@ -304,12 +304,12 @@ def verify_otp(body: VerifyOtpBody, response: Response):
         raise HTTPException(400, f"Incorrect OTP. {remaining} attempt(s) remaining.")
 
     # OTP is valid — clean it up
-    otps_col.delete_one({"_id": otp_doc["_id"]})
+    await otps_col.delete_one({"_id": otp_doc["_id"]})
 
     if body.purpose == "register":
-        users_col.update_one({"_id": user["_id"]}, {"$set": {"isVerified": True}})
+        await users_col.update_one({"_id": user["_id"]}, {"$set": {"isVerified": True}})
         token = create_access_token(user_id)
-        updated_user = users_col.find_one({"_id": user["_id"]})
+        updated_user = await users_col.find_one({"_id": user["_id"]})
         response.set_cookie(
             key="orbitavanya_token",
             value=token,
@@ -346,8 +346,8 @@ def verify_otp(body: VerifyOtpBody, response: Response):
 async def forgot_password(body: ForgotPasswordBody):
     if not body.email:
         raise HTTPException(400, "Email is required.")
-    users_col = get_collection("users")
-    user = users_col.find_one({"email": body.email.lower().strip()})
+    users_col = get_async_collection("users")
+    user = await users_col.find_one({"email": body.email.lower().strip()})
     # Always return success to avoid email enumeration
     if user and user.get("isVerified"):
         await _send_otp_for_user(str(user["_id"]), user["email"], "reset-password")
@@ -355,7 +355,7 @@ async def forgot_password(body: ForgotPasswordBody):
 
 
 @router.post("/reset-password")
-def reset_password(body: ResetPasswordBody):
+async def reset_password(body: ResetPasswordBody):
     if body.newPassword != body.confirmPassword:
         raise HTTPException(400, "Passwords do not match.")
     if not _is_strong_password(body.newPassword):
@@ -366,20 +366,22 @@ def reset_password(body: ResetPasswordBody):
     user_id = verify_action_token(body.actionToken, "reset-password")
     if not user_id:
         raise HTTPException(400, "Invalid or expired action token. Please start over.")
-    users_col = get_collection("users")
-    users_col.update_one(
+    users_col = get_async_collection("users")
+    pw_hash = await asyncio.to_thread(_hash_password, body.newPassword)
+    await users_col.update_one(
         {"_id": ObjectId(user_id)},
-        {"$set": {"passwordHash": _hash_password(body.newPassword), "mustChangePassword": False}},
+        {"$set": {"passwordHash": pw_hash, "mustChangePassword": False}},
     )
     return {"message": "Password reset successfully. You can now sign in."}
 
 
 @router.patch("/change-password")
-def change_password(
+async def change_password(
     body: ChangePasswordBody,
     current_user: dict = Depends(get_current_user),
 ):
-    if not _verify_password(body.currentPassword, current_user.get("passwordHash", "")):
+    is_valid_pw = await asyncio.to_thread(_verify_password, body.currentPassword, current_user.get("passwordHash", ""))
+    if not is_valid_pw:
         raise HTTPException(400, "Current password is incorrect.")
     if body.newPassword != body.confirmPassword:
         raise HTTPException(400, "Passwords do not match.")
@@ -388,9 +390,11 @@ def change_password(
             400,
             "Password is too weak. Use at least 8 characters with uppercase, lowercase, a number, and a special character.",
         )
-    get_collection("users").update_one(
+    pw_hash = await asyncio.to_thread(_hash_password, body.newPassword)
+    users_col = get_async_collection("users")
+    await users_col.update_one(
         {"_id": current_user["_id"]},
-        {"$set": {"passwordHash": _hash_password(body.newPassword), "mustChangePassword": False}},
+        {"$set": {"passwordHash": pw_hash, "mustChangePassword": False}},
     )
     return {"message": "Password changed successfully."}
 
@@ -406,7 +410,7 @@ class UpdateProfileBody(BaseModel):
 
 
 @router.patch("/me/profile")
-def update_profile(
+async def update_profile(
     body: UpdateProfileBody,
     current_user: dict = Depends(get_current_user),
 ):
@@ -416,9 +420,10 @@ def update_profile(
         updates["name"] = body.name.strip()
     if body.phone is not None:
         updates["phone"] = body.phone.strip()
+    users_col = get_async_collection("users")
     if updates:
-        get_collection("users").update_one({"_id": current_user["_id"]}, {"$set": updates})
-    updated = get_collection("users").find_one({"_id": current_user["_id"]})
+        await users_col.update_one({"_id": current_user["_id"]}, {"$set": updates})
+    updated = await users_col.find_one({"_id": current_user["_id"]})
     return {"user": _to_public_user(updated)}
 
 
@@ -445,7 +450,6 @@ async def upload_avatar(
     content_type = (file.content_type or "").lower()
     ext = _ALLOWED_AVATAR_TYPES.get(content_type)
     if not ext:
-        # Fall back to checking the filename extension if the content-type header is unreliable.
         suffix = Path(file.filename).suffix.lower() if file.filename else ""
         if suffix in (".jpg", ".jpeg", ".png", ".gif", ".webp"):
             ext = ".jpg" if suffix == ".jpeg" else suffix
@@ -461,7 +465,6 @@ async def upload_avatar(
     upload_dir = Path(_AVATAR_DIR)
     upload_dir.mkdir(parents=True, exist_ok=True)
 
-    # Remove any previous avatar file(s) for this user before saving the new one.
     user_id = str(current_user["_id"])
     for old_file in upload_dir.glob(f"{user_id}_*"):
         try:
@@ -471,14 +474,19 @@ async def upload_avatar(
 
     unique_name = f"{user_id}_{uuid.uuid4().hex}{ext}"
     dest_path = upload_dir / unique_name
-    with open(dest_path, "wb") as f:
-        f.write(content)
+    
+    def write_avatar_file():
+        with open(dest_path, "wb") as f:
+            f.write(content)
 
-    get_collection("users").update_one(
+    await asyncio.to_thread(write_avatar_file)
+
+    users_col = get_async_collection("users")
+    await users_col.update_one(
         {"_id": current_user["_id"]},
         {"$set": {"avatarUrl": unique_name, "updatedAt": datetime.now(tz=timezone.utc)}},
     )
-    updated = get_collection("users").find_one({"_id": current_user["_id"]})
+    updated = await users_col.find_one({"_id": current_user["_id"]})
     return {"user": _to_public_user(updated)}
 
 

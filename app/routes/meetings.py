@@ -12,18 +12,21 @@ Endpoints:
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import datetime, timezone
 from typing import List, Optional
 
 from bson import ObjectId
+from bson.errors import InvalidId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.core.auth import get_current_user
 from app.core.mailer import send_meeting_invite_email, send_meeting_cancelled_email
 from app.core.video_rooms import create_video_room
-from utils.db_client import get_collection
+from utils.db_client import get_async_collection
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/meetings", tags=["meetings"])
 
 
@@ -59,20 +62,25 @@ def _to_public_meeting(m: Optional[dict]) -> dict:
     }
 
 
-def _resolve_attendees(raw_attendees: List[dict], users_col) -> List[dict]:
-    """Normalize the mixed user-id / email attendees list."""
+async def _resolve_attendees(raw_attendees: List[dict]) -> List[dict]:
+    """Normalize the mixed user-id / email attendees list (batch $in query)."""
     if not raw_attendees:
         return []
 
-    user_ids = [a["userId"] for a in raw_attendees if a.get("userId")]
+    users_col = get_async_collection("users")
+    user_oids = []
+    for a in raw_attendees:
+        if a.get("userId"):
+            try:
+                user_oids.append(ObjectId(str(a["userId"])))
+            except InvalidId:
+                pass
+
     users = {}
-    for uid in user_ids:
-        try:
-            u = users_col.find_one({"_id": ObjectId(str(uid))})
-            if u:
-                users[str(u["_id"])] = u
-        except Exception:
-            pass
+    if user_oids:
+        user_docs = await users_col.find({"_id": {"$in": user_oids}}).to_list(length=len(user_oids))
+        for u in user_docs:
+            users[str(u["_id"])] = u
 
     by_email: dict[str, dict] = {}
     for raw in raw_attendees:
@@ -96,27 +104,29 @@ def _resolve_attendees(raw_attendees: List[dict], users_col) -> List[dict]:
     return list(by_email.values())
 
 
-def _push_notifications(user_ids: List[str], notif_type: str, title: str, message: str, link: str, related_id: str) -> None:
+async def _push_notifications_async(user_ids: List[str], notif_type: str, title: str, message: str, link: str, related_id: str) -> None:
     try:
-        notifs_col = get_collection("notifications")
-        docs = [
-            {
-                "user": ObjectId(uid),
-                "type": notif_type,
-                "title": title,
-                "message": message,
-                "link": link,
-                "relatedId": related_id,
-                "read": False,
-                "createdAt": datetime.now(tz=timezone.utc),
-            }
-            for uid in user_ids
-            if uid
-        ]
+        notifs_col = get_async_collection("notifications")
+        docs = []
+        for uid in user_ids:
+            if uid:
+                try:
+                    docs.append({
+                        "user": ObjectId(uid),
+                        "type": notif_type,
+                        "title": title,
+                        "message": message,
+                        "link": link,
+                        "relatedId": related_id,
+                        "read": False,
+                        "createdAt": datetime.now(tz=timezone.utc),
+                    })
+                except InvalidId:
+                    pass
         if docs:
-            notifs_col.insert_many(docs)
-    except Exception:
-        pass
+            await notifs_col.insert_many(docs)
+    except Exception as e:
+        logger.warning(f"[Meetings] Push notification error: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -148,9 +158,9 @@ class CreateMeetingBody(BaseModel):
 # ---------------------------------------------------------------------------
 
 @router.get("")
-def list_meetings(current_user: dict = Depends(get_current_user)):
-    meetings_col = get_collection("meetings")
-    meetings = list(meetings_col.find().sort("date", 1))
+async def list_meetings(current_user: dict = Depends(get_current_user)):
+    meetings_col = get_async_collection("meetings")
+    meetings = await meetings_col.find().sort("date", 1).to_list(length=1000)
     return {"meetings": [_to_public_meeting(m) for m in meetings]}
 
 
@@ -162,9 +172,8 @@ async def create_meeting(
     if not body.title or not body.date or not body.time:
         raise HTTPException(400, "Title, date, and time are required.")
 
-    users_col = get_collection("users")
     raw_attendees = [a.dict() for a in (body.attendees or [])]
-    resolved = _resolve_attendees(raw_attendees, users_col)
+    resolved = await _resolve_attendees(raw_attendees)
 
     meeting_type = "In Person" if body.type == "In Person" else "Video Call"
     meeting_link = ""
@@ -187,8 +196,8 @@ async def create_meeting(
 
     with_name = getattr(body, "with_", None) or ""
 
-    meetings_col = get_collection("meetings")
-    result = meetings_col.insert_one({
+    meetings_col = get_async_collection("meetings")
+    result = await meetings_col.insert_one({
         "title": body.title,
         "with": with_name,
         "date": body.date,
@@ -203,7 +212,7 @@ async def create_meeting(
         "createdAt": datetime.now(tz=timezone.utc),
     })
 
-    meeting = meetings_col.find_one({"_id": result.inserted_id})
+    meeting = await meetings_col.find_one({"_id": result.inserted_id})
     meeting_id = str(result.inserted_id)
 
     # Send invite emails asynchronously (best-effort)
@@ -230,13 +239,13 @@ async def create_meeting(
             # Update inviteSent flags
             for i, r in enumerate(results):
                 resolved[i]["inviteSent"] = not isinstance(r, Exception)
-            meetings_col.update_one({"_id": result.inserted_id}, {"$set": {"attendees": resolved}})
+            await meetings_col.update_one({"_id": result.inserted_id}, {"$set": {"attendees": resolved}})
 
         asyncio.create_task(send_invites())
 
     # In-app notifications for all attendee users
     attendee_user_ids = [str(a["userId"]) for a in resolved if a.get("userId")]
-    _push_notifications(
+    await _push_notifications_async(
         [str(current_user["_id"])] + attendee_user_ids,
         notif_type="meeting_scheduled",
         title="Meeting scheduled",
@@ -258,21 +267,21 @@ async def cancel_meeting(
 ):
     try:
         oid = ObjectId(meeting_id)
-    except Exception:
+    except InvalidId:
         raise HTTPException(400, "Invalid meeting ID.")
 
-    meetings_col = get_collection("meetings")
-    meeting = meetings_col.find_one({"_id": oid})
+    meetings_col = get_async_collection("meetings")
+    meeting = await meetings_col.find_one({"_id": oid})
     if not meeting:
         raise HTTPException(404, "Meeting not found.")
     if meeting.get("status") == "cancelled":
         raise HTTPException(400, "This meeting is already cancelled.")
 
-    meetings_col.update_one(
+    await meetings_col.update_one(
         {"_id": oid},
         {"$set": {"status": "cancelled", "cancelledAt": datetime.now(tz=timezone.utc)}},
     )
-    meeting = meetings_col.find_one({"_id": oid})
+    meeting = await meetings_col.find_one({"_id": oid})
     if not meeting:
         raise HTTPException(404, "Meeting not found.")
 
@@ -302,7 +311,7 @@ async def cancel_meeting(
 
     # In-app notifications
     attendee_user_ids = [str(a["userId"]) for a in attendees if a.get("userId")]
-    _push_notifications(
+    await _push_notifications_async(
         [str(current_user["_id"])] + attendee_user_ids,
         notif_type="meeting_cancelled",
         title="Meeting cancelled",

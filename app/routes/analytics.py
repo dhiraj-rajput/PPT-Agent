@@ -1,10 +1,12 @@
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional
+import asyncio
 from bson import ObjectId
+from bson.errors import InvalidId
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.auth import get_current_user
-from utils.db_client import get_collection
+from utils.db_client import get_async_collection
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -27,23 +29,62 @@ def _calculate_rates(stats: dict) -> dict:
 
 
 @router.get("/dashboard")
-def get_dashboard_data(current_user: dict = Depends(get_current_user)):
-    """Fetch aggregated real metrics for the dashboard from MongoDB."""
-    import re
-    companies_col = get_collection("companies")
-    tenders_col = get_collection("tenders")
-    campaigns_col = get_collection("campaigns")
-    meetings_col = get_collection("meetings")
-    reports_col = get_collection("reports")
-    leads_col = get_collection("leads")
+async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
+    """Fetch aggregated real metrics for the dashboard from MongoDB via Motor concurrently."""
+    companies_col = get_async_collection("companies")
+    tenders_col = get_async_collection("tenders")
+    campaigns_col = get_async_collection("campaigns")
+    meetings_col = get_async_collection("meetings")
+    reports_col = get_async_collection("reports")
+    leads_col = get_async_collection("leads")
 
-    # 1. Pipeline Stage Counts
-    prospects_count = companies_col.count_documents({})
-    contacted_count = leads_col.count_documents({"status": {"$in": ["sent", "opened", "clicked", "replied"]}})
-    proposals_count = reports_col.count_documents({})
-    meetings_count = meetings_col.count_documents({})
-    negotiation_count = leads_col.count_documents({"status": "replied"})
-    won_count = tenders_col.count_documents({"has_award": True})
+    now = datetime.now(timezone.utc)
+    seven_days_ago = now - timedelta(days=7)
+    fourteen_days_ago = now - timedelta(days=14)
+
+    res = await asyncio.gather(
+        companies_col.count_documents({}),
+        leads_col.count_documents({"status": {"$in": ["sent", "opened", "clicked", "replied"]}}),
+        reports_col.count_documents({}),
+        meetings_col.count_documents({}),
+        leads_col.count_documents({"status": "replied"}),
+        tenders_col.count_documents({"has_award": True}),
+        campaigns_col.find().to_list(length=1000),
+        companies_col.count_documents({"matchScore": {"$gte": 80}}),
+        companies_col.count_documents({"matchScore": {"$gte": 50, "$lt": 80}}),
+        companies_col.count_documents({"matchScore": {"$lt": 50}}),
+        tenders_col.find({"is_active": True, "closing_date": {"$ne": None, "$ne": ""}}).sort("days_until_close", 1).limit(3).to_list(length=3),
+        companies_col.find().sort("_id", -1).limit(5).to_list(length=5),
+        tenders_col.find().sort("match", -1).limit(5).to_list(length=5),
+        companies_col.count_documents({"createdAt": {"$gte": seven_days_ago}}),
+        tenders_col.count_documents({"is_active": True}),
+        tenders_col.count_documents({"is_active": True, "createdAt": {"$gte": seven_days_ago}}),
+        leads_col.count_documents({"status": "sent", "createdAt": {"$gte": seven_days_ago}}),
+        meetings_col.count_documents({"createdAt": {"$gte": seven_days_ago}}),
+        meetings_col.count_documents({"createdAt": {"$gte": fourteen_days_ago, "$lt": seven_days_ago}}),
+        leads_col.count_documents({"status": {"$in": ["sent", "opened", "clicked", "replied"]}, "createdAt": {"$gte": seven_days_ago}}),
+    )
+
+    prospects_count = int(res[0])
+    contacted_count = int(res[1])
+    proposals_count = int(res[2])
+    meetings_count = int(res[3])
+    negotiation_count = int(res[4])
+    won_count = int(res[5])
+    campaigns = list(res[6])
+    high = int(res[7])
+    medium = int(res[8])
+    low = int(res[9])
+    closing_soon = list(res[10])
+    recent_companies = list(res[11])
+    recent_tenders = list(res[12])
+    recent_companies_count = int(res[13])
+    active_tenders_count = int(res[14])
+    recent_tenders_count = int(res[15])
+    recent_emails = int(res[16])
+    current_meetings = int(res[17])
+    prev_meetings = int(res[18])
+    recent_contacted = int(res[19])
 
     pipeline_stages = [
         {"key": "leads", "label": "Prospects", "count": prospects_count, "icon": "Search", "color": "sky"},
@@ -54,8 +95,6 @@ def get_dashboard_data(current_user: dict = Depends(get_current_user)):
         {"key": "won", "label": "Tenders Won", "count": won_count, "icon": "Trophy", "color": "emerald"},
     ]
 
-    # 2. Email Stats
-    campaigns = list(campaigns_col.find())
     emails_sent = 0
     emails_opened = 0
     emails_clicked = 0
@@ -68,21 +107,11 @@ def get_dashboard_data(current_user: dict = Depends(get_current_user)):
         emails_clicked += stats.get("totalClicked", 0)
         emails_replied += stats.get("totalReplied", 0)
 
-    # 4. Match Distribution
-    high = companies_col.count_documents({"matchScore": {"$gte": 80}})
-    medium = companies_col.count_documents({"matchScore": {"$gte": 50, "$lt": 80}})
-    low = companies_col.count_documents({"matchScore": {"$lt": 50}})
-
     match_distribution = [
         {"label": "High Match", "value": high, "color": "#2f879d"},
         {"label": "Medium Match", "value": medium, "color": "#f7b708"},
         {"label": "Low Match", "value": low, "color": "#e41b50"}
     ]
-
-    # 5. Tenders Closing Soon
-    closing_soon = list(tenders_col.find(
-        {"is_active": True, "closing_date": {"$ne": None, "$ne": ""}}
-    ).sort("days_until_close", 1).limit(3))
 
     formatted_closing_soon = []
     for t in closing_soon:
@@ -96,8 +125,6 @@ def get_dashboard_data(current_user: dict = Depends(get_current_user)):
             "rfpUrl": t.get("rfp_url") or "",
         })
 
-    # 6. Recent Companies
-    recent_companies = list(companies_col.find().sort("_id", -1).limit(5))
     formatted_recent_companies = []
     for c in recent_companies:
         formatted_recent_companies.append({
@@ -108,8 +135,6 @@ def get_dashboard_data(current_user: dict = Depends(get_current_user)):
             "matchScore": c.get("matchScore") or c.get("match_score") or 0,
         })
 
-    # 7. Recently Matched Tenders
-    recent_tenders = list(tenders_col.find().sort("match", -1).limit(5))
     formatted_recent_tenders = []
     for t in recent_tenders:
         formatted_recent_tenders.append({
@@ -120,13 +145,6 @@ def get_dashboard_data(current_user: dict = Depends(get_current_user)):
             "closingDate": t.get("closingDate") or t.get("closing_date") or "",
         })
 
-    # Dynamic calculations for percentage changes based on MongoDB timestamps
-    now = datetime.now(timezone.utc)
-    seven_days_ago = now - timedelta(days=7)
-    fourteen_days_ago = now - timedelta(days=14)
-
-    # 1. Total Companies Change
-    recent_companies_count = companies_col.count_documents({"createdAt": {"$gte": seven_days_ago}})
     if recent_companies_count == 0:
         comp_change = f"+{(prospects_count % 8) + 3.4:.1f}%"
     else:
@@ -134,21 +152,15 @@ def get_dashboard_data(current_user: dict = Depends(get_current_user)):
         pct = (recent_companies_count / prev_companies * 100) if prev_companies > 0 else 0
         comp_change = f"+{pct:.1f}%"
 
-    # 2. Active Tenders Change
-    active_tenders_count = tenders_col.count_documents({"is_active": True})
-    recent_tenders = tenders_col.count_documents({"is_active": True, "createdAt": {"$gte": seven_days_ago}})
-    if recent_tenders == 0:
+    if recent_tenders_count == 0:
         tenders_change = f"+{(active_tenders_count % 6) + 2.1:.1f}%"
     else:
-        prev_tenders = active_tenders_count - recent_tenders
-        pct = (recent_tenders / prev_tenders * 100) if prev_tenders > 0 else 0
+        prev_tenders = active_tenders_count - recent_tenders_count
+        pct = (recent_tenders_count / prev_tenders * 100) if prev_tenders > 0 else 0
         tenders_change = f"+{pct:.1f}%"
 
-    # 3. High Match Change
     high_change = f"+{(high % 7) + 4.2:.1f}%"
 
-    # 4. Emails Sent Change
-    recent_emails = leads_col.count_documents({"status": "sent", "createdAt": {"$gte": seven_days_ago}})
     if recent_emails == 0:
         emails_change = f"+{(emails_sent % 10) + 5.5:.1f}%"
     else:
@@ -156,21 +168,12 @@ def get_dashboard_data(current_user: dict = Depends(get_current_user)):
         pct = (recent_emails / prev_emails * 100) if prev_emails > 0 else 0
         emails_change = f"+{pct:.1f}%"
 
-    # 5. Meetings Change
-    current_meetings = meetings_col.count_documents({"createdAt": {"$gte": seven_days_ago}})
-    prev_meetings = meetings_col.count_documents({"createdAt": {"$gte": fourteen_days_ago, "$lt": seven_days_ago}})
     if prev_meetings > 0:
         pct = ((current_meetings - prev_meetings) / prev_meetings) * 100
         meetings_change = f"{pct:+.1f}%"
     else:
         meetings_change = f"+{current_meetings * 10.0:.1f}%" if current_meetings > 0 else "+0.0%"
 
-    # 6. Contacted / Conversion Change (replaces revenue pipeline as a more
-    # data-centric, pipeline-driven metric)
-    recent_contacted = leads_col.count_documents({
-        "status": {"$in": ["sent", "opened", "clicked", "replied"]},
-        "createdAt": {"$gte": seven_days_ago}
-    })
     if recent_contacted == 0:
         contacted_change = f"+{(contacted_count % 9) + 3.0:.1f}%"
     else:
@@ -178,7 +181,6 @@ def get_dashboard_data(current_user: dict = Depends(get_current_user)):
         pct = (recent_contacted / prev_contacted * 100) if prev_contacted > 0 else 0
         contacted_change = f"+{pct:.1f}%"
 
-    # 8. Stats card list
     stats = [
         {
             "label": "Total Companies",
@@ -236,7 +238,7 @@ def get_dashboard_data(current_user: dict = Depends(get_current_user)):
         }
     ]
 
-    trends = get_weekly_trends(current_user)
+    trends = await get_weekly_trends(current_user)
 
     return {
         "stats": stats,
@@ -250,12 +252,15 @@ def get_dashboard_data(current_user: dict = Depends(get_current_user)):
 
 
 @router.get("/overview")
-def get_overview(current_user: dict = Depends(get_current_user)):
-    campaigns_col = get_collection("campaigns")
-    leads_col = get_collection("leads")
+async def get_overview(current_user: dict = Depends(get_current_user)):
+    campaigns_col = get_async_collection("campaigns")
+    leads_col = get_async_collection("leads")
     user_id = current_user["_id"]
 
-    campaigns = list(campaigns_col.find({"createdBy": user_id}))
+    campaigns, conversions = await asyncio.gather(
+        campaigns_col.find({"createdBy": user_id}).to_list(length=1000),
+        leads_col.count_documents({"createdBy": user_id, "status": "replied"}),
+    )
 
     totals = {
         "totalSent": 0,
@@ -277,11 +282,6 @@ def get_overview(current_user: dict = Depends(get_current_user)):
         totals["totalUnsubscribed"] += stats.get("totalUnsubscribed", 0)
         totals["totalResent"] += stats.get("totalResent", 0)
 
-    conversions = leads_col.count_documents({
-        "createdBy": user_id,
-        "status": "replied"
-    })
-
     rates = _calculate_rates(totals)
     sent = totals["totalSent"]
     conversion_rate = round((conversions / sent) * 100, 1) if sent > 0 else 0.0
@@ -296,23 +296,24 @@ def get_overview(current_user: dict = Depends(get_current_user)):
 
 
 @router.get("/campaign/{id}")
-def get_campaign_analytics(id: str, current_user: dict = Depends(get_current_user)):
+async def get_campaign_analytics(id: str, current_user: dict = Depends(get_current_user)):
     try:
         oid = ObjectId(id)
-    except Exception:
+    except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
-    campaigns_col = get_collection("campaigns")
-    campaign = campaigns_col.find_one({"_id": oid, "createdBy": current_user["_id"]})
+    campaigns_col = get_async_collection("campaigns")
+    campaign = await campaigns_col.find_one({"_id": oid, "createdBy": current_user["_id"]})
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found.")
 
-    leads_col = get_collection("leads")
+    leads_col = get_async_collection("leads")
     pipeline = [
         {"$match": {"campaignId": oid}},
         {"$group": {"_id": "$status", "count": {"$sum": 1}}}
     ]
-    lead_counts = list(leads_col.aggregate(pipeline))
+    lead_counts_cursor = leads_col.aggregate(pipeline)
+    lead_counts = await lead_counts_cursor.to_list(length=100)
     by_status = {r["_id"]: r["count"] for r in lead_counts}
 
     rates = _calculate_rates(campaign.get("stats", {}))
@@ -327,28 +328,26 @@ def get_campaign_analytics(id: str, current_user: dict = Depends(get_current_use
 
 
 @router.get("/trends")
-def get_weekly_trends(current_user: dict = Depends(get_current_user)):
-    campaigns_col = get_collection("campaigns")
-    leads_col = get_collection("leads")
+async def get_weekly_trends(current_user: dict = Depends(get_current_user)):
+    campaigns_col = get_async_collection("campaigns")
+    leads_col = get_async_collection("leads")
     user_id = current_user["_id"]
 
-    campaigns = list(campaigns_col.find({"createdBy": user_id}, {"_id": 1}))
+    campaigns = await campaigns_col.find({"createdBy": user_id}, {"_id": 1}).to_list(length=1000)
     campaign_ids = [c["_id"] for c in campaigns]
 
     since = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=6)
 
-    # Fetch leads updated in the last 7 days
-    leads = list(leads_col.find(
+    leads = await leads_col.find(
         {"campaignId": {"$in": campaign_ids}, "updatedAt": {"$gte": since}},
         {"sentAt": 1, "openedAt": 1, "clickedAt": 1, "repliedAt": 1}
-    ))
+    ).to_list(length=10000)
 
-    # Initialize buckets for the last 7 days
     buckets = {}
     for i in range(7):
         d = since + timedelta(days=i)
-        key = d.isoformat()[:10]  # "YYYY-MM-DD"
-        day_index = int(d.strftime("%w"))  # 0 = Sunday
+        key = d.isoformat()[:10]
+        day_index = int(d.strftime("%w"))
         buckets[key] = {
             "day": DAY_LABELS[day_index],
             "sent": 0,
@@ -360,7 +359,6 @@ def get_weekly_trends(current_user: dict = Depends(get_current_user)):
     def bump(dt: Optional[datetime], field: str):
         if not dt:
             return
-        # Handle tz-naive or tz-aware correctly
         dt_utc = dt.astimezone(timezone.utc) if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
         key = dt_utc.isoformat()[:10]
         if key in buckets:
@@ -377,12 +375,12 @@ def get_weekly_trends(current_user: dict = Depends(get_current_user)):
 
 
 @router.get("/website-engagement")
-def get_website_engagement(current_user: dict = Depends(get_current_user)):
-    campaigns_col = get_collection("campaigns")
-    events_col = get_collection("website_events")
+async def get_website_engagement(current_user: dict = Depends(get_current_user)):
+    campaigns_col = get_async_collection("campaigns")
+    events_col = get_async_collection("website_events")
     user_id = current_user["_id"]
 
-    campaigns = list(campaigns_col.find({"createdBy": user_id}, {"_id": 1, "name": 1}))
+    campaigns = await campaigns_col.find({"createdBy": user_id}, {"_id": 1, "name": 1}).to_list(length=1000)
     campaign_ids = [c["_id"] for c in campaigns]
     name_by_id = {str(c["_id"]): c["name"] for c in campaigns}
 
@@ -399,7 +397,8 @@ def get_website_engagement(current_user: dict = Depends(get_current_user)):
         }
     ]
 
-    rows = list(events_col.aggregate(pipeline))
+    cursor = events_col.aggregate(pipeline)
+    rows = await cursor.to_list(length=1000)
 
     results = []
     for r in rows:

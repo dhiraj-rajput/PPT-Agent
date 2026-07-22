@@ -12,17 +12,20 @@ Endpoints:
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 
 from bson import ObjectId
+from bson.errors import InvalidId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.core.auth import get_current_user
 from app.core.mailer import send_task_assigned_email
-from utils.db_client import get_collection
+from utils.db_client import get_async_collection
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 
@@ -30,42 +33,32 @@ router = APIRouter(prefix="/tasks", tags=["tasks"])
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _populate_assignee(task: Optional[dict], users_col) -> dict:
-    """Return the task dict with an embedded 'assignee' sub-doc."""
+def _format_task_with_user_map(task: Optional[dict], users_map: dict) -> dict:
+    """Format a task dict with embedded assignee details using a pre-fetched user map."""
     if not task:
         return {}
-    assignee = None
-    if task.get("assignee"):
-        try:
-            u = users_col.find_one({"_id": ObjectId(str(task["assignee"]))})
-            if u:
-                assignee = {
-                    "id": str(u["_id"]),
-                    "name": u.get("name", ""),
-                    "email": u.get("email", ""),
-                    "seed": u.get("email", ""),
-                }
-        except Exception:
-            pass
+    assignee_id = str(task["assignee"]) if task.get("assignee") else None
+    assignee = users_map.get(assignee_id) if assignee_id else None
     return {
         "id": str(task["_id"]),
         "title": task.get("title", ""),
         "due": task.get("due", ""),
         "priority": task.get("priority", "Medium"),
         "done": task.get("done", False),
-        "assigneeId": str(task["assignee"]) if task.get("assignee") else None,
+        "assigneeId": assignee_id,
         "assignee": assignee,
         "createdAt": task.get("createdAt", ""),
     }
 
 
-async def _notify_assignee(task: Optional[dict], assigner_id: str, users_col) -> None:
+async def _notify_assignee(task: Optional[dict], assigner_id: str) -> None:
     """Email the assignee (best-effort) when a task is assigned or re-assigned."""
     if not task or not task.get("assignee"):
         return
     try:
-        assignee = users_col.find_one({"_id": ObjectId(str(task["assignee"]))})
-        assigner = users_col.find_one({"_id": ObjectId(assigner_id)})
+        users_col = get_async_collection("users")
+        assignee = await users_col.find_one({"_id": ObjectId(str(task["assignee"]))})
+        assigner = await users_col.find_one({"_id": ObjectId(assigner_id)})
         if not assignee:
             return
         await send_task_assigned_email(
@@ -77,7 +70,7 @@ async def _notify_assignee(task: Optional[dict], assigner_id: str, users_col) ->
             assigner_name=assigner.get("name") if assigner else None,
         )
         # In-app notification
-        _push_notification(
+        await _push_notification_async(
             user_id=str(assignee["_id"]),
             notif_type="task_assigned",
             title="New task assigned to you",
@@ -89,16 +82,16 @@ async def _notify_assignee(task: Optional[dict], assigner_id: str, users_col) ->
             related_id=str(task["_id"]),
         )
     except Exception as exc:
-        import logging
-        logging.getLogger(__name__).warning(f"[Tasks] Notify assignee failed: {exc}")
+        logger.warning(f"[Tasks] Notify assignee failed: {exc}")
 
 
-def _push_notification(
+async def _push_notification_async(
     user_id: str, notif_type: str, title: str, message: str,
     link: str = "", related_id: str = "",
 ) -> None:
     try:
-        get_collection("notifications").insert_one({
+        notifs_col = get_async_collection("notifications")
+        await notifs_col.insert_one({
             "user": ObjectId(user_id),
             "type": notif_type,
             "title": title,
@@ -108,8 +101,8 @@ def _push_notification(
             "read": False,
             "createdAt": datetime.now(tz=timezone.utc),
         })
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"[Tasks] Push notification error: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -132,11 +125,26 @@ class ReassignBody(BaseModel):
 # ---------------------------------------------------------------------------
 
 @router.get("")
-def list_tasks(current_user: dict = Depends(get_current_user)):
-    tasks_col = get_collection("tasks")
-    users_col = get_collection("users")
-    tasks = list(tasks_col.find().sort("createdAt", -1))
-    return {"tasks": [_populate_assignee(t, users_col) for t in tasks]}
+async def list_tasks(current_user: dict = Depends(get_current_user)):
+    tasks_col = get_async_collection("tasks")
+    users_col = get_async_collection("users")
+    
+    tasks = await tasks_col.find().sort("createdAt", -1).to_list(length=1000)
+    
+    # Batch load all assignees in a single $in query (Fixes N+1 query)
+    assignee_oids = list({t["assignee"] for t in tasks if t.get("assignee")})
+    users_map = {}
+    if assignee_oids:
+        users = await users_col.find({"_id": {"$in": assignee_oids}}).to_list(length=len(assignee_oids))
+        for u in users:
+            users_map[str(u["_id"])] = {
+                "id": str(u["_id"]),
+                "name": u.get("name", ""),
+                "email": u.get("email", ""),
+                "seed": u.get("email", ""),
+            }
+
+    return {"tasks": [_format_task_with_user_map(t, users_map) for t in tasks]}
 
 
 @router.post("", status_code=201)
@@ -147,18 +155,18 @@ async def create_task(
     if not body.title:
         raise HTTPException(400, "Title is required.")
 
-    users_col = get_collection("users")
+    users_col = get_async_collection("users")
     assignee_oid = None
     if body.assigneeId:
         try:
             assignee_oid = ObjectId(body.assigneeId)
-        except Exception:
+        except InvalidId:
             raise HTTPException(400, "Invalid assignee ID.")
-        if not users_col.find_one({"_id": assignee_oid}):
+        if not await users_col.find_one({"_id": assignee_oid}):
             raise HTTPException(400, "Assignee not found.")
 
-    tasks_col = get_collection("tasks")
-    result = tasks_col.insert_one({
+    tasks_col = get_async_collection("tasks")
+    result = await tasks_col.insert_one({
         "title": body.title,
         "due": body.due or "",
         "priority": body.priority or "Medium",
@@ -168,33 +176,48 @@ async def create_task(
         "createdAt": datetime.now(tz=timezone.utc),
     })
 
-    task = tasks_col.find_one({"_id": result.inserted_id})
-    await _notify_assignee(task, str(current_user["_id"]), users_col)
-    return {"task": _populate_assignee(task, users_col)}
+    task = await tasks_col.find_one({"_id": result.inserted_id})
+    await _notify_assignee(task, str(current_user["_id"]))
+    
+    users_map = {}
+    if assignee_oid:
+        u = await users_col.find_one({"_id": assignee_oid})
+        if u:
+            users_map[str(u["_id"])] = {"id": str(u["_id"]), "name": u.get("name", ""), "email": u.get("email", ""), "seed": u.get("email", "")}
+
+    return {"task": _format_task_with_user_map(task, users_map)}
 
 
 @router.patch("/{task_id}/toggle")
-def toggle_task(
+async def toggle_task(
     task_id: str,
     current_user: dict = Depends(get_current_user),
 ):
     try:
         oid = ObjectId(task_id)
-    except Exception:
+    except InvalidId:
         raise HTTPException(400, "Invalid task ID.")
 
-    tasks_col = get_collection("tasks")
-    task = tasks_col.find_one({"_id": oid})
+    tasks_col = get_async_collection("tasks")
+    users_col = get_async_collection("users")
+    task = await tasks_col.find_one({"_id": oid})
     if not task:
         raise HTTPException(404, "Task not found.")
 
     new_done = not task.get("done", False)
-    task = tasks_col.find_one_and_update(
+    await tasks_col.update_one(
         {"_id": oid},
         {"$set": {"done": new_done}},
-        return_document=True,
     )
-    return {"task": _populate_assignee(task, get_collection("users"))}
+    updated_task = await tasks_col.find_one({"_id": oid})
+
+    users_map = {}
+    if updated_task and updated_task.get("assignee"):
+        u = await users_col.find_one({"_id": updated_task["assignee"]})
+        if u:
+            users_map[str(u["_id"])] = {"id": str(u["_id"]), "name": u.get("name", ""), "email": u.get("email", ""), "seed": u.get("email", "")}
+
+    return {"task": _format_task_with_user_map(updated_task, users_map)}
 
 
 @router.patch("/{task_id}/assignee")
@@ -208,21 +231,27 @@ async def reassign_task(
     try:
         task_oid = ObjectId(task_id)
         assignee_oid = ObjectId(body.assigneeId)
-    except Exception:
+    except InvalidId:
         raise HTTPException(400, "Invalid ID.")
 
-    users_col = get_collection("users")
-    if not users_col.find_one({"_id": assignee_oid}):
+    users_col = get_async_collection("users")
+    if not await users_col.find_one({"_id": assignee_oid}):
         raise HTTPException(400, "Assignee not found.")
 
-    tasks_col = get_collection("tasks")
-    task = tasks_col.find_one_and_update(
+    tasks_col = get_async_collection("tasks")
+    await tasks_col.update_one(
         {"_id": task_oid},
         {"$set": {"assignee": assignee_oid}},
-        return_document=True,
     )
-    if not task:
+    updated_task = await tasks_col.find_one({"_id": task_oid})
+    if not updated_task:
         raise HTTPException(404, "Task not found.")
 
-    await _notify_assignee(task, str(current_user["_id"]), users_col)
-    return {"task": _populate_assignee(task, users_col)}
+    await _notify_assignee(updated_task, str(current_user["_id"]))
+    
+    users_map = {}
+    u = await users_col.find_one({"_id": assignee_oid})
+    if u:
+        users_map[str(u["_id"])] = {"id": str(u["_id"]), "name": u.get("name", ""), "email": u.get("email", ""), "seed": u.get("email", "")}
+
+    return {"task": _format_task_with_user_map(updated_task, users_map)}

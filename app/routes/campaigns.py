@@ -1,11 +1,21 @@
+"""
+app/routes/campaigns.py
+-------------------------
+Campaign management & execution endpoints using async Motor.
+"""
+
+from __future__ import annotations
+
+import asyncio
 from datetime import datetime, timezone, timedelta
-from typing import Optional , Any
+from typing import Optional, Any
 from bson import ObjectId
+from bson.errors import InvalidId
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from app.core.auth import get_current_user
-from utils.db_client import get_collection
+from utils.db_client import get_async_collection, get_collection
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"])
 
@@ -80,10 +90,10 @@ def _format_campaign(c: Optional[dict]) -> dict:
     }
 
 
-def _queue_pending_leads(campaign_id: ObjectId, daily_limit: int):
+async def _queue_pending_leads_async(campaign_id: ObjectId, daily_limit: int):
     """Calculate and assign send_after timestamps spacing out leads across the day."""
-    leads_col = get_collection("leads")
-    pending = list(leads_col.find({"campaignId": campaign_id, "status": "pending"}, {"_id": 1}))
+    leads_col = get_async_collection("leads")
+    pending = await leads_col.find({"campaignId": campaign_id, "status": "pending"}, {"_id": 1}).to_list(length=10000)
     if not pending:
         return 0
 
@@ -95,7 +105,7 @@ def _queue_pending_leads(campaign_id: ObjectId, daily_limit: int):
         if i >= limit:
             break
         send_after = now + timedelta(milliseconds=i * spacing_ms)
-        leads_col.update_one(
+        await leads_col.update_one(
             {"_id": lead["_id"]},
             {"$set": {"send_after": send_after}}
         )
@@ -103,10 +113,10 @@ def _queue_pending_leads(campaign_id: ObjectId, daily_limit: int):
 
 
 @router.get("/worker-status")
-def get_worker_status(current_user: dict = Depends(get_current_user)):
+async def get_worker_status(current_user: dict = Depends(get_current_user)):
     """Check if the background email campaign worker is active."""
-    col = get_collection("system_status")
-    status = col.find_one({"key": "email_worker"})
+    col = get_async_collection("system_status")
+    status = await col.find_one({"key": "email_worker"})
     if not status:
         return {"active": False, "message": "Worker has never been started."}
         
@@ -114,7 +124,6 @@ def get_worker_status(current_user: dict = Depends(get_current_user)):
     if not last_active:
         return {"active": False, "message": "No active heartbeat recorded."}
         
-    # Check if last_active is within 30 seconds
     now = datetime.now(timezone.utc)
     if last_active.tzinfo is None:
         last_active = last_active.replace(tzinfo=timezone.utc)
@@ -131,21 +140,21 @@ def get_worker_status(current_user: dict = Depends(get_current_user)):
 
 
 @router.get("")
-def list_campaigns(current_user: dict = Depends(get_current_user)):
-    col = get_collection("campaigns")
-    campaigns = list(col.find().sort("createdAt", -1))
+async def list_campaigns(current_user: dict = Depends(get_current_user)):
+    col = get_async_collection("campaigns")
+    campaigns = await col.find().sort("createdAt", -1).to_list(length=1000)
     return {"campaigns": [_format_campaign(c) for c in campaigns]}
 
 
 @router.post("", status_code=201)
-def create_campaign(
+async def create_campaign(
     body: CampaignCreateBody,
     current_user: dict = Depends(get_current_user),
 ):
     if not body.name or not body.subject:
         raise HTTPException(status_code=400, detail="name and subject are required.")
 
-    col = get_collection("campaigns")
+    col = get_async_collection("campaigns")
     user_id = current_user["_id"]
 
     sched_start = None
@@ -155,10 +164,8 @@ def create_campaign(
         except Exception:
             raise HTTPException(status_code=400, detail="Invalid scheduleStart timestamp format.")
 
-    # Atomically assign the next campaign number so the UI can show a
-    # running "Campaign #N" counter.
-    counters_col = get_collection("counters")
-    counter_doc = counters_col.find_one_and_update(
+    counters_col = get_async_collection("counters")
+    counter_doc = await counters_col.find_one_and_update(
         {"_id": f"campaign_seq:{user_id}"},
         {"$inc": {"seq": 1}},
         upsert=True,
@@ -195,11 +202,11 @@ def create_campaign(
         "updatedAt": datetime.now(timezone.utc),
     }
 
-    result = col.insert_one(doc)
-    campaign = col.find_one({"_id": result.inserted_id})
+    result = await col.insert_one(doc)
+    campaign = await col.find_one({"_id": result.inserted_id})
 
-    # Log action in audit logs
-    get_collection("audit_logs").insert_one({
+    audit_col = get_async_collection("audit_logs")
+    await audit_col.insert_one({
         "action": "campaign.create",
         "entityType": "Campaign",
         "entityId": result.inserted_id,
@@ -223,8 +230,11 @@ async def upload_campaign_attachment(
         filename = f"{timestamp}_{file.filename}"
         dest_path = os.path.join("private/uploads", filename)
         
-        with open(dest_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        def save_file_sync():
+            with open(dest_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+
+        await asyncio.to_thread(save_file_sync)
             
         return {
             "attachmentPath": dest_path,
@@ -239,13 +249,6 @@ def view_campaign_file(path: str):
     import os
     from fastapi.responses import FileResponse
 
-    # Resolve to a real absolute path and verify it is actually contained
-    # within one of the allowed directories. A plain string-prefix check on
-    # the raw path (the previous approach) can be bypassed with "../"
-    # sequences that still start with the right string but resolve outside
-    # the allowed folder — this endpoint is intentionally public (email
-    # recipients open it without logging in), so that containment check has
-    # to be airtight.
     allowed_bases = [
         os.path.realpath("private/uploads"),
         os.path.realpath("private/reports"),
@@ -267,32 +270,32 @@ def view_campaign_file(path: str):
 
 
 @router.get("/{id}")
-def get_campaign(id: str, current_user: dict = Depends(get_current_user)):
+async def get_campaign(id: str, current_user: dict = Depends(get_current_user)):
     try:
         oid = ObjectId(id)
-    except Exception:
+    except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
-    col = get_collection("campaigns")
-    campaign = col.find_one({"_id": oid})
+    col = get_async_collection("campaigns")
+    campaign = await col.find_one({"_id": oid})
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found.")
     return {"campaign": _format_campaign(campaign)}
 
 
 @router.patch("/{id}")
-def update_campaign(
+async def update_campaign(
     id: str,
     body: CampaignUpdateBody,
     current_user: dict = Depends(get_current_user),
 ):
     try:
         oid = ObjectId(id)
-    except Exception:
+    except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
-    col = get_collection("campaigns")
-    campaign = col.find_one({"_id": oid})
+    col = get_async_collection("campaigns")
+    campaign = await col.find_one({"_id": oid})
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found.")
 
@@ -331,29 +334,28 @@ def update_campaign(
 
     if updates:
         updates["updatedAt"] = datetime.now(timezone.utc)
-        col.update_one({"_id": oid}, {"$set": updates})
-        campaign = col.find_one({"_id": oid})
+        await col.update_one({"_id": oid}, {"$set": updates})
+        campaign = await col.find_one({"_id": oid})
 
     return {"campaign": _format_campaign(campaign)}
 
 
 @router.delete("/{id}")
-def delete_campaign(id: str, current_user: dict = Depends(get_current_user)):
+async def delete_campaign(id: str, current_user: dict = Depends(get_current_user)):
     try:
         oid = ObjectId(id)
-    except Exception:
+    except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
-    col = get_collection("campaigns")
-    campaign = col.find_one_and_delete({"_id": oid})
+    col = get_async_collection("campaigns")
+    campaign = await col.find_one_and_delete({"_id": oid})
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found.")
 
-    # Delete all associated leads
-    get_collection("leads").delete_many({"campaignId": oid})
+    await get_async_collection("leads").delete_many({"campaignId": oid})
 
-    # Log action
-    get_collection("audit_logs").insert_one({
+    audit_col = get_async_collection("audit_logs")
+    await audit_col.insert_one({
         "action": "campaign.delete",
         "entityType": "Campaign",
         "entityId": oid,
@@ -365,19 +367,19 @@ def delete_campaign(id: str, current_user: dict = Depends(get_current_user)):
 
 
 @router.post("/{id}/duplicate", status_code=201)
-def duplicate_campaign(id: str, current_user: dict = Depends(get_current_user)):
+async def duplicate_campaign(id: str, current_user: dict = Depends(get_current_user)):
     try:
         oid = ObjectId(id)
-    except Exception:
+    except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
-    col = get_collection("campaigns")
-    source = col.find_one({"_id": oid})
+    col = get_async_collection("campaigns")
+    source = await col.find_one({"_id": oid})
     if not source:
         raise HTTPException(status_code=404, detail="Campaign not found.")
 
-    counters_col = get_collection("counters")
-    counter_doc = counters_col.find_one_and_update(
+    counters_col = get_async_collection("counters")
+    counter_doc = await counters_col.find_one_and_update(
         {"_id": f"campaign_seq:{current_user['_id']}"},
         {"$inc": {"seq": 1}},
         upsert=True,
@@ -411,72 +413,72 @@ def duplicate_campaign(id: str, current_user: dict = Depends(get_current_user)):
         "updatedAt": datetime.now(timezone.utc),
     }
 
-    result = col.insert_one(doc)
-    copy = col.find_one({"_id": result.inserted_id})
+    result = await col.insert_one(doc)
+    copy = await col.find_one({"_id": result.inserted_id})
     return {"campaign": _format_campaign(copy)}
 
 
 @router.post("/{id}/pause")
-def pause_campaign(id: str, current_user: dict = Depends(get_current_user)):
+async def pause_campaign(id: str, current_user: dict = Depends(get_current_user)):
     try:
         oid = ObjectId(id)
-    except Exception:
+    except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
-    col = get_collection("campaigns")
-    campaign = col.find_one_and_update(
+    col = get_async_collection("campaigns")
+    await col.update_one(
         {"_id": oid},
         {"$set": {"status": "paused", "updatedAt": datetime.now(timezone.utc)}},
-        return_document=True
     )
+    campaign = await col.find_one({"_id": oid})
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found.")
     return {"campaign": _format_campaign(campaign)}
 
 
 @router.post("/{id}/resume")
-def resume_campaign(id: str, current_user: dict = Depends(get_current_user)):
+async def resume_campaign(id: str, current_user: dict = Depends(get_current_user)):
     try:
         oid = ObjectId(id)
-    except Exception:
+    except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
-    col = get_collection("campaigns")
-    campaign = col.find_one({"_id": oid})
+    col = get_async_collection("campaigns")
+    campaign = await col.find_one({"_id": oid})
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found.")
 
-    col.update_one({"_id": oid}, {"$set": {"status": "running", "updatedAt": datetime.now(timezone.utc)}})
-    campaign = col.find_one({"_id": oid})
+    await col.update_one({"_id": oid}, {"$set": {"status": "running", "updatedAt": datetime.now(timezone.utc)}})
+    campaign = await col.find_one({"_id": oid})
     daily_limit = (campaign or {}).get("dailyLimit", 200)
 
-    queued = _queue_pending_leads(oid, daily_limit)
+    queued = await _queue_pending_leads_async(oid, daily_limit)
     return {"campaign": _format_campaign(campaign), "queuedLeads": queued}
 
 
 @router.post("/{id}/launch")
-def launch_campaign(id: str, current_user: dict = Depends(get_current_user)):
+async def launch_campaign(id: str, current_user: dict = Depends(get_current_user)):
     try:
         oid = ObjectId(id)
-    except Exception:
+    except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
-    col = get_collection("campaigns")
-    campaign = col.find_one({"_id": oid})
+    col = get_async_collection("campaigns")
+    campaign = await col.find_one({"_id": oid})
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found.")
 
     if campaign.get("status") == "running":
         raise HTTPException(status_code=400, detail="Campaign already running.")
 
-    col.update_one({"_id": oid}, {"$set": {"status": "running", "updatedAt": datetime.now(timezone.utc)}})
-    campaign = col.find_one({"_id": oid})
+    await col.update_one({"_id": oid}, {"$set": {"status": "running", "updatedAt": datetime.now(timezone.utc)}})
+    campaign = await col.find_one({"_id": oid})
     daily_limit = (campaign or {}).get("dailyLimit", 200)
 
-    queued = _queue_pending_leads(oid, daily_limit)
+    queued = await _queue_pending_leads_async(oid, daily_limit)
 
-    # Log action
-    get_collection("audit_logs").insert_one({
+    audit_col = get_async_collection("audit_logs")
+    await audit_col.insert_one({
         "action": "campaign.launch",
         "entityType": "Campaign",
         "entityId": oid,
@@ -486,4 +488,3 @@ def launch_campaign(id: str, current_user: dict = Depends(get_current_user)):
     })
 
     return {"campaign": _format_campaign(campaign), "queuedLeads": queued}
-

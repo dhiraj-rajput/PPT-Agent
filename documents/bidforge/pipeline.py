@@ -24,6 +24,7 @@ def run_bidforge_pipeline(
     output_name: str,
     solicitation_number: str = "",
     template_path: Optional[str] = None,
+    wizard_config: Optional[str] = None,
 ) -> str:
     from documents.bidforge.parse import parse_uploaded_rfp
     from documents.bidforge.inventory import analyze_inventory
@@ -45,7 +46,7 @@ def run_bidforge_pipeline(
 
     print("\nStep 5: Generating final proposal document...")
     final_path = generate_final_document(
-        parsed_rfp, inventory, competitor_intel, strategy, output_name, template_path
+        parsed_rfp, inventory, competitor_intel, strategy, output_name, template_path, wizard_config
     )
 
     print(f"\nStep 6: Done. Output: {final_path}")

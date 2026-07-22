@@ -1,10 +1,7 @@
 """
 app/routes/preview.py
 ---------------------
-Pre-generation Preview Wizard API endpoints.
-
-Provides interactive questionnaire generation, document outline preview,
-and customization settings prior to running full document generation.
+Pre-generation Preview Wizard API endpoints using Motor async client.
 """
 
 from typing import Any, Dict, List, Optional
@@ -12,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.core.auth import get_current_user
-from utils.db_client import get_collection
+from utils.db_client import get_async_collection
 from pipeline.ai.client import get_ai_client
 
 router = APIRouter(prefix="/preview", tags=["preview"])
@@ -49,7 +46,7 @@ class QuestionResponse(BaseModel):
 class CustomAnswersPayload(BaseModel):
     tender_id: Optional[str] = None
     solicitation_number: Optional[str] = None
-    proposal_type: str = "Prime RFP Response"  # or Subcontract Response
+    proposal_type: str = "Prime RFP Response"
     answers: List[QuestionResponse] = []
     custom_sections: Optional[List[OutlineSection]] = None
 
@@ -60,22 +57,18 @@ async def get_wizard_questions(
     proposal_type: str = "Prime RFP Response",
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    Generate tailored pre-generation questions with multi-choice options based on tender details.
-    """
     tender_info = {}
     if tender_id:
-        col = get_collection("tenders")
-        tender = col.find_one({"$or": [{"noticeId": tender_id}, {"_id": tender_id}]})
+        col = get_async_collection("tenders")
+        tender = await col.find_one({"$or": [{"noticeId": tender_id}, {"_id": tender_id}]})
         if tender:
             tender_info = tender
 
     title = tender_info.get("title", "Government Contracting Opportunity")
     naics = tender_info.get("naicsCode", "General")
     
-    # Get company profile
-    company_col = get_collection("own_company_profile")
-    company_profile = company_col.find_one({}) or {}
+    company_col = get_async_collection("own_company_profile")
+    company_profile = await company_col.find_one({}) or {}
     company_context = company_profile.get("company_name", "Our Company")
     if company_profile.get("capabilities"):
         company_context += f" - Capabilities: {company_profile.get('capabilities')}"
@@ -125,7 +118,6 @@ Output MUST be a JSON object with a 'questions' array. Each question must have:
         res = client.chat_json([{"role": "user", "content": prompt}])
         questions = res.get("questions", default_questions)
     except Exception as e:
-        print(f"Error generating questions via AI: {e}")
         questions = default_questions
 
     return {
@@ -140,9 +132,6 @@ async def generate_proposal_outline(
     payload: CustomAnswersPayload,
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    Generate an editable proposal outline and section structure based on user choices.
-    """
     is_subcontract = "subcontract" in payload.proposal_type.lower()
 
     if is_subcontract:
@@ -217,18 +206,17 @@ async def generate_proposal_outline(
             }
         ]
 
-    # Try AI generation for outline based on RFP and Company
     tender_info = {}
     if payload.tender_id:
-        col = get_collection("tenders")
-        tender = col.find_one({"$or": [{"noticeId": payload.tender_id}, {"_id": payload.tender_id}]})
+        col = get_async_collection("tenders")
+        tender = await col.find_one({"$or": [{"noticeId": payload.tender_id}, {"_id": payload.tender_id}]})
         if tender:
             tender_info = tender
 
     title = tender_info.get("title", "Government Opportunity")
     
-    company_col = get_collection("own_company_profile")
-    company_profile = company_col.find_one({}) or {}
+    company_col = get_async_collection("own_company_profile")
+    company_profile = await company_col.find_one({}) or {}
     company_context = company_profile.get("company_name", "Our Company")
     
     try:
@@ -248,7 +236,6 @@ Output MUST be a JSON object with a 'sections' array. Each section must have:
         res = client.chat_json([{"role": "user", "content": prompt}])
         sections = res.get("sections", default_sections)
     except Exception as e:
-        print(f"Error generating outline via AI: {e}")
         sections = default_sections
 
     total_words = sum(s.get("word_budget", 500) for s in sections if s.get("included", True))

@@ -4,24 +4,27 @@ app/core/auth.py
 JWT authentication utilities for the OrbitAvanya FastAPI backend.
 
 Provides:
-  - create_access_token()  — sign a JWT
-  - create_action_token()  — short-lived token for OTP-gated actions
-  - verify_action_token()  — verify short-lived tokens
-  - get_current_user()     — FastAPI dependency that decodes the Bearer token
-  - require_admin()        — dependency that also checks the user is an admin
+  - create_access_token()     — sign a JWT
+  - create_action_token()     — short-lived token for OTP-gated actions
+  - verify_action_token()     — verify short-lived tokens
+  - get_current_user()        — FastAPI dependency that decodes the Bearer token (async Motor)
+  - require_admin()           — dependency that also checks the user is an admin
+  - decode_and_get_user_async() — async helper for WebSockets / async contexts
 """
 
 from __future__ import annotations
 
-import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
+from bson import ObjectId
+from bson.errors import InvalidId
+from pymongo.errors import PyMongoError
 
-from utils.db_client import get_collection
+from utils.db_client import get_async_collection, get_collection
 from config.settings import settings
 
 # ---------------------------------------------------------------------------
@@ -80,7 +83,7 @@ async def get_current_user(
     request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
 ) -> dict:
-    """FastAPI dependency — decode Bearer token and return the user document."""
+    """FastAPI dependency — decode Bearer token or cookie and return the user document using Motor async."""
     exc = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Not authenticated or token expired.",
@@ -91,11 +94,8 @@ async def get_current_user(
     if credentials:
         token = credentials.credentials
     else:
-        # Fallback to cookies
+        # Fallback to HttpOnly cookie only (security hardening: query param token removed)
         token = request.cookies.get("orbitavanya_token")
-        if not token:
-            # Fallback to query param
-            token = request.query_params.get("token")
 
     if not token:
         raise exc
@@ -108,11 +108,10 @@ async def get_current_user(
     except JWTError:
         raise exc
 
-    users_col = get_collection("users")
-    from bson import ObjectId
     try:
-        user = users_col.find_one({"_id": ObjectId(user_id)})
-    except Exception:
+        users_col = get_async_collection("users")
+        user = await users_col.find_one({"_id": ObjectId(user_id)})
+    except (InvalidId, PyMongoError, Exception):
         raise exc
 
     if not user:
@@ -130,17 +129,40 @@ async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
     return current_user
 
 
-def decode_and_get_user(token: str) -> Optional[dict]:
-    """Helper to decode a JWT token and retrieve the user document. Useful for WebSockets."""
+async def decode_and_get_user_async(token: str) -> Optional[dict]:
+    """Async helper to decode a JWT token and retrieve the user document. Useful for WebSockets/async contexts."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = payload.get("sub", "")
         if not user_id:
             return None
-        from bson import ObjectId
-        user = get_collection("users").find_one({"_id": ObjectId(user_id)})
+        users_col = get_async_collection("users")
+        user = await users_col.find_one({"_id": ObjectId(user_id)})
         return user
-    except Exception as e:
+    except (JWTError, InvalidId, PyMongoError) as e:
         import logging
         logging.getLogger("auth").error(f"WebSocket authentication decode failed: {e}")
+        return None
+    except Exception as e:
+        import logging
+        logging.getLogger("auth").error(f"Unexpected error decoding token: {e}")
+        return None
+
+
+def decode_and_get_user(token: str) -> Optional[dict]:
+    """Sync fallback helper to decode a JWT token and retrieve the user document."""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub", "")
+        if not user_id:
+            return None
+        user = get_collection("users").find_one({"_id": ObjectId(user_id)})
+        return user
+    except (JWTError, InvalidId, PyMongoError) as e:
+        import logging
+        logging.getLogger("auth").error(f"Sync authentication decode failed: {e}")
+        return None
+    except Exception as e:
+        import logging
+        logging.getLogger("auth").error(f"Unexpected error in sync decode token: {e}")
         return None

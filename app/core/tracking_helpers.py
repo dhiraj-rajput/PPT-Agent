@@ -1,7 +1,6 @@
 import base64
 import hashlib
 import hmac
-import os
 import re
 import secrets
 from typing import Dict, List, Tuple
@@ -21,10 +20,14 @@ def new_tracking_id() -> str:
 
 
 def hash_ip(ip: str) -> str:
-    """Hash client IP using SHA-256 for privacy/GDPR compliance."""
+    """
+    Hash client IP using HMAC-SHA256 with JWT_SECRET salt for privacy/GDPR compliance.
+    Unsalted hashes of IPv4 addresses can be easily reversed via precomputed rainbow tables.
+    """
     if not ip:
         return ""
-    return hashlib.sha256(ip.encode("utf-8")).hexdigest()
+    salt = (settings.JWT_SECRET or "default-ip-hash-salt").encode("utf-8")
+    return hmac.new(salt, ip.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def open_pixel_tag(tracking_id: str) -> str:

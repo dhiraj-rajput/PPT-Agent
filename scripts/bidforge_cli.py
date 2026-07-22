@@ -26,6 +26,7 @@ def main():
     parser.add_argument("--rfp", required=True, help="Path to the uploaded RFP file (PDF/DOCX/TXT).")
     parser.add_argument("--output", required=True, help="Output filename (without extension).")
     parser.add_argument("--template", default=None, help="Optional path to an uploaded .docx template.")
+    parser.add_argument("--wizard-config", default=None, help="Optional JSON string from the pre-generation wizard.")
     parser.add_argument("--solicitation", default="", help="Optional solicitation/reference number.")
     args = parser.parse_args()
 
@@ -35,10 +36,12 @@ def main():
             output_name=args.output,
             solicitation_number=args.solicitation,
             template_path=args.template,
+            wizard_config=args.wizard_config,
         )
         print(f"\nSUCCESS: {final_path}")
     except Exception as exc:
-        print(f"\nFAILED: {exc}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
 
 

@@ -281,16 +281,25 @@ class BusinessIntelligenceCompactor:
         fenced = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
         if fenced:
             text = fenced.group(1).strip()
+        text_clean = re.sub(r"[\x00-\x08\x0b-\x1f]", " ", text)
         try:
-            parsed = json.loads(text)
+            parsed = json.loads(text_clean, strict=False)
         except json.JSONDecodeError:
-            match = re.search(r"(\{.*\})", text, re.DOTALL)
-            if not match:
-                raise ValueError(f"No JSON object found in response. First 500 chars: {text[:500]}")
             try:
-                parsed = json.loads(match.group(1))
-            except json.JSONDecodeError as inner:
-                raise ValueError(f"Extracted JSON is malformed: {inner}. First 500 chars: {text[:500]}") from inner
+                import json_repair
+                parsed = json_repair.repair_json(text_clean, return_objects=True)
+            except Exception:
+                match = re.search(r"(\{.*\})", text_clean, re.DOTALL)
+                if not match:
+                    raise ValueError(f"No JSON object found in response. First 500 chars: {text[:500]}")
+                try:
+                    parsed = json.loads(match.group(1), strict=False)
+                except json.JSONDecodeError as inner:
+                    try:
+                        import json_repair
+                        parsed = json_repair.repair_json(match.group(1), return_objects=True)
+                    except Exception as last_exc:
+                        raise ValueError(f"Extracted JSON is malformed: {last_exc}. First 500 chars: {text[:500]}") from inner
         if not isinstance(parsed, dict):
             raise ValueError("LLM response must be a JSON object.")
         return parsed
@@ -356,11 +365,30 @@ class BusinessIntelligenceCompactor:
         heuristics directly from the normalized dictionary.
         """
         import re
-        company_name = normalized.get("company_name", "")
+        def _clean_field_text(text: Any, max_len: int = 150) -> str:
+            if not text or not isinstance(text, str):
+                return ""
+            clean = re.sub(r"<[^>]+>", " ", text)
+            stop_terms = [
+                "Type", "Founded", "Specialties", "Employees", "Locations", "Sign in",
+                "Welcome back", "Email or phone", "User Agreement", "Privacy Policy",
+                "Cookie Policy", "See all employees", "Get directions", "Updates",
+                "Report this post", "followers", "View ", "LinkedIn Member"
+            ]
+            for term in stop_terms:
+                if term in clean:
+                    clean = clean.split(term)[0].strip()
+            clean = re.sub(r"\s+", " ", clean).strip()
+            if len(clean) > max_len:
+                clean = clean[:max_len].strip()
+            return clean
+
+        company_name = _clean_field_text(normalized.get("company_name", ""), 100)
         website = normalized.get("website", "")
-        industry = normalized.get("industry", "")
-        hq = normalized.get("headquarters", "")
+        industry = _clean_field_text(normalized.get("industry", ""), 60)
+        hq = _clean_field_text(normalized.get("headquarters", ""), 100)
         specialties = normalized.get("specialties", [])
+        emp_count_str = _clean_field_text(normalized.get("employee_count", ""), 60)
         
         # 1. Synthesise a description
         descriptions = normalized.get("descriptions", {})
@@ -427,16 +455,26 @@ class BusinessIntelligenceCompactor:
                 f"Maintains a workforce scale of {normalized.get('employee_count') or 'enterprise scale'} employees globally."
             ]
 
-        # 6. Competitors
-        competitors = normalized.get("competitors", [])
+        # 6. Competitors — dynamically extracted from search data, NOT hardcoded.
+        # We only include competitors that were actually mentioned in search snippets.
+        # If none found, return empty list rather than fake company names.
+        competitors = list(normalized.get("competitors", []))
         if not competitors:
-            ind_lower = industry.lower()
-            if "it" in ind_lower or "consult" in ind_lower or "service" in ind_lower:
-                competitors = ["Accenture", "Tata Consultancy Services (TCS)", "Infosys Limited", "Cognizant"]
-            elif "software" in ind_lower or "tech" in ind_lower:
-                competitors = ["Microsoft", "Salesforce", "Oracle", "SAP"]
-            else:
-                competitors = ["Major global and regional industry peers"]
+            # Try to extract from google search insights
+            insights = normalized.get("google_search_insights", [])
+            competitor_keywords = ["competitor", "rival", "vs", "alternative", "compete", "market share"]
+            for insight_text in insights:
+                text_lower = insight_text.lower()
+                if any(kw in text_lower for kw in competitor_keywords):
+                    # Extract capitalized company-like names (2+ words, title case)
+                    found = re.findall(r'\b([A-Z][a-z]+ (?:[A-Z][a-z]+\s?)+|[A-Z]{2,}\b)', insight_text)
+                    for name in found:
+                        name = name.strip()
+                        # Filter out common false positives
+                        if name and len(name) > 3 and name not in ("The", "This", "These", "Their") and name not in competitors:
+                            competitors.append(name)
+        # Keep max 6 competitors and add source tag
+        competitors = competitors[:6]
 
         # 7. Value proposition
         value_prop = normalized.get("value_proposition") or descriptions.get("external_value_proposition") or normalized.get("executive_summary") or normalized.get("tagline") or ""

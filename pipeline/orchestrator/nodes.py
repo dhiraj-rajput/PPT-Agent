@@ -274,16 +274,21 @@ def run_linkedin_agent(state: AgentState) -> dict:
 
     try:
         from pipeline.linkedin.scraper import scrape_company
+
+        def _linkedin_thread_worker():
+            return asyncio.run(scrape_company(linkedin_input))
+
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
             loop = None
+
         if loop and loop.is_running():
             import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                data = pool.submit(asyncio.run, scrape_company(linkedin_input)).result()
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                data = pool.submit(_linkedin_thread_worker).result()
         else:
-            data = asyncio.run(scrape_company(linkedin_input))
+            data = _linkedin_thread_worker()
 
         serialized = data.model_dump(mode="json")
 
@@ -394,15 +399,67 @@ def merge_results(state: AgentState) -> dict:
             if m.get("full_name")
         ] or website.get("leadership", []),
 
-        # Contact & Social
-        "emails": website.get("emails", []),
-        "phone_numbers": website.get("phone_numbers", []),
+        # Contact & Social (Multi-Source Contact Resolution)
+        "emails": (lambda: [
+            # Extract emails and phone numbers from all sources
+            e for e in (lambda: [
+                # Build list of raw text to scan
+                txt for txt in [
+                    linkedin_desc.get("about_text"),
+                    website.get("description"),
+                ] + [
+                    page.get("text") for page in website.get("pages", []) if page.get("text")
+                ] + [
+                    r.get("snippet") for r in (state.get("external_news") or []) if r.get("snippet")
+                ] if txt
+            ])()
+        ])() and (lambda: [
+            # Scan combined text and merge with direct sources
+            emails for emails in (lambda: [
+                # Direct website emails + SAM.gov POC emails + regex extracted
+                list(dict.fromkeys(
+                    [e.lower().strip() for e in website.get("emails", []) if e] +
+                    [poc.get("email", "").lower().strip() for poc in (lambda: [
+                        rfp.get("pocs", []) for rfp in [
+                            get_collection("rfps").find_one({"solicitation_number": state.get("solicitation_number")})
+                            if state.get("solicitation_number") else None
+                        ] if rfp
+                    ])() or [] if poc.get("email")] +
+                    [e.lower().strip() for e in re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', "\n".join([
+                        linkedin_desc.get("about_text") or "",
+                        website.get("description") or "",
+                    ] + [r.get("snippet") or "" for r in (state.get("external_news") or [])])) if e]
+                ))
+            ])()
+        ])() or [],
+
+        "phone_numbers": (lambda: [
+            list(dict.fromkeys(
+                [p.strip() for p in website.get("phone_numbers", []) if p] +
+                [poc.get("phone", "").strip() for poc in (lambda: [
+                    rfp.get("pocs", []) for rfp in [
+                        get_collection("rfps").find_one({"solicitation_number": state.get("solicitation_number")})
+                        if state.get("solicitation_number") else None
+                    ] if rfp
+                ])() or [] if poc.get("phone")] +
+                [p.strip() for p in re.findall(r'\+?\d{1,4}[-.\s]?\(?\d{1,3}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}', "\n".join([
+                    linkedin_desc.get("about_text") or "",
+                    website.get("description") or "",
+                ] + [r.get("snippet") or "" for r in (state.get("external_news") or [])])) if len(re.sub(r'\D', '', p)) >= 10]
+            ))
+        ])() or [],
+
         "social_links": website.get("social_links", []),
         "locations": (
             [
                 loc.get("city") or loc.get("full_address", "")
                 for loc in (linkedin.get("office_locations") or [])
                 if loc.get("city") or loc.get("full_address")
+            ] or [
+                rfp.get("place_of_performance", "") for rfp in [
+                    get_collection("rfps").find_one({"solicitation_number": state.get("solicitation_number")})
+                    if state.get("solicitation_number") else None
+                ] if rfp and rfp.get("place_of_performance")
             ] or website.get("locations", [])
         ),
 
@@ -656,19 +713,43 @@ def discover_external_news(state: AgentState) -> dict:
             for r in raw_results[:6]:
                 snippet_lower = r["snippet"].lower()
                 category = "General News"
-                if any(x in snippet_lower for x in ["revenue", "profit", "growth", "funding", "valuation", "financial"]):
+                matched_keywords = 0
+
+                fin_keywords = ["revenue", "profit", "growth", "funding", "valuation", "financial", "raised", "billion", "million"]
+                comp_keywords = ["competitor", "market share", "beat", "swot", "rival", "alternative", "outperform"]
+                rfp_keywords = ["rfp", "tender", "contract", "win", "award", "solicitation", "government"]
+                prod_keywords = ["product", "launch", "feature", "release", "update", "version", "platform"]
+
+                if any(x in snippet_lower for x in fin_keywords):
                     category = "Financial Health"
-                elif any(x in snippet_lower for x in ["competitor", "market share", "beat", "swot", "rival"]):
+                    matched_keywords = sum(1 for x in fin_keywords if x in snippet_lower)
+                    max_kw = len(fin_keywords)
+                elif any(x in snippet_lower for x in comp_keywords):
                     category = "Competitor Intelligence"
-                elif any(x in snippet_lower for x in ["rfp", "tender", "contract", "win"]):
+                    matched_keywords = sum(1 for x in comp_keywords if x in snippet_lower)
+                    max_kw = len(comp_keywords)
+                elif any(x in snippet_lower for x in rfp_keywords):
                     category = "RFP / Contract Win"
-                elif any(x in snippet_lower for x in ["product", "launch", "feature", "release"]):
+                    matched_keywords = sum(1 for x in rfp_keywords if x in snippet_lower)
+                    max_kw = len(rfp_keywords)
+                elif any(x in snippet_lower for x in prod_keywords):
                     category = "Product Release"
+                    matched_keywords = sum(1 for x in prod_keywords if x in snippet_lower)
+                    max_kw = len(prod_keywords)
+                else:
+                    matched_keywords = 1
+                    max_kw = 10
+
+                # Dynamic confidence: more keyword hits = higher confidence.
+                # Range: 0.40 (1 keyword match) to 0.85 (many matches).
+                confidence = min(0.85, 0.40 + (matched_keywords / max(max_kw, 1)) * 0.45)
+
                 insights.append({
                     "category": category,
                     "description": r["snippet"],
                     "source_url": r["url"],
-                    "confidence_score": 0.8,
+                    "confidence_score": round(confidence, 2),
+                    "source": "rule_based",  # Tag rule-based vs AI insights
                 })
             return {
                 "business_model": f"Core business model for {company_name} extracted from search snippets.",

@@ -125,33 +125,38 @@ export default function TenderDetail() {
 
   // Real-time updates when compile completes
   useEffect(() => {
-    let ws;
-    let reconnectTimeout;
+    let isMounted = true;
+    let ws = null;
+    let reconnectTimeout = null;
 
     function connect() {
+      if (!isMounted) return;
       const token = localStorage.getItem('orbitavanya_token');
       const wsUrl = api.getWebSocketUrl(`/api/proposals/ws${token ? `?token=${encodeURIComponent(token)}` : ''}`);
-      ws = new WebSocket(wsUrl);
-      ws.onmessage = () => {
-        // Refresh statuses whenever a progress push or task update is broadcasted
-        fetchDraftRequests();
-      };
-      ws.onclose = () => {
-        reconnectTimeout = setTimeout(connect, 5000);
-      };
-      ws.onerror = (err) => {
-        console.warn("TenderDetail WebSocket error:", err);
-      };
+      try {
+        ws = new WebSocket(wsUrl);
+        ws.onmessage = () => {
+          if (isMounted) fetchDraftRequests();
+        };
+        ws.onclose = () => {
+          if (isMounted) reconnectTimeout = setTimeout(connect, 5000);
+        };
+        ws.onerror = () => {};
+      } catch (e) {}
     }
 
     connect();
 
     return () => {
+      isMounted = false;
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
       if (ws) {
         ws.onclose = null;
-        ws.close();
+        ws.onerror = null;
+        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+          ws.close();
+        }
       }
-      if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };
   }, [fetchDraftRequests]);
 

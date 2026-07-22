@@ -148,8 +148,9 @@ export default function AIResearch() {
     if (!company || !profileList?.length) return null;
 
     const companyName = (company.name || '').trim();
+    if (!companyName) return null;
 
-    // 0. check taskStatusMap for a resolved_slug
+    // 0. Check taskStatusMap for a resolved_slug
     const resolvedSlug = taskStatusMap[companyName]?.resolved_slug;
     if (resolvedSlug) {
       const match = profileList.find(
@@ -159,25 +160,25 @@ export default function AIResearch() {
     }
 
     const companyNameLower = companyName.toLowerCase();
-
-    // Helper: slug from a string
     const toSlug = (str) =>
       (str || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
     const companySlug = toSlug(companyNameLower);
 
-    // Strip URL scheme/trailing slashes so URLs become a bare domain
     const stripUrl = (str) =>
       (str || '').replace(/^https?:\/\//, '').replace(/\/$/, '').split('/')[0].toLowerCase();
 
-    const companyDomain = stripUrl(companyNameLower); // in case name is a URL
+    const companyDomain = stripUrl(companyNameLower);
 
-    // Token match — min 2 chars, ignore very common words
-    const STOP = new Set(['inc', 'llc', 'ltd', 'corp', 'co', 'and', 'the', 'for',
-      'solutions', 'systems', 'services', 'technologies', 'group', 'global']);
+    const STOP = new Set([
+      'inc', 'llc', 'ltd', 'corp', 'co', 'and', 'the', 'for', 'solutions',
+      'systems', 'services', 'technologies', 'group', 'global', 'company',
+      'association', 'enterprise', 'international', 'holdings', 'tech', 'cyber'
+    ]);
+
     const tokenize = (str) =>
       (str || '').toLowerCase().replace(/[^a-z0-9\s]+/g, '').split(/\s+/)
-        .filter(t => t.length >= 2 && !STOP.has(t));
+        .filter(t => t.length >= 3 && !STOP.has(t));
 
     const companyTokens = tokenize(companyNameLower);
 
@@ -187,18 +188,22 @@ export default function AIResearch() {
       const pNameSlug = (p.company_name_slug || toSlug(pName));
       const pWebsite = stripUrl(p.website || '');
 
-      // 1. Exact slug match (both directions)
-      if (pSlug === companySlug || pNameSlug === companySlug) return true;
+      // 1. Exact slug match
+      if (companySlug && (pSlug === companySlug || pNameSlug === companySlug)) return true;
 
-      // 2. Website domain substring match (handles "infosys.com" input)
-      if (companyDomain && pWebsite && (pWebsite.includes(companyDomain) || companyDomain.includes(pWebsite))) return true;
+      // 2. Exact name match
+      if (pName && pName === companyNameLower) return true;
 
-      // 3. Token overlap: at least 1 meaningful shared token
-      if (companyTokens.length > 0) {
+      // 3. Website domain match (only if valid domain with dot)
+      if (companyDomain && companyDomain.includes('.') && pWebsite && pWebsite.includes('.')) {
+        if (pWebsite === companyDomain) return true;
+      }
+
+      // 4. Token overlap — require ALL distinct non-stop tokens to match
+      if (companyTokens.length >= 2) {
         const pTokens = tokenize(pName);
-        if (pTokens.length > 0 && companyTokens.some(t => pTokens.includes(t))) return true;
-        // First token exact match is strong signal
-        if (companyTokens[0] && pTokens[0] && companyTokens[0] === pTokens[0]) return true;
+        const allMatch = companyTokens.every(t => pTokens.includes(t));
+        if (allMatch) return true;
       }
 
       return false;
@@ -356,7 +361,11 @@ export default function AIResearch() {
     ? companiesList.filter(c => c.name.toLowerCase().includes(newCompanyInput.toLowerCase())).slice(0, 5)
     : [];
 
-  const hasProfileForCompany = (c) => !!matchProfile(c, profiles);
+  const hasProfileForCompany = (c) => {
+    if (!c) return false;
+    if (c.hasResearchedProfile || c.is_researched) return true;
+    return !!matchProfile(c, profiles);
+  };
 
   // ─── Render ───────────────────────────────────────────────────────────────────
 

@@ -10,17 +10,14 @@ rest of the application still works without email.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from typing import Optional
 
-logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Transporter setup (lazy, so no crash at import if SMTP not set)
-# ---------------------------------------------------------------------------
-
 from config.settings import settings
+
+logger = logging.getLogger(__name__)
 
 
 def _is_smtp_configured() -> bool:
@@ -265,13 +262,18 @@ async def send_meeting_cancelled_email(
 # Company custom email with attachments
 # ---------------------------------------------------------------------------
 
+def _read_file_sync(file_path: str) -> bytes:
+    with open(file_path, "rb") as f:
+        return f.read()
+
+
 async def send_company_email_with_attachments(
     to_email: str,
     subject: str,
     body_html: str,
     attachments: Optional[list[dict]] = None
 ) -> None:
-    """Send a custom email to a company with optional attachments."""
+    """Send a custom email to a company with optional attachments (non-blocking file reads)."""
     if attachments is None:
         attachments = []
     if not _is_smtp_configured():
@@ -298,8 +300,8 @@ async def send_company_email_with_attachments(
                 path = attach.get("path")
                 filename = attach.get("filename")
                 if path and os.path.exists(path):
-                    with open(path, "rb") as f:
-                        part = MIMEApplication(f.read(), Name=filename)
+                    content = await asyncio.to_thread(_read_file_sync, path)
+                    part = MIMEApplication(content, Name=filename)
                     part['Content-Disposition'] = f'attachment; filename="{filename}"'
                     msg.attach(part)
                 else:

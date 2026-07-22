@@ -11,6 +11,7 @@ that ignored uploaded templates and produced weak layout control.
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -27,6 +28,7 @@ def generate_final_document(
     strategy: Dict[str, Any],
     output_name: str,
     template_path: Optional[str] = None,
+    wizard_config: Optional[str | Dict[str, Any]] = None,
 ) -> str:
     """Generate the final editable proposal document for the BidForge workflow."""
     out_dir = Path(__file__).resolve().parent.parent.parent / "output" / "rfp_respond"
@@ -36,6 +38,7 @@ def generate_final_document(
     brand_config = _load_brand_config(template_path, out_dir)
     proposal_meta = _build_proposal_meta(parsed_rfp, brand_config)
     sections = _build_document_sections(parsed_rfp, inventory, competitor_intel, strategy)
+    sections = _apply_wizard_config(sections, wizard_config)
 
     cfg = {
         "brand": brand_config,
@@ -327,6 +330,109 @@ def _terms_blocks(compliance: list[Any]) -> list[Dict[str, Any]]:
             "Finalize attachments, signatures, representations, and submission packaging required by the buyer.",
         ]},
     ]
+
+
+def _apply_wizard_config(
+    sections: list[Dict[str, Any]],
+    wizard_config: Optional[str | Dict[str, Any]],
+) -> list[Dict[str, Any]]:
+    """Apply pre-generation wizard outline choices to the generated document.
+
+    The wizard can rename/include known sections and add custom sections. Unknown
+    custom sections are appended as normal proposal sections so user-entered
+    outline guidance is not silently dropped.
+    """
+    config = _decode_wizard_config(wizard_config)
+    wizard_sections = config.get("sections") if isinstance(config, dict) else None
+    if not isinstance(wizard_sections, list):
+        return sections
+
+    key_to_title = {
+        "executive_summary": "Executive Summary",
+        "requirements": "Understanding of Requirements",
+        "technical_approach": "Scope of Work",
+        "scope_of_work": "Scope of Work",
+        "pricing": "Pricing Strategy",
+        "pricing_table": "Pricing Strategy",
+        "competitive_positioning": "Competitive Positioning",
+        "implementation": "Implementation Timeline",
+        "timeline": "Implementation Timeline",
+        "terms": "Terms, Compliance, and Next Steps",
+        "compliance": "Terms, Compliance, and Next Steps",
+        "next_steps": "Terms, Compliance, and Next Steps",
+    }
+    by_title = {section.get("title"): section for section in sections}
+    used_titles: set[str] = set()
+    ordered: list[Dict[str, Any]] = []
+
+    for wizard_section in wizard_sections:
+        if not isinstance(wizard_section, dict) or wizard_section.get("included") is False:
+            continue
+
+        key = str(wizard_section.get("key") or "").strip().lower()
+        desired_title = str(wizard_section.get("title") or "").strip()
+        base_title = key_to_title.get(key)
+
+        if base_title and base_title in by_title:
+            section = dict(by_title[base_title])
+            if desired_title:
+                section["title"] = _strip_leading_number(desired_title)
+            used_titles.add(base_title)
+            ordered.append(section)
+            continue
+
+        blocks = _wizard_section_blocks(wizard_section)
+        if blocks:
+            ordered.append({
+                "title": _strip_leading_number(desired_title or key.replace("_", " ").title() or "Additional Proposal Section"),
+                "page_break_before": True,
+                "blocks": blocks,
+            })
+
+    for section in sections:
+        if section.get("title") not in used_titles:
+            ordered.append(section)
+
+    first = True
+    for section in ordered:
+        section["page_break_before"] = not first
+        first = False
+    return ordered
+
+
+def _decode_wizard_config(wizard_config: Optional[str | Dict[str, Any]]) -> Dict[str, Any]:
+    if isinstance(wizard_config, dict):
+        return wizard_config
+    if not wizard_config:
+        return {}
+    try:
+        decoded = json.loads(wizard_config)
+        return decoded if isinstance(decoded, dict) else {}
+    except Exception as exc:
+        logger.warning(f"[BidForge:DocGen] Could not parse wizard config: {exc}")
+        return {}
+
+
+def _wizard_section_blocks(wizard_section: Dict[str, Any]) -> list[Dict[str, Any]]:
+    blocks: list[Dict[str, Any]] = []
+    description = str(wizard_section.get("description") or "").strip()
+    if description:
+        blocks.append({"type": "paragraph", "text": description})
+
+    key_points = wizard_section.get("key_points") or []
+    if isinstance(key_points, str):
+        key_points = [line.strip() for line in key_points.splitlines() if line.strip()]
+    if isinstance(key_points, list):
+        items = [str(item).strip() for item in key_points if str(item).strip()]
+        if items:
+            blocks.append({"type": "bullets", "items": items})
+    return blocks
+
+
+def _strip_leading_number(title: str) -> str:
+    import re
+
+    return re.sub(r"^\s*\d+(?:\.\d+)?[.)]?\s+", "", title).strip()
 
 
 def _first_present(*values: Any) -> str:

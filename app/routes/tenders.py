@@ -1,18 +1,13 @@
 """
 app/routes/tenders.py
 ---------------------
-Tenders API — SAM.gov Opportunities v2 integration with MongoDB caching.
+Tenders API — SAM.gov Opportunities v2 integration with Motor MongoDB caching.
 
 SAM.gov Opportunities API: https://api.sam.gov/opportunities/v2/search
 Entity Management API (companies): https://api.sam.gov/entity-information/v3/entities
 
-IMPORTANT — Rate limits:
-  Non-federal, no SAM role  →  10 requests/day
-  Non-federal, with SAM role → 1,000 requests/day  (register at sam.gov to unlock)
-  Federal                    → 10,000 requests/day
-
 Strategy:
-  - MongoDB is the single source of truth. The frontend never hits SAM.gov directly.
+  - MongoDB (Motor async) is the single source of truth. The frontend never hits SAM.gov directly.
   - SAM.gov is only called when the cache is empty OR the user triggers a manual sync.
   - Cached results include computed lifecycle status (Open / Closing Soon / Expired / Won).
 
@@ -24,34 +19,38 @@ Endpoints:
   POST /api/tenders/{id}/request-draft  — "Ask for Project (Draft)" button
 """
 
+from __future__ import annotations
+
+import asyncio
+import logging
 import re
 import httpx
+
+logger = logging.getLogger(__name__)
 from datetime import datetime, timezone, timedelta
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from utils.db_client import get_collection
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
+from fastapi.responses import FileResponse
+
+from utils.db_client import get_async_collection, get_collection
 from config.settings import settings
 from app.core.auth import get_current_user
 
 def _sanitize_path_component(value: str) -> str:
-    """Sanitize a string for safe use as a filesystem path component."""
-    import re
     return re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', str(value)).strip('_. ')
 
 router = APIRouter(prefix="/tenders", tags=["tenders"])
 
-# SAM.gov Opportunities v2 search endpoint
 SAM_OPPORTUNITIES_BASE = "https://api.sam.gov/opportunities/v2/search"
 
-# ---------------------------------------------------------------------------
-# Lifecycle helpers
-# ---------------------------------------------------------------------------
 
 def _utc_now_iso() -> str:
     return datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
+
 def _compute_match_score(notice_id: str, naics_code: str = "", title: str = "", summary: str = "") -> int:
-    """Compute dynamic relevance match score against OrbitAvanya_Services_ADD.xlsx catalog."""
     try:
         from app.core.match_engine import compute_tender_match_score
         return compute_tender_match_score(notice_id=notice_id, title=title, summary=summary, naics_code=naics_code)
@@ -65,19 +64,8 @@ def _compute_lifecycle(
     award_date_str: str = "",
     award_amount: float = 0.0,
 ) -> dict:
-    """
-    Compute the rich lifecycle state of a tender from its dates and flags.
-
-    Returns:
-        status          : "Open" | "Closing Soon" | "Expired" | "Won" | "Closed"
-        days_until_close: int (positive = days remaining, negative = days past deadline)
-        is_active       : bool
-        has_award       : bool — True when SAM reports an awarded contract
-        urgency         : "critical" | "warning" | "normal" | "expired" | "won"
-    """
     now = datetime.now(tz=timezone.utc)
 
-    # Parse closing date
     closing_dt = None
     for fmt in (
         "%Y-%m-%dT%H:%M:%S%z",
@@ -90,7 +78,6 @@ def _compute_lifecycle(
             raw = closing_date_str.strip() if closing_date_str else ""
             if not raw:
                 break
-            # Handle timezone offset like -05:00
             if raw.endswith("Z"):
                 raw_try = raw[:-1] + "+00:00"
             else:
@@ -101,300 +88,219 @@ def _compute_lifecycle(
                     closing_dt = closing_dt.replace(tzinfo=timezone.utc)
                 break
             except ValueError:
-                pass
-            closing_dt = datetime.strptime(raw[:len(fmt)], fmt)
-            if closing_dt.tzinfo is None:
-                closing_dt = closing_dt.replace(tzinfo=timezone.utc)
-            break
-        except (ValueError, AttributeError):
-            continue
+                closing_dt = datetime.strptime(raw, fmt).replace(tzinfo=timezone.utc)
+                break
+        except Exception:
+            pass
 
-    days_until_close = None
-    if closing_dt:
-        delta = closing_dt - now
-        days_until_close = delta.days  # negative = past deadline
-
-    is_active = str(active_flag).strip().lower() in ("yes", "true", "1", "active", "y")
-    has_award = bool(award_date_str and award_date_str.strip()) or award_amount > 0
-
-    # Determine status and urgency
+    has_award = bool(award_amount > 0 or award_date_str)
     if has_award:
-        status = "Won"
-        urgency = "won"
-    elif not is_active and (days_until_close is None or days_until_close < 0):
-        status = "Expired"
-        urgency = "expired"
-    elif days_until_close is not None and days_until_close < 0:
-        status = "Expired"
-        urgency = "expired"
-    elif days_until_close is not None and days_until_close <= 7:
-        status = "Closing Soon"
-        urgency = "critical"
-    elif days_until_close is not None and days_until_close <= 30:
-        status = "Closing Soon"
-        urgency = "warning"
-    elif is_active:
-        status = "Open"
-        urgency = "normal"
+        return {
+            "status": "Won",
+            "days_until_close": 0,
+            "is_active": False,
+            "has_award": True,
+            "urgency": "won",
+        }
+
+    if not closing_dt:
+        is_active = active_flag.strip().lower() in ("yes", "y", "true", "active")
+        return {
+            "status": "Open" if is_active else "Closed",
+            "days_until_close": 999 if is_active else 0,
+            "is_active": is_active,
+            "has_award": False,
+            "urgency": "normal" if is_active else "expired",
+        }
+
+    diff_days = (closing_dt - now).days
+
+    if diff_days < 0:
+        return {
+            "status": "Expired",
+            "days_until_close": diff_days,
+            "is_active": False,
+            "has_award": False,
+            "urgency": "expired",
+        }
+    elif diff_days <= 7:
+        return {
+            "status": "Closing Soon",
+            "days_until_close": diff_days,
+            "is_active": True,
+            "has_award": False,
+            "urgency": "critical",
+        }
+    elif diff_days <= 30:
+        return {
+            "status": "Closing Soon",
+            "days_until_close": diff_days,
+            "is_active": True,
+            "has_award": False,
+            "urgency": "warning",
+        }
     else:
-        status = "Closed"
-        urgency = "expired"
-
-    return {
-        "status": status,
-        "urgency": urgency,
-        "days_until_close": days_until_close,
-        "is_active": is_active,
-        "has_award": has_award,
-    }
-
-
-def _fmt_date(raw: str | None) -> str:
-    """Safely parse and re-format a SAM.gov date string to YYYY-MM-DD."""
-    if not raw:
-        return ""
-    try:
-        for fmt in (
-            "%Y-%m-%dT%H:%M:%S%z",
-            "%Y-%m-%dT%H:%M:%SZ",
-            "%Y-%m-%dT%H:%M:%S",
-            "%Y-%m-%d",
-            "%m/%d/%Y",
-        ):
-            try:
-                raw_try = raw.strip()
-                if raw_try.endswith("Z"):
-                    raw_try = raw_try[:-1] + "+00:00"
-                dt = datetime.fromisoformat(raw_try)
-                return dt.strftime("%Y-%m-%d")
-            except ValueError:
-                pass
-            try:
-                dt = datetime.strptime(raw.strip()[:len(fmt)], fmt)
-                return dt.strftime("%Y-%m-%d")
-            except ValueError:
-                continue
-        return raw[:10] if len(raw) >= 10 else raw
-    except Exception:
-        return raw or ""
+        return {
+            "status": "Open",
+            "days_until_close": diff_days,
+            "is_active": True,
+            "has_award": False,
+            "urgency": "normal",
+        }
 
 
 def _map_opportunity(opp: dict) -> dict:
-    """
-    Map a single SAM.gov Opportunities v2 object to our internal schema.
-    Handles missing / None fields gracefully.
-    """
-    notice_id = opp.get("noticeId") or opp.get("id") or ""
+    notice_id = opp.get("noticeId") or opp.get("_id") or ""
+    sol_num = opp.get("solicitationNumber") or opp.get("solnum") or ""
+    title = opp.get("title") or opp.get("subject") or "Untitled Opportunity"
 
-    # Award block — SAM nests this inside an award sub-object
-    award = opp.get("award") or {}
-    raw_value = award.get("amount") or opp.get("award_amount") or 0
-    award_date = _fmt_date(award.get("date") or award.get("awardDate") or "")
-    try:
-        value_dollars = float(str(raw_value).replace(",", "").replace("$", ""))
-        if value_dollars >= 1_000_000:
-            formatted_value = f"${value_dollars / 1_000_000:.1f}M"
-        elif value_dollars >= 1_000:
-            formatted_value = f"${value_dollars / 1_000:.0f}K"
-        elif value_dollars > 0:
-            formatted_value = f"${value_dollars:,.0f}"
-        else:
-            formatted_value = "N/A"
-    except (ValueError, TypeError):
-        formatted_value = "N/A"
-        value_dollars = 0.0
+    naics = opp.get("naicsCode") or opp.get("naics") or ""
+    if isinstance(naics, list):
+        naics = naics[0] if naics else ""
 
-    posted = _fmt_date(opp.get("postedDate"))
-    # responseDeadLine is the solicitation response deadline
-    # archiveDate is used when it's been archived without a deadline
-    closing_raw = opp.get("responseDeadLine") or opp.get("responseDateDeadline") or opp.get("archiveDate") or ""
-    closing = _fmt_date(closing_raw)
+    dept = (
+        opp.get("fullParentPathName")
+        or opp.get("department")
+        or opp.get("agency")
+        or "U.S. Federal Government"
+    )
 
-    # Lifecycle computation
-    active_flag = opp.get("active", "")
+    set_aside_code = opp.get("typeOfSetAsideCode") or opp.get("setAside") or ""
+    set_aside_desc = opp.get("typeOfSetAside") or set_aside_code or "Unrestricted"
+
+    award_info = opp.get("award") or {}
+    award_amount = float(award_info.get("amount") or 0.0)
+    award_date = award_info.get("date") or ""
+    award_awardee = (award_info.get("awardee") or {}).get("name") or ""
+
+    closing = (
+        opp.get("responseDeadLine")
+        or opp.get("closeDate")
+        or opp.get("archiveDate")
+        or ""
+    )
+    active_flag = str(opp.get("active") or "Yes")
+
     lifecycle = _compute_lifecycle(
-        closing_date_str=closing_raw,
+        closing_date_str=closing,
         active_flag=active_flag,
         award_date_str=award_date,
-        award_amount=value_dollars,
+        award_amount=award_amount,
     )
 
-    # Category / type
-    raw_type = (
-        opp.get("type")
-        or opp.get("baseType")
-        or opp.get("classificationCode")
-        or "Solicitation"
-    )
+    posted = opp.get("postedDate") or opp.get("publishDate") or ""
+    if posted and len(posted) >= 10:
+        posted_fmt = posted[:10]
+    else:
+        posted_fmt = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
 
-    # Agency — SAM nests this as fullParentPathName or departmentName
-    agency_full = (
-        opp.get("fullParentPathName")
-        or opp.get("departmentName")
-        or opp.get("subtierName")
-        or opp.get("organizationName")
-        or "Federal Agency"
-    )
-    # fullParentPathName = "DEPT OF DEFENSE.DEPT OF THE ARMY" → take last segment
-    agency = agency_full.split(".")[-1].strip().title() if "." in agency_full else agency_full
+    closing_fmt = ""
+    if closing and len(closing) >= 10:
+        closing_fmt = closing[:10]
 
-    description = opp.get("description") or opp.get("synopsis") or ""
-
-    # Solicitation number / POC
-    poc_list = opp.get("pointOfContact") or []
-    poc_email = ""
+    pocs = opp.get("pointOfContact") or []
     poc_name = ""
+    poc_email = ""
     poc_phone = ""
-    if poc_list and isinstance(poc_list, list):
-        primary_poc = next((p for p in poc_list if p.get("type") == "primary"), poc_list[0] if poc_list else {})
-        poc_email = primary_poc.get("email") or ""
-        poc_name = primary_poc.get("fullName") or ""
-        poc_phone = primary_poc.get("phone") or ""
+    if pocs and isinstance(pocs, list):
+        p0 = pocs[0]
+        poc_name = p0.get("fullName") or p0.get("title") or ""
+        poc_email = p0.get("email") or ""
+        poc_phone = p0.get("phone") or ""
 
-    # Place of performance
-    pop = opp.get("placeOfPerformance") or {}
-    pop_city = (pop.get("city") or {}).get("name") or ""
-    pop_state = (pop.get("state") or {}).get("code") or ""
-    pop_location = f"{pop_city}, {pop_state}".strip(", ") if (pop_city or pop_state) else ""
+    summary = opp.get("description") or opp.get("synopsis") or ""
+
+    match_score = _compute_match_score(
+        notice_id=notice_id,
+        naics_code=str(naics),
+        title=title,
+        summary=summary,
+    )
 
     return {
-        # Identity
         "id": notice_id,
-        "solicitation_number": opp.get("solicitationNumber") or "",
-        "title": opp.get("title") or "Untitled Opportunity",
-
-        # Agency
-        "agency": agency,
-        "agency_full_path": agency_full,
-        "department_name": opp.get("departmentName") or "",
-        "sub_tier": opp.get("subtierName") or "",
-        "office": opp.get("officeName") or "",
-
-        # Classification
-        "category": raw_type,
-        "base_type": opp.get("baseType") or "",
-        "naics_code": opp.get("naicsCode") or "",
-        "classification_code": opp.get("classificationCode") or "",
-        "set_aside_code": opp.get("typeOfSetAsideCode") or "",
-        "set_aside": opp.get("typeOfSetAside") or "",
-
-        # Financials
-        "value": formatted_value,
-        "award_amount": value_dollars,
-        "award_date": award_date,
-        "award_number": award.get("number") or award.get("awardNumber") or "",
-        "award_awardee": (award.get("awardee") or {}).get("name") or award.get("awardeeName") or "",
-
-        # Lifecycle / Dates
-        "posted_date": posted,
-        "closing_date": closing,
-        "archive_date": _fmt_date(opp.get("archiveDate") or ""),
+        "noticeId": notice_id,
+        "title": title,
+        "solicitation_number": sol_num,
+        "agency": dept,
+        "department": dept,
+        "naics_code": str(naics),
+        "set_aside": set_aside_desc,
+        "set_aside_code": set_aside_code,
+        "type": opp.get("type") or "Solicitation",
+        "postedDate": posted_fmt,
+        "posted_date": posted_fmt,
+        "closingDate": closing_fmt,
+        "closing_date": closing_fmt,
+        "days_until_close": lifecycle["days_until_close"],
         "status": lifecycle["status"],
         "urgency": lifecycle["urgency"],
-        "days_until_close": lifecycle["days_until_close"],
         "is_active": lifecycle["is_active"],
         "has_award": lifecycle["has_award"],
-
-        # Contact
+        "award_amount": award_amount,
+        "award_date": award_date[:10] if award_date else "",
+        "award_awardee": award_awardee,
+        "match": match_score,
+        "matchScore": match_score,
+        "rfp_url": opp.get("uiLink") or f"https://sam.gov/opp/{notice_id}/view",
+        "summary": summary[:2000],
         "poc_name": poc_name,
         "poc_email": poc_email,
         "poc_phone": poc_phone,
-
-        # Place of Performance
-        "place_of_performance": pop_location,
-
-        # Content
-        "description": description,
-        "rfp_url": opp.get("uiLink") or f"https://sam.gov/opp/{notice_id}/view",
-
-        # AI-computed
-        "match": _compute_match_score(notice_id, opp.get("naicsCode") or ""),
-
-        # Legacy camelCase aliases so any existing frontend reading .closingDate etc still works
-        "postedDate": posted,
-        "closingDate": closing,
-        "matchScore": _compute_match_score(notice_id, opp.get("naicsCode") or ""),
-
-        # Internal metadata
-        "_cached_at": _utc_now_iso(),
+        "place_of_performance": opp.get("placeOfPerformance") or {},
+        "updatedAt": _utc_now_iso(),
     }
 
-
-# ---------------------------------------------------------------------------
-# GET /api/tenders/meta  — MUST be before /{id} to avoid route shadowing
-# ---------------------------------------------------------------------------
 
 @router.get("/meta")
-def get_tenders_meta(current_user: dict = Depends(get_current_user)):
-    """Return sync metadata: last_synced, total cached, quota used today."""
-    meta_col = get_collection("tenders_meta")
-    tenders_col = get_collection("tenders")
-    meta = meta_col.find_one({}, {"_id": 0}) or {}
-    count = tenders_col.count_documents({})
+async def get_tenders_meta(current_user: dict = Depends(get_current_user)):
+    meta_col = get_async_collection("tenders_meta")
+    tenders_col = get_async_collection("tenders")
+
+    meta = await meta_col.find_one({}) or {}
+    total_cached = await tenders_col.count_documents({})
+    active_cached = await tenders_col.count_documents({"is_active": True})
+
     return {
+        "total_cached": total_cached,
+        "active_cached": active_cached,
         "last_synced": meta.get("last_synced"),
-        "total_cached": count,
         "quota_used_today": meta.get("quota_used_today", 0),
-        "last_sync_params": meta.get("last_sync_params", {}),
-        "rate_limit_note": (
-            "Free tier: 10 req/day. Register a role at sam.gov/workspace → 1,000 req/day. "
-            "Cached results never expire — sync only when you need fresh data."
-        ),
+        "quota_max_daily": 10,
     }
 
 
-# ---------------------------------------------------------------------------
-# GET /api/tenders
-# ---------------------------------------------------------------------------
-
 @router.get("")
-def get_tenders(
-    query: Optional[str] = None,
+async def get_tenders(
+    q: Optional[str] = None,
     naics: Optional[str] = None,
     set_aside: Optional[str] = None,
     status: Optional[str] = None,
     urgency: Optional[str] = None,
     has_award: Optional[bool] = None,
-    page: int = 1,
-    limit: int = 20,
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    Return cached tenders from MongoDB with optional local filtering.
-    No SAM.gov calls — everything served from the cache.
-
-    status options: Open | Closing Soon | Expired | Won | Closed | All
-    urgency options: critical | warning | normal | expired | won
-    """
     try:
-        col = get_collection("tenders")
-        total_cached = col.count_documents({})
+        col = get_async_collection("tenders")
+        total_cached = await col.count_documents({})
 
-        if total_cached == 0:
-            return {
-                "total": 0,
-                "page": page,
-                "limit": limit,
-                "tenders": [],
-                "cache_empty": True,
-                "naics_codes": [],
-                "set_aside_options": [],
-                "message": "No tenders cached yet. Use the Sync button to fetch from SAM.gov.",
-            }
+        filter_q = {}
+        and_conditions = []
 
-        # Build filter
-        filter_q: dict = {}
-        and_conditions: list = []
-
-        if query:
-            q = re.escape(query.strip())
-            and_conditions.append({"$or": [
-                {"title": {"$regex": q, "$options": "i"}},
-                {"agency": {"$regex": q, "$options": "i"}},
-                {"solicitation_number": {"$regex": q, "$options": "i"}},
-                {"description": {"$regex": q, "$options": "i"}},
-                {"naics_code": {"$regex": q, "$options": "i"}},
-            ]})
+        if q:
+            escaped_q = re.escape(q.strip())
+            and_conditions.append({
+                "$or": [
+                    {"title": {"$regex": escaped_q, "$options": "i"}},
+                    {"solicitation_number": {"$regex": escaped_q, "$options": "i"}},
+                    {"agency": {"$regex": escaped_q, "$options": "i"}},
+                    {"department": {"$regex": escaped_q, "$options": "i"}},
+                    {"summary": {"$regex": escaped_q, "$options": "i"}},
+                    {"naics_code": {"$regex": escaped_q, "$options": "i"}},
+                ]
+            })
 
         if naics and naics.upper() != "ALL":
             and_conditions.append({"naics_code": {"$regex": re.escape(naics.strip()), "$options": "i"}})
@@ -417,20 +323,19 @@ def get_tenders(
         if and_conditions:
             filter_q["$and"] = and_conditions
 
-        total = col.count_documents(filter_q)
+        total = await col.count_documents(filter_q)
         skip = (page - 1) * limit
-        results = list(col.find(filter_q, {"_id": 0}).skip(skip).limit(limit))
+        results = await col.find(filter_q, {"_id": 0}).skip(skip).limit(limit).to_list(length=limit)
 
-        # Summary counts by lifecycle status
         pipeline = [
             {"$group": {"_id": "$status", "count": {"$sum": 1}}}
         ]
-        status_counts_raw = list(col.aggregate(pipeline))
+        status_counts_cursor = col.aggregate(pipeline)
+        status_counts_raw = await status_counts_cursor.to_list(length=100)
         status_counts = {s["_id"]: s["count"] for s in status_counts_raw if s.get("_id")}
 
-        # Dropdown options from cached data
-        naics_codes = sorted([n for n in col.distinct("naics_code") if n])[:100]
-        set_aside_opts = sorted([s for s in col.distinct("set_aside") if s])[:50]
+        naics_codes = sorted([n for n in await col.distinct("naics_code") if n])[:100]
+        set_aside_opts = sorted([s for s in await col.distinct("set_aside") if s])[:50]
 
         return {
             "total": total,
@@ -438,7 +343,7 @@ def get_tenders(
             "page": page,
             "limit": limit,
             "tenders": results,
-            "cache_empty": False,
+            "cache_empty": total_cached == 0,
             "naics_codes": naics_codes,
             "set_aside_options": set_aside_opts,
             "status_counts": status_counts,
@@ -447,41 +352,17 @@ def get_tenders(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ---------------------------------------------------------------------------
-# POST /api/tenders/sync
-# ---------------------------------------------------------------------------
-
 @router.post("/sync")
-def sync_tenders_from_sam(
+async def sync_tenders_from_sam(
     payload: dict = {},
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    Fetch opportunities from SAM.gov Opportunities v2 API and cache them in MongoDB.
-
-    SAM.gov Opportunities API parameters (all optional):
-    {
-        "naicsCode":          "541511",    // 6-digit NAICS code (primary NAICS on the solicitation)
-        "keyword":            "AI cloud",  // free-text search across title + description
-        "typeOfSetAsideCode": "SBA",       // set-aside type: SBA, WOSB, 8A, SDVOSBC, HZC, VSB...
-        "postedFrom":         "01/01/2026", // MM/DD/YYYY
-        "postedTo":           "12/31/2026", // MM/DD/YYYY
-        "active":             "Yes",        // "Yes" = active only, "No" = archived only
-        "limit":              25,           // SAM hard max = 25 per request
-        "offset":             0             // pagination offset (0, 25, 50 ...)
-    }
-
-    Rate limit reminder:
-      - No SAM.gov role: 10 req/day (each call here = 1 request)
-      - With SAM.gov role: 1,000 req/day → register at sam.gov to unlock this
-    """
     api_key = settings.SAM_GOV_API_KEY
     force_mock = settings.FORCE_MOCK_SAM_GOV
 
     if not force_mock:
-        # Check manual sync cooldown of 24 hours
-        meta_col = get_collection("tenders_meta")
-        meta = meta_col.find_one({}) or {}
+        meta_col = get_async_collection("tenders_meta")
+        meta = await meta_col.find_one({}) or {}
         last_synced_str = meta.get("last_synced")
         if last_synced_str:
             try:
@@ -501,7 +382,7 @@ def sync_tenders_from_sam(
             except HTTPException:
                 raise
             except Exception as e:
-                print(f"[Tenders] Cooldown parse warning: {e}")
+                logger.warning(f"[Tenders] Cooldown parse warning: {e}")
 
     if not api_key and not force_mock:
         raise HTTPException(
@@ -509,10 +390,9 @@ def sync_tenders_from_sam(
             detail="SAM_GOV_API_KEY is not set. Add it to your .env file.",
         )
 
-    # Build SAM.gov Opportunities v2 query params
     params: dict = {
         "api_key": api_key,
-        "limit": min(int(payload.get("limit", 25)), 25),   # SAM hard max = 25
+        "limit": min(int(payload.get("limit", 25)), 25),
         "offset": int(payload.get("offset", 0)),
         "active": payload.get("active", "Yes"),
     }
@@ -528,27 +408,20 @@ def sync_tenders_from_sam(
     if payload.get("postedTo"):
         params["postedTo"] = payload["postedTo"].strip()
 
-    # SAM.gov Opportunities v2 mandates postedFrom and postedTo dates
     if not force_mock:
         if not params.get("postedFrom"):
             params["postedFrom"] = (datetime.now(tz=timezone.utc) - timedelta(days=90)).strftime("%m/%d/%Y")
         if not params.get("postedTo"):
             params["postedTo"] = datetime.now(tz=timezone.utc).strftime("%m/%d/%Y")
 
-    # Strip empty values (forbidden chars / unexpected behaviour)
     params = {k: v for k, v in params.items() if v not in (None, "")}
 
     if force_mock:
-        print("[Tenders] FORCE_MOCK_SAM_GOV=true — using mock data, no API call made")
-        return _insert_mock_tenders(params)
+        return await _insert_mock_tenders_async(params)
 
-    # --- Live SAM.gov Opportunities API call ---
     try:
-        print(f"[Tenders] -> GET {SAM_OPPORTUNITIES_BASE} params={params}")
-        with httpx.Client(timeout=30) as client:
-            resp = client.get(SAM_OPPORTUNITIES_BASE, params=params)
-
-        print(f"[Tenders] <- HTTP {resp.status_code}")
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.get(SAM_OPPORTUNITIES_BASE, params=params)
 
         if resp.status_code == 429:
             raise HTTPException(
@@ -573,7 +446,6 @@ def sync_tenders_from_sam(
             )
 
         data = resp.json()
-        # Opportunities v2 wraps results in "opportunitiesData"
         opportunities = (
             data.get("opportunitiesData")
             or data.get("_embedded", {}).get("results", [])
@@ -593,7 +465,7 @@ def sync_tenders_from_sam(
                 ),
             }
 
-        return _upsert_tenders(opportunities, params)
+        return await _upsert_tenders_async(opportunities, params)
 
     except HTTPException:
         raise
@@ -601,10 +473,9 @@ def sync_tenders_from_sam(
         raise HTTPException(status_code=500, detail=f"SAM.gov request failed: {e}")
 
 
-def _upsert_tenders(opportunities: list, sync_params: dict, is_mock: bool = False) -> dict:
-    """Upsert a list of SAM.gov opportunity dicts into MongoDB and refresh metadata."""
-    tenders_col = get_collection("tenders")
-    meta_col = get_collection("tenders_meta")
+async def _upsert_tenders_async(opportunities: list, sync_params: dict, is_mock: bool = False) -> dict:
+    tenders_col = get_async_collection("tenders")
+    meta_col = get_async_collection("tenders_meta")
     upserted = 0
 
     for opp in opportunities:
@@ -614,14 +485,14 @@ def _upsert_tenders(opportunities: list, sync_params: dict, is_mock: bool = Fals
         mapped["raw_sam_data"] = opp
         if is_mock:
             mapped["_data_source"] = "mock"
-        tenders_col.update_one(
+        await tenders_col.update_one(
             {"id": mapped["id"]},
             {"$set": mapped},
             upsert=True,
         )
         upserted += 1
 
-    meta_col.update_one(
+    await meta_col.update_one(
         {},
         {
             "$set": {
@@ -635,10 +506,8 @@ def _upsert_tenders(opportunities: list, sync_params: dict, is_mock: bool = Fals
         upsert=True,
     )
 
-    # Recompute lifecycle statuses for already-cached tenders whose deadlines have passed
-    _refresh_expired_statuses(tenders_col)
+    await _refresh_expired_statuses_async(tenders_col)
 
-    print(f"[Tenders] Upserted {upserted} tenders into MongoDB.")
     return {
         "status": "ok",
         "fetched": len(opportunities),
@@ -650,35 +519,27 @@ def _upsert_tenders(opportunities: list, sync_params: dict, is_mock: bool = Fals
     }
 
 
-def _refresh_expired_statuses(col) -> None:
-    """
-    Re-evaluate lifecycle status for all cached tenders.
-    Run after every sync so tenders that have expired since last fetch
-    are correctly marked as Expired rather than showing stale Open status.
-    """
+async def _refresh_expired_statuses_async(col) -> None:
     now = datetime.now(tz=timezone.utc)
     cutoff = now.strftime("%Y-%m-%d")
     try:
-        # Mark expired: closing_date < today AND status is NOT Won/Expired
-        col.update_many(
+        await col.update_many(
             {
                 "closing_date": {"$lt": cutoff, "$ne": ""},
                 "status": {"$nin": ["Won", "Expired"]},
             },
             {"$set": {"status": "Expired", "urgency": "expired", "is_active": False}},
         )
-        # Mark closing-soon: closing_date within next 7 days
         in_7_days = (now + timedelta(days=7)).strftime("%Y-%m-%d")
-        col.update_many(
+        await col.update_many(
             {
                 "closing_date": {"$gte": cutoff, "$lte": in_7_days},
                 "status": "Open",
             },
             {"$set": {"status": "Closing Soon", "urgency": "critical"}},
         )
-        # Mark closing-soon (warning): closing_date within next 30 days
         in_30_days = (now + timedelta(days=30)).strftime("%Y-%m-%d")
-        col.update_many(
+        await col.update_many(
             {
                 "closing_date": {"$gt": in_7_days, "$lte": in_30_days},
                 "status": "Open",
@@ -686,11 +547,10 @@ def _refresh_expired_statuses(col) -> None:
             {"$set": {"status": "Closing Soon", "urgency": "warning"}},
         )
     except Exception as e:
-        print(f"[Tenders] Warning: lifecycle refresh failed: {e}")
+        logger.warning(f"[Tenders] Warning: lifecycle refresh failed: {e}")
 
 
-def _insert_mock_tenders(params: dict) -> dict:
-    """Mock data for dev/demo — uses realistic SAM.gov Opportunities v2 shape."""
+async def _insert_mock_tenders_async(params: dict) -> dict:
     now = datetime.now(tz=timezone.utc)
     mock_raw = [
         {
@@ -784,21 +644,16 @@ def _insert_mock_tenders(params: dict) -> dict:
             "description": "Deploy and configure a SaaS-based LMS covering over 40,000 federal employees, including SCORM-compliant content authoring and HRIS integration.",
         },
     ]
-    return _upsert_tenders(mock_raw, params, is_mock=True)
+    return await _upsert_tenders_async(mock_raw, params, is_mock=True)
 
-
-# ---------------------------------------------------------------------------
-# GET /api/tenders/{notice_id}
-# ---------------------------------------------------------------------------
 
 @router.get("/{notice_id}")
-def get_tender_detail(
+async def get_tender_detail(
     notice_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """Retrieve a single cached tender by its noticeId."""
-    col = get_collection("tenders")
-    tender = col.find_one({"id": notice_id}, {"_id": 0})
+    col = get_async_collection("tenders")
+    tender = await col.find_one({"id": notice_id}, {"_id": 0})
     if not tender:
         raise HTTPException(
             status_code=404,
@@ -807,47 +662,21 @@ def get_tender_detail(
     return tender
 
 
-# ---------------------------------------------------------------------------
-# POST /api/tenders/{notice_id}/request-draft
-# ---------------------------------------------------------------------------
-
 @router.post("/{notice_id}/request-draft")
-def request_draft(
+async def request_draft(
     notice_id: str,
     background_tasks: BackgroundTasks,
     payload: dict = {},
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    Wire the action buttons in TenderDetail.jsx.
-
-    Modes
-    -----
-    prime        — We respond to the open RFP directly as the prime contractor.
-                   Stores the draft request and queues RFP response generation.
-    subcontract  — The contract was already awarded to another company (status=Won).
-                   We pitch ourselves to the winning prime contractor for a subcontract.
-                   Queues the partnership proposal pipeline with `winner` = award_awardee.
-    reference    — The RFP has expired. We generate a reference/template proposal
-                   for similar future opportunities.
-
-    Body (all optional):
-    {
-        "mode":           "prime" | "subcontract" | "reference",
-        "requester":      "John Doe",
-        "notes":          "Focus on AI volume and past performance",
-        "target_company": "TechForward Solutions LLC"   # auto-filled for subcontract
-    }
-    """
-    tenders_col = get_collection("tenders")
-    tender = tenders_col.find_one({"id": notice_id}, {"_id": 0})
+    tenders_col = get_async_collection("tenders")
+    tender = await tenders_col.find_one({"id": notice_id}, {"_id": 0})
     if not tender:
         raise HTTPException(
             status_code=404,
             detail=f"Tender '{notice_id}' not found. Sync from SAM.gov before requesting a draft.",
         )
 
-    # Resolve mode from payload or infer from tender status
     tender_status = tender.get("status", "Open")
     has_award = tender.get("has_award", False)
     award_awardee = tender.get("award_awardee", "")
@@ -859,12 +688,10 @@ def request_draft(
         else:
             mode = "prime"
 
-    # For subcontract, the target company is the winner
     target_company = payload.get("target_company") or (award_awardee if mode == "subcontract" else "")
 
-    drafts_col = get_collection("draft_requests")
-    # Check for existing request with the same mode
-    existing = drafts_col.find_one({"notice_id": notice_id, "mode": mode})
+    drafts_col = get_async_collection("draft_requests")
+    existing = await drafts_col.find_one({"notice_id": notice_id, "mode": mode})
     if existing:
         return {
             "status": "already_requested",
@@ -897,15 +724,13 @@ def request_draft(
         "requested_at": _utc_now_iso(),
     }
 
-    drafts_col.insert_one(record)
+    await drafts_col.insert_one(record)
 
-    # Trigger RFP documents download in the background for prime mode
     if mode == "prime":
         sol_num = tender.get("solicitation_number")
         if sol_num:
             background_tasks.add_task(ensure_rfp_downloaded, notice_id, sol_num)
 
-    # --- Mode-specific messages ---
     if mode == "prime":
         msg = (
             f"Prime contractor draft request saved. You can start building the technical "
@@ -930,16 +755,12 @@ def request_draft(
 
 
 @router.get("/{notice_id}/request-draft")
-def get_draft_request_status(
+async def get_draft_request_status(
     notice_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    Returns all existing draft requests for a tender so the frontend
-    can pre-populate button states on page load without re-submitting.
-    """
-    drafts_col = get_collection("draft_requests")
-    requests = list(drafts_col.find(
+    drafts_col = get_async_collection("draft_requests")
+    requests = await drafts_col.find(
         {
             "$or": [
                 {"notice_id": notice_id},
@@ -947,7 +768,7 @@ def get_draft_request_status(
             ]
         },
         {"_id": 0}
-    ))
+    ).to_list(length=100)
     return {
         "notice_id": notice_id,
         "requests": requests,
@@ -956,37 +777,21 @@ def get_draft_request_status(
 
 
 @router.get("/draft-requests/all")
-def get_all_draft_requests(current_user: dict = Depends(get_current_user)):
-    """
-    Returns all draft requests across all tenders so the Proposal Builder
-    can display the pending and active drafts list.
-    """
+async def get_all_draft_requests(current_user: dict = Depends(get_current_user)):
     try:
-        drafts_col = get_collection("draft_requests")
-        requests = list(drafts_col.find({}, {"_id": 0}).sort("requested_at", -1))
+        drafts_col = get_async_collection("draft_requests")
+        requests = await drafts_col.find({}, {"_id": 0}).sort("requested_at", -1).to_list(length=1000)
         return requests
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-
 def ensure_rfp_downloaded(notice_id: str, solicitation_number: str) -> None:
-    """
-    Checks if RFP PDF/document files are already downloaded for this solicitation.
-    If not, fetches the raw opportunity from cache or SAM.gov and triggers the
-    SAMOpportunitiesClient to download them locally.
-    """
-    from pathlib import Path
-    import os
-    
-    # Opportunities are saved to: downloads/opportunities/{solicitation_number}/rfp_docs/
     downloads_path = Path("downloads") / "opportunities" / solicitation_number / "rfp_docs"
     if downloads_path.exists() and any(downloads_path.iterdir()):
-        print(f"[Tenders] RFP docs already downloaded for {solicitation_number}")
+        logger.info(f"[Tenders] RFP docs already downloaded for {solicitation_number}")
         return
 
-    # Check MongoDB cache for the raw SAM.gov payload
-    from utils.db_client import get_collection
     tender = get_collection("tenders").find_one({"id": notice_id})
     raw_opp = None
     if tender and "raw_sam_data" in tender:
@@ -996,7 +801,7 @@ def ensure_rfp_downloaded(notice_id: str, solicitation_number: str) -> None:
     opp_client = SAMOpportunitiesClient()
 
     if not raw_opp:
-        print(f"[Tenders] Raw data missing. Querying SAM.gov for solicitation: {solicitation_number}")
+        logger.info(f"[Tenders] Raw data missing. Querying SAM.gov for solicitation: {solicitation_number}")
         try:
             results = opp_client.search_opportunities(query=solicitation_number, posted_days=360)
             if results:
@@ -1008,38 +813,24 @@ def ensure_rfp_downloaded(notice_id: str, solicitation_number: str) -> None:
                 if not raw_opp:
                     raw_opp = results[0]
         except Exception as e:
-            print(f"[Tenders] Failed searching SAM.gov: {e}")
+            logger.error(f"[Tenders] Failed searching SAM.gov: {e}")
 
     if raw_opp:
-        print(f"[Tenders] Triggering download and structuring for {solicitation_number}")
+        logger.info(f"[Tenders] Triggering download and structuring for {solicitation_number}")
         try:
             opp_client.structure_rfp_profile(raw_opp)
-            print(f"[Tenders] Successfully downloaded and parsed RFP documents for {solicitation_number}")
+            logger.info(f"[Tenders] Successfully downloaded and parsed RFP documents for {solicitation_number}")
         except Exception as e:
-            print(f"[Tenders] Error downloading RFP documents: {e}")
-    else:
-        print(f"[Tenders] Warning: Could not find raw opportunity for {solicitation_number} to download RFP.")
+            logger.error(f"[Tenders] Error downloading RFP documents: {e}")
 
-
-# ---------------------------------------------------------------------------
-# Tender document serving endpoints
-# ---------------------------------------------------------------------------
 
 @router.get("/{notice_id}/documents")
 async def list_tender_documents(
     notice_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    List all downloaded documents for a specific tender.
-    Returns file metadata: name, size, type, path key for viewing.
-    """
-    import os
-    from pathlib import Path
-
-    # Look up the tender to get solicitation number
-    col = get_collection("tenders")
-    tender = col.find_one({"noticeId": notice_id}, {"solicitationNumber": 1, "title": 1})
+    col = get_async_collection("tenders")
+    tender = await col.find_one({"noticeId": notice_id}, {"solicitationNumber": 1, "title": 1})
     if not tender:
         raise HTTPException(status_code=404, detail="Tender not found")
 
@@ -1098,21 +889,12 @@ async def serve_tender_document(
     filename: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    Stream/serve a specific downloaded tender document.
-    Prevents path traversal attacks by validating the filename.
-    """
-    import os
-    from pathlib import Path
-    from fastapi.responses import FileResponse
-
-    # Security: prevent path traversal
     safe_filename = Path(filename).name
     if not safe_filename or safe_filename != filename:
         raise HTTPException(status_code=400, detail="Invalid filename")
 
-    col = get_collection("tenders")
-    tender = col.find_one({"noticeId": notice_id}, {"solicitationNumber": 1})
+    col = get_async_collection("tenders")
+    tender = await col.find_one({"noticeId": notice_id}, {"solicitationNumber": 1})
     if not tender:
         raise HTTPException(status_code=404, detail="Tender not found")
 
@@ -1122,7 +904,6 @@ async def serve_tender_document(
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Document not found")
 
-    # Determine media type
     ext = file_path.suffix.lower()
     media_types = {
         ".pdf": "application/pdf",

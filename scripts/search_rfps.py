@@ -245,15 +245,19 @@ def main():
         print("-" * 50)
 
     if args.all:
-        print(f"\n→ Run Mode: --all. Profiling ALL {len(opportunities)} opportunities sequentially...\n")
-        for idx, opp in enumerate(opportunities, 1):
-            print(f"\n" + "=" * 80)
-            print(f"  💼 OPPORTUNITY {idx} OF {len(opportunities)}")
-            print("=" * 80)
+        print(f"\n→ Run Mode: --all. Profiling {len(opportunities)} opportunities in parallel...\n")
+        import concurrent.futures
+
+        def _profile_worker(item):
+            idx, opp = item
+            print(f"  💼 Launching analysis for Opportunity {idx} ({opp.get('solicitationNumber')})...")
             try:
                 profile_single_opportunity(opp, opp_client, use_mock_flag, args.limit_competitors)
             except Exception as e:
                 logger.error(f"Failed processing opportunity {opp.get('solicitationNumber')}: {e}", exc_info=True)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as ex:
+            list(ex.map(_profile_worker, enumerate(opportunities, 1)))
     else:
         # 2. Select opportunity
         selected_idx = 0  # Default to first one
@@ -392,13 +396,9 @@ def profile_single_opportunity(selected_opp: dict, opp_client: SAMOpportunitiesC
             print("⚡ Launching full scraping pipeline (LinkedIn, Website, Search agents) for the winner...")
             try:
                 from pipeline.orchestrator import run_pipeline
-                from main import print_summary
                 
-                # Execute the full LangGraph scraping/agent pipeline on the winning company
                 winner_result = run_pipeline(winner_name, solicitation_number=rfp_profile["solicitation_number"])
-                
-                # Print the summarized results from the scrapers/agents
-                print_summary(winner_result)
+                print(f"✓ Completed analysis for {winner_name}: status={winner_result.get('status')}")
                 
                 # Also save the optimized profile to MongoDB cache under company_profiles
                 optimized = winner_result.get("optimized_profile") or winner_result.get("combined_profile") or {}

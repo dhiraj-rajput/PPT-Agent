@@ -42,36 +42,37 @@ class CompetitorProfiler:
         profiles = []
         target_list = competitor_list[:self.limit]
 
-        for comp in target_list:
+        import concurrent.futures
+
+        def _profile_single(comp: dict) -> Optional[dict]:
             name = comp.get("company_name", "").strip()
             if not name:
-                continue
+                return None
 
             logger.info(f"Processing competitor profiling for: '{name}'")
-            profile = None
-
-            # 1. Try to load from MongoDB cache
             if self.db is not None and not use_mock:
                 profile = self._get_cached_profile(name)
                 if profile:
                     logger.info(f"Cache hit: Loaded fresh profile for competitor '{name}' from MongoDB.")
-                    profiles.append(profile)
-                    continue
+                    return profile
 
-            # 2. Run rule-based profile extraction via web search
             logger.info(f"Cache miss: Running rule-based profiler for competitor '{name}'...")
             try:
                 profile = self._extract_profile_via_search(name, use_mock=use_mock)
                 if profile:
-                    profiles.append(profile)
-                    # Save to MongoDB cache (only if not in mock mode)
                     if not use_mock:
                         self._save_profile_to_cache(profile)
                     logger.info(f"Successfully profiled and cached competitor: '{name}'")
+                    return profile
                 else:
                     logger.warning(f"Rule-based profiler returned no profile data for '{name}'.")
             except Exception as e:
                 logger.error(f"Failed to profile competitor '{name}' via rule-based search: {e}", exc_info=True)
+            return None
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as ex:
+            results = ex.map(_profile_single, target_list)
+            profiles = [p for p in results if p is not None]
 
         return profiles
 

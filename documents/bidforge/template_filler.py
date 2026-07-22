@@ -1,56 +1,44 @@
 """
 bidforge/template_filler.py
 ----------------------------
-Populates a user-uploaded .docx template with AI-generated proposal content,
-instead of building the document from scratch.
+Generates a branded proposal document by:
+  1. Extracting branding assets (fonts, colors, logo, margins) from the
+     user-uploaded .docx template using TemplateAnalyzer — template is
+     NEVER modified or written to.
+  2. Building a completely NEW document from scratch using proposal_generator.py,
+     driven by the extracted brand profile.
 
-Design (deliberately NOT tied to a specific template-authoring convention —
-works with any normal Word document that uses heading styles):
+WHY THIS APPROACH (not the old "inject content into template" approach):
+  The previous implementation opened the user's template, found headings,
+  and inserted paragraphs directly into the original file. This caused:
+    - Content appended at the end for any unmatched section
+    - Template headings duplicated alongside injected content
+    - Fonts and paragraph styles from the template mixed with injected styles
+    - The original template permanently modified/mangled
 
-  1. Walk the template's paragraphs and find heading paragraphs (Word's
-     "Heading 1"/"Heading 2"/"Title" styles).
-  2. Fuzzy-match each heading's text against known proposal section keywords
-     (Executive Summary, Scope, Pricing, Timeline, Terms, ...).
-  3. Insert the generated content for a matched section directly after that
-     heading, using the *template's own* body-text style — so the
-     template's fonts/branding/spacing are preserved exactly.
-  4. Any generated section that doesn't match an existing heading in the
-     template is appended at the end (after a page break) under its own
-     heading, so nothing is silently dropped.
-
-Because we only ever touch body paragraphs — never section/header/footer
-XML — the template's headers, footers, logos, and page numbering carry
-through automatically and the document is free to run to however many
-pages the content needs (no page cap is imposed anywhere in this code).
+  The correct approach: treat the template as a READ-ONLY branding reference.
+  Extract its visual identity, discard the rest, and generate a clean new
+  document from scratch.
 """
 
 from __future__ import annotations
 
+import io
+import logging
+import re
+import tempfile
+from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional
-
-from docx import Document as OpenDocument
-from docx.document import Document
-from docx.oxml.ns import qn
-from docx.oxml import OxmlElement
-from docx.text.paragraph import Paragraph
-from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 from utils.helpers import setup_logger
 
 logger = setup_logger(__name__)
 
 
-# Section key -> heading keywords used to match it against the template's own headings
-_SECTION_KEYWORDS = {
-    "executive_summary": ["executive summary", "overview", "introduction"],
-    "scope_of_work": ["scope of work", "scope", "solution", "approach", "products and services"],
-    "pricing_table": ["pricing", "cost", "investment", "budget", "fees"],
-    "competitive_positioning": ["competitive", "value proposition", "why us", "differentiat"],
-    "timeline": ["timeline", "schedule", "implementation", "milestones", "roadmap"],
-    "terms": ["terms", "conditions", "sla", "warranty", "support"],
-    "next_steps": ["next steps", "conclusion", "contact"],
-}
-
+# ---------------------------------------------------------------------------
+# Section titles (used when no template heading exists for a section)
+# ---------------------------------------------------------------------------
 _SECTION_TITLES = {
     "executive_summary": "Executive Summary",
     "scope_of_work": "Scope of Work",
@@ -61,145 +49,219 @@ _SECTION_TITLES = {
     "next_steps": "Next Steps",
 }
 
+# Ordered list of sections for consistent document structure
+_SECTION_ORDER = [
+    "executive_summary",
+    "scope_of_work",
+    "pricing_table",
+    "competitive_positioning",
+    "timeline",
+    "terms",
+    "next_steps",
+]
+
 
 def fill_template(template_path: str, sections: Dict[str, Any], output_path: str) -> str:
     """
-    sections: {
-      "executive_summary": "text...",
-      "scope_of_work": ["bullet", "bullet", ...] or "text",
-      "pricing_table": {"headers": [...], "rows": [[...], ...]},
-      "competitive_positioning": "text",
-      "timeline": [{"phase": ..., "duration": ..., "focus": ...}, ...] or "text",
-      "terms": ["term1", "term2", ...],
-      "next_steps": "text",
-    }
+    Generate a professional proposal document using branding from an uploaded template.
+
+    The template file is opened READ-ONLY — its visual identity (fonts, colors,
+    logo, page margins) is extracted and used to style a completely new document.
+    The original template is never modified.
+
+    Args:
+        template_path:  Path to the user's .docx branding template.
+        sections:       Dict of section content from the AI/rule-based generator:
+                        {
+                          "executive_summary": "text...",
+                          "scope_of_work": ["bullet", ...] or "text",
+                          "pricing_table": {"headers": [...], "rows": [[...]]},
+                          "competitive_positioning": "text",
+                          "timeline": [{"phase": ..., "duration": ..., "focus": ...}],
+                          "terms": ["term1", "term2", ...],
+                          "next_steps": "text",
+                        }
+        output_path:    Where to save the generated .docx.
+
+    Returns:
+        output_path (str)
     """
-    doc = OpenDocument(template_path)
-    body_style = _guess_body_style(doc)
+    logger.info(f"[TemplateFiller] Extracting branding from: {template_path}")
 
-    headings = _find_headings(doc)
-    used_section_keys = set()
+    # 1. Extract branding from the uploaded template (read-only)
+    brand_config = _extract_brand(template_path)
 
-    for heading_para, heading_text in headings:
-        section_key = _match_section(heading_text)
-        if section_key and section_key not in used_section_keys:
-            anchor = heading_para
-            anchor = _insert_section_content(doc, anchor, sections.get(section_key), body_style)
-            used_section_keys.add(section_key)
+    # 2. Build the proposal metadata
+    proposal_meta = _build_proposal_meta(sections, brand_config)
 
-    # Anything not matched to an existing heading gets appended at the end.
-    remaining = [k for k in sections.keys() if k in _SECTION_TITLES and k not in used_section_keys and sections.get(k)]
-    if remaining:
-        doc.add_page_break()
-        for key in remaining:
-            heading_para = doc.add_heading(_SECTION_TITLES[key], level=1)
-            _insert_section_content(doc, heading_para, sections.get(key), body_style, append_mode=True)
+    # 3. Convert sections dict → proposal_generator section blocks
+    sections_list = _build_sections_list(sections)
 
-    doc.save(output_path)
+    # 4. Assemble config and generate a new document from scratch
+    cfg = {
+        "brand": brand_config,
+        "proposal": proposal_meta,
+        "sections": sections_list,
+    }
+
+    from scripts import proposal_generator as pg
+    pg.generate(cfg, output_path)
+
     logger.info(
-        f"[BidForge:TemplateFiller] Filled template. Matched headings: {sorted(used_section_keys)}. "
-        f"Appended (no matching heading): {remaining}"
+        f"[TemplateFiller] Generated new document with extracted branding -> {output_path} "
+        f"(font={brand_config.get('body_font')}, accent=#{brand_config.get('accent_color')})"
     )
     return output_path
 
 
-def _guess_body_style(doc: Document) -> Optional[str]:
-    for p in doc.paragraphs:
-        if p.style and p.style.name and not p.style.name.lower().startswith(("heading", "title")) and p.text.strip():
-            return p.style.name
-    return "Normal"
+# ---------------------------------------------------------------------------
+# Brand extraction
+# ---------------------------------------------------------------------------
 
-
-def _find_headings(doc: Document) -> List[tuple]:
-    headings = []
-    for p in doc.paragraphs:
-        style_name = (p.style.name if p.style else "") or ""
-        if style_name.lower().startswith("heading") or style_name.lower() == "title":
-            if p.text.strip():
-                headings.append((p, p.text.strip()))
-    return headings
-
-
-def _match_section(heading_text: str) -> Optional[str]:
-    text_lower = heading_text.lower()
-    for key, keywords in _SECTION_KEYWORDS.items():
-        if any(kw in text_lower for kw in keywords):
-            return key
-    return None
-
-
-def _insert_paragraph_after(paragraph: Paragraph, text: str = "", style: Optional[str] = None) -> Paragraph:
-    new_p = OxmlElement("w:p")
-    paragraph._p.addnext(new_p)
-    new_para = Paragraph(new_p, paragraph._parent)
-    if style:
-        try:
-            new_para.style = style
-        except KeyError:
-            pass
-    if text:
-        new_para.add_run(text)
-    return new_para
-
-
-def _insert_table_after(paragraph: Paragraph, doc: Document, headers: List[str], rows: List[List[str]]) -> Paragraph:
-    table = doc.add_table(rows=1, cols=len(headers))
+def _extract_brand(template_path: str) -> Dict[str, Any]:
+    """
+    Extract brand assets from the template using TemplateAnalyzer.
+    Falls back to the default OrbitAvanya brand if extraction fails.
+    """
     try:
-        table.style = "Table Grid"
-    except KeyError:
-        pass
-    hdr_cells = table.rows[0].cells
-    for cell, text in zip(hdr_cells, headers):
-        cell.text = str(text)
-    for row_data in rows:
-        row = table.add_row()
-        for cell, text in zip(row.cells, row_data):
-            cell.text = str(text)
-
-    # Move the table's XML element to right after `paragraph`
-    paragraph._p.addnext(table._tbl)
-    # Return a fresh trailing paragraph so subsequent inserts continue below the table
-    trailing = OxmlElement("w:p")
-    table._tbl.addnext(trailing)
-    return Paragraph(trailing, paragraph._parent)
+        from documents.template_analyzer import TemplateAnalyzer, get_default_brand_profile
+        analyzer = TemplateAnalyzer(template_path)
+        profile = analyzer.analyze()
+        brand = profile.to_brand_config_dict()
+        logger.info(
+            f"[TemplateFiller] Brand extracted from template: "
+            f"font={brand.get('body_font')}, heading_font={brand.get('heading_font')}, "
+            f"accent=#{brand.get('accent_color')}, "
+            f"logo={'yes' if brand.get('logo_path') else 'no'}"
+        )
+        return brand
+    except Exception as e:
+        logger.warning(f"[TemplateFiller] Template branding extraction failed ({e}), using defaults.")
+        from documents.brand_config import get_brand_config
+        return get_brand_config()
 
 
-def _insert_section_content(
-    doc: Document,
-    anchor: Paragraph,
-    content: Any,
-    body_style: Optional[str],
-    append_mode: bool = False,
-) -> Paragraph:
-    """Inserts `content` (str, list of str, list of dicts, or a pricing-table dict)
-    directly after `anchor`, returning the new last paragraph so callers can chain
-    further inserts in document order."""
-    if not content:
-        return anchor
+# ---------------------------------------------------------------------------
+# Proposal metadata
+# ---------------------------------------------------------------------------
 
+def _build_proposal_meta(sections: Dict[str, Any], brand: Dict[str, Any]) -> Dict[str, Any]:
+    """Build the proposal-level metadata block for proposal_generator."""
+    from documents.brand_config import DEFAULT_CONFIDENTIALITY_TEXT
+    return {
+        "title": "RFP Response Proposal",
+        "subtitle": "Technical & Pricing Proposal",
+        "prepared_for": "Prospective Client",
+        "prepared_by": f"Ranjeet Kumar — Founder & CEO, {brand.get('company_name', 'OrbitAvanya Tech LLP')}",
+        "engagement_ref": f"OAT-BIDFORGE-{datetime.now().strftime('%Y%m%d')}",
+        "proposal_date": datetime.now().strftime("%B %d, %Y"),
+        "validity": "90 days from proposal date",
+        "confidentiality_text": DEFAULT_CONFIDENTIALITY_TEXT,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Section blocks builder
+# ---------------------------------------------------------------------------
+
+def _build_sections_list(sections: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Convert the AI/rule-based sections dict into the block-list format
+    expected by proposal_generator.add_section().
+    """
+    result = []
+    first_section = True
+
+    for key in _SECTION_ORDER:
+        content = sections.get(key)
+        if not content:
+            continue
+
+        title = _SECTION_TITLES.get(key, key.replace("_", " ").title())
+        blocks = _content_to_blocks(key, content)
+
+        if not blocks:
+            continue
+
+        result.append({
+            "title": title,
+            "page_break_before": not first_section,
+            "blocks": blocks,
+        })
+        first_section = False
+
+    # Handle any extra keys not in _SECTION_ORDER
+    for key, content in sections.items():
+        if key not in _SECTION_ORDER and content:
+            title = key.replace("_", " ").title()
+            blocks = _content_to_blocks(key, content)
+            if blocks:
+                result.append({
+                    "title": title,
+                    "page_break_before": True,
+                    "blocks": blocks,
+                })
+
+    return result
+
+
+def _content_to_blocks(key: str, content: Any) -> List[Dict[str, Any]]:
+    """Convert a section's content to a list of proposal_generator block dicts."""
+    blocks: List[Dict[str, Any]] = []
+
+    # Pricing table dict
     if isinstance(content, dict) and "headers" in content and "rows" in content:
-        return _insert_table_after(anchor, doc, content["headers"], content["rows"])
+        if content["headers"] and len(content["headers"]) > 0:
+            blocks.append({
+                "type": "table",
+                "headers": content["headers"],
+                "rows": content.get("rows", []),
+            })
+        return blocks
 
+    # String content (split on double newlines for paragraph breaks)
     if isinstance(content, str):
         for para_text in content.split("\n\n"):
             para_text = para_text.strip()
             if para_text:
-                anchor = _insert_paragraph_after(anchor, para_text, style=body_style)
-        return anchor
+                blocks.append({"type": "paragraph", "text": para_text})
+        return blocks
 
+    # List content
     if isinstance(content, list):
-        for item in content:
-            if isinstance(item, dict):
-                # e.g. timeline phase dicts -> render as a compact line
-                line = " — ".join(str(v) for v in item.values() if v)
-                anchor = _insert_paragraph_after(anchor, line, style=body_style)
-            else:
-                p = _insert_paragraph_after(anchor, str(item), style=None)
-                try:
-                    p.style = "List Bullet"
-                except KeyError:
-                    pass
-                anchor = p
-        return anchor
+        if not content:
+            return blocks
 
-    return anchor
+        # Timeline: list of phase dicts
+        if all(isinstance(item, dict) and "phase" in item for item in content):
+            headers = ["Phase", "Duration", "Focus"]
+            rows = [
+                [
+                    str(item.get("phase", "")),
+                    str(item.get("duration", "")),
+                    str(item.get("focus", "")),
+                ]
+                for item in content
+            ]
+            if rows:
+                blocks.append({"type": "table", "headers": headers, "rows": rows})
+            return blocks
+
+        # Generic list of dicts — render as "key: value" bullets
+        if all(isinstance(item, dict) for item in content):
+            items = []
+            for item in content:
+                line = " — ".join(f"{k}: {v}" for k, v in item.items() if v)
+                if line:
+                    items.append(line)
+            if items:
+                blocks.append({"type": "bullets", "items": items})
+            return blocks
+
+        # Plain list of strings → bullet list
+        str_items = [str(item).strip() for item in content if item]
+        if str_items:
+            blocks.append({"type": "bullets", "items": str_items})
+        return blocks
+
+    return blocks

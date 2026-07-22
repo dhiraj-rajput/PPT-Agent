@@ -114,12 +114,16 @@ class CompetitorExtractor:
                     }
                 ]
         else:
-            # Live Tavily search
+            import concurrent.futures
+
             query_1 = f'"{sol_num}" AND ("protest" OR "GAO" OR "bid" OR "bidders" OR "award" OR "competitor")'
-            snippets.extend(self._tavily_search(query_1))
-            
             query_2 = f'"{sol_num}" contract award'
-            snippets.extend(self._tavily_search(query_2))
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                f1 = executor.submit(self._tavily_search, query_1)
+                f2 = executor.submit(self._tavily_search, query_2)
+                snippets.extend(f1.result())
+                snippets.extend(f2.result())
 
         # Deduplicate snippets by URL
         seen_urls = set()
@@ -138,14 +142,14 @@ class CompetitorExtractor:
         parser = DocumentParser()
         protest_raw_docs = []
         
-        for s in deduped_snippets:
-            url = s["url"]
-            title = s.get("title", "Document")
-            
+        import concurrent.futures
+
+        def _parse_item(item):
+            url_target = item["url"]
+            title_target = item.get("title", "Document")
             if use_mock or not self.tavily_key or "your_" in self.tavily_key:
-                # Provide full mock protest decision text
-                if "b-426101" in url:
-                    content = (
+                if "b-426101" in url_target:
+                    content_txt = (
                         "U.S. GOVERNMENT ACCOUNTABILITY OFFICE (GAO) DECISION\n"
                         "Matter of: Deloitte Consulting LLP\n"
                         "File: B-426101.1\n"
@@ -172,23 +176,26 @@ class CompetitorExtractor:
                         "Outstanding technical rating made it the logical best-value selection. The protest is denied."
                     )
                 else:
-                    content = (
+                    content_txt = (
                         f"CONTRACT AWARD ANNOUNCEMENT FOR SOLICITATION {sol_num}\n"
                         "The government announced the award under solicitation number " + sol_num + " for data analytics. "
                         "The winning bidder was Booz Allen Hamilton Inc., bidding $12,450,000. Deloitte Consulting and "
                         "Palantir Technologies submitted competitive proposals but were not selected."
                     )
-                s["document_text"] = content
-                protest_raw_docs.append({"url": url, "title": title, "content": content, "status": "success"})
+                item["document_text"] = content_txt
+                return {"url": url_target, "title": title_target, "content": content_txt, "status": "success"}
             else:
-                doc_result = parser.parse_document(url)
-                s["document_text"] = doc_result.get("content") or s["snippet"]
-                protest_raw_docs.append({
-                    "url": url,
-                    "title": title,
-                    "content": s["document_text"],
+                doc_result = parser.parse_document(url_target)
+                item["document_text"] = doc_result.get("content") or item.get("snippet", "")
+                return {
+                    "url": url_target,
+                    "title": title_target,
+                    "content": item["document_text"],
                     "status": doc_result.get("status", "failed")
-                })
+                }
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as ex:
+            protest_raw_docs = list(ex.map(_parse_item, deduped_snippets))
 
         # 4. In-depth rule-based pattern extraction from snippets and full texts
         competitors = self._extract_competitors_rule_based(sol_num, deduped_snippets)

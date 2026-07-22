@@ -33,7 +33,20 @@ def gather_competitor_intel(parsed_rfp: Dict[str, Any], inventory: Dict[str, Any
         item_names = ["core scope of work"]
 
     try:
-        snippets_by_item = asyncio.run(_search_market_pricing(item_names))
+        def _pricing_worker():
+            return asyncio.run(_search_market_pricing(item_names))
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                snippets_by_item = pool.submit(_pricing_worker).result()
+        else:
+            snippets_by_item = _pricing_worker()
     except Exception as exc:
         logger.warning(f"[BidForge:Competitor] Market search stage failed entirely: {exc}")
         snippets_by_item = {name: [] for name in item_names}

@@ -22,18 +22,9 @@ export default function PreGenerationWizard({ tenderId, solicitationNumber, prop
     const params = { proposal_type: proposalType };
     if (tenderId) params.tender_id = tenderId;
 
-    fetch(`${api.BASE_URL || 'http://localhost:5050'}/api/preview/questions?${new URLSearchParams(params)}`, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('orbitavanya_token') || ''}`,
-      },
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed to load questions');
-        return res.json();
-      })
+    api.getPreviewQuestions(params)
       .then((data) => {
         setQuestions(data.questions || []);
-        // Pre-select recommended options
         const initialAnswers = {};
         (data.questions || []).forEach((q) => {
           if (q.recommended_option_id) {
@@ -46,28 +37,13 @@ export default function PreGenerationWizard({ tenderId, solicitationNumber, prop
         setLoading(false);
       })
       .catch((err) => {
-        console.warn('Backend preview API offline, using standard options.', err);
-        // Fallback questions if backend endpoint is unavailable
-        const fallbackQs = [
-          {
-            id: 'strategy_focus',
-            question: 'What is the primary strategy focus for this proposal?',
-            category: 'Strategic Alignment',
-            is_multi_select: false,
-            options: [
-              { id: 'opt_cost_tech', label: 'Best Value (Technical Superiority & Optimized Cost)', description: 'Risk reduction, experienced team, modern technology.' },
-              { id: 'opt_low_risk', label: 'Lowest Risk & Compliance First', description: 'FAR compliance, ISO standards, seamless transition.' }
-            ],
-            recommended_option_id: 'opt_cost_tech'
-          }
-        ];
-        setQuestions(fallbackQs);
-        setAnswers({ strategy_focus: ['opt_cost_tech'] });
+        console.warn('Failed to load pre-generation questions:', err);
+        setError('Could not load customization questions.');
         setLoading(false);
       });
   }, [tenderId, proposalType]);
 
-  const handleOptionSelect = (questionId, optionId, isMultiSelect) => {
+  const handleOptionToggle = (questionId, optionId, isMultiSelect = false) => {
     setAnswers((prev) => {
       const current = prev[questionId] || [];
       if (isMultiSelect) {
@@ -82,10 +58,8 @@ export default function PreGenerationWizard({ tenderId, solicitationNumber, prop
     });
   };
 
-  const handleNextToOutline = () => {
+  const handleGenerateOutline = () => {
     setGeneratingOutline(true);
-    setError(null);
-
     const formattedAnswers = Object.keys(answers).map((qId) => ({
       question_id: qId,
       selected_option_ids: answers[qId] || [],
@@ -98,18 +72,7 @@ export default function PreGenerationWizard({ tenderId, solicitationNumber, prop
       answers: formattedAnswers,
     };
 
-    fetch(`${api.BASE_URL || 'http://localhost:5050'}/api/preview/outline`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('orbitavanya_token') || ''}`,
-      },
-      body: JSON.stringify(payload),
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed to generate outline');
-        return res.json();
-      })
+    api.getPreviewOutline(payload)
       .then((data) => {
         setOutline(data);
         setSections(data.sections || []);
@@ -229,7 +192,7 @@ export default function PreGenerationWizard({ tenderId, solicitationNumber, prop
                       return (
                         <div
                           key={opt.id}
-                          onClick={() => handleOptionSelect(q.id, opt.id, q.is_multi_select)}
+                          onClick={() => handleOptionToggle(q.id, opt.id, q.is_multi_select)}
                           className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer transition-all ${
                             isSelected
                               ? 'border-brand-500 bg-brand-50/30 dark:bg-brand-950/20 shadow-sm'
@@ -336,7 +299,7 @@ export default function PreGenerationWizard({ tenderId, solicitationNumber, prop
               <div>
                 <h4 className="text-base font-extrabold text-navy-900 dark:text-white">Ready to Generate Document</h4>
                 <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mt-1">
-                  The document will be generated using Gemma 4 E4B local AI model and styled according to OrbitAvanya branding rules.
+                  The document will be generated using AI and styled according to OrbitAvanya branding rules.
                 </p>
               </div>
             </div>
@@ -363,7 +326,7 @@ export default function PreGenerationWizard({ tenderId, solicitationNumber, prop
 
           {step === 1 ? (
             <button
-              onClick={handleNextToOutline}
+              onClick={handleGenerateOutline}
               disabled={generatingOutline}
               className="inline-flex items-center gap-1.5 rounded-xl bg-brand-500 px-5 py-2 text-xs font-bold text-white shadow-soft hover:bg-brand-600 disabled:opacity-50"
             >

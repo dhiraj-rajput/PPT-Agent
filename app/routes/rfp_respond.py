@@ -54,6 +54,7 @@ def _run_pipeline_sync(
     rfp_paths: str,
     output_name: str,
     template_path: Optional[Path],
+    wizard_config: Optional[str] = None,
 ) -> None:
     """Run bidforge_cli.py as a subprocess and update progress in MongoDB."""
 
@@ -68,47 +69,53 @@ def _run_pipeline_sync(
     ]
     if template_path:
         cmd += ["--template", str(template_path)]
+    if wizard_config:
+        cmd += ["--wizard-config", wizard_config]
 
     try:
-        update(5, "Starting RFP Auto-Respond pipeline...")
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            cwd=str(PROJECT_ROOT),
-            text=True,
-            encoding="utf-8",
-            errors="ignore",
-        )
-        final_path = None
-        if proc.stdout:
-            for line in proc.stdout:
-                safe_line = line.strip()
-                print(f"[RFP-Respond] {safe_line}")
-                if "Step 1" in safe_line:
-                    update(15, "Parsing uploaded RFP document...")
-                elif "checking inventory" in safe_line.lower():
-                    update(35, "Checking our inventory against requirements...")
-                elif "competitor" in safe_line.lower() and "market pricing" in safe_line.lower():
-                    update(50, "Gathering competitor / market pricing intelligence...")
-                elif "Step 3" in safe_line:
-                    update(65, "Synthesizing pricing strategy...")
-                elif "Step 4" in safe_line:
-                    update(80, "Generating final proposal document...")
-                elif safe_line.startswith("SUCCESS:"):
-                    final_path = safe_line.split("SUCCESS:", 1)[1].strip()
-                elif safe_line.startswith("FAILED:"):
-                    update(0, safe_line.split("FAILED:", 1)[1].strip(), "failed")
+        from utils.helpers import SUBPROCESS_SEMAPHORE
 
-        proc.wait()
-        if proc.returncode != 0 or not final_path:
-            existing = get_task_status_db(task_id)
-            if not existing or existing.get("status") != "failed":
-                update(0, f"Pipeline exited with code {proc.returncode}", "failed")
-            return
+        update(4, "Waiting in queue for document-generation resources...")
+        with SUBPROCESS_SEMAPHORE:
+            update(5, "Starting RFP Auto-Respond pipeline...")
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                cwd=str(PROJECT_ROOT),
+                text=True,
+                encoding="utf-8",
+                errors="ignore",
+            )
+            final_path = None
+            if proc.stdout:
+                for line in proc.stdout:
+                    safe_line = line.strip()
+                    print(f"[RFP-Respond] {safe_line}")
+                    if "Step 1" in safe_line:
+                        update(15, "Parsing uploaded RFP document...")
+                    elif "checking inventory" in safe_line.lower():
+                        update(35, "Checking our inventory against requirements...")
+                    elif "competitor" in safe_line.lower() and "market pricing" in safe_line.lower():
+                        update(50, "Gathering competitor / market pricing intelligence...")
+                    elif "Step 3" in safe_line:
+                        update(65, "Synthesizing pricing strategy...")
+                    elif "Step 4" in safe_line:
+                        update(80, "Generating final proposal document...")
+                    elif safe_line.startswith("SUCCESS:"):
+                        final_path = safe_line.split("SUCCESS:", 1)[1].strip()
+                    elif safe_line.startswith("FAILED:"):
+                        update(0, safe_line.split("FAILED:", 1)[1].strip(), "failed")
 
-        filename = Path(final_path).name
-        update(100, "Proposal document generated successfully!", "completed", filename)
+            proc.wait()
+            if proc.returncode != 0 or not final_path:
+                existing = get_task_status_db(task_id)
+                if not existing or existing.get("status") != "failed":
+                    update(0, f"Pipeline exited with code {proc.returncode}", "failed")
+                return
+
+            filename = Path(final_path).name
+            update(100, "Proposal document generated successfully!", "completed", filename)
     except Exception as exc:
         update(0, f"Pipeline failed: {exc}", "failed")
 
@@ -186,7 +193,7 @@ async def upload_rfp(
     )
 
     background_tasks.add_task(
-        _run_pipeline_sync, task_id, rfp_paths_str, output_name, template_dest
+        _run_pipeline_sync, task_id, rfp_paths_str, output_name, template_dest, wizard_config
     )
     return {"status": "started", "task_id": task_id}
 

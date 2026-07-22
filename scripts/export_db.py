@@ -37,11 +37,19 @@ def export_database():
 
     for coll_name in collections:
         coll = db[coll_name]
-        docs = list(coll.find({}))
+        count = 0
         file_path = EXPORT_DIR / f"{coll_name}.json"
         with open(file_path, "w", encoding="utf-8") as f:
-            f.write(json_util.dumps(docs, indent=2))
-        logger.info(f" - Exported collection '{coll_name}': {len(docs)} documents")
+            f.write("[\n")
+            first = True
+            for doc in coll.find({}):
+                if not first:
+                    f.write(",\n")
+                f.write("  " + json_util.dumps(doc))
+                first = False
+                count += 1
+            f.write("\n]\n")
+        logger.info(f" - Exported collection '{coll_name}': {count} documents")
 
     logger.info("Compressing exported collections into ZIP archive...")
     with zipfile.ZipFile(ZIP_OUTPUT, "w", zipfile.ZIP_DEFLATED) as zip_file:

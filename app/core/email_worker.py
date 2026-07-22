@@ -5,13 +5,7 @@ import zoneinfo
 from datetime import datetime, timezone, timedelta
 from bson import ObjectId
 from config.settings import settings
-from utils.db_client import get_collection
-from app.core.tracking_helpers import (
-    rewrite_links_for_tracking,
-    open_pixel_tag,
-    unsubscribe_url,
-    new_tracking_id,
-)
+from utils.db_client import get_collection, get_async_collection
 
 logger = logging.getLogger("email_worker")
 
@@ -78,8 +72,25 @@ def classify_score(score: int) -> str:
     return "cold"
 
 
+async def add_score_async(lead_id: ObjectId, delta: int):
+    """Async add delta to lead score and update grade."""
+    try:
+        leads_col = get_async_collection("leads")
+        lead = await leads_col.find_one({"_id": lead_id})
+        if not lead:
+            return None
+        new_score = lead.get("score", 0) + delta
+        new_grade = classify_score(new_score)
+        await leads_col.update_one(
+            {"_id": lead_id},
+            {"$set": {"score": new_score, "grade": new_grade}}
+        )
+    except Exception as e:
+        logger.error(f"Failed to add score to lead {lead_id}: {e}")
+
+
 def add_score(lead_id: ObjectId, delta: int):
-    """Add delta to lead score and update grade."""
+    """Sync fallback to add delta to lead score and update grade."""
     try:
         leads_col = get_collection("leads")
         lead = leads_col.find_one({"_id": lead_id})
@@ -93,6 +104,14 @@ def add_score(lead_id: ObjectId, delta: int):
         )
     except Exception as e:
         logger.error(f"Failed to add score to lead {lead_id}: {e}")
+
+
+async def score_email_sent_async(lead_id: ObjectId):
+    await add_score_async(lead_id, SCORE_RULES["emailSent"])
+
+
+async def score_replied_async(lead_id: ObjectId):
+    await add_score_async(lead_id, SCORE_RULES["replied"])
 
 
 def score_email_sent(lead_id: ObjectId):
@@ -164,10 +183,13 @@ async def send_campaign_email_to_lead(campaign: dict, lead: dict) -> dict:
         alt_part.attach(MIMEText(final_html, "html"))
         msg.attach(alt_part)
         
-        # Attach PDF
+        # Attach PDF using non-blocking read
         try:
-            with open(attach_path, "rb") as f:
-                part = MIMEApplication(f.read(), Name=attach_name)
+            def read_file(p):
+                with open(p, "rb") as f:
+                    return f.read()
+            pdf_bytes = await asyncio.to_thread(read_file, attach_path)
+            part = MIMEApplication(pdf_bytes, Name=attach_name)
             part['Content-Disposition'] = f'attachment; filename="{attach_name}"'
             msg.attach(part)
         except Exception as e:
@@ -189,10 +211,6 @@ async def send_campaign_email_to_lead(campaign: dict, lead: dict) -> dict:
 
     msg["To"] = lead["email"]
 
-    # Send SMTP email if configured. IMPORTANT: if SMTP isn't configured we must
-    # raise instead of silently "succeeding" — otherwise the lead gets marked
-    # as sent and campaign stats increment even though no email ever left the
-    # server, which is why campaigns looked like they worked but nothing arrived.
     if not (settings.SMTP_USER and settings.SMTP_PASS):
         raise RuntimeError(
             "SMTP is not configured (SMTP_USER / SMTP_PASS are empty). "
@@ -210,8 +228,8 @@ async def send_campaign_email_to_lead(campaign: dict, lead: dict) -> dict:
         start_tls=(settings.SMTP_PORT == 587),
     )
 
-    # Pre-register tracking events in MongoDB
-    tracking_events_col = get_collection("tracking_events")
+    # Pre-register tracking events in MongoDB using Motor
+    tracking_events_col = get_async_collection("tracking_events")
     docs = [
         {
             "trackingId": open_tracking_id,
@@ -237,7 +255,7 @@ async def send_campaign_email_to_lead(campaign: dict, lead: dict) -> dict:
         })
 
     try:
-        tracking_events_col.insert_many(docs, ordered=False)
+        await tracking_events_col.insert_many(docs, ordered=False)
     except Exception as e:
         logger.error(f"Failed to pre-register tracking events: {e}")
 
@@ -245,22 +263,22 @@ async def send_campaign_email_to_lead(campaign: dict, lead: dict) -> dict:
 
 
 async def process_lead_send(campaign: dict, lead: dict):
-    """Processes suppression check, updates delivery status, sends email, and scores lead."""
-    leads_col = get_collection("leads")
-    campaigns_col = get_collection("campaigns")
-    suppressions_col = get_collection("suppressions")
+    """Processes suppression check, updates delivery status, sends email, and scores lead via Motor."""
+    leads_col = get_async_collection("leads")
+    campaigns_col = get_async_collection("campaigns")
+    suppressions_col = get_async_collection("suppressions")
 
     # 1. Suppression check
-    suppressed = suppressions_col.find_one({"email": lead["email"]})
+    suppressed = await suppressions_col.find_one({"email": lead["email"]})
     if suppressed:
-        leads_col.update_one(
+        await leads_col.update_one(
             {"_id": lead["_id"]},
             {"$set": {"status": "unsubscribed", "updatedAt": datetime.now(timezone.utc)}}
         )
         return
 
     # Increment attempt counter
-    leads_col.update_one(
+    await leads_col.update_one(
         {"_id": lead["_id"]},
         {"$inc": {"sendAttempts": 1}}
     )
@@ -270,7 +288,7 @@ async def process_lead_send(campaign: dict, lead: dict):
         await send_campaign_email_to_lead(campaign, lead)
 
         # 3. Update lead to 'sent'
-        leads_col.update_one(
+        await leads_col.update_one(
             {"_id": lead["_id"]},
             {"$set": {
                 "status": "sent",
@@ -281,17 +299,17 @@ async def process_lead_send(campaign: dict, lead: dict):
         )
 
         # 4. Increment campaign sent stats
-        campaigns_col.update_one(
+        await campaigns_col.update_one(
             {"_id": campaign["_id"]},
             {"$inc": {"stats.totalSent": 1}}
         )
 
         # 5. Score lead
-        score_email_sent(lead["_id"])
+        await score_email_sent_async(lead["_id"])
 
         # 6. Audit Log
-        audit_col = get_collection("audit_logs")
-        audit_col.insert_one({
+        audit_col = get_async_collection("audit_logs")
+        await audit_col.insert_one({
             "action": "campaign.email_sent",
             "entityType": "Lead",
             "entityId": lead["_id"],
@@ -301,7 +319,7 @@ async def process_lead_send(campaign: dict, lead: dict):
 
     except Exception as err:
         err_msg = str(err)
-        leads_col.update_one(
+        await leads_col.update_one(
             {"_id": lead["_id"]},
             {"$set": {"lastSendError": err_msg}}
         )
@@ -309,7 +327,7 @@ async def process_lead_send(campaign: dict, lead: dict):
         # Treat SMTP rejection / bounced responses as bounces
         permanent = bool(re.search(r"invalid|not exist|no such user|mailbox unavailable", err_msg, re.IGNORECASE))
         if permanent:
-            leads_col.update_one(
+            await leads_col.update_one(
                 {"_id": lead["_id"]},
                 {"$set": {
                     "status": "bounced",
@@ -317,11 +335,11 @@ async def process_lead_send(campaign: dict, lead: dict):
                     "updatedAt": datetime.now(timezone.utc)
                 }}
             )
-            campaigns_col.update_one(
+            await campaigns_col.update_one(
                 {"_id": campaign["_id"]},
                 {"$inc": {"stats.totalBounced": 1}}
             )
-            suppressions_col.update_one(
+            await suppressions_col.update_one(
                 {"email": lead["email"]},
                 {
                     "$setOnInsert": {
@@ -343,16 +361,9 @@ def check_incoming_replies():
     import imaplib
     import email
     import time
-    import socket
     from email.header import decode_header
 
-    # Set connection timeout limits
-    socket.setdefaulttimeout(30.0)
-
-    # Determine IMAP server. An explicit IMAP_HOST setting always wins (needed
-    # for providers whose IMAP host isn't derivable from the SMTP host, e.g.
-    # custom/company mail servers). Otherwise fall back to well-known providers,
-    # then a best-effort guess for anything else.
+    # Determine IMAP server
     smtp_host = settings.SMTP_HOST.lower()
     if settings.IMAP_HOST:
         imap_host = settings.IMAP_HOST
@@ -365,21 +376,20 @@ def check_incoming_replies():
     elif "zoho" in smtp_host:
         imap_host = "imap.zoho.com"
     elif smtp_host.startswith("smtp."):
-        # Common convention: mail.example.com / smtp.example.com -> imap.example.com
         imap_host = "imap." + smtp_host.split("smtp.", 1)[1]
     else:
-        # Many self-hosted / shared-hosting mail servers use the same
-        # hostname for SMTP and IMAP, just on different ports.
         imap_host = settings.SMTP_HOST
 
     try:
-        mail = imaplib.IMAP4_SSL(imap_host, settings.IMAP_PORT)
+        mail = imaplib.IMAP4_SSL(imap_host, settings.IMAP_PORT, timeout=30.0)
         mail.login(settings.SMTP_USER, settings.SMTP_PASS)
         mail.select("INBOX")
 
-        status, messages = mail.search(None, "ALL")
+        status, messages = mail.search(None, "UNSEEN")
+        if status != "OK" or not messages[0]:
+            status, messages = mail.search(None, "ALL")
+
         if status == "OK" and messages[0]:
-            # Inspect the last 30 messages in the inbox (handles read/unread reply states robustly)
             mail_ids = messages[0].split()[-30:]
             leads_col = get_collection("leads")
             campaigns_col = get_collection("campaigns")
@@ -462,20 +472,25 @@ def check_incoming_replies():
 
 
 async def start_email_worker_loop():
-    """Background loop polling MongoDB for scheduled campaign emails to process."""
+    """Background loop polling MongoDB for scheduled campaign emails to process concurrently."""
     logger.info("Email worker background polling loop started.")
-    campaigns_col = get_collection("campaigns")
-    leads_col = get_collection("leads")
-    sys_col = get_collection("system_status")
+    campaigns_col = get_async_collection("campaigns")
+    leads_col = get_async_collection("leads")
+    sys_col = get_async_collection("system_status")
 
     import time
     last_reply_check = 0
+    semaphore = asyncio.Semaphore(5)  # Limit concurrent email sends to 5
+
+    async def bounded_process_lead(campaign: dict, lead: dict):
+        async with semaphore:
+            await process_lead_send(campaign, lead)
 
     while True:
         try:
             # Update heartbeat
             try:
-                sys_col.update_one(
+                await sys_col.update_one(
                     {"key": "email_worker"},
                     {"$set": {"last_active": datetime.now(timezone.utc), "status": "running"}},
                     upsert=True
@@ -490,31 +505,36 @@ async def start_email_worker_loop():
                 asyncio.create_task(asyncio.to_thread(check_incoming_replies))
 
             # Query for active running campaigns
-            running_campaigns = list(campaigns_col.find({"status": "running"}))
+            running_campaigns = await campaigns_col.find({"status": "running"}).to_list(length=100)
             if running_campaigns:
                 campaign_ids = [c["_id"] for c in running_campaigns]
                 campaign_map = {c["_id"]: c for c in running_campaigns}
 
                 # Find up to 10 pending leads whose send_after is in the past
                 now = datetime.now(timezone.utc)
-                pending_leads = list(leads_col.find({
+                pending_leads = await leads_col.find({
                     "campaignId": {"$in": campaign_ids},
                     "status": "pending",
                     "send_after": {"$lte": now}
-                }).limit(10))
+                }).limit(10).to_list(length=10)
 
+                tasks = []
                 for lead in pending_leads:
                     campaign = campaign_map.get(lead["campaignId"])
                     if campaign:
                         if campaign.get("workingHoursOnly") and not is_within_working_hours(campaign.get("timezone", "America/Chicago")):
                             next_send = get_next_working_hour(campaign.get("timezone", "America/Chicago"))
-                            leads_col.update_one(
+                            await leads_col.update_one(
                                 {"_id": lead["_id"]},
                                 {"$set": {"send_after": next_send, "updatedAt": datetime.now(timezone.utc)}}
                             )
                             logger.info(f"[Email Worker] Lead {lead['email']} postponed to {next_send.isoformat()} (outside working hours for timezone {campaign.get('timezone')})")
                             continue
-                        await process_lead_send(campaign, lead)
+                        tasks.append(bounded_process_lead(campaign, lead))
+
+                if tasks:
+                    await asyncio.gather(*tasks)
+
         except Exception as e:
             logger.error(f"Email worker loop encountered an error: {e}")
         await asyncio.sleep(5)

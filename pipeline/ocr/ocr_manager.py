@@ -4,10 +4,14 @@ pipeline/ocr/ocr_manager.py
 Unified OCR manager with cascading engine fallback.
 
 Engine priority (configurable via OCR_ENGINE setting):
-  1. Docling    — CPU-friendly, handles tables/forms/layouts within 8GB RAM
-  2. PaddleOCR  — excellent table/layout detection on CPU
-  3. Tesseract  — enhanced at 300 DPI with image preprocessing
-  4. PyMuPDF    — raw text extraction (non-OCR fallback for digital PDFs)
+  1. OCR.space  — Cloud API, zero local computation, 25K free req/month
+                  Get a free key at https://ocr.space/ocrapi/freekey
+  2. PyMuPDF    — Fast text extraction for digital (non-scanned) PDFs (no OCR)
+  3. Docling    — Local model, CPU-friendly, handles tables/forms/layouts
+  4. Tesseract  — Local OCR at 300 DPI with image preprocessing (last resort)
+
+Note: PaddleOCR removed — it requires converting every PDF page to a PNG image,
+causing severe CPU/RAM spikes with no GPU. Use OCR.space instead.
 
 Usage:
     from pipeline.ocr.ocr_manager import OCRManager, extract_text_from_file
@@ -136,22 +140,30 @@ class OCRManager:
     # ------------------------------------------------------------------
 
     def _get_engine_order(self, suffix: str) -> List[str]:
-        """Return the engine priority order based on file type."""
+        """Return the engine priority order based on file type.
+        
+        PyMuPDF is tried first for PDFs — it reads embedded digital text nearly instantly
+        without any OCR computation. If it fails or returns too few characters (indicating
+        a scanned/image-only PDF), it falls back to OCR.space cloud API.
+        Local engines (Docling, Tesseract) are offline fallbacks.
+        """
         if suffix == ".pdf":
-            return ["docling", "paddleocr", "tesseract", "pymupdf"]
+            return ["pymupdf", "ocrspace", "docling", "tesseract"]
         elif suffix in (".docx", ".doc", ".pptx", ".xlsx"):
-            return ["docling", "pymupdf"]
-        elif suffix in (".png", ".jpg", ".jpeg", ".tiff", ".bmp"):
-            return ["docling", "paddleocr", "tesseract"]
+            # Office formats: OCR.space handles them; pymupdf as fallback
+            return ["ocrspace", "pymupdf", "docling"]
+        elif suffix in (".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".webp"):
+            # Images: cloud OCR first, then local
+            return ["ocrspace", "docling", "tesseract"]
         else:
-            return ["docling", "pymupdf"]
+            return ["ocrspace", "pymupdf", "docling"]
 
     def _run_engine(self, engine: str, file_path: Path) -> Dict[str, object]:
         """Run a specific OCR engine on a file."""
-        if engine == "docling":
+        if engine == "ocrspace":
+            return self._run_ocrspace(file_path)
+        elif engine == "docling":
             return self._run_docling(file_path)
-        elif engine == "paddleocr":
-            return self._run_paddleocr(file_path)
         elif engine == "tesseract":
             return self._run_tesseract(file_path)
         elif engine == "pymupdf":
@@ -160,61 +172,34 @@ class OCRManager:
             return {"text": "", "engine": engine, "pages": 0, "success": False,
                     "error": f"Unknown engine: {engine}"}
 
+    def _run_ocrspace(self, file_path: Path) -> Dict[str, object]:
+        """Run OCR.space cloud API — zero local computation."""
+        try:
+            from pipeline.ocr.ocr_api import OCRSpaceClient
+            # Read API key from settings if available
+            api_key = ""
+            try:
+                from config.settings import settings
+                api_key = getattr(settings, "OCR_SPACE_API_KEY", "") or ""
+            except Exception:
+                pass
+            client = OCRSpaceClient(api_key=api_key)
+            # Use table mode for PDFs (better at structured government docs)
+            use_table = file_path.suffix.lower() == ".pdf"
+            return client.extract_text(file_path, use_table_mode=use_table)
+        except Exception as e:
+            return {"text": "", "engine": "ocrspace", "pages": 0, "success": False, "error": str(e)}
+
     def _run_docling(self, file_path: Path) -> Dict[str, object]:
-        """Run Docling OCR."""
+        """Run Docling OCR (local, optional)."""
         try:
             from pipeline.ocr.docling_ocr import DoclingOCR
             return DoclingOCR.extract_text(file_path)
         except Exception as e:
             return {"text": "", "engine": "docling", "pages": 0, "success": False, "error": str(e)}
 
-    def _run_paddleocr(self, file_path: Path) -> Dict[str, object]:
-        """Run PaddleOCR on a PDF (converts pages to images first)."""
-        result = {"text": "", "engine": "paddleocr", "pages": 0, "success": False}
-        try:
-            from paddleocr import PaddleOCR # type: ignore
-        except ImportError:
-            result["error"] = "PaddleOCR not installed. Run: pip install paddlepaddle paddleocr"
-            return result
-
-        try:
-            import fitz  # PyMuPDF for page rasterization
-            ocr = PaddleOCR(use_angle_cls=True, lang="en", show_log=False)
-            doc = fitz.open(str(file_path))
-            all_text = []
-
-            for page_num, page in enumerate(doc):
-                mat = fitz.Matrix(self.dpi / 72, self.dpi / 72)
-                pix = page.get_pixmap(matrix=mat)
-                img_bytes = pix.tobytes("png")
-
-                import tempfile
-                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_img:
-                    tmp_img.write(img_bytes)
-                    tmp_img_path = tmp_img.name
-
-                try:
-                    ocr_result = ocr.ocr(tmp_img_path, cls=True)
-                    page_text = ""
-                    if ocr_result and ocr_result[0]:
-                        lines = [line[1][0] for line in ocr_result[0] if line and line[1]]
-                        page_text = "\n".join(lines)
-                    all_text.append(page_text)
-                finally:
-                    try:
-                        Path(tmp_img_path).unlink()
-                    except Exception:
-                        pass
-
-            doc.close()
-            full_text = "\f".join(all_text)  # Form-feed as page separator
-            result["text"] = full_text
-            result["pages"] = len(all_text)
-            result["success"] = bool(full_text.strip())
-        except Exception as e:
-            result["error"] = str(e)
-
-        return result
+    # PaddleOCR removed — it required converting every PDF page to a PNG image,
+    # causing severe CPU/RAM spikes. Use OCR.space (cloud) instead.
 
     def _run_tesseract(self, file_path: Path) -> Dict[str, object]:
         """Run enhanced Tesseract OCR at 300 DPI with preprocessing."""
@@ -315,4 +300,4 @@ def extract_text_from_file(file_path: Union[str, Path]) -> str:
     Returns extracted text as a string, empty string on failure.
     """
     result = get_ocr_manager().extract(file_path)
-    return result.get("text", "")
+    return str(result.get("text", "") or "")

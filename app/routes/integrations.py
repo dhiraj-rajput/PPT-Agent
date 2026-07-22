@@ -19,13 +19,13 @@ logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
 
 from app.core.auth import get_current_user
-from utils.db_client import get_collection
+from utils.db_client import get_async_collection, get_collection
+from config.settings import settings
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
-
-from config.settings import settings
 
 _CLIENT_URL = settings.CLIENT_URL
 _GOOGLE_CLIENT_ID = settings.GOOGLE_CLIENT_ID
@@ -33,10 +33,10 @@ _GOOGLE_CLIENT_SECRET = settings.GOOGLE_CLIENT_SECRET
 _GOOGLE_REDIRECT_URI = settings.GOOGLE_REDIRECT_URI
 
 # ---------------------------------------------------------------------------
-# Google OAuth helpers (thin wrappers — gracefully unavailable)
+# Google OAuth helpers
 # ---------------------------------------------------------------------------
 
-def _get_google_auth_url(user_id: str) -> str:
+async def _get_google_auth_url_async(user_id: str) -> str:
     if not _GOOGLE_CLIENT_ID:
         raise HTTPException(505, "Google OAuth is not configured (GOOGLE_CLIENT_ID missing).")
     from google_auth_oauthlib.flow import Flow  # type: ignore
@@ -58,13 +58,13 @@ def _get_google_auth_url(user_id: str) -> str:
     )
     flow.redirect_uri = _GOOGLE_REDIRECT_URI
     
-    # Generate and store a secure OAuth state token to prevent CSRF
     import secrets
     from datetime import datetime, timezone, timedelta
     state_token = secrets.token_urlsafe(32)
     auth_url, _ = flow.authorization_url(access_type="offline", prompt="consent", state=state_token)
     
-    get_collection("oauth_states").insert_one({
+    oauth_states_col = get_async_collection("oauth_states")
+    await oauth_states_col.insert_one({
         "state": state_token,
         "userId": user_id,
         "codeVerifier": getattr(flow, "code_verifier", None),
@@ -74,15 +74,15 @@ def _get_google_auth_url(user_id: str) -> str:
     return auth_url
 
 
-def _handle_google_callback(code: str, state: Optional[str] = None) -> None:
+async def _handle_google_callback_async(code: str, state: Optional[str] = None) -> None:
     if not _GOOGLE_CLIENT_ID:
         raise HTTPException(505, "Google OAuth is not configured.")
         
     user_id_clean = "global"
     code_verifier = None
     if state:
-        # Validate OAuth state and resolve to userId
-        state_doc = get_collection("oauth_states").find_one_and_delete({"state": state})
+        oauth_states_col = get_async_collection("oauth_states")
+        state_doc = await oauth_states_col.find_one_and_delete({"state": state})
         if not state_doc:
             raise HTTPException(400, "Invalid or expired OAuth state parameter.")
         user_id_clean = state_doc.get("userId") or "global"
@@ -109,8 +109,9 @@ def _handle_google_callback(code: str, state: Optional[str] = None) -> None:
     flow.redirect_uri = _GOOGLE_REDIRECT_URI
     flow.fetch_token(code=code, code_verifier=code_verifier)
     creds = flow.credentials
-    # Store refresh token in MongoDB scoped to userId
-    get_collection("integrations").update_one(
+
+    integrations_col = get_async_collection("integrations")
+    await integrations_col.update_one(
         {"service": "google", "userId": user_id_clean},
         {"$set": {
             "service": "google",
@@ -124,8 +125,9 @@ def _handle_google_callback(code: str, state: Optional[str] = None) -> None:
     )
 
 
-def _get_google_connection_status(user_id: str) -> dict:
-    doc = get_collection("integrations").find_one({"service": "google", "userId": user_id})
+async def _get_google_connection_status_async(user_id: str) -> dict:
+    integrations_col = get_async_collection("integrations")
+    doc = await integrations_col.find_one({"service": "google", "userId": user_id})
     return {"connected": bool(doc and doc.get("connected"))}
 
 
@@ -134,29 +136,31 @@ def _get_google_connection_status(user_id: str) -> dict:
 # ---------------------------------------------------------------------------
 
 @router.get("/google/status")
-def google_status(current_user: dict = Depends(get_current_user)):
+async def google_status(current_user: dict = Depends(get_current_user)):
     try:
         user_id = str(current_user["_id"])
-        return _get_google_connection_status(user_id)
+        return await _get_google_connection_status_async(user_id)
     except Exception as exc:
         raise HTTPException(500, f"Could not check Google connection status: {exc}")
 
 
 @router.delete("/google")
-def disconnect_google(current_user: dict = Depends(get_current_user)):
+async def disconnect_google(current_user: dict = Depends(get_current_user)):
     try:
         user_id = str(current_user["_id"])
-        get_collection("integrations").delete_one({"service": "google", "userId": user_id})
+        integrations_col = get_async_collection("integrations")
+        await integrations_col.delete_one({"service": "google", "userId": user_id})
         return {"success": True, "message": "Google Meet integration disconnected."}
     except Exception as exc:
         raise HTTPException(500, f"Could not disconnect Google integration: {exc}")
 
 
 @router.get("/google/auth-url")
-def google_auth_url(current_user: dict = Depends(get_current_user)):
+async def google_auth_url(current_user: dict = Depends(get_current_user)):
     try:
         user_id = str(current_user["_id"])
-        return {"url": _get_google_auth_url(user_id)}
+        url = await _get_google_auth_url_async(user_id)
+        return {"url": url}
     except HTTPException:
         raise
     except Exception as exc:
@@ -164,7 +168,7 @@ def google_auth_url(current_user: dict = Depends(get_current_user)):
 
 
 @router.get("/google/callback")
-def google_callback(request: Request, code: Optional[str] = None, state: Optional[str] = None, error: Optional[str] = None):
+async def google_callback(request: Request, code: Optional[str] = None, state: Optional[str] = None, error: Optional[str] = None):
     if error:
         logger.error(f"Google OAuth callback received error from Google: {error}")
         return RedirectResponse(f"{_CLIENT_URL}/integrations?google=error")
@@ -172,14 +176,10 @@ def google_callback(request: Request, code: Optional[str] = None, state: Optiona
         logger.error("Google OAuth callback received no code parameter.")
         return RedirectResponse(f"{_CLIENT_URL}/integrations?google=error")
     try:
-        _handle_google_callback(code, state)
+        await _handle_google_callback_async(code, state)
         return RedirectResponse(f"{_CLIENT_URL}/integrations?google=connected")
     except Exception as exc:
-        import traceback
-        print("\n=== GOOGLE OAUTH CALLBACK EXCEPTION TRACEBACK ===")
-        traceback.print_exc()
-        print("=================================================\n")
-        logger.error(f"Google OAuth callback processing failed: {exc}")
+        logger.error(f"Google OAuth callback processing failed: {exc}", exc_info=True)
         return RedirectResponse(f"{_CLIENT_URL}/integrations?google=error")
 
 
@@ -187,17 +187,16 @@ def google_callback(request: Request, code: Optional[str] = None, state: Optiona
 # SAM.gov API Key Integration
 # ---------------------------------------------------------------------------
 
-from pydantic import BaseModel
-
 class SamApiKeyPayload(BaseModel):
     api_key: str
 
 
 @router.get("/sam/status")
-def sam_status(current_user: dict = Depends(get_current_user)):
+async def sam_status(current_user: dict = Depends(get_current_user)):
     try:
         user_id = str(current_user["_id"])
-        doc = get_collection("integrations").find_one({"service": "sam", "userId": user_id})
+        integrations_col = get_async_collection("integrations")
+        doc = await integrations_col.find_one({"service": "sam", "userId": user_id})
         raw_key = ""
         if doc and doc.get("connected"):
             raw_key = doc.get("apiKey", "")
@@ -214,14 +213,15 @@ def sam_status(current_user: dict = Depends(get_current_user)):
 
 
 @router.post("/sam/connect")
-def sam_connect(payload: SamApiKeyPayload, current_user: dict = Depends(get_current_user)):
+async def sam_connect(payload: SamApiKeyPayload, current_user: dict = Depends(get_current_user)):
     try:
         user_id = str(current_user["_id"])
         api_key = payload.api_key.strip()
         if not api_key:
             raise HTTPException(400, "API key cannot be empty.")
             
-        get_collection("integrations").update_one(
+        integrations_col = get_async_collection("integrations")
+        await integrations_col.update_one(
             {"service": "sam", "userId": user_id},
             {"$set": {
                 "service": "sam",
@@ -243,10 +243,11 @@ def sam_connect(payload: SamApiKeyPayload, current_user: dict = Depends(get_curr
 
 
 @router.delete("/sam")
-def sam_disconnect(current_user: dict = Depends(get_current_user)):
+async def sam_disconnect(current_user: dict = Depends(get_current_user)):
     try:
         user_id = str(current_user["_id"])
-        get_collection("integrations").delete_one({"service": "sam", "userId": user_id})
+        integrations_col = get_async_collection("integrations")
+        await integrations_col.delete_one({"service": "sam", "userId": user_id})
         return {"success": True, "message": "SAM.gov API Key disconnected."}
     except Exception as exc:
         raise HTTPException(500, f"Could not disconnect SAM.gov: {exc}")
@@ -269,7 +270,6 @@ def read_env_file_keys() -> dict:
                 parts = line.split("=", 1)
                 k = parts[0].strip()
                 v = parts[1].strip()
-                # strip potential quotes around value
                 if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
                     v = v[1:-1]
                 keys[k] = v
@@ -307,9 +307,6 @@ def update_env_file(updates: dict) -> None:
         f.writelines(new_lines)
 
 
-# Keys that hold real secrets and must always be masked before leaving the server.
-# Everything else in TARGET_KEYS (hosts, model names, ports, usernames, account ids)
-# is not sensitive and is returned in full so the UI can actually show/prefill it.
 _SECRET_KEY_SUFFIXES = ("_API_KEY", "_SECRET", "_PASS", "_KEY", "_TOKEN", "_LI_AT")
 
 
@@ -320,15 +317,11 @@ def _is_secret_key(key: str) -> bool:
 def obfuscate_key(val: str) -> str:
     if not val:
         return ""
-    # Don't obfuscate short values if they are placeholders/ports/hosts
     if len(val) <= 6:
         return val
     return f"****{val[-4:]}"
 
 
-# Every field any integration card on the frontend can submit. Kept in sync with
-# Frontend/orbitavanya/src/pages/Integrations.jsx — a key missing here can be saved
-# but will never be reported back as "connected" or shown for editing.
 TARGET_KEYS = [
     "TAVILY_API_KEY",
     "SAM_GOV_API_KEY",
@@ -372,34 +365,31 @@ def get_env_keys(current_user: dict = Depends(get_current_user)):
 
 
 @router.get("/linkedin/status")
-def linkedin_status(current_user: dict = Depends(get_current_user)):
+async def linkedin_status(current_user: dict = Depends(get_current_user)):
     try:
         user_id = str(current_user["_id"])
         env_keys = read_env_file_keys()
         li_at = env_keys.get("LINKEDIN_LI_AT") or os.environ.get("LINKEDIN_LI_AT") or ""
         
-        doc = get_collection("integrations").find_one({"service": "linkedin", "userId": user_id})
+        integrations_col = get_async_collection("integrations")
+        doc = await integrations_col.find_one({"service": "linkedin", "userId": user_id})
         
         if not li_at or "EXPIRED" in li_at.upper() or (doc and doc.get("expired")):
             return {"connected": False, "expired": True, "status": "expired"}
             
         return {"connected": True, "expired": False, "status": "connected"}
-    except Exception as exc:
+    except Exception:
         return {"connected": False, "expired": True, "status": "expired"}
 
 
-
 @router.post("/env-keys")
-def save_env_keys(payload: dict, current_user: dict = Depends(get_current_user)):
+async def save_env_keys(payload: dict, current_user: dict = Depends(get_current_user)):
     try:
-        current_keys = read_env_file_keys()
-        
         updates = {}
         for k, new_val in payload.items():
             if new_val is None:
                 continue
             new_val = str(new_val).strip()
-            # If new_val contains ****, it is obfuscated and unchanged.
             if "****" in new_val:
                 continue
             updates[k] = new_val
@@ -407,7 +397,6 @@ def save_env_keys(payload: dict, current_user: dict = Depends(get_current_user))
         if updates:
             update_env_file(updates)
             
-            # Load and update in-memory settings & os.environ
             from config.settings import settings
             for k, v in updates.items():
                 os.environ[k] = v
@@ -428,7 +417,8 @@ def save_env_keys(payload: dict, current_user: dict = Depends(get_current_user))
                 
                 if k == "LINKEDIN_LI_AT" and v:
                     user_id = str(current_user["_id"])
-                    get_collection("integrations").update_one(
+                    integrations_col = get_async_collection("integrations")
+                    await integrations_col.update_one(
                         {"service": "linkedin", "userId": user_id},
                         {"$set": {"connected": True, "expired": False, "status": "connected", "li_at": v}},
                         upsert=True

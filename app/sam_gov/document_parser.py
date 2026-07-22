@@ -200,10 +200,10 @@ class DocumentParser:
             try:
                 from pipeline.ocr.ocr_manager import get_ocr_manager
                 ocr_res = get_ocr_manager().extract_from_bytes(content_bytes, filename=filename)
-                text = ocr_res.get("text", "")
+                text = str(ocr_res.get("text", "") or "")
             except Exception as e:
                 logger.warning(f"OCR manager failed for {filename}: {e}. Falling back to pypdf.")
-                text = self.extract_text_from_pdf(content_bytes)
+                text = str(self.extract_text_from_pdf(content_bytes) or "")
 
             if text.strip():
                 result["content"] = text
@@ -214,7 +214,7 @@ class DocumentParser:
             try:
                 from pipeline.ocr.ocr_manager import get_ocr_manager
                 ocr_res = get_ocr_manager().extract_from_bytes(content_bytes, filename=filename)
-                text = ocr_res.get("text", "")
+                text = str(ocr_res.get("text", "") or "")
                 if text.strip():
                     result["content"] = text
                     result["status"] = "success"
@@ -226,7 +226,7 @@ class DocumentParser:
             try:
                 from pipeline.ocr.ocr_manager import get_ocr_manager
                 ocr_res = get_ocr_manager().extract_from_bytes(content_bytes, filename=filename)
-                text = ocr_res.get("text", "")
+                text = str(ocr_res.get("text", "") or "")
                 if text.strip():
                     result["content"] = text
                     result["status"] = "success"
@@ -280,6 +280,7 @@ class DocumentParser:
                     headers=self._DEFAULT_HEADERS,
                     timeout=30,
                     allow_redirects=True,
+                    stream=True,
                 )
                 if response.status_code in (401, 403):
                     logger.warning(
@@ -305,7 +306,15 @@ class DocumentParser:
             result["status"] = "download_failed"
             return result
 
-        content_bytes = response.content
+        # Peak at initial chunk for magic header validation
+        initial_chunk = b""
+        chunks = []
+        for chunk in response.iter_content(chunk_size=8192):
+            if chunk:
+                chunks.append(chunk)
+                if len(initial_chunk) < 64:
+                    initial_chunk += chunk
+        content_bytes = b"".join(chunks)
 
         # --- Determine filename ---
         filename = ""
@@ -358,20 +367,19 @@ class DocumentParser:
         result["filename"] = filename
 
         try:
-            target_path = Path(target_dir)
-            target_path.mkdir(parents=True, exist_ok=True)
-            local_filepath = target_path / filename
-
-            with open(local_filepath, "wb") as f:
+            os.makedirs(target_dir, exist_ok=True)
+            target_path = os.path.join(target_dir, filename)
+            with open(target_path, "wb") as f:
                 f.write(content_bytes)
 
-            logger.info(f"Successfully saved document locally to: {local_filepath}")
-            result["local_path"] = str(local_filepath.resolve())
-            result["file_size"] = len(content_bytes)
-            result["binary_content"] = content_bytes
+            file_size = len(content_bytes)
+            logger.info(f"Saved document to disk: {target_path} ({file_size} bytes)")
+
             result["status"] = "success"
+            result["local_path"] = os.path.abspath(target_path)
+            result["file_size"] = file_size
         except Exception as e:
-            logger.error(f"Failed to save document locally to {target_dir}: {e}")
-            result["status"] = "save_failed"
+            logger.error(f"Failed to save document {filename} to {target_dir}: {e}")
+            result["status"] = "write_failed"
 
         return result

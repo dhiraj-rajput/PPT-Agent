@@ -503,19 +503,18 @@ class SAMOpportunitiesClient:
         proposal_links = prioritize_and_cap_links(proposal_links)
 
         # Download and Parse RFP Documents
-        rfp_documents = []
         parser = DocumentParser()
         rfp_docs_dir = os.path.join("downloads", "opportunities", sol_num, "rfp_docs")
-
         is_mock = opp.get("opportunityId", "").startswith("mock-")
 
-        for link in rfp_links:
+        import concurrent.futures
+
+        def _process_rfp_link(link: str) -> dict:
             filename = link.split("/")[-1]
             if not os.path.splitext(filename)[1]:
                 filename += ".pdf"
 
             if is_mock:
-                # Mock RFP doc text and PDF generation
                 if "draft-solicitation" in link:
                     text_content = (
                         f"DRAFT SOLICITATION {sol_num}\n"
@@ -545,42 +544,43 @@ class SAMOpportunitiesClient:
                 except Exception as e:
                     logger.error(f"Failed to save mock RFP document: {e}")
 
-                rfp_documents.append({
+                return {
                     "url": link,
                     "filename": filename,
                     "local_path": local_path,
                     "file_size": len(file_bytes),
                     "content": text_content,
                     "status": "success"
-                })
+                }
             else:
-                # Live download & parse
                 save_result = parser.download_and_save_to_path(link, rfp_docs_dir)
                 if save_result["status"] == "success":
                     parse_result = parser.parse_document(save_result["url"])
-                    rfp_documents.append({
+                    return {
                         "url": link,
                         "filename": filename,
                         "local_path": save_result["local_path"],
                         "file_size": save_result["file_size"],
                         "content": parse_result["content"],
                         "status": "success"
-                    })
+                    }
                 else:
-                    rfp_documents.append({
+                    return {
                         "url": link,
                         "filename": filename,
                         "local_path": "",
                         "file_size": 0,
                         "content": "",
                         "status": save_result["status"]
-                    })
+                    }
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as ex:
+            rfp_documents = list(ex.map(_process_rfp_link, rfp_links))
 
         # Download and Parse Proposal/Award Documents
-        proposal_documents = []
         proposal_docs_dir = os.path.join("downloads", "opportunities", sol_num, "proposal_docs")
 
-        for link in proposal_links:
+        def _process_proposal_link(link: str) -> dict:
             filename = link.split("/")[-1]
             if not os.path.splitext(filename)[1]:
                 filename += ".pdf"
@@ -602,35 +602,38 @@ class SAMOpportunitiesClient:
                 except Exception as e:
                     logger.error(f"Failed to save mock proposal document: {e}")
 
-                proposal_documents.append({
+                return {
                     "url": link,
                     "filename": filename,
                     "local_path": local_path,
                     "file_size": len(file_bytes),
                     "content": text_content,
                     "status": "success"
-                })
+                }
             else:
                 save_result = parser.download_and_save_to_path(link, proposal_docs_dir)
                 if save_result["status"] == "success":
                     parse_result = parser.parse_document(save_result["url"])
-                    proposal_documents.append({
+                    return {
                         "url": link,
                         "filename": filename,
                         "local_path": save_result["local_path"],
                         "file_size": save_result["file_size"],
                         "content": parse_result["content"],
                         "status": "success"
-                    })
+                    }
                 else:
-                    proposal_documents.append({
+                    return {
                         "url": link,
                         "filename": filename,
                         "local_path": "",
                         "file_size": 0,
                         "content": "",
                         "status": save_result["status"]
-                    })
+                    }
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as ex:
+            proposal_documents = list(ex.map(_process_proposal_link, proposal_links))
 
         # Generate Proposal Summary if no proposal documents were downloaded but we have a winner
         if not proposal_documents and award_details and award_details.get("awardee_name") != "Unknown":

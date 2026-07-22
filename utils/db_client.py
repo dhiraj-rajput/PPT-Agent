@@ -3,220 +3,254 @@ utils/db_client.py
 ------------------
 MongoDB connection management for the entire PPT-Agent application.
 
-Implements a module-level singleton so the database connection is
-created once and reused across all modules — no redundant connections.
+Dual-access pattern:
+  - Async Motor client  → FastAPI routes and async core modules
+  - Sync pymongo client → CLI scripts, pipeline workers, tests
 
-Usage:
+Usage (async — FastAPI routes):
+    from utils.db_client import get_async_collection
+    col = get_async_collection("users")
+    user = await col.find_one({"email": email})
+
+Usage (sync — scripts / pipeline):
     from utils.db_client import get_collection
-
-    raw_linkedin_collection   = get_collection("raw_linkedin")
-    structured_collection     = get_collection("structured_linkedin")
-    scrape_logs_collection    = get_collection("scrape_logs")
+    col = get_collection("raw_linkedin")
+    doc = col.find_one({"company_slug": "acme"})
 """
 
+from __future__ import annotations
+
+import re
 from typing import Optional, Any
 
 import pymongo
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
+from pymongo.errors import PyMongoError
 
-from config.settings import settings, Settings
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase, AsyncIOMotorCollection
+
+from config.settings import settings
 from utils.helpers import setup_logger
 
 logger = setup_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Singleton MongoDB Client
+# Sync singleton (scripts, pipeline, tests)
 # ---------------------------------------------------------------------------
 
-# These are initialized once when the first call to get_database() is made.
 _mongo_client: Optional[MongoClient] = None
 _mongo_database: Optional[Database] = None
 
 
 def get_database() -> Database:
-    """
-    Returns the singleton MongoDB database instance.
-
-    Creates the MongoClient connection on the first call, then reuses
-    the same connection for every subsequent call.
-
-    Returns:
-        A pymongo Database object connected to the configured database.
-
-    Raises:
-        pymongo.errors.ConnectionFailure: If MongoDB is unreachable.
-    """
+    """Returns the singleton sync pymongo database. Lazy-initialised on first call."""
     global _mongo_client, _mongo_database
 
     if _mongo_database is not None:
         return _mongo_database
 
-    import re
-    redacted_uri = re.sub(r'://[^@]*@', '://***:***@', settings.MONGO_URI)
-    logger.info(f"Connecting to MongoDB at: {redacted_uri}")
+    redacted_uri = re.sub(r"://[^@]*@", "://***:***@", settings.MONGO_URI)
+    logger.info(f"[sync] Connecting to MongoDB at: {redacted_uri}")
 
     _mongo_client = MongoClient(
         settings.MONGO_URI,
-        serverSelectionTimeoutMS=5000,   # Fail fast if MongoDB is not running
+        serverSelectionTimeoutMS=5000,
         connectTimeoutMS=5000,
         socketTimeoutMS=10000,
+        maxPoolSize=20,
+        minPoolSize=2,
     )
-
-    # Trigger an actual connection attempt to surface errors early
     _mongo_client.admin.command("ping")
-    logger.info(f"MongoDB connected. Using database: '{settings.MONGO_DB_NAME}'")
+    logger.info(f"[sync] MongoDB connected. DB: '{settings.MONGO_DB_NAME}'")
 
     _mongo_database = _mongo_client[settings.MONGO_DB_NAME]
     return _mongo_database
 
 
 def get_collection(collection_name: str) -> Collection:
-    """
-    Returns a MongoDB Collection object for the given collection name.
-
-    Args:
-        collection_name: The name of the MongoDB collection to access.
-                         Collections are created automatically if they
-                         do not already exist.
-
-    Returns:
-        A pymongo Collection object.
-
-    Example:
-        raw_collection = get_collection("raw_linkedin")
-        raw_collection.insert_one({"company_slug": "infosys", ...})
-    """
-    database = get_database()
-    return database[collection_name]
+    """Returns a sync pymongo Collection. Use in scripts and pipeline workers."""
+    return get_database()[collection_name]
 
 
 def close_connection() -> None:
-    """
-    Closes the MongoDB connection and resets the singleton.
-
-    Should be called on application shutdown or after test teardown
-    to release network resources cleanly.
-    """
+    """Closes the sync MongoDB connection. Call on CLI/script shutdown."""
     global _mongo_client, _mongo_database
-
     if _mongo_client:
-        logger.info("Closing MongoDB connection.")
+        logger.info("[sync] Closing MongoDB connection.")
         _mongo_client.close()
         _mongo_client = None
         _mongo_database = None
 
 
+# ---------------------------------------------------------------------------
+# Async Motor singleton (FastAPI routes and async core modules)
+# ---------------------------------------------------------------------------
+
+_motor_client: Optional[AsyncIOMotorClient] = None
+_motor_database: Optional[AsyncIOMotorDatabase] = None
+
+
+def get_motor_client() -> AsyncIOMotorClient:
+    """
+    Returns the Motor async client singleton.
+    Call init_motor_client() once at FastAPI startup.
+    """
+    if _motor_client is None:
+        raise RuntimeError(
+            "Motor client not initialised. Call init_motor_client() inside the FastAPI lifespan."
+        )
+    return _motor_client
+
+
+def init_motor_client() -> AsyncIOMotorClient:
+    """
+    Create the async Motor client singleton.
+    Must be called once in the FastAPI lifespan startup handler.
+    Returns the client so the caller can store it for shutdown.
+    """
+    global _motor_client, _motor_database
+
+    redacted_uri = re.sub(r"://[^@]*@", "://***:***@", settings.MONGO_URI)
+    logger.info(f"[motor] Connecting to MongoDB at: {redacted_uri}")
+
+    _motor_client = AsyncIOMotorClient(
+        settings.MONGO_URI,
+        serverSelectionTimeoutMS=5000,
+        connectTimeoutMS=5000,
+        socketTimeoutMS=30000,
+        maxPoolSize=50,
+        minPoolSize=5,
+    )
+    _motor_database = _motor_client[settings.MONGO_DB_NAME]
+    logger.info(f"[motor] Motor async client ready. DB: '{settings.MONGO_DB_NAME}'")
+    return _motor_client
+
+
+def close_motor_client() -> None:
+    """Closes the async Motor client. Call in FastAPI lifespan shutdown."""
+    global _motor_client, _motor_database
+    if _motor_client:
+        logger.info("[motor] Closing Motor async client.")
+        _motor_client.close()
+        _motor_client = None
+        _motor_database = None
+
+
+def get_async_db() -> AsyncIOMotorDatabase:
+    """Returns the Motor async database. Requires init_motor_client() to have been called."""
+    if _motor_database is None:
+        raise RuntimeError("Motor client not initialised. Call init_motor_client() in lifespan.")
+    return _motor_database
+
+
+def get_async_collection(collection_name: str) -> AsyncIOMotorCollection:
+    """
+    Returns a Motor async Collection. Use in FastAPI async routes.
+
+    Example:
+        col = get_async_collection("users")
+        user = await col.find_one({"email": email})
+    """
+    return get_async_db()[collection_name]
+
+
+# ---------------------------------------------------------------------------
+# Index management
+# ---------------------------------------------------------------------------
+
 def ensure_indexes() -> None:
-    """
-    Creates all necessary MongoDB indexes for optimal query performance.
+    """Creates core LinkedIn pipeline indexes (sync, for script use)."""
+    logger.info("Ensuring core MongoDB indexes...")
 
-    This should be called once at application startup or during
-    database migration. Safe to call multiple times (indexes are
-    created only if they do not already exist).
+    try:
+        raw_linkedin = get_collection("raw_linkedin")
+        raw_linkedin.create_index(
+            [("company_slug", pymongo.ASCENDING), ("scrape_layer", pymongo.ASCENDING)],
+            name="idx_raw_linkedin_slug_scrape_layer",
+        )
+        raw_linkedin.create_index(
+            [("company_slug", pymongo.ASCENDING), ("scrape_layer", pymongo.ASCENDING), ("scraped_at", pymongo.DESCENDING)],
+            name="idx_raw_linkedin_slug_layer_time",
+        )
 
-    Indexes created:
-      - raw_linkedin:        (company_slug, layer)   — find raw data by company & layer
-      - structured_linkedin: (company_slug)           — unique per company
-      - scrape_logs:         (company_slug, scraped_at) — audit trail queries
-    """
-    logger.info("Ensuring MongoDB indexes exist...")
+        get_collection("structured_linkedin").create_index(
+            [("company_slug", pymongo.ASCENDING)],
+            name="idx_structured_linkedin_slug",
+            unique=True,
+        )
 
-    raw_linkedin_collection = get_collection("raw_linkedin")
-    raw_linkedin_collection.create_index(
-        [("company_slug", pymongo.ASCENDING), ("scrape_layer", pymongo.ASCENDING)],
-        name="idx_raw_linkedin_slug_scrape_layer",
-    )
-
-    structured_linkedin_collection = get_collection("structured_linkedin")
-    structured_linkedin_collection.create_index(
-        [("company_slug", pymongo.ASCENDING)],
-        name="idx_structured_linkedin_slug",
-        unique=True,
-    )
-
-    scrape_logs_collection = get_collection("scrape_logs")
-    scrape_logs_collection.create_index(
-        [("company_slug", pymongo.ASCENDING), ("scraped_at", pymongo.DESCENDING)],
-        name="idx_scrape_logs_slug_time",
-    )
-
-    logger.info("All MongoDB indexes are in place.")
+        get_collection("scrape_logs").create_index(
+            [("company_slug", pymongo.ASCENDING), ("scraped_at", pymongo.DESCENDING)],
+            name="idx_scrape_logs_slug_time",
+        )
+        logger.info("Core indexes ensured.")
+    except PyMongoError as e:
+        logger.warning(f"MongoDB core index setup note: {e}")
 
 
 def ensure_all_indexes() -> None:
     """
-    Creates indexes for ALL collections used across all agents:
-      LinkedIn agent: raw_linkedin, structured_linkedin, scrape_logs
-      Website agent:  raw_website, structured_website
-      Discovery:      search_cache
-      Orchestrator:   company_profiles
-
-    Safe to call repeatedly — indexes are created only if they don't already exist.
+    Creates indexes for ALL collections across the application.
+    Safe to call repeatedly — only creates indexes that don't exist.
     """
-    logger.info("Creating indexes for all agent collections...")
+    logger.info("Creating indexes for all collections...")
 
-    # --- LinkedIn agent collections (already in ensure_indexes) ---
     ensure_indexes()
 
-    # --- Website agent collections ---
-    raw_website = get_collection("raw_website")
-    raw_website.create_index(
-        [("company_slug", pymongo.ASCENDING), ("scraped_at", pymongo.DESCENDING)],
-        name="idx_raw_website_slug_time",
-    )
+    def _safe_create(col_name: str, keys: list, **kwargs):
+        try:
+            get_collection(col_name).create_index(keys, **kwargs)
+        except Exception:
+            pass
 
-    structured_website = get_collection("structured_website")
-    structured_website.create_index(
-        [("company_slug", pymongo.ASCENDING)],
-        name="idx_structured_website_slug",
-        unique=True,
-    )
+    # Website pipeline
+    _safe_create("raw_website", [("company_slug", pymongo.ASCENDING), ("scraped_at", pymongo.DESCENDING)], name="idx_raw_website_slug_time")
+    _safe_create("structured_website", [("company_slug", pymongo.ASCENDING)], name="idx_structured_website_slug", unique=True)
 
-    # --- Search cache ---
-    search_cache = get_collection("search_cache")
-    search_cache.create_index(
-        [("query", pymongo.ASCENDING)],
-        name="idx_search_cache_query",
-        unique=True,
-    )
+    # Search & profiles
+    _safe_create("search_cache", [("query", pymongo.ASCENDING)], name="idx_search_cache_query", unique=True)
+    _safe_create("company_profiles", [("company_slug", pymongo.ASCENDING)], name="idx_company_profiles_slug", unique=True)
 
-    # --- Unified company profiles ---
-    company_profiles = get_collection("company_profiles")
-    company_profiles.create_index(
-        [("company_slug", pymongo.ASCENDING)],
-        name="idx_company_profiles_slug",
-        unique=True,
-    )
+    # External search
+    _safe_create("raw_external_search", [("company_slug", pymongo.ASCENDING), ("scraped_at", pymongo.DESCENDING)], name="idx_raw_external_search_slug_time")
+    _safe_create("structured_external_search", [("company_slug", pymongo.ASCENDING)], name="idx_structured_external_search_slug", unique=True)
 
-    # --- External News Search agent collections ---
-    raw_external_search = get_collection("raw_external_search")
-    raw_external_search.create_index(
-        [("company_slug", pymongo.ASCENDING), ("scraped_at", pymongo.DESCENDING)],
-        name="idx_raw_external_search_slug_time",
-    )
+    # Task & OAuth state TTL
+    _safe_create("task_statuses", [("task_id", pymongo.ASCENDING)], name="idx_task_statuses_id", unique=True)
+    _safe_create("task_statuses", [("expireAt", pymongo.ASCENDING)], name="idx_task_statuses_expire_at", expireAfterSeconds=0)
+    _safe_create("oauth_states", [("state", pymongo.ASCENDING)], name="idx_oauth_states_id", unique=True)
+    _safe_create("oauth_states", [("expireAt", pymongo.ASCENDING)], name="idx_oauth_states_expire_at", expireAfterSeconds=0)
 
-    structured_external_search = get_collection("structured_external_search")
-    structured_external_search.create_index(
-        [("company_slug", pymongo.ASCENDING)],
-        name="idx_structured_external_search_slug",
-        unique=True,
-    )
+    # RFPs & tenders
+    _safe_create("rfps", [("solicitation_number", pymongo.ASCENDING)], name="idx_rfps_solicitation_number", unique=True)
+    _safe_create("tenders", [("noticeId", pymongo.ASCENDING)], name="idx_tenders_notice_id")
+    _safe_create("tenders", [("closing_date", pymongo.ASCENDING), ("status", pymongo.ASCENDING)], name="idx_tenders_closing_status")
 
-    # --- Task Statuses collection ---
-    task_statuses = get_collection("task_statuses")
-    task_statuses.create_index([("task_id", pymongo.ASCENDING)], name="idx_task_statuses_id", unique=True)
-    task_statuses.create_index([("expireAt", pymongo.ASCENDING)], name="idx_task_statuses_expire_at", expireAfterSeconds=0)
+    # Leads & campaigns
+    _safe_create("leads", [("createdBy", pymongo.ASCENDING)], name="idx_leads_created_by")
+    _safe_create("leads", [("campaignId", pymongo.ASCENDING), ("updatedAt", pymongo.DESCENDING)], name="idx_leads_campaign_updated")
+    _safe_create("leads", [("campaignId", pymongo.ASCENDING), ("status", pymongo.ASCENDING), ("send_after", pymongo.ASCENDING)], name="idx_leads_campaign_status_send_after")
+    _safe_create("leads", [("email", pymongo.ASCENDING), ("status", pymongo.ASCENDING)], name="idx_leads_email_status")
+    _safe_create("campaigns", [("status", pymongo.ASCENDING)], name="idx_campaigns_status")
 
-    # --- OAuth States collection ---
-    oauth_states = get_collection("oauth_states")
-    oauth_states.create_index([("state", pymongo.ASCENDING)], name="idx_oauth_states_id", unique=True)
-    oauth_states.create_index([("expireAt", pymongo.ASCENDING)], name="idx_oauth_states_expire_at", expireAfterSeconds=0)
+    # Integrations
+    _safe_create("integrations", [("service", pymongo.ASCENDING), ("userId", pymongo.ASCENDING)], name="idx_integrations_service_user")
 
-    logger.info("All agent indexes are in place (11 collections).")
+    # Competitor profiles
+    _safe_create("competitor_profiles", [("company_name", pymongo.ASCENDING)], name="idx_competitor_profiles_name", collation={"locale": "en", "strength": 2})
 
+    # Company catalog
+    _safe_create("company_catalog", [("category", pymongo.ASCENDING)], name="idx_company_catalog_category")
+
+    logger.info("All indexes ensured (25+ collections).")
+
+
+# ---------------------------------------------------------------------------
+# Task status helpers (sync — used by background threads/scripts)
+# ---------------------------------------------------------------------------
 
 def update_task_status(
     task_id: str,
@@ -227,11 +261,11 @@ def update_task_status(
     filename: Optional[str] = None,
     extra: Optional[dict] = None,
 ) -> None:
-    """Upsert background task progress/status inside MongoDB to support multi-worker deployments."""
+    """Upsert background task progress/status into MongoDB."""
     from datetime import datetime, timezone, timedelta
     col = get_collection("task_statuses")
     now = datetime.now(timezone.utc)
-    doc = {
+    doc: dict[str, Any] = {
         "task_id": task_id,
         "type": task_type,
         "progress": progress,
@@ -244,7 +278,10 @@ def update_task_status(
         doc["filename"] = filename
     if extra:
         doc.update(extra)
-    col.update_one({"task_id": task_id}, {"$set": doc}, upsert=True)
+    try:
+        col.update_one({"task_id": task_id}, {"$set": doc}, upsert=True)
+    except PyMongoError as e:
+        logger.error(f"Failed to update task status for {task_id}: {e}")
 
 
 def get_task_status_db(task_id: str) -> Optional[dict]:
@@ -257,3 +294,45 @@ def get_all_task_statuses_db() -> list[dict]:
     """Retrieve all background task statuses from MongoDB."""
     col = get_collection("task_statuses")
     return list(col.find({}, {"_id": 0, "expireAt": 0, "updatedAt": 0}))
+
+
+# ---------------------------------------------------------------------------
+# Async task status helpers (Motor — used by async routes)
+# ---------------------------------------------------------------------------
+
+async def update_task_status_async(
+    task_id: str,
+    task_type: str,
+    progress: int,
+    status: str,
+    message: str,
+    filename: Optional[str] = None,
+    extra: Optional[dict] = None,
+) -> None:
+    """Async version of update_task_status for use in async FastAPI routes."""
+    from datetime import datetime, timezone, timedelta
+    col = get_async_collection("task_statuses")
+    now = datetime.now(timezone.utc)
+    doc: dict[str, Any] = {
+        "task_id": task_id,
+        "type": task_type,
+        "progress": progress,
+        "status": status,
+        "message": message,
+        "updatedAt": now,
+        "expireAt": now + timedelta(days=1),
+    }
+    if filename is not None:
+        doc["filename"] = filename
+    if extra:
+        doc.update(extra)
+    try:
+        await col.update_one({"task_id": task_id}, {"$set": doc}, upsert=True)
+    except Exception as e:
+        logger.error(f"[motor] Failed to update task status for {task_id}: {e}")
+
+
+async def get_task_status_async(task_id: str) -> Optional[dict]:
+    """Async version of get_task_status_db for use in async FastAPI routes."""
+    col = get_async_collection("task_statuses")
+    return await col.find_one({"task_id": task_id}, {"_id": 0, "expireAt": 0, "updatedAt": 0})

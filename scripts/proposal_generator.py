@@ -240,7 +240,10 @@ def build_cover_page(doc, cfg):
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         p.paragraph_format.space_after = Pt(18)
         run = p.add_run()
-        run.add_picture(graphic, width=Inches(6.5))
+        try:
+            run.add_picture(graphic, width=Inches(6.5))
+        except Exception as e:
+            logger.warning(f"Could not load cover graphic image: {e}")
 
     title_p = doc.add_paragraph()
     title_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -422,9 +425,13 @@ def add_table_block(doc, cfg, headers, rows, col_widths=None):
         cell.paragraphs[0].text = ""
         _add_formatted_runs(cell.paragraphs[0], cfg, text, size=10.5, color="FFFFFF", default_bold=True)
 
-    for row_data in rows:
+    for row_idx, row_data in enumerate(rows):
         row = table.add_row()
+        # Alternating row shading: light gray background for odd rows (1-indexed: 1st row data is index 0)
+        bg_color = "F9F9F9" if row_idx % 2 == 1 else None
         for cell, text in zip(row.cells, row_data):
+            if bg_color:
+                _set_cell_shading(cell, bg_color)
             cell.paragraphs[0].text = ""
             _add_formatted_runs(cell.paragraphs[0], cfg, text, size=10)
 
@@ -457,10 +464,18 @@ _BLOCK_HANDLERS = {
 }
 
 
-def add_section(doc, cfg, section):
+def add_section(doc, cfg, section, index=None):
     if section.get("page_break_before", False):
         doc.add_page_break()
-    add_section_title(doc, cfg, section["title"])
+    
+    title = section["title"]
+    if index is not None:
+        # Check if the title already starts with a number like "1." or "1.0"
+        import re
+        if not re.match(r'^\d+(\.\d+)?\s', title):
+            title = f"{index}.0 {title}"
+            
+    add_section_title(doc, cfg, title)
     for block in section.get("blocks", []):
         handler = _BLOCK_HANDLERS.get(block["type"])
         if handler is None:
@@ -485,7 +500,10 @@ def setup_headers_footers(doc, cfg):
     logo = brand.get("logo_path")
     if logo and Path(logo).exists():
         fp_run = fp_p.add_run()
-        fp_run.add_picture(logo, width=Inches(1.1))
+        try:
+            fp_run.add_picture(logo, width=Inches(1.1))
+        except Exception as e:
+            logger.warning(f"Could not load cover header logo image: {e}")
 
     # First page footer: intentionally blank (matches cover page convention)
     fp_footer = section.first_page_footer
@@ -594,8 +612,8 @@ def generate(cfg: dict, output_docx: str) -> str:
     build_cover_page(doc, cfg)
     build_toc_page(doc, cfg)
 
-    for section in cfg["sections"]:
-        add_section(doc, cfg, section)
+    for idx, section in enumerate(cfg["sections"], start=1):
+        add_section(doc, cfg, section, index=idx)
 
     out_path = Path(output_docx)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -626,6 +644,7 @@ def convert_to_pdf(docx_path: str, outdir: Optional[str] = None) -> str:
             
             def _com_convert():
                 try:
+                    comtypes.CoInitialize()
                     word = comtypes.client.CreateObject('Word.Application')
                     word.Visible = False
                     word.DisplayAlerts = 0
@@ -639,6 +658,11 @@ def convert_to_pdf(docx_path: str, outdir: Optional[str] = None) -> str:
                         word.Quit()
                 except Exception as e:
                     result_holder["error"] = str(e)
+                finally:
+                    try:
+                        comtypes.CoUninitialize()
+                    except Exception:
+                        pass
 
             t = threading.Thread(target=_com_convert, daemon=True)
             t.start()
@@ -671,10 +695,11 @@ def convert_to_pdf(docx_path: str, outdir: Optional[str] = None) -> str:
                 break
 
     if not soffice:
-        raise RuntimeError(
+        logger.warning(
             "Neither Microsoft Word (via COM) nor LibreOffice ('soffice') was found. "
-            "Install LibreOffice or Microsoft Word to enable PDF export."
+            "Returning generated DOCX document."
         )
+        return docx_path
 
     logger.info(f"Attempting LibreOffice conversion using: {soffice}")
     subprocess.run(

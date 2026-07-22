@@ -1,14 +1,23 @@
+"""
+app/routes/leads.py
+--------------------
+Lead management & bulk import endpoints using async Motor.
+"""
+
+from __future__ import annotations
+
 import csv
 import io
 import re
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Any, List, Optional
 from bson import ObjectId
+from bson.errors import InvalidId
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 
 from app.core.auth import get_current_user
-from utils.db_client import get_collection
+from utils.db_client import get_async_collection
 
 router = APIRouter(prefix="/leads", tags=["leads"])
 
@@ -77,48 +86,23 @@ class BulkCompanyImportBody(BaseModel):
     companies: List[CompanySelectItem]
 
 
-def _assert_campaign_ownership(campaign_id: ObjectId, user_id: ObjectId) -> bool:
-    campaigns_col = get_collection("campaigns")
-    campaign = campaigns_col.find_one({"_id": campaign_id})
+async def _assert_campaign_ownership(campaign_id: ObjectId, user_id: ObjectId) -> bool:
+    campaigns_col = get_async_collection("campaigns")
+    campaign = await campaigns_col.find_one({"_id": campaign_id})
     return bool(campaign)
 
 
 def _normalize_company_key(name: Optional[str], uei: Optional[str] = "") -> str:
-    """Normalize a company identifier so the same company can be matched
-    consistently across campaigns, regardless of casing/whitespace."""
     if uei:
         return f"uei:{str(uei).strip().lower()}"
     return f"name:{re.sub(r'[^a-z0-9]+', '', str(name or '').lower())}"
 
 
-def _find_company_conflict(company_key: str, user_id: ObjectId, exclude_campaign_id: Optional[ObjectId] = None):
-    """Check whether a company (by normalized key) is already enrolled as a
-    lead in ANY other campaign owned by this user. Returns the conflicting
-    campaign document if found, else None."""
-    if not company_key:
-        return None
-
-    leads_col = get_collection("leads")
-    campaigns_col = get_collection("campaigns")
-
-    query = {"createdBy": user_id}
-    if exclude_campaign_id is not None:
-        query["_id"] = {"$ne": exclude_campaign_id}
-    other_campaign_ids = [c["_id"] for c in campaigns_col.find(query, {"_id": 1})]
-    if not other_campaign_ids:
-        return None
-
-    existing_lead = leads_col.find_one({
-        "campaignId": {"$in": other_campaign_ids},
-        "companyKey": company_key,
-    })
-    if not existing_lead:
-        return None
-
-    return campaigns_col.find_one({"_id": existing_lead["campaignId"]})
+def _iso(dt: Any) -> Optional[str]:
+    return dt.isoformat() if dt and hasattr(dt, "isoformat") else None
 
 
-def _format_lead(l: dict) -> dict:
+def _format_lead(l: Optional[dict]) -> dict:
     if not l:
         return {}
     return {
@@ -136,68 +120,66 @@ def _format_lead(l: dict) -> dict:
         "sendAttempts": l.get("sendAttempts", 0),
         "resendCount": l.get("resendCount", 0),
         "lastSendError": l.get("lastSendError", ""),
-        "sentAt": l.get("sentAt").isoformat() if hasattr(l.get("sentAt"), "isoformat") else None,
-        "openedAt": l.get("openedAt").isoformat() if hasattr(l.get("openedAt"), "isoformat") else None,
-        "clickedAt": l.get("clickedAt").isoformat() if hasattr(l.get("clickedAt"), "isoformat") else None,
-        "repliedAt": l.get("repliedAt").isoformat() if hasattr(l.get("repliedAt"), "isoformat") else None,
-        "bouncedAt": l.get("bouncedAt").isoformat() if hasattr(l.get("bouncedAt"), "isoformat") else None,
-        "unsubscribedAt": l.get("unsubscribedAt").isoformat() if hasattr(l.get("unsubscribedAt"), "isoformat") else None,
+        "sentAt": _iso(l.get("sentAt")),
+        "openedAt": _iso(l.get("openedAt")),
+        "clickedAt": _iso(l.get("clickedAt")),
+        "repliedAt": _iso(l.get("repliedAt")),
+        "bouncedAt": _iso(l.get("bouncedAt")),
+        "unsubscribedAt": _iso(l.get("unsubscribedAt")),
         "replyPreview": l.get("replyPreview", ""),
-        "createdAt": l.get("createdAt").isoformat() if hasattr(l.get("createdAt"), "isoformat") else None,
-        "updatedAt": l.get("updatedAt").isoformat() if hasattr(l.get("updatedAt"), "isoformat") else None,
+        "createdAt": _iso(l.get("createdAt")),
+        "updatedAt": _iso(l.get("updatedAt")),
     }
 
 
 @router.get("")
-def list_leads(
+async def list_leads(
     campaignId: str,
     status: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
 ):
     try:
         camp_oid = ObjectId(campaignId)
-    except Exception:
+    except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
-    if not _assert_campaign_ownership(camp_oid, current_user["_id"]):
+    if not await _assert_campaign_ownership(camp_oid, current_user["_id"]):
         raise HTTPException(status_code=404, detail="Campaign not found.")
 
-    leads_col = get_collection("leads")
-    query = {"campaignId": camp_oid}
+    leads_col = get_async_collection("leads")
+    query: dict = {"campaignId": camp_oid}
     if status:
         query["status"] = status
 
-    leads = list(leads_col.find(query).sort("createdAt", -1).limit(2000))
+    leads = await leads_col.find(query).sort("createdAt", -1).limit(2000).to_list(length=2000)
     return {"leads": [_format_lead(l) for l in leads]}
 
 
 @router.post("", status_code=201)
-def create_lead(
+async def create_lead(
     body: LeadCreateBody,
     current_user: dict = Depends(get_current_user),
 ):
     try:
         camp_oid = ObjectId(body.campaignId)
-    except Exception:
+    except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
-    if not _assert_campaign_ownership(camp_oid, current_user["_id"]):
+    if not await _assert_campaign_ownership(camp_oid, current_user["_id"]):
         raise HTTPException(status_code=404, detail="Campaign not found.")
 
     normalized = normalize_email(body.email)
     if not is_valid_email(normalized) or not is_plausible_domain(extract_domain(normalized)):
         raise HTTPException(status_code=400, detail="Invalid email address.")
 
-    suppressions_col = get_collection("suppressions")
-    if suppressions_col.find_one({"email": normalized}):
+    suppressions_col = get_async_collection("suppressions")
+    if await suppressions_col.find_one({"email": normalized}):
         raise HTTPException(status_code=400, detail="Email is on the suppression list.")
 
-    leads_col = get_collection("leads")
-    # Check duplicate in campaign
-    if leads_col.find_one({"campaignId": camp_oid, "email": normalized}):
+    leads_col = get_async_collection("leads")
+    if await leads_col.find_one({"campaignId": camp_oid, "email": normalized}):
         raise HTTPException(status_code=409, detail="This email is already a lead in this campaign.")
 
-    # Cross-campaign guard: log conflict if enrolled elsewhere, but permit re-enrollment across different campaigns if forced.
     company_key = _normalize_company_key(body.companyName, "") if (body.companyName or "").strip() else ""
 
     doc = {
@@ -227,8 +209,8 @@ def create_lead(
         "updatedAt": datetime.now(timezone.utc),
     }
 
-    result = leads_col.insert_one(doc)
-    lead = leads_col.find_one({"_id": result.inserted_id})
+    result = await leads_col.insert_one(doc)
+    lead = await leads_col.find_one({"_id": result.inserted_id})
     return {"lead": _format_lead(lead)}
 
 
@@ -240,10 +222,10 @@ async def import_leads_csv(
 ):
     try:
         camp_oid = ObjectId(campaignId)
-    except Exception:
+    except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
-    if not _assert_campaign_ownership(camp_oid, current_user["_id"]):
+    if not await _assert_campaign_ownership(camp_oid, current_user["_id"]):
         raise HTTPException(status_code=404, detail="Campaign not found.")
 
     contents = await file.read()
@@ -259,11 +241,18 @@ async def import_leads_csv(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Could not parse CSV: {e}")
 
-    leads_col = get_collection("leads")
-    suppressions_col = get_collection("suppressions")
+    leads_col = get_async_collection("leads")
+    suppressions_col = get_async_collection("suppressions")
 
-    existing_emails = set(l["email"] for l in leads_col.find({"campaignId": camp_oid}, {"email": 1}))
-    suppressed_emails = set(s["email"] for s in suppressions_col.find({}, {"email": 1}))
+    # Batch set lookup for existing and suppressed emails
+    extracted_emails = [normalize_email(r.get("email") or "") for r in rows if r.get("email")]
+    valid_extracted = [e for e in extracted_emails if is_valid_email(e)]
+
+    existing_docs = await leads_col.find({"campaignId": camp_oid, "email": {"$in": valid_extracted}}, {"email": 1}).to_list(length=len(valid_extracted))
+    existing_emails = set(l["email"] for l in existing_docs)
+
+    suppressed_docs = await suppressions_col.find({"email": {"$in": valid_extracted}}, {"email": 1}).to_list(length=len(valid_extracted))
+    suppressed_emails = set(s["email"] for s in suppressed_docs)
 
     report = {"totalRows": len(rows), "imported": 0, "duplicates": 0, "invalidEmail": 0, "suppressed": 0}
     to_insert = []
@@ -282,9 +271,8 @@ async def import_leads_csv(
             report["suppressed"] += 1
             continue
 
-        existing_emails.add(email)  # Guard against duplicates in same CSV
+        existing_emails.add(email)
 
-        # Handle mapped header variants
         company = row.get("companyname") or row.get("company") or ""
         name = row.get("contactname") or row.get("name") or ""
         title = row.get("title") or ""
@@ -317,30 +305,35 @@ async def import_leads_csv(
         })
 
     if to_insert:
-        leads_col.insert_many(to_insert, ordered=False)
+        await leads_col.insert_many(to_insert, ordered=False)
     report["imported"] = len(to_insert)
 
     return {"report": report}
 
 
 @router.post("/import/api")
-def import_leads_api(
+async def import_leads_api(
     body: BulkImportBody,
     current_user: dict = Depends(get_current_user),
 ):
     try:
         camp_oid = ObjectId(body.campaignId)
-    except Exception:
+    except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
-    if not _assert_campaign_ownership(camp_oid, current_user["_id"]):
+    if not await _assert_campaign_ownership(camp_oid, current_user["_id"]):
         raise HTTPException(status_code=404, detail="Campaign not found.")
 
-    leads_col = get_collection("leads")
-    suppressions_col = get_collection("suppressions")
+    leads_col = get_async_collection("leads")
+    suppressions_col = get_async_collection("suppressions")
 
-    existing_emails = set(l["email"] for l in leads_col.find({"campaignId": camp_oid}, {"email": 1}))
-    suppressed_emails = set(s["email"] for s in suppressions_col.find({}, {"email": 1}))
+    valid_extracted = [normalize_email(r.email) for r in body.leads if is_valid_email(normalize_email(r.email))]
+    
+    existing_docs = await leads_col.find({"campaignId": camp_oid, "email": {"$in": valid_extracted}}, {"email": 1}).to_list(length=len(valid_extracted))
+    existing_emails = set(l["email"] for l in existing_docs)
+
+    suppressed_docs = await suppressions_col.find({"email": {"$in": valid_extracted}}, {"email": 1}).to_list(length=len(valid_extracted))
+    suppressed_emails = set(s["email"] for s in suppressed_docs)
 
     report = {"totalRows": len(body.leads), "imported": 0, "duplicates": 0, "invalidEmail": 0, "suppressed": 0}
     to_insert = []
@@ -385,30 +378,28 @@ def import_leads_api(
         })
 
     if to_insert:
-        leads_col.insert_many(to_insert, ordered=False)
+        await leads_col.insert_many(to_insert, ordered=False)
     report["imported"] = len(to_insert)
 
     return {"report": report}
 
 
 @router.get("/companies-in-use")
-def get_companies_in_use(current_user: dict = Depends(get_current_user)):
-    """Return every companyKey already enrolled in one of the user's
-    campaigns, mapped to that campaign, so the UI can warn before a
-    duplicate is attempted."""
-    campaigns_col = get_collection("campaigns")
-    leads_col = get_collection("leads")
+async def get_companies_in_use(current_user: dict = Depends(get_current_user)):
+    campaigns_col = get_async_collection("campaigns")
+    leads_col = get_async_collection("leads")
 
-    campaign_ids = [c["_id"] for c in campaigns_col.find({"createdBy": current_user["_id"]}, {"_id": 1})]
-    if not campaign_ids:
+    campaigns = await campaigns_col.find({"createdBy": current_user["_id"]}, {"_id": 1, "name": 1}).to_list(length=1000)
+    if not campaigns:
         return {"inUse": []}
 
-    campaign_names = {str(c["_id"]): c.get("name", "") for c in campaigns_col.find({"_id": {"$in": campaign_ids}}, {"name": 1})}
+    campaign_ids = [c["_id"] for c in campaigns]
+    campaign_names = {str(c["_id"]): c.get("name", "") for c in campaigns}
 
-    rows = leads_col.find(
+    rows = await leads_col.find(
         {"campaignId": {"$in": campaign_ids}, "companyKey": {"$ne": ""}},
         {"companyKey": 1, "companyName": 1, "campaignId": 1}
-    )
+    ).to_list(length=5000)
 
     in_use = []
     seen = set()
@@ -428,27 +419,27 @@ def get_companies_in_use(current_user: dict = Depends(get_current_user)):
 
 
 @router.post("/import/companies")
-def import_leads_from_companies(
+async def import_leads_from_companies(
     body: BulkCompanyImportBody,
     current_user: dict = Depends(get_current_user),
 ):
-    """Add multiple companies (selected from the company database) as leads
-    to a single campaign in one go. Any company already enrolled in another
-    campaign owned by this user is rejected with an alert instead of being
-    silently duplicated."""
     try:
         camp_oid = ObjectId(body.campaignId)
-    except Exception:
+    except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
-    if not _assert_campaign_ownership(camp_oid, current_user["_id"]):
+    if not await _assert_campaign_ownership(camp_oid, current_user["_id"]):
         raise HTTPException(status_code=404, detail="Campaign not found.")
 
-    leads_col = get_collection("leads")
-    suppressions_col = get_collection("suppressions")
+    leads_col = get_async_collection("leads")
+    suppressions_col = get_async_collection("suppressions")
+    profile_col = get_async_collection("company_profiles")
 
-    existing_emails = set(l["email"] for l in leads_col.find({"campaignId": camp_oid}, {"email": 1}))
-    suppressed_emails = set(s["email"] for s in suppressions_col.find({}, {"email": 1}))
+    existing_docs = await leads_col.find({"campaignId": camp_oid}, {"email": 1}).to_list(length=10000)
+    existing_emails = set(l["email"] for l in existing_docs)
+    
+    suppressed_docs = await suppressions_col.find({}, {"email": 1}).to_list(length=10000)
+    suppressed_emails = set(s["email"] for s in suppressed_docs)
 
     report = {
         "totalSelected": len(body.companies),
@@ -456,18 +447,15 @@ def import_leads_from_companies(
         "duplicates": 0,
         "invalidEmail": 0,
         "suppressed": 0,
-        "conflicts": [],  # companies already claimed by another campaign
+        "conflicts": [],
     }
     to_insert = []
     used_keys_this_batch = set()
 
-    profile_col = get_collection("company_profiles")
-
     for company in body.companies:
         email = normalize_email(company.email)
         if not email or "@" not in email:
-            # Fallback lookup in researched company profiles
-            profile = profile_col.find_one({
+            profile = await profile_col.find_one({
                 "company_name": {"$regex": f"^{re.escape(company.companyName)}$", "$options": "i"}
             })
             if profile and profile.get("emails"):
@@ -524,32 +512,29 @@ def import_leads_from_companies(
         })
 
     if to_insert:
-        leads_col.insert_many(to_insert, ordered=False)
+        await leads_col.insert_many(to_insert, ordered=False)
     report["added"] = len(to_insert)
 
     return {"report": report}
 
 
 @router.post("/{id}/resend")
-def resend_lead(id: str, current_user: dict = Depends(get_current_user)):
-    """Re-queue a single lead's email to be sent again. Keeps a running
-    resend counter and resets the lead so the outbox worker picks it up on
-    its next pass."""
+async def resend_lead(id: str, current_user: dict = Depends(get_current_user)):
     try:
         oid = ObjectId(id)
-    except Exception:
+    except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid lead ID.")
 
-    leads_col = get_collection("leads")
-    lead = leads_col.find_one({"_id": oid})
+    leads_col = get_async_collection("leads")
+    lead = await leads_col.find_one({"_id": oid})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found.")
 
-    if not _assert_campaign_ownership(lead["campaignId"], current_user["_id"]):
+    if not await _assert_campaign_ownership(lead["campaignId"], current_user["_id"]):
         raise HTTPException(status_code=403, detail="Not authorized.")
 
     now = datetime.now(timezone.utc)
-    leads_col.update_one(
+    await leads_col.update_one(
         {"_id": oid},
         {
             "$set": {
@@ -562,13 +547,14 @@ def resend_lead(id: str, current_user: dict = Depends(get_current_user)):
         }
     )
 
-    # Track the resend on the campaign-level counters too.
-    get_collection("campaigns").update_one(
+    campaigns_col = get_async_collection("campaigns")
+    await campaigns_col.update_one(
         {"_id": lead["campaignId"]},
         {"$inc": {"stats.totalResent": 1}, "$set": {"updatedAt": now}}
     )
 
-    get_collection("audit_logs").insert_one({
+    audit_col = get_async_collection("audit_logs")
+    await audit_col.insert_one({
         "action": "lead.resend",
         "entityType": "Lead",
         "entityId": oid,
@@ -576,24 +562,24 @@ def resend_lead(id: str, current_user: dict = Depends(get_current_user)):
         "createdAt": now,
     })
 
-    updated = leads_col.find_one({"_id": oid})
+    updated = await leads_col.find_one({"_id": oid})
     return {"lead": _format_lead(updated)}
 
 
 @router.delete("/{id}")
-def delete_lead(id: str, current_user: dict = Depends(get_current_user)):
+async def delete_lead(id: str, current_user: dict = Depends(get_current_user)):
     try:
         oid = ObjectId(id)
-    except Exception:
+    except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid lead ID.")
 
-    leads_col = get_collection("leads")
-    lead = leads_col.find_one({"_id": oid})
+    leads_col = get_async_collection("leads")
+    lead = await leads_col.find_one({"_id": oid})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found.")
 
-    if not _assert_campaign_ownership(lead["campaignId"], current_user["_id"]):
+    if not await _assert_campaign_ownership(lead["campaignId"], current_user["_id"]):
         raise HTTPException(status_code=403, detail="Not authorized.")
 
-    leads_col.delete_one({"_id": oid})
+    await leads_col.delete_one({"_id": oid})
     return {"ok": True}

@@ -136,11 +136,25 @@ export default function ProposalBuilder() {
   useEffect(() => {
     let ws;
     let reconnectTimeout;
-    
+    // Guards against React 18 StrictMode's dev-only mount->cleanup->mount: without
+    // this, cleanup calls ws.close() while the socket is still mid-handshake, which
+    // is exactly what Chrome reports as "WebSocket is closed before the connection
+    // is established." Not a backend/auth problem — just needs a safe teardown.
+    let cancelled = false;
+
     function connect() {
+      if (cancelled) return;
       const token = localStorage.getItem('orbitavanya_token');
       const wsUrl = api.getWebSocketUrl(`/api/proposals/ws${token ? `?token=${encodeURIComponent(token)}` : ''}`);
       ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        // Cleanup already ran before the handshake finished (StrictMode dev double-invoke) —
+        // close the now-orphaned socket cleanly instead of leaving it connected.
+        if (cancelled) {
+          ws.close();
+        }
+      };
 
       ws.onmessage = (event) => {
         try {
@@ -170,20 +184,26 @@ export default function ProposalBuilder() {
 
       ws.onclose = () => {
         // Retry connection in 5 seconds if disconnected
-        reconnectTimeout = setTimeout(connect, 5000);
+        if (!cancelled) {
+          reconnectTimeout = setTimeout(connect, 5000);
+        }
       };
 
-      ws.onerror = (err) => {
-        console.warn("WebSocket connection error:", err);
-      };
+      ws.onerror = () => {};
     }
 
     connect();
 
     return () => {
+      cancelled = true;
       if (ws) {
         ws.onclose = null;
-        ws.close();
+        if (ws.readyState === WebSocket.CONNECTING) {
+          // Don't abort mid-handshake (that's what produces the noisy warning) —
+          // ws.onopen above will close it as soon as the handshake finishes.
+        } else {
+          ws.close();
+        }
       }
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };

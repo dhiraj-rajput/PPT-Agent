@@ -13,6 +13,7 @@ export default function Companies() {
   const [query, setQuery] = useState('');
   const [sizeFilter, setSizeFilter] = useState('All');
   const [naicsFilter, setNaicsFilter] = useState('All');
+  const [researchedFilter, setResearchedFilter] = useState('All');
   const [naicsCodes, setNaicsCodes] = useState([]);
   
   // Data States
@@ -72,6 +73,9 @@ export default function Companies() {
     if (query) params.query = query;
     if (sizeFilter !== 'All') params.size = sizeFilter;
     if (naicsFilter !== 'All') params.naics = naicsFilter;
+    if (researchedFilter !== 'All') {
+      params.researched = researchedFilter === 'Researched' ? 'true' : 'false';
+    }
 
     api.getCompanies(params)
       .then((data) => {
@@ -90,12 +94,12 @@ export default function Companies() {
 
   useEffect(() => {
     fetchCompanies();
-  }, [currentPage, query, sizeFilter, naicsFilter]);
+  }, [currentPage, query, sizeFilter, naicsFilter, researchedFilter]);
 
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [query, sizeFilter, naicsFilter]);
+  }, [query, sizeFilter, naicsFilter, researchedFilter]);
 
   const pageCount = Math.ceil(totalCompanies / itemsPerPage);
 
@@ -216,6 +220,17 @@ export default function Companies() {
               <option key={code} value={code}>{code}</option>
             ))}
           </select>
+
+          {/* Research Status Filter */}
+          <select
+            value={researchedFilter}
+            onChange={(e) => setResearchedFilter(e.target.value)}
+            className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-800 dark:text-white cursor-pointer"
+          >
+            <option value="All">All Research Status</option>
+            <option value="Researched">Researched (AI Ready)</option>
+            <option value="Not Researched">Not Researched</option>
+          </select>
         </div>
       </Card>
 
@@ -231,13 +246,13 @@ export default function Companies() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 text-left text-[11px] uppercase tracking-wide text-slate-400 dark:border-navy-800 dark:text-slate-400">
-                  <th className="px-5 py-3 font-semibold w-[30%] min-w-[260px]">Company</th>
+                  <th className="px-5 py-3 font-semibold w-[26%] min-w-[240px]">Company</th>
                   <th className="px-5 py-3 font-semibold">UEI / CAGE</th>
                   <th className="px-5 py-3 font-semibold w-[15%] max-w-[150px]">NAICS Sector</th>
                   <th className="px-5 py-3 font-semibold">Location</th>
                   <th className="px-5 py-3 font-semibold">Size</th>
-                  <th className="px-5 py-3 font-semibold">Reg. Expiry</th>
                   <th className="px-5 py-3 font-semibold">Match Score</th>
+                  <th className="px-5 py-3 font-semibold">Research Status</th>
                   <th className="px-5 py-3 font-semibold">Status</th>
                 </tr>
               </thead>
@@ -245,7 +260,7 @@ export default function Companies() {
                 {allCompanies.map((c) => (
                   <tr key={c.uei} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 dark:border-navy-800/40 dark:hover:bg-navy-800/40">
                     {/* Company Column */}
-                    <td className="px-5 py-3.5 w-[30%] min-w-[260px]">
+                    <td className="px-5 py-3.5 w-[26%] min-w-[240px]">
                       <Link to={`/companies/${c.uei}`} className="flex items-center gap-3">
                         <div className="flex h-9 w-9 shrink-0 flex-shrink-0 items-center justify-center rounded-lg bg-brand-50 text-xs font-bold text-brand-600 dark:bg-navy-900 dark:text-brand-400 aspect-square">
                           {(c.name || '??').slice(0, 2).toUpperCase()}
@@ -282,23 +297,20 @@ export default function Companies() {
                         {c.size || 'Unknown'} Business
                       </span>
                     </td>
-                    {/* Registration Expiry */}
-                    <td className="px-5 py-3.5 text-xs">
-                      {c.expiration_date ? (
-                        <span className={`flex items-center gap-1 font-mono ${
-                          new Date(c.expiration_date) < new Date()
-                            ? 'text-rose-500'
-                            : new Date(c.expiration_date) < new Date(Date.now() + 90 * 86400000)
-                            ? 'text-amber-600'
-                            : 'text-slate-500 dark:text-slate-400'
-                        }`}>
-                          <Calendar size={11} />
-                          {c.expiration_date}
-                        </span>
-                      ) : <span className="text-slate-300">—</span>}
-                    </td>
                     {/* Match Score Column */}
                     <td className="px-5 py-3.5"><MatchBadge score={c.matchScore ?? c.match_score} /></td>
+                    {/* Research Status Column */}
+                    <td className="px-5 py-3.5 text-xs">
+                      {c.is_researched || c.hasResearchedProfile ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                          <Check size={11} /> Researched
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-navy-800 dark:text-slate-400">
+                          Not Researched
+                        </span>
+                      )}
+                    </td>
                     {/* Status Column */}
                     <td className="px-5 py-3.5">
                       <div className="flex flex-col gap-1">

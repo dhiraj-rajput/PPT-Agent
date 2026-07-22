@@ -185,22 +185,39 @@ class RulesStructurer:
             if web_match:
                 website_url = web_match.group(1).strip()
 
+        def _clean(val: Optional[str], max_len: int = 100) -> Optional[str]:
+            if not val:
+                return None
+            stop_terms = [
+                "Type", "Founded", "Specialties", "Employees", "Locations", "Sign in",
+                "Welcome back", "Email or phone", "User Agreement", "Privacy Policy",
+                "Cookie Policy", "See all employees", "Get directions", "Updates",
+                "Report this post", "followers", "View ", "LinkedIn Member"
+            ]
+            for term in stop_terms:
+                if term in val:
+                    val = val.split(term)[0].strip()
+            val = re.sub(r"\s+", " ", val).strip()
+            if len(val) > max_len:
+                val = val[:max_len].strip()
+            return val if val else None
+
         if not industry:
             ind_match = re.search(r"Industry\s+([^\n\r]+)", raw_text)
             if ind_match:
-                industry = ind_match.group(1).strip()
+                industry = _clean(ind_match.group(1), 60)
 
         size_match = re.search(r"Company size\s+([^\n\r]+)", raw_text)
         if size_match:
-            company_size_range = size_match.group(1).strip()
+            company_size_range = _clean(size_match.group(1), 60)
 
         hq_match = re.search(r"Headquarters\s+([^\n\r]+)", raw_text)
         if hq_match:
-            headquarters_location = hq_match.group(1).strip()
+            headquarters_location = _clean(hq_match.group(1), 100)
 
         type_match = re.search(r"Type\s+([^\n\r]+)", raw_text)
         if type_match:
-            company_type = type_match.group(1).strip()
+            company_type = _clean(type_match.group(1), 60)
 
         founded_match = re.search(r"Founded\s+(\d{4})", raw_text)
         if founded_match:
@@ -208,11 +225,7 @@ class RulesStructurer:
 
         spec_match = re.search(r"Specialties\s+([^\n\r]+)", raw_text)
         if spec_match:
-            spec_text = spec_match.group(1).strip()
-            for term in ["Products", "Locations", "Primary", "Employees"]:
-                if term in spec_text:
-                    spec_text = spec_text.split(term)[0].strip()
-                    break
+            spec_text = _clean(spec_match.group(1), 200) or ""
             specialties = [s.strip() for s in spec_text.split(",") if s.strip()]
 
         stock_match = re.search(r"\(([A-Z]+):\s*([A-Z]+)\)", raw_text)

@@ -115,6 +115,27 @@ class AppSettings(BaseSettings):
     FIRECRAWL_API_KEY: str = Field(default="", description="Firecrawl API key.")
 
     # ------------------------------------------------------------------
+    # OCR Configuration
+    # ------------------------------------------------------------------
+    OCR_SPACE_API_KEY: str = Field(
+        default="",
+        description=(
+            "OCR.space API key for cloud-based OCR (zero local computation). "
+            "Free tier: 25,000 requests/month. "
+            "Get a free key at https://ocr.space/ocrapi/freekey. "
+            "Without a key, falls back to 500 req/day demo mode."
+        ),
+    )
+    OCR_ENGINE: str = Field(
+        default="auto",
+        description=(
+            "OCR engine to use: 'auto' (cascade: ocrspace -> pymupdf -> docling -> tesseract), "
+            "'ocrspace' (cloud only), 'pymupdf' (digital PDFs only), "
+            "'docling' (local), 'tesseract' (local)."
+        ),
+    )
+
+    # ------------------------------------------------------------------
     # MongoDB Collections & Search Settings
     # ------------------------------------------------------------------
     MONGODB_RAW_COLLECTION: str = Field(default="raw_data")
@@ -154,8 +175,12 @@ class AppSettings(BaseSettings):
         description="OpenRouter API Key for fallback generation.",
     )
     OPENROUTER_MODEL: str = Field(
-        default="nvidia/nemotron-3-ultra-550b-a55b:free",
-        description="OpenRouter fallback model name.",
+        default="google/gemma-3-27b-it:free",
+        description="Primary OpenRouter model. Falls back through OPENROUTER_MODEL_FALLBACKS.",
+    )
+    OPENROUTER_MODEL_FALLBACKS: str = Field(
+        default="meta-llama/llama-3.3-70b-instruct:free,mistralai/mistral-7b-instruct:free,openrouter/auto",
+        description="Comma-separated OpenRouter model fallback chain, tried in order after OPENROUTER_MODEL.",
     )
     OPENROUTER_BASE_URL: str = Field(
         default="https://openrouter.ai/api/v1",

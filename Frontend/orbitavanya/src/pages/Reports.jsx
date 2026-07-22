@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FileBarChart, Download, Calendar, Eye, X, Loader2, AlertCircle, ShieldAlert, Filter, ChevronDown, SortAsc, SortDesc } from 'lucide-react';
+import { FileBarChart, Download, Calendar, Eye, X, Loader2, AlertCircle, ShieldAlert, Filter, SortAsc, SortDesc, Mail, ExternalLink, Send, CheckCircle2 } from 'lucide-react';
 import { PageHeader, Card } from '../components/ui/Common.jsx';
 import { api } from '../lib/api.jsx';
 
@@ -8,6 +8,14 @@ const DOCUMENT_TYPES = [
   { value: 'Prime RFP Response', label: 'Prime Contract' },
   { value: 'Subcontract Response', label: 'Subcontract' },
   { value: 'other', label: 'Other' },
+];
+
+const REPORT_STATUSES = [
+  { value: 'Generated', label: 'Generated', color: 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200' },
+  { value: 'Draft', label: 'Draft', color: 'bg-slate-100 text-slate-700 dark:bg-navy-800 dark:text-slate-300 border-slate-200' },
+  { value: 'Sent', label: 'Sent', color: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border-emerald-200' },
+  { value: 'Submitted', label: 'Submitted (SAM)', color: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 border-indigo-200' },
+  { value: 'Downloaded', label: 'Downloaded', color: 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border-purple-200' },
 ];
 
 const FALLBACK_REPORTS = [
@@ -22,6 +30,7 @@ const FALLBACK_REPORTS = [
     size: '305 KB', 
     date: 'Jul 13, 2026',
     mtime: 1752364800,
+    status: 'Generated',
   },
   { 
     filename: 'N00164-26-R-0001_subcontract_proposal.pdf', 
@@ -34,6 +43,7 @@ const FALLBACK_REPORTS = [
     size: '304 KB', 
     date: 'Jul 13, 2026',
     mtime: 1752364700,
+    status: 'Generated',
   },
 ];
 
@@ -63,6 +73,16 @@ export default function Reports() {
   const [typeFilter, setTypeFilter] = useState('all');
   const [sortOrder, setSortOrder] = useState('newest'); // 'newest' | 'oldest'
 
+  // Send Email Modal States
+  const [emailModalReport, setEmailModalReport] = useState(null);
+  const [emailForm, setEmailForm] = useState({
+    to_email: '',
+    subject: '',
+    body: '',
+  });
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailNotice, setEmailNotice] = useState(null);
+
   useEffect(() => {
     if (previewing && !backendOffline) {
       api.viewReportBlob(previewing.filename)
@@ -85,25 +105,7 @@ export default function Reports() {
     };
   }, [previewing, backendOffline]);
 
-  const handleDownload = async (e, filename) => {
-    e.preventDefault();
-    try {
-      const blob = await api.downloadReport(filename);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error('Download failed:', err);
-      alert('Failed to download file.');
-    }
-  };
-
-  useEffect(() => {
+  const loadReports = () => {
     setLoading(true);
     api.getReports()
       .then((data) => {
@@ -118,7 +120,101 @@ export default function Reports() {
         setBackendOffline(true);
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    loadReports();
   }, []);
+
+  const handleDownload = async (e, filename) => {
+    if (e) e.preventDefault();
+    try {
+      const blob = await api.downloadReport(filename);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+      // Update local report status
+      setReports(prev => prev.map(r => r.filename === filename ? { ...r, status: r.status === 'Sent' || r.status === 'Submitted' ? r.status : 'Downloaded' } : r));
+    } catch (err) {
+      console.error('Download failed:', err);
+      alert('Failed to download file.');
+    }
+  };
+
+  const handleStatusChange = async (filename, newStatus) => {
+    try {
+      setReports(prev => prev.map(r => r.filename === filename ? { ...r, status: newStatus } : r));
+      await api.updateReportStatus(filename, newStatus);
+    } catch (err) {
+      console.error('Failed to update report status:', err);
+    }
+  };
+
+  const openEmailModal = (report) => {
+    setEmailModalReport(report);
+    const isPrime = (report.proposal_type || '').toLowerCase().includes('prime');
+    const isSub = (report.proposal_type || '').toLowerCase().includes('subcontract');
+    const typeLabel = isPrime ? 'Prime Proposal' : isSub ? 'Subcontract Teaming Proposal' : 'Partnership Proposal';
+
+    setEmailForm({
+      to_email: report.sentTo || 'procurement@' + (report.company_name || 'company').toLowerCase().replace(/[^a-z0-9]/g, '') + '.com',
+      subject: `[${typeLabel}] ${report.title || report.company_name} — Solicitation ${report.solicitation_number || report.ref || 'Ref'}`,
+      body: `<p>Dear Team at ${report.company_name},</p>
+<p>Please find attached our generated <strong>${typeLabel}</strong> for solicitation <strong>${report.solicitation_number || report.ref || ''}</strong>.</p>
+<p>We welcome the opportunity to discuss our technical approach, capabilities, and delivery timeline.</p>
+<p>Best regards,<br/>OrbitAvanya Tech LLP Teaming & Contracting Team</p>`,
+    });
+    setEmailNotice(null);
+  };
+
+  const handleSendEmailSubmit = async (e) => {
+    e.preventDefault();
+    if (!emailForm.to_email) return;
+
+    setSendingEmail(true);
+    setEmailNotice(null);
+
+    try {
+      await api.sendReportEmail({
+        filename: emailModalReport.filename,
+        to_email: emailForm.to_email,
+        subject: emailForm.subject,
+        body: emailForm.body,
+        company_name: emailModalReport.company_name,
+      });
+
+      setReports(prev => prev.map(r => r.filename === emailModalReport.filename ? { ...r, status: 'Sent' } : r));
+      setEmailNotice({ type: 'success', text: `Proposal email successfully sent to ${emailForm.to_email} and logged in Campaign & CRM!` });
+      setTimeout(() => {
+        setEmailModalReport(null);
+        setSendingEmail(false);
+      }, 1500);
+    } catch (err) {
+      console.error('Email send failed:', err);
+      setEmailNotice({ type: 'error', text: err.message || 'Failed to send email' });
+      setSendingEmail(false);
+    }
+  };
+
+  const handleSamUploadRedirect = async (report) => {
+    // 1. Download file locally
+    await handleDownload(null, report.filename);
+
+    // 2. Update status to Submitted
+    await handleStatusChange(report.filename, 'Submitted');
+
+    // 3. Open SAM.gov workspace in new tab
+    const samUrl = report.solicitation_number && report.solicitation_number !== 'N/A'
+      ? `https://sam.gov/search/?index=opp&q=${encodeURIComponent(report.solicitation_number)}`
+      : 'https://sam.gov/workspace/opportunities';
+    window.open(samUrl, '_blank');
+  };
 
   // Filter and sort reports
   const filteredReports = reports
@@ -144,9 +240,14 @@ export default function Reports() {
     return 'bg-slate-100 text-slate-700 dark:bg-navy-800 dark:text-slate-300';
   };
 
+  const getStatusBadge = (status) => {
+    const found = REPORT_STATUSES.find(s => s.value === status) || REPORT_STATUSES[0];
+    return found;
+  };
+
   return (
     <div>
-      <PageHeader title="Reports" subtitle="Generated business proposals and evaluation summaries" />
+      <PageHeader title="Reports & Proposals" subtitle="Generated business proposals, teaming agreements, and submission status tracking" />
 
       {backendOffline && (
         <div className="mb-5 flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-700 dark:bg-amber-950/30 dark:border-amber-900/30 dark:text-amber-400">
@@ -208,74 +309,204 @@ export default function Reports() {
                 <tr className="border-b border-slate-100 text-left text-[11px] uppercase tracking-wide text-slate-400 dark:border-navy-800 dark:text-slate-400">
                   <th className="px-5 py-3 font-semibold">Intended Company & Details</th>
                   <th className="px-5 py-3 font-semibold">Type</th>
-                  <th className="px-5 py-3 font-semibold">Source</th>
-                  <th className="px-5 py-3 font-semibold">Solicitation Number</th>
-                  <th className="px-5 py-3 font-semibold">Size</th>
+                  <th className="px-5 py-3 font-semibold">Status</th>
+                  <th className="px-5 py-3 font-semibold">Solicitation Ref</th>
                   <th className="px-5 py-3 font-semibold">Generated</th>
-                  <th className="px-5 py-3 font-semibold text-right">Actions</th>
+                  <th className="px-5 py-3 font-semibold text-right">Actions & Outreach</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredReports.map((r) => (
-                  <tr key={r.filename} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 dark:border-navy-800/40 dark:hover:bg-navy-800/40">
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-600 dark:bg-navy-800 dark:text-brand-400">
-                          <FileBarChart size={18} />
+                {filteredReports.map((r) => {
+                  const statusInfo = getStatusBadge(r.status || 'Generated');
+                  const isPrime = (r.proposal_type || '').toLowerCase().includes('prime');
+                  
+                  return (
+                    <tr key={r.filename} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 dark:border-navy-800/40 dark:hover:bg-navy-800/40">
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-600 dark:bg-navy-800 dark:text-brand-400">
+                            <FileBarChart size={18} />
+                          </div>
+                          <div>
+                            <p className="font-bold text-navy-900 dark:text-white leading-tight text-sm">
+                              {r.company_name}
+                            </p>
+                            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 flex items-center gap-1.5">
+                              <span className="font-semibold text-slate-600 dark:text-slate-400">{r.title || r.filename}</span>
+                              <span>•</span>
+                              <span>{r.size}</span>
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-bold text-navy-900 dark:text-white leading-tight text-sm">
-                            {r.company_name}
-                          </p>
-                          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 flex items-center gap-1.5">
-                            <span className="font-semibold text-slate-600 dark:text-slate-400">{r.proposal_type}</span>
-                            <span>•</span>
-                            <span className="font-mono">{r.solicitation_number || r.ref || 'N/A'}</span>
-                          </p>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${proposalTypeBadgeColor(r.proposal_type)}`}>
+                          {r.proposal_type}
+                        </span>
+                      </td>
+                      {/* Status Column */}
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={r.status || 'Generated'}
+                            onChange={(e) => handleStatusChange(r.filename, e.target.value)}
+                            className={`rounded-lg px-2.5 py-1 text-xs font-bold border ${statusInfo.color} cursor-pointer outline-none transition-all`}
+                          >
+                            {REPORT_STATUSES.map(st => (
+                              <option key={st.value} value={st.value}>{st.label}</option>
+                            ))}
+                          </select>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${proposalTypeBadgeColor(r.proposal_type)}`}>
-                        {r.proposal_type}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 dark:bg-navy-800 px-2.5 py-0.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
-                        {r.source || (r.filename.toLowerCase().includes('prime') ? 'SAM.gov' : 'RFP Auto-Respond')}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400 font-mono text-sm">
-                      {r.solicitation_number || r.ref || 'N/A'}
-                    </td>
-                    <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{r.size}</td>
-                    <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">
-                      <span className="flex items-center gap-1.5"><Calendar size={13} /> {r.date}</span>
-                    </td>
-                    <td className="px-5 py-3.5 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => setPreviewing(r)}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-navy-900 hover:bg-slate-50 dark:border-navy-700 dark:bg-navy-800 dark:text-white dark:hover:bg-navy-700"
-                        >
-                          <Eye size={13} /> View
-                        </button>
-                        <button
-                          onClick={(e) => handleDownload(e, r.filename)}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-navy-900 hover:bg-slate-50 dark:border-navy-700 dark:bg-navy-800 dark:text-white dark:hover:bg-navy-700"
-                        >
-                          <Download size={13} /> Download
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400 font-mono text-xs">
+                        {r.solicitation_number || r.ref || 'N/A'}
+                      </td>
+                      <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400 text-xs">
+                        <span className="flex items-center gap-1.5"><Calendar size={13} /> {r.date}</span>
+                      </td>
+                      <td className="px-5 py-3.5 text-right">
+                        <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                          {/* Send Email Action */}
+                          <button
+                            onClick={() => openEmailModal(r)}
+                            title="Send Proposal Email (Logs to Campaign & CRM)"
+                            className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-900/60 transition-colors"
+                          >
+                            <Mail size={13} /> Email
+                          </button>
+
+                          {/* SAM.gov Submission Action */}
+                          {isPrime && (
+                            <button
+                              onClick={() => handleSamUploadRedirect(r)}
+                              title="Submit on SAM.gov (Downloads locally & redirects)"
+                              className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 px-2.5 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:bg-indigo-900/60 transition-colors"
+                            >
+                              <ExternalLink size={13} /> SAM.gov
+                            </button>
+                          )}
+
+                          {/* Download Button */}
+                          <button
+                            onClick={(e) => handleDownload(e, r.filename)}
+                            title="Download PDF file locally"
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-navy-700 dark:bg-navy-800 dark:text-slate-300 dark:hover:bg-navy-700"
+                          >
+                            <Download size={13} /> PDF
+                          </button>
+
+                          {/* View Preview Button */}
+                          <button
+                            onClick={() => setPreviewing(r)}
+                            title="Preview PDF inline"
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-navy-700 dark:bg-navy-800 dark:text-slate-300 dark:hover:bg-navy-700"
+                          >
+                            <Eye size={13} /> View
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </Card>
       )}
 
+      {/* Send Email Modal */}
+      {emailModalReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/70 p-4 backdrop-blur-sm" onClick={() => setEmailModalReport(null)}>
+          <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-navy-800 p-6 shadow-2xl border border-slate-100 dark:border-navy-700" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-navy-700 mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                  <Mail size={18} />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-navy-900 dark:text-white leading-tight">Send Proposal Email</h3>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Logs outreach to Email Campaign & CRM pipeline</p>
+                </div>
+              </div>
+              <button onClick={() => setEmailModalReport(null)} className="rounded-lg p-1.5 text-slate-400 hover:text-navy-900 dark:hover:text-white">
+                <X size={18} />
+              </button>
+            </div>
+
+            {emailNotice && (
+              <div className={`mb-4 flex items-center gap-2 rounded-xl p-3 text-xs font-semibold ${
+                emailNotice.type === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
+              }`}>
+                {emailNotice.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                <span>{emailNotice.text}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSendEmailSubmit} className="space-y-4 text-xs">
+              <div>
+                <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">To Email Address</label>
+                <input
+                  type="email"
+                  required
+                  value={emailForm.to_email}
+                  onChange={(e) => setEmailForm({ ...emailForm, to_email: e.target.value })}
+                  placeholder="recipient@company.com"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white outline-none focus:border-brand-500"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Subject</label>
+                <input
+                  type="text"
+                  required
+                  value={emailForm.subject}
+                  onChange={(e) => setEmailForm({ ...emailForm, subject: e.target.value })}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white outline-none focus:border-brand-500"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Attached PDF Proposal</label>
+                <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-100 p-2.5 text-xs font-mono text-slate-700 dark:border-navy-700 dark:bg-navy-900 dark:text-slate-300">
+                  <FileBarChart size={14} className="text-brand-500" />
+                  <span className="truncate">{emailModalReport.filename}</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Email Body</label>
+                <textarea
+                  rows={5}
+                  value={emailForm.body}
+                  onChange={(e) => setEmailForm({ ...emailForm, body: e.target.value })}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white outline-none focus:border-brand-500 font-sans"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-navy-700">
+                <button
+                  type="button"
+                  onClick={() => setEmailModalReport(null)}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-navy-700 dark:bg-navy-800 dark:text-slate-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={sendingEmail}
+                  className="flex items-center gap-1.5 rounded-xl bg-emerald-500 px-5 py-2 text-xs font-bold text-white shadow-soft hover:bg-emerald-600 disabled:opacity-50"
+                >
+                  {sendingEmail ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                  Send Proposal Email
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* PDF Inline Preview Modal */}
       {previewing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/80 p-4 md:p-6 backdrop-blur-md" onClick={() => setPreviewing(null)}>
           <div className="w-[94vw] md:w-[90vw] lg:w-[85vw] max-w-7xl h-[92vh] flex flex-col rounded-2xl bg-white dark:bg-navy-800 shadow-2xl overflow-hidden border border-slate-100 dark:border-navy-700" onClick={(e) => e.stopPropagation()}>

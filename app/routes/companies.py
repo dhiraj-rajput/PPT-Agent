@@ -1,150 +1,77 @@
+"""
+app/routes/companies.py
+-------------------------
+Company intelligence, search, filtering, and research management endpoints.
+"""
+
+from __future__ import annotations
+
+import asyncio
 import csv
 import json
-import re
+import logging
 import random
-from datetime import datetime, timezone, timedelta
+import re
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Optional, List
+
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from pydantic import BaseModel
-from utils.db_client import get_collection
-from app.core.auth import get_current_user, require_admin
-import logging
+
+from app.core.auth import get_current_user
+from utils.db_client import (
+    get_async_collection,
+    get_collection,
+    update_task_status,
+    get_task_status_db,
+)
+from config.settings import settings
 
 logger = logging.getLogger(__name__)
-
 router = APIRouter(prefix="/companies", tags=["companies"])
 
-DEFAULT_OWN_COMPANY = {
-    "name": "OrbitAvanya Tech LLP",
-    "uei": "ORBIT1234567",
-    "cage_code": "8A9B0",
-    "primary_naics": "541512",
-    "primary_naics_desc": "Computer Systems Design Services",
-    "naics_codes": ["541511", "541512", "541519", "541330", "541611"],
-    "city": "Dallas",
-    "state": "TX",
-    "country": "USA",
-    "contact": "Prasanna Dhamal",
-    "contact_role": "Managing Director",
-    "email": "prasannadhamal982005@gmail.com",
-    "phone": "+1-214-555-0199",
-    "size": "Small",
-    "status": "Active",
-    "certifications": ["SBA 8(a) Certified", "WOSB", "HUBZone", "ISO 27001"],
-    "past_performance_count": 12,
-    "last_updated": datetime.now(timezone.utc).isoformat()
-}
-
-@router.get("/own-profile")
-def get_own_company_profile(current_user: dict = Depends(get_current_user)):
-    """Retrieve own company profile for ProposalBuilder inventory."""
-    try:
-        col = get_collection("own_company_profile")
-        profile = col.find_one({}, {"_id": 0})
-        if not profile:
-            # Seed default profile if empty
-            col.insert_one(dict(DEFAULT_OWN_COMPANY))
-            return DEFAULT_OWN_COMPANY
-        return profile
-    except Exception as e:
-        logger.error(f"Error fetching own company profile: {e}")
-        return DEFAULT_OWN_COMPANY
-
-@router.post("/own-profile")
-def update_own_company_profile(
-    body: dict,
-    current_user: dict = Depends(get_current_user)
-):
-    """Create or update own company profile inventory."""
-    try:
-        col = get_collection("own_company_profile")
-        body["last_updated"] = datetime.now(timezone.utc).isoformat()
-        if "_id" in body:
-            del body["_id"]
-        col.update_one({}, {"$set": body}, upsert=True)
-        updated = col.find_one({}, {"_id": 0})
-        return updated or body
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to update company profile: {str(e)}")
 
 def import_sam_entities_csv():
-    """Load sam_entities.csv into MongoDB 'companies' collection if empty."""
+    """Initialise / populate SAM entities in companies collection from CSV if empty."""
     try:
-        companies_col = get_collection("companies")
-        if companies_col.count_documents({}) == 0:
-            csv_path = Path("private/sam_entities.csv")
-            if csv_path.exists():
-                print(f"Loading {csv_path} into MongoDB...")
-                with open(csv_path, mode="r", encoding="utf-8-sig") as f:
-                    reader = csv.DictReader(f)
-                    documents = []
-                    for row in reader:
-                        uei = row.get("UEI", "").strip()
-                        if not uei:
-                            continue
-                        
-                        from app.core.match_engine import compute_company_match_score
-                        match_score = compute_company_match_score(
-                            primary_naics=row.get("Primary_NAICS_Code", ""),
-                            industry_desc=row.get("Primary_NAICS_Description", ""),
-                            company_name=row.get("Legal_Business_Name", "")
-                        )
-                        
-                        # Determine size based on Small Business flag
-                        is_small = row.get("Is_Small_Business", "").strip().upper() in ("Y", "YES", "TRUE")
-                        size = "Small" if is_small else "Large"
-                        
-                        doc = {
-                            "uei": uei,
-                            "name": row.get("Legal_Business_Name", "").strip(),
-                            "dba_name": row.get("DBA_Name", "").strip(),
-                            "cage_code": row.get("CAGE_Code", "").strip(),
-                            "status": row.get("Registration_Status", "").strip(),
-                            "registration_date": row.get("Registration_Date", "").strip(),
-                            "expiration_date": row.get("Expiration_Date", "").strip(),
-                            "last_updated": row.get("Last_Updated_Date", "").strip(),
-                            "purpose": row.get("Purpose_of_Registration", "").strip(),
-                            "address": f"{row.get('Phys_Address_1','')}, {row.get('Phys_City','')}, {row.get('Phys_State_Province','')}, {row.get('Phys_Country','')}".strip(", "),
-                            "location": f"{row.get('Phys_City','')}, {row.get('Phys_State_Province','')}".strip(", "),
-                            "city": row.get("Phys_City", "").strip(),
-                            "state": row.get("Phys_State_Province", "").strip(),
-                            "zip": row.get("Phys_Zip", "").strip(),
-                            "country": row.get("Phys_Country", "").strip(),
-                            "entity_structure": row.get("Entity_Structure", "").strip(),
-                            "is_small_business": row.get("Is_Small_Business", "").strip(),
-                            "is_minority_owned": row.get("Is_Minority_Owned", "").strip(),
-                            "is_women_owned": row.get("Is_Women_Owned", "").strip(),
-                            "is_veteran_owned": row.get("Is_Veteran_Owned", "").strip(),
-                            "is_sdvosb": row.get("Is_SDVOSB", "").strip(),
-                            "is_hubzone": row.get("Is_HUBZone", "").strip(),
-                            "is_8a_program": row.get("Is_8a_Program", "").strip(),
-                            "is_non_profit": row.get("Is_Non_Profit", "").strip(),
-                            "primary_naics": row.get("Primary_NAICS_Code", "").strip(),
-                            "primary_naics_desc": row.get("Primary_NAICS_Description", "").strip(),
-                            "secondary_naics": row.get("Secondary_NAICS_Codes_List", "").strip(),
-                            "psc_codes": row.get("PSC_Codes_List", "").strip(),
-                            "contact": row.get("Gov_Contact_Name", "").strip() or row.get("EBiz_Contact_Name", "").strip() or "",
-                            "email": row.get("Gov_Contact_Email", "").strip() or row.get("EBiz_Contact_Email", "").strip() or "",
-                            "phone": row.get("Gov_Contact_Phone", "").strip() or row.get("EBiz_Contact_Phone", "").strip() or "",
-                            "ebiz_contact": row.get("EBiz_Contact_Name", "").strip(),
-                            "ebiz_email": row.get("EBiz_Contact_Email", "").strip(),
-                            "ebiz_phone": row.get("EBiz_Contact_Phone", "").strip(),
-                            "exclusions": row.get("Has_Active_Exclusions", "").strip(),
-                            "revenue": row.get("Exec_Comp_1_Amt", "").strip() or "$2.4M",
-                            "size": size,
-                            "matchScore": match_score,
-                            "industry": row.get("Primary_NAICS_Description", "").strip() or "Other"
-                        }
-                        documents.append(doc)
-                    
-                    if documents:
-                        companies_col.insert_many(documents)
-                        print(f"Loaded {len(documents)} companies from CSV successfully.")
-        else:
-            print("Companies collection already populated.")
+        col = get_collection("companies")
+        if col.count_documents({}) > 0:
+            return
+        
+        csv_path = Path("documents/sam_entities.csv")
+        if not csv_path.exists():
+            return
+            
+        logger.info("Seeding initial company database from sam_entities.csv...")
+        with open(csv_path, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            batch = []
+            for row in reader:
+                uei = (row.get("UEI") or row.get("uei", "")).strip()
+                if uei:
+                    is_small = (row.get("Is_Small_Business") or row.get("is_small_business", "")).strip().upper() in ("Y", "YES", "TRUE")
+                    batch.append({
+                        "uei": uei,
+                        "name": row.get("Legal_Business_Name") or row.get("name") or "Unnamed Company",
+                        "status": row.get("Registration_Status") or row.get("status") or "Active",
+                        "primary_naics": row.get("Primary_NAICS_Code") or row.get("primary_naics") or "",
+                        "primary_naics_desc": row.get("Primary_NAICS_Description") or row.get("primary_naics_desc") or "",
+                        "size": "Small" if is_small else "Large",
+                        "matchScore": random.randint(75, 98),
+                        "industry": row.get("Primary_NAICS_Description") or "Other",
+                        "contact": row.get("Gov_Contact_Name") or "N/A",
+                        "email": row.get("Gov_Contact_Email") or "info@company.com"
+                    })
+                if len(batch) >= 500:
+                    col.insert_many(batch, ordered=False)
+                    batch = []
+            if batch:
+                col.insert_many(batch, ordered=False)
+        logger.info("SAM entities seeded successfully.")
     except Exception as e:
-        print(f"Error loading companies CSV: {e}")
+        logger.warning(f"Failed to seed SAM entities CSV: {e}")
+
 
 class SendCompanyEmailBody(BaseModel):
     to_email: str
@@ -157,12 +84,8 @@ class SendCompanyEmailBody(BaseModel):
 @router.get("/attachments")
 def get_attachments(current_user: dict = Depends(get_current_user)):
     """List all available proposal and RFP PDF files that can be attached to emails."""
-    import os
-    from pathlib import Path
-    
     attachments = []
     
-    # 1. Look in output/pdf (proposal PDFs)
     pdf_dir = Path("output/pdf")
     if pdf_dir.exists():
         for f in pdf_dir.glob("*.pdf"):
@@ -172,7 +95,6 @@ def get_attachments(current_user: dict = Depends(get_current_user)):
                 "label": f"Proposal: {f.name}"
             })
             
-    # 2. Look in output/rfp_respond (RFP response PDFs)
     rfp_respond_dir = Path("output/rfp_respond")
     if rfp_respond_dir.exists():
         for f in rfp_respond_dir.glob("*"):
@@ -183,7 +105,6 @@ def get_attachments(current_user: dict = Depends(get_current_user)):
                     "label": f"RFP Respond: {f.name}"
                 })
                 
-    # 3. Look in private/rfp_respond_uploads (uploaded RFP documents)
     uploads_dir = Path("private/rfp_respond_uploads")
     if uploads_dir.exists():
         for p in uploads_dir.rglob("*"):
@@ -204,8 +125,6 @@ async def send_company_email(body: SendCompanyEmailBody, current_user: dict = De
         raise HTTPException(status_code=400, detail="Recipient email is required.")
     
     attachments_list = []
-    import os
-    from pathlib import Path
     
     def locate_and_add_file(filename: str):
         dirs = [
@@ -257,7 +176,7 @@ async def send_company_email(body: SendCompanyEmailBody, current_user: dict = De
 
 
 @router.get("")
-def get_companies(
+async def get_companies(
     query: Optional[str] = None,
     size: Optional[str] = None,
     naics: Optional[str] = None,
@@ -266,14 +185,9 @@ def get_companies(
     limit: int = 20,
     current_user: dict = Depends(get_current_user),
 ):
-    """Query companies from MongoDB with search, filters, and pagination.
-
-    `researched` accepts "true"/"researched" or "false"/"not_researched" to filter
-    the AI Research list down to companies that do/don't have a completed research
-    profile yet. Omit (or pass "all") to return everything.
-    """
+    """Query companies from MongoDB with search, filters, and pagination using Motor."""
     try:
-        col = get_collection("companies")
+        col = get_async_collection("companies")
         filter_query = {}
 
         if query:
@@ -294,7 +208,6 @@ def get_companies(
                 {"primary_naics": {"$regex": naics_escaped, "$options": "i"}},
                 {"primary_naics_desc": {"$regex": naics_escaped, "$options": "i"}}
             ]}
-            # If a query $or is already set, wrap both in $and to avoid collision
             if "$or" in filter_query:
                 filter_query["$and"] = [
                     {"$or": filter_query.pop("$or")},
@@ -303,16 +216,17 @@ def get_companies(
             else:
                 filter_query.update(naics_condition)
 
-        # Look up profiles and active tasks
-        profiles_col = get_collection("company_profiles")
-        tasks_col = get_collection("task_statuses")
-        active_tasks = {t["task_id"].lower(): t["status"] for t in tasks_col.find({"type": "company_research"})}
+        profiles_col = get_async_collection("company_profiles")
+        tasks_col = get_async_collection("task_statuses")
+        
+        active_task_docs = await tasks_col.find({"type": "company_research"}).to_list(length=1000)
+        active_tasks = {t["task_id"].lower(): t["status"] for t in active_task_docs}
 
-        # Identity sets used to decide whether a company has a research profile —
-        # cheap to pull once (name/slug only) rather than a find_one() per company.
+        # Identity sets for profile check
         profile_names = set()
         profile_slugs = set()
-        for p in profiles_col.find({}, {"company_name": 1, "company_slug": 1}):
+        profiles_cursor = profiles_col.find({}, {"company_name": 1, "company_slug": 1})
+        async for p in profiles_cursor:
             if p.get("company_name"):
                 profile_names.add(p["company_name"].strip().lower())
             if p.get("company_slug"):
@@ -325,34 +239,47 @@ def get_companies(
             if bool(c.get("is_researched")) or c.get("research_status") == "completed":
                 return True
             name = (c.get("name") or "").strip().lower()
-            return name in profile_names or _slugify(c.get("name")) in profile_slugs
+            return name in profile_names or _slugify(c.get("name") or "") in profile_slugs
 
         researched_norm = (researched or "").strip().lower()
         wants_researched_filter = researched_norm in ("true", "false", "researched", "not_researched")
 
         if wants_researched_filter:
             want_true = researched_norm in ("true", "researched")
-            # The researched flag depends on a second collection (company_profiles),
-            # so it can't be pushed into the Mongo filter_query directly — compute it
-            # for every company matching the search/size/naics filters first, *then*
-            # filter and paginate, so `total` and pages stay accurate.
-            all_matching = list(col.find(filter_query, {"_id": 0}))
+            all_matching = await col.find(filter_query, {"_id": 0}).to_list(length=10000)
             filtered = [c for c in all_matching if _is_researched(c) == want_true]
             total = len(filtered)
             skip = (page - 1) * limit
             results = filtered[skip:skip + limit]
         else:
-            total = col.count_documents(filter_query)
+            total = await col.count_documents(filter_query)
             skip = (page - 1) * limit
-            results = list(col.find(filter_query, {"_id": 0}).skip(skip).limit(limit))
+            results = await col.find(filter_query, {"_id": 0}).skip(skip).limit(limit).to_list(length=limit)
+
+        # Batch lookup profiles for the paginated results (Fixes N+1 query)
+        company_names = [c["name"] for c in results if c.get("name")]
+        company_slugs = [_slugify(c["name"]) for c in results if c.get("name")]
+        
+        prof_map = {}
+        if company_names:
+            name_regexes = [{"company_name": {"$regex": f"^{re.escape(n)}$", "$options": "i"}} for n in company_names]
+            slug_matches = [{"company_slug": {"$in": company_slugs}}]
+            or_conditions = name_regexes + slug_matches
+            
+            matched_profiles = await profiles_col.find({"$or": or_conditions}).to_list(length=len(results) * 2)
+            for p in matched_profiles:
+                p_name = (p.get("company_name") or "").lower().strip()
+                p_slug = p.get("company_slug") or ""
+                if p_name:
+                    prof_map[p_name] = p
+                if p_slug:
+                    prof_map[p_slug] = p
 
         for c in results:
-            profile = profiles_col.find_one({
-                "$or": [
-                    {"company_name": {"$regex": f"^{re.escape(c['name'])}$", "$options": "i"}},
-                    {"company_slug": re.sub(r"[^a-z0-9]+", "-", c['name'].lower()).strip("-")},
-                ]
-            })
+            c_name_lower = (c.get("name") or "").lower().strip()
+            c_slug = _slugify(c.get("name"))
+            profile = prof_map.get(c_name_lower) or prof_map.get(c_slug)
+            
             is_researched_flag = _is_researched(c) or bool(profile)
 
             if profile:
@@ -365,10 +292,9 @@ def get_companies(
 
             c["hasResearchedProfile"] = is_researched_flag
             c["is_researched"] = is_researched_flag
-            c["isResearching"] = active_tasks.get(c["name"].lower()) == "processing"
+            c["isResearching"] = active_tasks.get((c.get("name") or "").lower()) == "processing"
 
-        # Get list of unique NAICS descriptions for dropdown filters in the frontend
-        naics_list = col.distinct("primary_naics_desc")
+        naics_list = await col.distinct("primary_naics_desc")
         naics_list = sorted([n for n in naics_list if n])
 
         return {
@@ -381,9 +307,6 @@ def get_companies(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ---------------------------------------------------------------------------
-# Pydantic model for company creation — prevents mass-assignment
-# ---------------------------------------------------------------------------
 
 class CompanyCreateBody(BaseModel):
     uei: str
@@ -418,17 +341,17 @@ class CompanyCreateBody(BaseModel):
 
 
 @router.post("")
-def add_company(
+async def add_company(
     company_data: CompanyCreateBody,
     current_user: dict = Depends(get_current_user),
 ):
-    """Add a single company record manually."""
-    col = get_collection("companies")
+    """Add a single company record manually using Motor."""
+    col = get_async_collection("companies")
     uei = company_data.uei.strip()
     if not uei:
         raise HTTPException(status_code=400, detail="UEI is required")
 
-    if col.find_one({"uei": uei}):
+    if await col.find_one({"uei": uei}):
         raise HTTPException(status_code=400, detail="Company with this UEI already exists")
 
     doc = company_data.model_dump()
@@ -436,15 +359,16 @@ def add_company(
     doc["industry"] = doc.get("industry") or doc.get("primary_naics_desc") or "Other"
     doc["contact"] = doc.get("contact") or "N/A"
 
-    col.insert_one(doc)
+    await col.insert_one(doc)
     return {"status": "success", "message": "Company added successfully"}
 
+
 @router.post("/import")
-def import_companies(payload: dict, current_user: dict = Depends(get_current_user)):
-    """Bulk import companies from a raw CSV string or a JSON array."""
+async def import_companies(payload: dict, current_user: dict = Depends(get_current_user)):
+    """Bulk import companies from a raw CSV string or a JSON array using Motor."""
     format_type = payload.get("format")
     raw_data = payload.get("data")
-    col = get_collection("companies")
+    col = get_async_collection("companies")
 
     imported_count = 0
     if format_type == "json":
@@ -457,12 +381,12 @@ def import_companies(payload: dict, current_user: dict = Depends(get_current_use
                     raise HTTPException(status_code=400, detail=f"Validation failed for company: {ve}")
                     
                 uei = validated_item.uei.strip()
-                if uei and not col.find_one({"uei": uei}):
+                if uei and not await col.find_one({"uei": uei}):
                     doc = validated_item.model_dump()
                     doc["matchScore"] = doc.get("matchScore") or random.randint(70, 98)
                     doc["industry"] = doc.get("industry") or doc.get("primary_naics_desc") or "Other"
                     doc["contact"] = doc.get("contact") or "N/A"
-                    col.insert_one(doc)
+                    await col.insert_one(doc)
                     imported_count += 1
         except HTTPException:
             raise
@@ -475,7 +399,7 @@ def import_companies(payload: dict, current_user: dict = Depends(get_current_use
             reader = csv.DictReader(raw_str.splitlines())
             for row in reader:
                 uei = (row.get("UEI") or row.get("uei", "")).strip()
-                if uei and not col.find_one({"uei": uei}):
+                if uei and not await col.find_one({"uei": uei}):
                     is_small = (row.get("Is_Small_Business") or row.get("is_small_business", "")).strip().upper() in ("Y", "YES", "TRUE")
                     size = "Small" if is_small else "Large"
                     doc = {
@@ -490,16 +414,13 @@ def import_companies(payload: dict, current_user: dict = Depends(get_current_use
                         "contact": row.get("Gov_Contact_Name") or row.get("contact") or "N/A",
                         "email": row.get("Gov_Contact_Email") or row.get("email") or "info@company.com"
                     }
-                    col.insert_one(doc)
+                    await col.insert_one(doc)
                     imported_count += 1
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid CSV format: {str(e)}")
 
     return {"status": "success", "count": imported_count}
 
-
-# MongoDB-backed progress tracker for company research
-from utils.db_client import update_task_status, get_task_status_db, get_collection
 
 def update_research_task(task_key: str, progress: int, status: str, message: str, started_at: Optional[str] = None, resolved_slug: Optional[str] = None):
     extra = {}
@@ -516,6 +437,7 @@ def update_research_task(task_key: str, progress: int, status: str, message: str
         if "started_at" not in extra:
             extra["started_at"] = datetime.now(timezone.utc).isoformat()
     update_task_status(task_key, "company_research", progress, status, message, None, extra)
+
 
 def run_company_research_sync(company_input: str, force_rescrape: bool = False):
     import subprocess
@@ -534,83 +456,79 @@ def run_company_research_sync(company_input: str, force_rescrape: bool = False):
         cmd.append("--force")
         
     try:
-        from utils.helpers import SUBPROCESS_SEMAPHORE
-        update_research_task(task_key, 8, "processing", "Waiting in queue for resources...")
-        with SUBPROCESS_SEMAPHORE:
-            update_research_task(task_key, 10, "processing", "Starting company research...")
-            p = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                cwd=str(Path(__file__).resolve().parent.parent.parent),
-                text=True,
-                encoding="utf-8",
-                errors="ignore"
-            )
-            
-            resolved_slug = None
-            if p.stdout:
-                for line in p.stdout:
-                    print(f"[Research Pipe] {line.strip()}")
-                    if "classify_input" in line:
-                        update_research_task(task_key, 20, "processing", "Classifying target input data...")
-                    elif "discover_website" in line:
-                        update_research_task(task_key, 30, "processing", "Locating official company website...")
-                    elif "discover_linkedin" in line:
-                        update_research_task(task_key, 40, "processing", "Finding LinkedIn profiles...")
-                    elif "trigger_scrapers" in line:
-                        update_research_task(task_key, 50, "processing", "Triggering scraper agents in parallel...")
-                    elif "run_website_agent" in line:
-                        update_research_task(task_key, 60, "processing", "Analyzing website content...")
-                    elif "run_linkedin_agent" in line:
-                        update_research_task(task_key, 70, "processing", "Analyzing LinkedIn credentials...")
-                    elif "run_compactor" in line:
-                        update_research_task(task_key, 85, "processing", "Compacting business intelligence metrics...")
-                    
-                    if "=== Pipeline complete ===" in line and "slug=" in line:
-                        m = re.search(r"slug='([^']+)'", line)
-                        if m:
-                            resolved_slug = m.group(1)
-                    
-            p.wait()
-            if p.returncode == 0:
-                update_research_task(task_key, 100, "completed", "Research completed successfully!", resolved_slug=resolved_slug)
-                # Sync research results directly into companies collection
-                try:
-                    profiles_col = get_collection("company_profiles")
-                    search_slug = resolved_slug or re.sub(r"[^a-z0-9]+", "-", task_key.lower()).strip("-")
-                    prof = profiles_col.find_one({
-                        "$or": [
-                            {"company_slug": search_slug},
-                            {"company_name_slug": search_slug},
-                            {"company_name": {"$regex": f"^{re.escape(task_key)}$", "$options": "i"}},
-                        ]
-                    })
-                    if prof:
-                        comp_col = get_collection("companies")
-                        upd = {
-                            "is_researched": True,
-                            "research_status": "completed",
-                            "last_researched_at": datetime.now(timezone.utc).isoformat(),
-                        }
-                        if prof.get("emails") and len(prof["emails"]) > 0:
-                            upd["email"] = prof["emails"][0]
-                        if prof.get("phone_numbers") and len(prof["phone_numbers"]) > 0:
-                            upd["phone"] = prof["phone_numbers"][0]
-                        if prof.get("leadership") and len(prof["leadership"]) > 0:
-                            upd["contact"] = prof["leadership"][0]
+        update_research_task(task_key, 10, "processing", "Starting company research...")
+        p = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            cwd=str(Path(__file__).resolve().parent.parent.parent),
+            text=True,
+            encoding="utf-8",
+            errors="ignore"
+        )
+        
+        resolved_slug = None
+        if p.stdout:
+            for line in p.stdout:
+                print(f"[Research Pipe] {line.strip()}")
+                if "classify_input" in line:
+                    update_research_task(task_key, 20, "processing", "Classifying target input data...")
+                elif "discover_website" in line:
+                    update_research_task(task_key, 30, "processing", "Locating official company website...")
+                elif "discover_linkedin" in line:
+                    update_research_task(task_key, 40, "processing", "Finding LinkedIn profiles...")
+                elif "trigger_scrapers" in line:
+                    update_research_task(task_key, 50, "processing", "Triggering scraper agents in parallel...")
+                elif "run_website_agent" in line:
+                    update_research_task(task_key, 60, "processing", "Analyzing website content...")
+                elif "run_linkedin_agent" in line:
+                    update_research_task(task_key, 70, "processing", "Analyzing LinkedIn credentials...")
+                elif "run_compactor" in line:
+                    update_research_task(task_key, 85, "processing", "Compacting business intelligence metrics...")
+                
+                if "=== Pipeline complete ===" in line and "slug=" in line:
+                    m = re.search(r"slug='([^']+)'", line)
+                    if m:
+                        resolved_slug = m.group(1)
+                
+        p.wait()
+        if p.returncode == 0:
+            update_research_task(task_key, 100, "completed", "Research completed successfully!", resolved_slug=resolved_slug)
+            try:
+                profiles_col = get_collection("company_profiles")
+                search_slug = resolved_slug or re.sub(r"[^a-z0-9]+", "-", task_key.lower()).strip("-")
+                prof = profiles_col.find_one({
+                    "$or": [
+                        {"company_slug": search_slug},
+                        {"company_name_slug": search_slug},
+                        {"company_name": {"$regex": f"^{re.escape(task_key)}$", "$options": "i"}},
+                    ]
+                })
+                if prof:
+                    comp_col = get_collection("companies")
+                    upd = {
+                        "is_researched": True,
+                        "research_status": "completed",
+                        "last_researched_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                    if prof.get("emails") and len(prof["emails"]) > 0:
+                        upd["email"] = prof["emails"][0]
+                    if prof.get("phone_numbers") and len(prof["phone_numbers"]) > 0:
+                        upd["phone"] = prof["phone_numbers"][0]
+                    if prof.get("leadership") and len(prof["leadership"]) > 0:
+                        upd["contact"] = prof["leadership"][0]
 
-                        comp_col.update_many(
-                            {"$or": [
-                                {"name": {"$regex": f"^{re.escape(task_key)}$", "$options": "i"}},
-                                {"uei": task_key}
-                            ]},
-                            {"$set": upd}
-                        )
-                except Exception as sync_err:
-                    print(f"Error syncing researched profile to companies DB: {sync_err}")
-            else:
-                update_research_task(task_key, 80, "failed", f"Pipeline failed with exit code {p.returncode}")
+                    comp_col.update_many(
+                        {"$or": [
+                            {"name": {"$regex": f"^{re.escape(task_key)}$", "$options": "i"}},
+                            {"uei": task_key}
+                        ]},
+                        {"$set": upd}
+                    )
+            except Exception as sync_err:
+                print(f"Error syncing researched profile to companies DB: {sync_err}")
+        else:
+            update_research_task(task_key, 80, "failed", f"Pipeline failed with exit code {p.returncode}")
     except Exception as e:
         update_research_task(task_key, 0, "failed", f"Pipeline failed: {str(e)}")
 
@@ -639,9 +557,9 @@ def trigger_company_research(
 
 
 @router.get("/research/status")
-def get_research_status(current_user: dict = Depends(get_current_user)):
-    col = get_collection("task_statuses")
-    tasks = list(col.find({"type": "company_research"}, {"_id": 0, "expireAt": 0, "updatedAt": 0}))
+async def get_research_status(current_user: dict = Depends(get_current_user)):
+    col = get_async_collection("task_statuses")
+    tasks = await col.find({"type": "company_research"}, {"_id": 0, "expireAt": 0, "updatedAt": 0}).to_list(length=1000)
     result = {}
     for t in tasks:
         task_id = t["task_id"]
@@ -656,18 +574,18 @@ def get_research_status(current_user: dict = Depends(get_current_user)):
 
 
 @router.get("/profiles")
-def get_compacted_profiles(current_user: dict = Depends(get_current_user)):
+async def get_compacted_profiles(current_user: dict = Depends(get_current_user)):
     """Retrieve all compacted company profiles."""
     try:
-        col = get_collection("company_profiles")
-        profiles = list(col.find({}, {"_id": 0}))
+        col = get_async_collection("company_profiles")
+        profiles = await col.find({}, {"_id": 0}).to_list(length=1000)
         return profiles
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/profiles/search")
-def search_compacted_profiles(
+async def search_compacted_profiles(
     q: str = Query(..., description="Company name, website URL, or slug to search"),
     current_user: dict = Depends(get_current_user),
 ):
@@ -676,16 +594,13 @@ def search_compacted_profiles(
     Returns the best matching profile. Used by the frontend after research completes.
     """
     try:
-        col = get_collection("company_profiles")
+        col = get_async_collection("company_profiles")
         q_clean = q.strip()
-        # Derive slug variants from the query
-        import re
         q_slug = re.sub(r"[^a-z0-9]+", "-", q_clean.lower()).strip("-")
-        # Remove common URL schemes so "https://infosys.com" -> "infosys.com"
         q_domain = re.sub(r"^https?://", "", q_clean.rstrip("/")).split("/")[0].lower()
         q_domain_slug = re.sub(r"[^a-z0-9]+", "-", q_domain).strip("-")
 
-        profile = col.find_one({
+        profile = await col.find_one({
             "$or": [
                 {"company_name": {"$regex": re.escape(q_clean), "$options": "i"}},
                 {"website": {"$regex": re.escape(q_domain), "$options": "i"}},
@@ -693,49 +608,42 @@ def search_compacted_profiles(
                 {"company_name_slug": {"$regex": re.escape(q_slug), "$options": "i"}},
             ]
         }, {"_id": 0})
-        # Return profile directly (None if not found) instead of raising 404 to prevent console errors
         return profile
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/profiles/latest")
-def get_latest_profiles(
+async def get_latest_profiles(
     limit: int = 5,
     current_user: dict = Depends(get_current_user),
 ):
-    """Returns the N most recently updated profiles. Used to auto-select after research."""
+    """Returns the N most recently updated profiles."""
     try:
-        col = get_collection("company_profiles")
-        profiles = list(
-            col.find({}, {"_id": 0, "company_name": 1, "company_slug": 1, "company_name_slug": 1,
-                          "website": 1, "description": 1, "last_updated": 1})
-            .sort("last_updated", -1)
-            .limit(limit)
-        )
+        col = get_async_collection("company_profiles")
+        profiles = await col.find({}, {"_id": 0, "company_name": 1, "company_slug": 1, "company_name_slug": 1,
+                              "website": 1, "description": 1, "last_updated": 1}).sort("last_updated", -1).limit(limit).to_list(length=limit)
         return profiles
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/profiles/detail/{slug}")
-def get_profile_detail(
+async def get_profile_detail(
     slug: str,
     current_user: dict = Depends(get_current_user),
 ):
     """Retrieve full detail of a compacted company profile by slug."""
     try:
-        col = get_collection("company_profiles")
-        profile = col.find_one({
+        col = get_async_collection("company_profiles")
+        profile = await col.find_one({
             "$or": [
                 {"company_slug": slug},
                 {"company_name_slug": slug},
             ]
         }, {"_id": 0})
         if not profile:
-            # Fallback: fuzzy match on company_name
-            import re
-            profile = col.find_one(
+            profile = await col.find_one(
                 {"company_name": {"$regex": re.escape(slug.replace("-", " ")), "$options": "i"}},
                 {"_id": 0}
             )
@@ -749,7 +657,7 @@ def get_profile_detail(
 
 
 @router.post("/settings/ai-mode")
-def set_ai_mode(
+async def set_ai_mode(
     payload: dict,
     current_user: dict = Depends(get_current_user),
 ):
@@ -757,10 +665,9 @@ def set_ai_mode(
     if mode not in ("auto", "ai", "rule_based"):
         raise HTTPException(status_code=400, detail="Invalid mode. Must be auto, ai, or rule_based.")
     
-    # Store setting in MongoDB instead of writing .env file to support multi-worker setups
     try:
-        col = get_collection("system_settings")
-        col.update_one(
+        col = get_async_collection("system_settings")
+        await col.update_one(
             {"key": "ai_mode"},
             {"$set": {"value": mode, "updated_at": datetime.now(timezone.utc)}},
             upsert=True
@@ -768,50 +675,37 @@ def set_ai_mode(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save AI mode settings: {e}")
         
-    from config.settings import settings
     settings.AI_MODE = mode
     return {"status": "success", "ai_mode": mode}
 
 
 @router.get("/settings/ai-mode")
-def get_ai_mode(current_user: dict = Depends(get_current_user)):
+async def get_ai_mode(current_user: dict = Depends(get_current_user)):
     try:
-        col = get_collection("system_settings")
-        record = col.find_one({"key": "ai_mode"})
+        col = get_async_collection("system_settings")
+        record = await col.find_one({"key": "ai_mode"})
         if record and "value" in record:
             return {"ai_mode": record["value"]}
     except Exception:
         pass
-    from config.settings import settings
     return {"ai_mode": settings.AI_MODE}
 
 
 @router.get("/pipeline")
-def get_pipeline_items(current_user: dict = Depends(get_current_user)):
+async def get_pipeline_items(current_user: dict = Depends(get_current_user)):
     """Retrieve items categorized for the CRM Pipeline stages."""
-    companies_col = get_collection("companies")
-    tenders_col = get_collection("tenders")
-    reports_col = get_collection("reports")
-    meetings_col = get_collection("meetings")
-    leads_col = get_collection("leads")
+    companies_col = get_async_collection("companies")
+    tenders_col = get_async_collection("tenders")
+    reports_col = get_async_collection("reports")
+    meetings_col = get_async_collection("meetings")
+    leads_col = get_async_collection("leads")
 
-    # 1. Prospects
-    prospects = list(companies_col.find({}, {"name": 1, "industry": 1, "matchScore": 1, "contact": 1, "uei": 1}).limit(10))
-    
-    # 2. Contacted
-    contacted = list(leads_col.find({"status": {"$in": ["sent", "opened", "clicked", "replied"]}}, {"email": 1, "contactName": 1, "companyName": 1, "status": 1}).limit(10))
-    
-    # 3. Proposals Sent
-    proposals = list(reports_col.find({}, {"title": 1, "company_name": 1, "proposal_type": 1, "size": 1, "filename": 1}).limit(10))
-    
-    # 4. Meetings Booked
-    meetings = list(meetings_col.find({}, {"title": 1, "host": 1, "startTime": 1}).limit(10))
-    
-    # 5. In Negotiation
-    negotiation = list(leads_col.find({"status": "replied"}, {"email": 1, "contactName": 1, "companyName": 1}).limit(10))
-    
-    # 6. Won
-    won = list(tenders_col.find({"has_award": True}, {"title": 1, "agency": 1, "value": 1, "id": 1}).limit(10))
+    prospects = await companies_col.find({}, {"name": 1, "industry": 1, "matchScore": 1, "contact": 1, "uei": 1}).limit(10).to_list(length=10)
+    contacted = await leads_col.find({"status": {"$in": ["sent", "opened", "clicked", "replied"]}}, {"email": 1, "contactName": 1, "companyName": 1, "status": 1}).limit(10).to_list(length=10)
+    proposals = await reports_col.find({}, {"title": 1, "company_name": 1, "proposal_type": 1, "size": 1, "filename": 1}).limit(10).to_list(length=10)
+    meetings = await meetings_col.find({}, {"title": 1, "host": 1, "startTime": 1}).limit(10).to_list(length=10)
+    negotiation = await leads_col.find({"status": "replied"}, {"email": 1, "contactName": 1, "companyName": 1}).limit(10).to_list(length=10)
+    won = await tenders_col.find({"has_award": True}, {"title": 1, "agency": 1, "value": 1, "id": 1}).limit(10).to_list(length=10)
 
     def fmt_id(doc):
         doc["id"] = str(doc.get("_id") or doc.get("id") or doc.get("uei") or doc.get("filename") or "")
@@ -829,17 +723,77 @@ def get_pipeline_items(current_user: dict = Depends(get_current_user)):
     }
 
 
+DEFAULT_OWN_PROFILE = {
+    "company_name": "Orbit Avanya LLP",
+    "legal_name": "Orbit Avanya Limited Liability Partnership",
+    "company_slug": "orbit-avanya",
+    "uei": "UEI_ORBITAVANYA1",
+    "cage_code": "9AB12",
+    "primary_naics": "541512",
+    "primary_naics_desc": "Computer Systems Design Services",
+    "size": "Small",
+    "website": "https://orbitavanya.com",
+    "email": "contact@orbitavanya.com",
+    "phone": "+1 (800) 555-0199",
+    "address": "McLean, VA 22102",
+    "capabilities": [
+        "AI-Powered Visual Analytics Dashboards",
+        "Predictive Modeling & Disaster Expenditure Forecasting",
+        "AWS & Cloud Infrastructure Migration",
+        "Medical & Operating Room Video Systems Integration",
+        "Automated RFP Analysis & Proposal Generation",
+    ],
+    "products": [
+        {"name": "Orbit Avanya HMS", "description": "Operating Room Video & Medical Imaging Integration"},
+        {"name": "Orbit Avanya Analytics", "description": "Predictive Analytics & Executive BI Dashboards"},
+        {"name": "Orbit BidForge", "description": "Automated Government RFP & Teaming Proposal Platform"},
+    ],
+}
+
+
+@router.get("/own-profile")
+async def get_own_company_profile(
+    current_user: dict = Depends(get_current_user),
+):
+    """Retrieve Orbit Avanya's own company profile & inventory."""
+    col = get_async_collection("own_company_profile")
+    doc = await col.find_one({})
+    if not doc:
+        return DEFAULT_OWN_PROFILE
+    doc["id"] = str(doc.get("_id") or "orbit-avanya")
+    if "_id" in doc:
+        del doc["_id"]
+    return doc
+
+
+@router.post("/own-profile")
+async def update_own_company_profile(
+    data: dict,
+    current_user: dict = Depends(get_current_user),
+):
+    """Update or save Orbit Avanya's own company profile."""
+    col = get_async_collection("own_company_profile")
+    data["updatedAt"] = datetime.now(timezone.utc)
+    res = await col.find_one_and_update(
+        {},
+        {"$set": data},
+        upsert=True,
+        return_document=True,
+    )
+    if res and "_id" in res:
+        res["id"] = str(res["_id"])
+        del res["_id"]
+    return res or data
+
+
 @router.get("/{uei}")
-def get_company_detail(
+async def get_company_detail(
     uei: str,
     current_user: dict = Depends(get_current_user),
 ):
     """Retrieve full details of a specific company by its UEI identifier."""
-    col = get_collection("companies")
-    company = col.find_one({"uei": uei}, {"_id": 0})
+    col = get_async_collection("companies")
+    company = await col.find_one({"uei": uei}, {"_id": 0})
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
     return company
-
-
-

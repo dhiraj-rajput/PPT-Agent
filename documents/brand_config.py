@@ -30,7 +30,7 @@ FONT_FALLBACK_CHAIN: List[str] = [
 _detected_font: Optional[str] = None
 
 
-def detect_available_font(preferred_fonts: List[str] = None) -> str:
+def detect_available_font(preferred_fonts: Optional[List[str]] = None) -> str:
     """
     Detect the first available font from the preferred list.
     Falls back through FONT_FALLBACK_CHAIN if none are available.
@@ -45,7 +45,7 @@ def detect_available_font(preferred_fonts: List[str] = None) -> str:
         # python-docx doesn't expose font enumeration, but we can check
         # via matplotlib (if installed) or just return the first in the chain
         try:
-            import matplotlib.font_manager as fm
+            import matplotlib.font_manager as fm  # type: ignore
             available = {f.name for f in fm.fontManager.ttflist}
             for font in fonts_to_try:
                 if font in available:

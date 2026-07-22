@@ -120,24 +120,31 @@ class CompanyDiscovery:
         # Clean words of company name into key tokens
         words = re.sub(r'[^a-z0-9\s]+', '', name_lower).split()
         stop_words = {
-            "inc", "llc", "ltd", "corp", "co", "and", "the", "for", "solutions", 
+            "inc", "llc", "ltd", "corp", "co", "and", "the", "for", "solutions",
             "systems", "services", "group", "company", "corporation", "association",
             "foundation", "community", "development", "international", "agency", "services"
         }
         distinctive_tokens = [w for w in words if w not in stop_words and len(w) > 2]
 
         if not distinctive_tokens:
-            return True
+            # Edge case: all tokens are stop words (e.g. company called "International Services Group").
+            # Instead of blindly returning True (which accepts any result), check if the FULL
+            # company name appears as a substring in the title or snippet.
+            full_name_clean = re.sub(r'\s+', ' ', name_lower).strip()
+            if full_name_clean in title_lower or full_name_clean in snippet_lower:
+                return True
+            logger.debug(f"[Discovery] No distinctive tokens for '{company_name}' and full name not found in result — rejecting.")
+            return False
 
         # Check domain match first (e.g. if company name has a distinct token, and domain has it too)
         domain = self._get_domain(url) or ""
         domain_lower = domain.lower()
-        
+
         generic_brand_words = {
-            "hope", "group", "center", "centre", "alliance", "union", "care", "trust", 
+            "hope", "group", "center", "centre", "alliance", "union", "care", "trust",
             "hands", "partnership", "house", "people", "global", "national", "united"
         }
-        
+
         for token in distinctive_tokens:
             if token in domain_lower and token not in generic_brand_words:
                 return True
@@ -147,12 +154,16 @@ class CompanyDiscovery:
         if not matches:
             return False
 
-        # If it's a multi-word distinct brand, prevent single matches of generic words
-        # (e.g. "Hope" matching "Buckeye Community Hope" when the target is "Hope Pulse")
-        if len(distinctive_tokens) >= 2 and len(matches) < 2:
-            for t in ["pulse", "unique", "avanya"]:
-                if t in distinctive_tokens and t not in matches:
-                    return False
+        # For multi-word brand names, require a higher match ratio to prevent false positives.
+        # e.g. "Hope Pulse" should NOT match a result that only contains "Hope" but not "Pulse".
+        if len(distinctive_tokens) >= 2:
+            match_ratio = len(matches) / len(distinctive_tokens)
+            # Require at least 60% of distinctive tokens to match for multi-word brands
+            if match_ratio < 0.6:
+                logger.debug(
+                    f"[Discovery] Match ratio {match_ratio:.1%} < 60% for '{company_name}' — rejecting weak match."
+                )
+                return False
 
         return len(matches) / len(distinctive_tokens) >= 0.5
 

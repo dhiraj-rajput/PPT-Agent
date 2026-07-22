@@ -484,14 +484,22 @@ def crawl_website(
                         continue
 
                     results = await crawler.arun_many(batch, config=run_cfg)
+                    res_items = []
+                    if hasattr(results, "__aiter__"):
+                        async for res in results:
+                            res_items.append(res)
+                    elif hasattr(results, "__iter__"):
+                        res_items = list(results)
+                    else:
+                        res_items = [results]
 
-                    async for res in results:
-                        url = res.url
-                        if not is_safe_url(url):
+                    for res in res_items:
+                        url = getattr(res, "url", "")
+                        if not url or not is_safe_url(url):
                             logger.warning(f"[SSRF Protection] Blocked unsafe redirected URL: {url}")
                             continue
-                        if res.success:
-                            html = res.html or ""
+                        if getattr(res, "success", False):
+                            html = getattr(res, "html", "") or ""
                             # Discover new links via crawl4ai's extracted links + link filter
                             discovered = link_filter.extract_and_filter_links(html)
                             for new_link in discovered[:20]:
@@ -502,8 +510,7 @@ def crawl_website(
                             pages[url] = {
                                 "url": url,
                                 "html": html,
-                                # Keep cleaned markdown for extractor as a bonus
-                                "cleaned_markdown": res.markdown or "",
+                                "markdown": getattr(getattr(res, "markdown", None), "raw_markdown", str(getattr(res, "markdown", ""))),
                                 "status": "success",
                             }
                             logger.info(
@@ -521,18 +528,25 @@ def crawl_website(
 
             return pages
 
-        # Run the async crawl in a fresh event loop (works from sync context / threads)
+        def _thread_worker():
+            return asyncio.run(_run_crawl4ai())
+
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+
+            if loop and loop.is_running():
                 import concurrent.futures
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
-                    future = ex.submit(asyncio.run, _run_crawl4ai())
+                    future = ex.submit(_thread_worker)
                     result = future.result(timeout=int(limit_timeout / 1000) + 120)
             else:
-                result = loop.run_until_complete(_run_crawl4ai())
-        except RuntimeError:
-            result = asyncio.run(_run_crawl4ai())
+                result = _thread_worker()
+        except Exception as run_err:
+            logger.error(f"[crawl4ai] Failed to execute crawl thread: {run_err}")
+            result = {}
 
         success_count = sum(1 for p in result.values() if p["status"] == "success")
         logger.info(

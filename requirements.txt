@@ -5,8 +5,9 @@ pydantic-settings>=2.0.0
 python-dotenv>=1.0.0
 motor>=3.6.0
 
-# Presentation generation
+# Presentation generation & Excel catalog matching
 python-pptx>=0.6.21
+openpyxl>=3.1.0
 
 # HTTP & HTML parsing
 requests>=2.31.0

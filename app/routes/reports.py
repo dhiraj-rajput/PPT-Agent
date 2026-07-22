@@ -1,15 +1,27 @@
+"""
+app/routes/reports.py
+---------------------
+Generated PDF reports management and serving using Motor async client.
+"""
+
+from __future__ import annotations
+
+import asyncio
 import json
 from pathlib import Path
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
-from utils.db_client import get_collection
+from pydantic import BaseModel
+
+from utils.db_client import get_async_collection, get_collection
 from app.core.auth import get_current_user
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
+
 def sync_reports_with_mongo():
-    """Scan output/pdf folder, parse metadata using config files, and sync with MongoDB."""
+    """Scan output/pdf folder, parse metadata using config files, and sync with MongoDB (sync thread worker)."""
     pdf_dir = Path("output/pdf")
     proposals_dir = Path("output/proposals")
     reports_col = get_collection("reports")
@@ -23,14 +35,10 @@ def sync_reports_with_mongo():
         filename = pdf_path.name
         synced_filenames.append(filename)
         
-        # Attempt to find corresponding proposal config JSON
         parts = filename.rsplit("_", 1)
         prefix = parts[0] if len(parts) > 1 else filename.replace(".pdf", "")
-        
-        # Extract solicitation number (e.g. N00164-26-R-0001)
         solicitation_number = filename.split("_", 1)[0]
         
-        # Determine proposal type
         lower_filename = filename.lower()
         if "prime" in lower_filename:
             proposal_type = "Prime RFP Response"
@@ -46,8 +54,6 @@ def sync_reports_with_mongo():
             proposal_type = "Partnership"
             
         config_path = proposals_dir / f"{prefix}_config.json"
-        
-        # Fallback to match_config if direct config is missing
         if not config_path.exists():
             config_path = proposals_dir / f"{solicitation_number}_match_config.json"
             
@@ -71,7 +77,6 @@ def sync_reports_with_mongo():
             except Exception as e:
                 print(f"Error parsing config {config_path}: {e}")
                 
-        # Resolve company_name to the actual RFP name for Prime RFP Responses
         if proposal_type == "Prime RFP Response" or company_name in ("Issuing Agency", "Federal Agency", "Unknown Company"):
             try:
                 drafts_col = get_collection("draft_requests")
@@ -100,7 +105,6 @@ def sync_reports_with_mongo():
             except Exception as e:
                 print(f"Error resolving RFP title: {e}")
                 
-        # If date is missing in config, use file modification time
         mtime = pdf_path.stat().st_mtime
         if not proposal_date:
             proposal_date = datetime.fromtimestamp(mtime).strftime("%b %d, %Y")
@@ -111,20 +115,21 @@ def sync_reports_with_mongo():
         else:
             file_size = f"{file_size_bytes / 1024:.0f} KB"
             
-        # Determine source (SAM.gov vs RFP Auto-Respond vs System)
         source = "System"
         if lower_filename.startswith("n0") or lower_filename.startswith("w9") or lower_filename.startswith("fa") or lower_filename.startswith("doc"):
             source = "SAM.gov"
         elif "rfp" in lower_filename or "auto" in lower_filename:
             source = "RFP Auto-Respond"
         else:
-            # Check draft request or tender collection
             try:
                 tenders_col = get_collection("tenders")
                 if tenders_col.find_one({"solicitationNumber": solicitation_number}):
                     source = "SAM.gov"
             except Exception:
                 pass
+
+        existing_report = reports_col.find_one({"filename": filename})
+        existing_status = existing_report.get("status", "Generated") if existing_report else "Generated"
 
         report_record = {
             "filename": filename,
@@ -139,42 +144,139 @@ def sync_reports_with_mongo():
             "type": "PDF",
             "source": source,
             "mtime": mtime,
+            "status": existing_status,
             "createdAt": datetime.fromtimestamp(mtime),
             "filepath": str(pdf_path.resolve())
         }
         
-        # Store in MongoDB
         reports_col.update_one(
             {"filename": filename},
             {"$set": report_record},
             upsert=True
         )
         
-    # Clean up any records in MongoDB whose physical files no longer exist
     all_stored = list(reports_col.find({}, {"filename": 1}))
     for record in all_stored:
         if record["filename"] not in synced_filenames:
             reports_col.delete_one({"filename": record["filename"]})
 
+
 @router.get("")
-def get_reports(current_user: dict = Depends(get_current_user)):
+async def get_reports(current_user: dict = Depends(get_current_user)):
     """Retrieve all reports synced with MongoDB sorted by date descending."""
     try:
-        sync_reports_with_mongo()
-        reports_col = get_collection("reports")
-        reports = list(reports_col.find({}, {"_id": 0}).sort("mtime", -1))
+        await asyncio.to_thread(sync_reports_with_mongo)
+        reports_col = get_async_collection("reports")
+        reports = await reports_col.find({}, {"_id": 0}).sort("mtime", -1).to_list(length=1000)
         return reports
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.patch("/{filename}/status")
+async def update_report_status(
+    filename: str,
+    payload: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update report workflow status (Generated, Draft, Sent, Submitted, Downloaded)."""
+    new_status = payload.get("status")
+    if not new_status:
+        raise HTTPException(status_code=400, detail="Status is required.")
+        
+    safe_filename = Path(filename).name
+    col = get_async_collection("reports")
+    res = await col.update_one(
+        {"filename": safe_filename},
+        {"$set": {"status": new_status, "updatedAt": datetime.utcnow()}}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Report record not found.")
+        
+    return {"ok": True, "filename": safe_filename, "status": new_status}
+
+
+class SendReportEmailBody(BaseModel):
+    filename: str
+    to_email: str
+    subject: str
+    body: str
+    company_name: Optional[str] = None
+
+
+@router.post("/send-email")
+async def send_report_email(
+    body: SendReportEmailBody,
+    current_user: dict = Depends(get_current_user)
+):
+    """Send proposal PDF report via email and record note in Email Campaign & CRM logs."""
+    from pydantic import BaseModel
+    safe_filename = Path(body.filename).name
+    pdf_path = Path("output/pdf") / safe_filename
+    if not pdf_path.exists():
+        raise HTTPException(status_code=404, detail=f"Report file '{safe_filename}' not found.")
+
+    attachments_list = [{
+        "path": str(pdf_path.resolve()),
+        "filename": safe_filename
+    }]
+
+    from app.core.mailer import send_company_email_with_attachments
+    try:
+        await send_company_email_with_attachments(
+            to_email=body.to_email,
+            subject=body.subject,
+            body_html=body.body,
+            attachments=attachments_list
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+
+    # Update report status to Sent in reports collection
+    reports_col = get_async_collection("reports")
+    await reports_col.update_one(
+        {"filename": safe_filename},
+        {"$set": {"status": "Sent", "sentTo": body.to_email, "sentAt": datetime.utcnow()}}
+    )
+
+    # Log in email_campaigns / outreach_events for Email Campaign integration
+    email_logs_col = get_async_collection("email_logs")
+    outreach_doc = {
+        "user_id": str(current_user["_id"]),
+        "to_email": body.to_email,
+        "company_name": body.company_name or "Recipient",
+        "subject": body.subject,
+        "body_snippet": body.body[:200],
+        "attachment_filename": safe_filename,
+        "type": "proposal_email",
+        "status": "sent",
+        "timestamp": datetime.utcnow()
+    }
+    await email_logs_col.insert_one(outreach_doc)
+
+    # Sync lead status to contacted in CRM pipeline
+    leads_col = get_async_collection("leads")
+    await leads_col.update_one(
+        {"email": body.to_email},
+        {"$set": {
+            "status": "sent",
+            "last_contacted": datetime.utcnow(),
+            "companyName": body.company_name or "Recipient",
+            "last_proposal": safe_filename
+        }},
+        upsert=True
+    )
+
+    return {"ok": True, "message": f"Proposal email sent successfully to {body.to_email} and logged to campaign!"}
+
+
 @router.get("/view/{filename}")
-def view_report(filename: str, current_user: dict = Depends(get_current_user)):
+async def view_report(filename: str, current_user: dict = Depends(get_current_user)):
     """Serve a PDF report inline in the browser."""
-    safe_filename = Path(filename).name  # prevent path traversal
+    safe_filename = Path(filename).name
     
-    # Ownership Check
-    col = get_collection("task_statuses")
-    task = col.find_one({"filename": safe_filename})
+    col = get_async_collection("task_statuses")
+    task = await col.find_one({"filename": safe_filename})
     if task:
         user_id = str(current_user["_id"])
         if task.get("userId") and str(task.get("userId")) != user_id:
@@ -185,14 +287,14 @@ def view_report(filename: str, current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Report file not found")
     return FileResponse(pdf_path, media_type="application/pdf")
 
+
 @router.get("/download/{filename}")
-def download_report(filename: str, current_user: dict = Depends(get_current_user)):
+async def download_report(filename: str, current_user: dict = Depends(get_current_user)):
     """Force download of a PDF report."""
-    safe_filename = Path(filename).name  # prevent path traversal
+    safe_filename = Path(filename).name
     
-    # Ownership Check
-    col = get_collection("task_statuses")
-    task = col.find_one({"filename": safe_filename})
+    col = get_async_collection("task_statuses")
+    task = await col.find_one({"filename": safe_filename})
     if task:
         user_id = str(current_user["_id"])
         if task.get("userId") and str(task.get("userId")) != user_id:
@@ -201,4 +303,12 @@ def download_report(filename: str, current_user: dict = Depends(get_current_user
     pdf_path = Path("output/pdf") / safe_filename
     if not pdf_path.exists():
         raise HTTPException(status_code=404, detail="Report file not found")
+
+    # Update report status to Downloaded if not already sent/submitted
+    reports_col = get_async_collection("reports")
+    existing = await reports_col.find_one({"filename": safe_filename})
+    if existing and existing.get("status") not in ("Sent", "Submitted"):
+        await reports_col.update_one({"filename": safe_filename}, {"$set": {"status": "Downloaded"}})
+
     return FileResponse(pdf_path, media_type="application/pdf", filename=safe_filename)
+

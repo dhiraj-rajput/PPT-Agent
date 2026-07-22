@@ -1,63 +1,43 @@
 """
 app/routes/newsletters.py
 --------------------------
-Newsletter publication, persistent subscriber management, and edition distribution routes.
-Shares mailer and suppression infrastructure with campaign tracking.
+Newsletter creation, subscriber management, edition dispatch, and tracking endpoints.
 """
 
 from __future__ import annotations
 
-import re
+import asyncio
+import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
+from pathlib import Path
+import uuid
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, File, UploadFile, Request
-from pydantic import BaseModel, EmailStr
+from bson.errors import InvalidId
+from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks, File, UploadFile, Query
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
 from app.core.auth import get_current_user
 from app.core.mailer import send_company_email_with_attachments
 from app.core.tracking_helpers import (
-    new_tracking_id,
-    open_pixel_tag,
     rewrite_links_for_tracking,
+    open_pixel_tag,
     unsubscribe_url,
+    new_tracking_id,
 )
-from utils.db_client import get_collection
-from utils.helpers import setup_logger
-from fastapi.responses import FileResponse
+from utils.db_client import get_async_collection, get_collection
 
-logger = setup_logger(__name__)
-
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/newsletters", tags=["newsletters"])
 
 
-class CreateNewsletterBody(BaseModel):
-    name: str
-    description: Optional[str] = ""
-    senderName: Optional[str] = "OrbitAvanya Tech"
-    senderEmail: Optional[str] = "newsletter@orbitavanyatech.com"
+def _iso(dt: Any) -> Optional[str]:
+    return dt.isoformat() if dt and hasattr(dt, "isoformat") else None
 
 
-class CreateSubscriberBody(BaseModel):
-    email: str
-    contactName: Optional[str] = ""
-    companyName: Optional[str] = ""
-
-
-class BulkCompanySubscriberBody(BaseModel):
-    companyIds: Optional[List[str]] = []
-    manualEmail: Optional[str] = ""
-
-
-class CreateEditionBody(BaseModel):
-    subject: str
-    body: str
-    imageUrl: Optional[str] = None
-    sendNow: Optional[bool] = True
-
-
-def _format_newsletter(n: dict) -> dict:
+def _format_newsletter(n: Optional[dict]) -> dict:
     if not n:
         return {}
     stats = n.get("stats", {}) or {}
@@ -65,8 +45,7 @@ def _format_newsletter(n: dict) -> dict:
         "id": str(n["_id"]),
         "name": n.get("name", ""),
         "description": n.get("description", ""),
-        "senderName": n.get("senderName", "OrbitAvanya Tech"),
-        "senderEmail": n.get("senderEmail", ""),
+        "category": n.get("category", "General"),
         "stats": {
             "totalSubscribers": stats.get("totalSubscribers", 0),
             "totalSent": stats.get("totalSent", 0),
@@ -74,28 +53,12 @@ def _format_newsletter(n: dict) -> dict:
             "totalClicked": stats.get("totalClicked", 0),
             "totalUnsubscribed": stats.get("totalUnsubscribed", 0),
         },
-        "createdAt": n.get("createdAt").isoformat() if hasattr(n.get("createdAt"), "isoformat") else None,
-        "updatedAt": n.get("updatedAt").isoformat() if hasattr(n.get("updatedAt"), "isoformat") else None,
+        "createdAt": _iso(n.get("createdAt")),
+        "updatedAt": _iso(n.get("updatedAt")),
     }
 
 
-def _format_subscriber(s: dict) -> dict:
-    if not s:
-        return {}
-    return {
-        "id": str(s["_id"]),
-        "newsletterId": str(s["newsletterId"]),
-        "email": s.get("email", ""),
-        "contactName": s.get("contactName", ""),
-        "companyName": s.get("companyName", ""),
-        "source": s.get("source", "manual"),
-        "status": s.get("status", "subscribed"),
-        "subscribedAt": s.get("subscribedAt").isoformat() if hasattr(s.get("subscribedAt"), "isoformat") else None,
-        "createdAt": s.get("createdAt").isoformat() if hasattr(s.get("createdAt"), "isoformat") else None,
-    }
-
-
-def _format_edition(e: dict) -> dict:
+def _format_edition(e: Optional[dict]) -> dict:
     if not e:
         return {}
     stats = e.get("stats", {}) or {}
@@ -106,35 +69,59 @@ def _format_edition(e: dict) -> dict:
         "body": e.get("body", ""),
         "imageUrl": e.get("imageUrl"),
         "status": e.get("status", "draft"),
-        "sentAt": e.get("sentAt").isoformat() if hasattr(e.get("sentAt"), "isoformat") else None,
+        "sentAt": _iso(e.get("sentAt")),
         "stats": {
             "sent": stats.get("sent", 0),
             "opened": stats.get("opened", 0),
             "clicked": stats.get("clicked", 0),
             "unsubscribed": stats.get("unsubscribed", 0),
         },
-        "createdAt": e.get("createdAt").isoformat() if hasattr(e.get("createdAt"), "isoformat") else None,
+        "createdAt": _iso(e.get("createdAt")),
     }
 
 
+class CreateNewsletterBody(BaseModel):
+    name: str
+    description: Optional[str] = ""
+    category: Optional[str] = "General"
+
+
+class CreateEditionBody(BaseModel):
+    subject: str
+    body: str
+    imageUrl: Optional[str] = None
+    sendNow: Optional[bool] = False
+
+
+class SubscriberInput(BaseModel):
+    email: str
+    name: Optional[str] = ""
+
+
+class BulkSubscriberBody(BaseModel):
+    subscribers: List[SubscriberInput]
+
+
 @router.get("")
-def list_newsletters(current_user: dict = Depends(get_current_user)):
-    col = get_collection("newsletters")
-    items = col.find().sort("createdAt", -1)
+async def list_newsletters(current_user: dict = Depends(get_current_user)):
+    col = get_async_collection("newsletters")
+    items = await col.find().sort("createdAt", -1).to_list(length=1000)
     return {"newsletters": [_format_newsletter(n) for n in items]}
 
 
-@router.post("")
-def create_newsletter(
+@router.post("", status_code=201)
+async def create_newsletter(
     body: CreateNewsletterBody,
     current_user: dict = Depends(get_current_user),
 ):
-    col = get_collection("newsletters")
+    if not body.name:
+        raise HTTPException(status_code=400, detail="Name is required.")
+
+    col = get_async_collection("newsletters")
     doc = {
         "name": body.name.strip(),
         "description": (body.description or "").strip(),
-        "senderName": (body.senderName or "OrbitAvanya Tech").strip(),
-        "senderEmail": (body.senderEmail or "newsletter@orbitavanyatech.com").strip(),
+        "category": (body.category or "General").strip(),
         "stats": {
             "totalSubscribers": 0,
             "totalSent": 0,
@@ -146,225 +133,170 @@ def create_newsletter(
         "createdAt": datetime.now(timezone.utc),
         "updatedAt": datetime.now(timezone.utc),
     }
-    res = col.insert_one(doc)
-    created = col.find_one({"_id": res.inserted_id})
+
+    res = await col.insert_one(doc)
+    created = await col.find_one({"_id": res.inserted_id})
     return {"newsletter": _format_newsletter(created)}
 
 
-@router.get("/{id}")
-def get_newsletter(id: str, current_user: dict = Depends(get_current_user)):
-    try:
-        oid = ObjectId(id)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid newsletter ID")
-
-    col = get_collection("newsletters")
-    item = col.find_one({"_id": oid})
-    if not item:
-        raise HTTPException(status_code=404, detail="Newsletter not found")
-
-    return {"newsletter": _format_newsletter(item)}
-
-
-@router.delete("/{id}")
-def delete_newsletter(id: str, current_user: dict = Depends(get_current_user)):
+@router.post("/{id}/subscribers", status_code=201)
+async def add_subscribers_to_newsletter(
+    id: str,
+    body: BulkSubscriberBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Add subscribers in bulk using insert_many (Eliminates N+1 query loop)."""
     try:
         n_oid = ObjectId(id)
-    except Exception:
+    except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid newsletter ID")
 
-    newsletters_col = get_collection("newsletters")
-    newsletter = newsletters_col.find_one({"_id": n_oid})
+    newsletters_col = get_async_collection("newsletters")
+    newsletter = await newsletters_col.find_one({"_id": n_oid})
     if not newsletter:
         raise HTTPException(status_code=404, detail="Newsletter not found")
 
-    newsletters_col.delete_one({"_id": n_oid})
-    get_collection("editions").delete_many({"newsletterId": n_oid})
-    get_collection("newsletter_subscribers").delete_many({"newsletterId": n_oid})
-    get_collection("newsletter_sends").delete_many({"newsletterId": n_oid})
+    subs_col = get_async_collection("newsletter_subscribers")
+    
+    emails = [s.email.lower().strip() for s in body.subscribers if s.email and "@" in s.email]
+    existing = await subs_col.find({"newsletterId": n_oid, "email": {"$in": emails}}, {"email": 1}).to_list(length=len(emails))
+    existing_emails = set(e["email"] for e in existing)
 
-    return {"ok": True, "message": "Newsletter deleted successfully"}
+    to_insert = []
+    seen = set()
+    for s in body.subscribers:
+        e = s.email.lower().strip()
+        if e and "@" in e and e not in existing_emails and e not in seen:
+            seen.add(e)
+            to_insert.append({
+                "newsletterId": n_oid,
+                "email": e,
+                "name": (s.name or "").strip(),
+                "status": "subscribed",
+                "subscribedAt": datetime.now(timezone.utc),
+                "createdAt": datetime.now(timezone.utc),
+            })
+
+    if to_insert:
+        await subs_col.insert_many(to_insert, ordered=False)
+        added_count = len(to_insert)
+        await newsletters_col.update_one(
+            {"_id": n_oid},
+            {"$inc": {"stats.totalSubscribers": added_count}, "$set": {"updatedAt": datetime.now(timezone.utc)}}
+        )
+    else:
+        added_count = 0
+
+    return {"added": added_count}
 
 
 @router.get("/{id}/subscribers")
-def list_subscribers(
+async def list_newsletter_subscribers(
     id: str,
     page: int = Query(1, ge=1),
-    limit: int = Query(50, ge=1, le=200),
-    status: Optional[str] = "all",
+    limit: int = Query(50, ge=1, le=500),
     current_user: dict = Depends(get_current_user),
 ):
+    """Retrieve subscriber list for a specific newsletter."""
     try:
         n_oid = ObjectId(id)
-    except Exception:
+    except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid newsletter ID")
 
-    subs_col = get_collection("newsletter_subscribers")
-    query: Dict[str, Any] = {"newsletterId": n_oid}
-    if status and status != "all":
-        query["status"] = status
+    subs_col = get_async_collection("newsletter_subscribers")
+    skip = (page - 1) * limit
+    total = await subs_col.count_documents({"newsletterId": n_oid})
+    docs = await subs_col.find({"newsletterId": n_oid}).sort("createdAt", -1).skip(skip).limit(limit).to_list(length=limit)
 
-    total = subs_col.count_documents(query)
-    items = subs_col.find(query).sort("createdAt", -1).skip((page - 1) * limit).limit(limit)
+    subscribers = []
+    for d in docs:
+        subscribers.append({
+            "id": str(d["_id"]),
+            "email": d.get("email", ""),
+            "name": d.get("name", ""),
+            "status": d.get("status", "subscribed"),
+            "subscribedAt": _iso(d.get("subscribedAt")),
+            "createdAt": _iso(d.get("createdAt")),
+        })
 
     return {
-        "subscribers": [_format_subscriber(s) for s in items],
+        "subscribers": subscribers,
         "total": total,
         "page": page,
         "limit": limit,
     }
 
 
-@router.post("/{id}/subscribers")
-def add_subscriber(
+class AddCompanySubscribersBody(BaseModel):
+    companyIds: List[str] = []
+    manualEmail: Optional[str] = None
+
+
+@router.post("/{id}/subscribers/companies", status_code=201)
+async def add_company_subscribers_to_newsletter(
     id: str,
-    body: CreateSubscriberBody,
+    body: AddCompanySubscribersBody,
     current_user: dict = Depends(get_current_user),
 ):
+    """Add subscribers from company records or manual email entry to a newsletter."""
     try:
         n_oid = ObjectId(id)
-    except Exception:
+    except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid newsletter ID")
 
-    email = body.email.strip().lower()
-    if not email or "@" not in email:
-        raise HTTPException(status_code=400, detail="Valid email required")
+    newsletters_col = get_async_collection("newsletters")
+    newsletter = await newsletters_col.find_one({"_id": n_oid})
+    if not newsletter:
+        raise HTTPException(status_code=404, detail="Newsletter not found")
 
-    subs_col = get_collection("newsletter_subscribers")
-    suppressions_col = get_collection("suppressions")
+    subs_col = get_async_collection("newsletter_subscribers")
+    emails_to_add = set()
 
-    if suppressions_col.find_one({"email": email}):
-        raise HTTPException(status_code=400, detail="Email is globally unsubscribed")
+    if body.manualEmail and "@" in body.manualEmail:
+        emails_to_add.add(body.manualEmail.lower().strip())
 
-    existing = subs_col.find_one({"newsletterId": n_oid, "email": email})
-    if existing:
-        if existing.get("status") == "unsubscribed":
-            subs_col.update_one({"_id": existing["_id"]}, {"$set": {"status": "subscribed", "subscribedAt": datetime.now(timezone.utc)}})
-            return {"status": "resubscribed"}
-        raise HTTPException(status_code=409, detail="Already subscribed to this newsletter")
-
-    doc = {
-        "newsletterId": n_oid,
-        "email": email,
-        "contactName": body.contactName or "",
-        "companyName": body.companyName or "",
-        "source": "manual",
-        "status": "subscribed",
-        "subscribedAt": datetime.now(timezone.utc),
-        "createdAt": datetime.now(timezone.utc),
-    }
-    subs_col.insert_one(doc)
-
-    # Update subscriber count
-    get_collection("newsletters").update_one(
-        {"_id": n_oid},
-        {"$inc": {"stats.totalSubscribers": 1}, "$set": {"updatedAt": datetime.now(timezone.utc)}}
-    )
-
-    return {"status": "success"}
-
-
-@router.post("/{id}/subscribers/companies")
-def add_company_subscribers(
-    id: str,
-    body: BulkCompanySubscriberBody,
-    current_user: dict = Depends(get_current_user),
-):
-    try:
-        n_oid = ObjectId(id)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid newsletter ID")
-
-    companies_col = get_collection("companies")
-    subs_col = get_collection("newsletter_subscribers")
-    suppressions_col = get_collection("suppressions")
-
-    suppressed = set(s["email"] for s in suppressions_col.find({}, {"email": 1}))
-    existing = set(s["email"] for s in subs_col.find({"newsletterId": n_oid}, {"email": 1}))
-
-    query = {}
     if body.companyIds:
+        companies_col = get_async_collection("companies")
         c_oids = []
-        c_ueis = []
-        c_names = []
         for cid in body.companyIds:
-            c_str = str(cid)
-            c_ueis.append(c_str)
-            c_names.append(c_str)
             try:
-                c_oids.append(ObjectId(c_str))
-            except Exception:
+                c_oids.append(ObjectId(cid))
+            except InvalidId:
                 pass
-        
-        or_conds = [
-            {"uei": {"$in": c_ueis}},
-            {"name": {"$in": c_names}}
-        ]
         if c_oids:
-            or_conds.append({"_id": {"$in": c_oids}})
-        query["$or"] = or_conds
+            comp_docs = await companies_col.find({"_id": {"$in": c_oids}}, {"email": 1, "name": 1}).to_list(length=len(c_oids))
+            for cd in comp_docs:
+                em = cd.get("email")
+                if em and "@" in em:
+                    emails_to_add.add(em.lower().strip())
 
-    companies = list(companies_col.find(query, {"name": 1, "contact": 1, "email": 1}))
+    if not emails_to_add:
+        return {"added": 0}
+
+    existing = await subs_col.find({"newsletterId": n_oid, "email": {"$in": list(emails_to_add)}}, {"email": 1}).to_list(length=len(emails_to_add))
+    existing_emails = set(e["email"] for e in existing)
+
     to_insert = []
-    added_count = 0
-
-    profile_col = get_collection("company_profiles")
-
-    for c in companies:
-        c_email = (c.get("email") or "").strip().lower()
-        if not c_email or "@" not in c_email:
-            # Fallback lookup in researched company profiles
-            profile = profile_col.find_one({
-                "company_name": {"$regex": f"^{re.escape(c['name'])}$", "$options": "i"}
-            })
-            if profile and profile.get("emails"):
-                c_email = str(profile["emails"][0]).strip().lower()
-            else:
-                continue
-        if c_email in suppressed or c_email in existing:
-            continue
-
-        existing.add(c_email)
-        to_insert.append({
-            "newsletterId": n_oid,
-            "email": c_email,
-            "contactName": c.get("contact", ""),
-            "companyName": c.get("name", ""),
-            "source": "company_db",
-            "status": "subscribed",
-            "subscribedAt": datetime.now(timezone.utc),
-            "createdAt": datetime.now(timezone.utc),
-        })
-        added_count += 1
-
-    # Process manualEmail
-    if body.manualEmail:
-        raw_emails = re.split(r"[,\s;]+", body.manualEmail)
-        for r_email in raw_emails:
-            clean_email = r_email.strip().lower()
-            if not clean_email or "@" not in clean_email:
-                continue
-            if clean_email in suppressed or clean_email in existing:
-                continue
-            existing.add(clean_email)
+    for em in emails_to_add:
+        if em not in existing_emails:
             to_insert.append({
                 "newsletterId": n_oid,
-                "email": clean_email,
-                "contactName": "",
-                "companyName": "",
-                "source": "manual_input",
+                "email": em,
+                "name": "",
                 "status": "subscribed",
                 "subscribedAt": datetime.now(timezone.utc),
                 "createdAt": datetime.now(timezone.utc),
             })
-            added_count += 1
 
     if to_insert:
-        subs_col.insert_many(to_insert, ordered=False)
-        get_collection("newsletters").update_one(
+        await subs_col.insert_many(to_insert, ordered=False)
+        added_count = len(to_insert)
+        await newsletters_col.update_one(
             {"_id": n_oid},
             {"$inc": {"stats.totalSubscribers": added_count}, "$set": {"updatedAt": datetime.now(timezone.utc)}}
         )
+    else:
+        added_count = 0
 
     return {"added": added_count}
 
@@ -375,9 +307,6 @@ async def upload_image(
     current_user: dict = Depends(get_current_user),
 ):
     try:
-        from pathlib import Path
-        import uuid
-        
         UPLOAD_DIR = Path("private/newsletter_images")
         UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
         
@@ -386,8 +315,11 @@ async def upload_image(
         dest_path = UPLOAD_DIR / unique_name
         
         content = await file.read()
-        with open(dest_path, "wb") as f:
-            f.write(content)
+        def write_img():
+            with open(dest_path, "wb") as f:
+                f.write(content)
+
+        await asyncio.to_thread(write_img)
             
         return {"imageUrl": unique_name}
     except Exception as e:
@@ -396,7 +328,6 @@ async def upload_image(
 
 @router.get("/images/{filename}")
 def serve_image(filename: str):
-    from pathlib import Path
     safe_filename = Path(filename).name
     image_path = Path("private/newsletter_images") / safe_filename
     if not image_path.exists():
@@ -424,20 +355,16 @@ async def _send_newsletter_background(
     base_url: str,
     image_url: Optional[str] = None
 ):
-    import logging
-    logger = logging.getLogger(__name__)
     logger.info(f"Starting background newsletter dispatch for edition {e_id}...")
 
-    subs_col = get_collection("newsletter_subscribers")
-    sends_col = get_collection("newsletter_sends")
-    editions_col = get_collection("editions")
-    newsletters_col = get_collection("newsletters")
-    events_col = get_collection("tracking_events")
+    subs_col = get_async_collection("newsletter_subscribers")
+    sends_col = get_async_collection("newsletter_sends")
+    editions_col = get_async_collection("editions")
+    newsletters_col = get_async_collection("newsletters")
+    events_col = get_async_collection("tracking_events")
 
-    subscribers = list(subs_col.find({"newsletterId": n_oid, "status": {"$ne": "unsubscribed"}}))
-    sent_count = 0
+    subscribers = await subs_col.find({"newsletterId": n_oid, "status": {"$ne": "unsubscribed"}}).to_list(length=10000)
 
-    # Header Image HTML if present
     header_img_html = ""
     if image_url:
         img_url = f"{base_url}api/newsletters/images/{image_url}"
@@ -447,84 +374,87 @@ async def _send_newsletter_background(
             f'</div>'
         )
 
-    for sub in subscribers:
+    semaphore = asyncio.Semaphore(5)
+
+    async def send_single_newsletter(sub: dict):
         recipient_email = sub.get("email")
         if not recipient_email:
-            continue
+            return 0
 
-        tracking_id = new_tracking_id()
-        unsub_link = unsubscribe_url(str(sub["_id"]), str(n_oid))
+        async with semaphore:
+            tracking_id = new_tracking_id()
+            unsub_link = unsubscribe_url(str(sub["_id"]), str(n_oid))
 
-        # 1. Rewrite HTML links for click tracking
-        html_body, click_links = rewrite_links_for_tracking(body_text)
+            html_body, click_links = rewrite_links_for_tracking(body_text)
 
-        # 2. Append open tracking pixel & unsubscribe link in clean 600px wrapper
-        pixel = open_pixel_tag(tracking_id)
-        body_with_unsub = (
-            f'<div style="max-width:600px;margin:0 auto;font-family:sans-serif;color:#334155;line-height:1.6;font-size:14px;">'
-            f"  {header_img_html}"
-            f"  <div style=\"padding:10px 0;\">{html_body}</div>"
-            f'  <hr style="border:none;border-top:1px solid #e2e8f0;margin:25px 0;" />'
-            f'  <p style="font-size:11px;color:#94a3b8;text-align:center;">To unsubscribe from this newsletter, <a href="{unsub_link}" style="color:#3b82f6;text-decoration:underline;">click here</a>.</p>'
-            f"</div>"
-            f"{pixel}"
-        )
-
-        try:
-            await send_company_email_with_attachments(
-                to_email=recipient_email,
-                subject=subject,
-                body_html=body_with_unsub,
+            pixel = open_pixel_tag(tracking_id)
+            body_with_unsub = (
+                f'<div style="max-width:600px;margin:0 auto;font-family:sans-serif;color:#334155;line-height:1.6;font-size:14px;">'
+                f"  {header_img_html}"
+                f"  <div style=\"padding:10px 0;\">{html_body}</div>"
+                f'  <hr style="border:none;border-top:1px solid #e2e8f0;margin:25px 0;" />'
+                f'  <p style="font-size:11px;color:#94a3b8;text-align:center;">To unsubscribe from this newsletter, <a href="{unsub_link}" style="color:#3b82f6;text-decoration:underline;">click here</a>.</p>'
+                f"</div>"
+                f"{pixel}"
             )
-            success = True
-            err = ""
-        except Exception as mail_err:
-            success = False
-            err = str(mail_err)
 
-        sends_col.insert_one({
-            "editionId": e_id,
-            "newsletterId": n_oid,
-            "subscriberId": sub["_id"],
-            "email": recipient_email,
-            "trackingId": tracking_id,
-            "status": "sent" if success else "failed",
-            "error": err if not success else "",
-            "sentAt": datetime.now(timezone.utc),
-        })
+            try:
+                await send_company_email_with_attachments(
+                    to_email=recipient_email,
+                    subject=subject,
+                    body_html=body_with_unsub,
+                )
+                success = True
+                err = ""
+            except Exception as mail_err:
+                success = False
+                err = str(mail_err)
 
-        if success:
-            sent_count += 1
-            # Register open tracking event record
-            events_col.insert_one({
-                "trackingId": tracking_id,
+            await sends_col.insert_one({
                 "editionId": e_id,
                 "newsletterId": n_oid,
                 "subscriberId": sub["_id"],
-                "type": "open",
-                "timestamp": None,
-                "createdAt": datetime.now(timezone.utc),
+                "email": recipient_email,
+                "trackingId": tracking_id,
+                "status": "sent" if success else "failed",
+                "error": err if not success else "",
+                "sentAt": datetime.now(timezone.utc),
             })
 
-            # Register click tracking event records for links
-            for link in click_links:
-                events_col.insert_one({
-                    "trackingId": link["trackingId"],
+            if success:
+                event_docs = [{
+                    "trackingId": tracking_id,
                     "editionId": e_id,
                     "newsletterId": n_oid,
                     "subscriberId": sub["_id"],
-                    "destinationUrl": link["destinationUrl"],
-                    "type": "click",
+                    "type": "open",
                     "timestamp": None,
                     "createdAt": datetime.now(timezone.utc),
-                })
+                }]
+                for link in click_links:
+                    event_docs.append({
+                        "trackingId": link["trackingId"],
+                        "editionId": e_id,
+                        "newsletterId": n_oid,
+                        "subscriberId": sub["_id"],
+                        "destinationUrl": link["destinationUrl"],
+                        "type": "click",
+                        "timestamp": None,
+                        "createdAt": datetime.now(timezone.utc),
+                    })
+                await events_col.insert_many(event_docs, ordered=False)
+                return 1
+            return 0
 
-    editions_col.update_one(
+    results = await asyncio.gather(*[send_single_newsletter(sub) for sub in subscribers])
+    sent_count = sum(results)
+
+    await editions_col.update_one(
         {"_id": e_id},
         {"$set": {"status": "sent", "stats.sent": sent_count}}
     )
 
-    newsletters_col.update_one(
+    await newsletters_col.update_one(
         {"_id": n_oid},
         {"$inc": {"stats.totalSent": sent_count}, "$set": {"updatedAt": datetime.now(timezone.utc)}}
     )
@@ -541,15 +471,15 @@ async def create_edition(
 ):
     try:
         n_oid = ObjectId(id)
-    except Exception:
+    except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid newsletter ID")
 
-    newsletters_col = get_collection("newsletters")
-    newsletter = newsletters_col.find_one({"_id": n_oid})
+    newsletters_col = get_async_collection("newsletters")
+    newsletter = await newsletters_col.find_one({"_id": n_oid})
     if not newsletter:
         raise HTTPException(status_code=404, detail="Newsletter not found")
 
-    editions_col = get_collection("editions")
+    editions_col = get_async_collection("editions")
 
     edition_doc = {
         "newsletterId": n_oid,
@@ -562,7 +492,7 @@ async def create_edition(
         "createdBy": current_user["_id"],
         "createdAt": datetime.now(timezone.utc),
     }
-    e_res = editions_col.insert_one(edition_doc)
+    e_res = await editions_col.insert_one(edition_doc)
     e_id = e_res.inserted_id
 
     if body.sendNow:
@@ -577,19 +507,19 @@ async def create_edition(
             body.imageUrl.strip() if body.imageUrl else None
         )
 
-    created_e = editions_col.find_one({"_id": e_id})
+    created_e = await editions_col.find_one({"_id": e_id})
     return {"edition": _format_edition(created_e)}
 
 
 @router.get("/{id}/editions")
-def list_editions(id: str, current_user: dict = Depends(get_current_user)):
+async def list_editions(id: str, current_user: dict = Depends(get_current_user)):
     try:
         n_oid = ObjectId(id)
-    except Exception:
+    except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid newsletter ID")
 
-    editions_col = get_collection("editions")
-    items = editions_col.find({"newsletterId": n_oid}).sort("createdAt", -1)
+    editions_col = get_async_collection("editions")
+    items = await editions_col.find({"newsletterId": n_oid}).sort("createdAt", -1).to_list(length=1000)
     return {"editions": [_format_edition(e) for e in items]}
 
 
@@ -600,26 +530,25 @@ class UpdateEditionBody(BaseModel):
 
 
 @router.put("/editions/{edition_id}")
-def update_edition(
+async def update_edition(
     edition_id: str,
     body: UpdateEditionBody,
     current_user: dict = Depends(get_current_user),
 ):
     try:
         e_oid = ObjectId(edition_id)
-    except Exception:
+    except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid edition ID")
 
-    editions_col = get_collection("editions")
-    edition = editions_col.find_one({"_id": e_oid})
+    editions_col = get_async_collection("editions")
+    edition = await editions_col.find_one({"_id": e_oid})
     if not edition:
         raise HTTPException(status_code=404, detail="Edition not found")
 
-    # Check ownership or admin
     if edition.get("createdBy") != current_user["_id"]:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    editions_col.update_one(
+    await editions_col.update_one(
         {"_id": e_oid},
         {"$set": {
             "subject": body.subject.strip(),
@@ -632,28 +561,25 @@ def update_edition(
 
 
 @router.delete("/editions/{edition_id}")
-def delete_edition(
+async def delete_edition(
     edition_id: str,
     current_user: dict = Depends(get_current_user),
 ):
     try:
         e_oid = ObjectId(edition_id)
-    except Exception:
+    except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid edition ID")
 
-    editions_col = get_collection("editions")
-    edition = editions_col.find_one({"_id": e_oid})
+    editions_col = get_async_collection("editions")
+    edition = await editions_col.find_one({"_id": e_oid})
     if not edition:
         raise HTTPException(status_code=404, detail="Edition not found")
 
     if edition.get("createdBy") != current_user["_id"]:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # Delete edition
-    editions_col.delete_one({"_id": e_oid})
-    
-    # Delete related sends and tracking events
-    get_collection("newsletter_sends").delete_many({"editionId": e_oid})
-    get_collection("tracking_events").delete_many({"editionId": e_oid})
+    await editions_col.delete_one({"_id": e_oid})
+    await get_async_collection("newsletter_sends").delete_many({"editionId": e_oid})
+    await get_async_collection("tracking_events").delete_many({"editionId": e_oid})
     
     return {"status": "success"}

@@ -48,23 +48,20 @@ class WebsiteStorage:
         Upsert structured website data by company_slug.
         Returns the document _id (inserted or existing).
         """
+        from pymongo import ReturnDocument
+
         collection = get_collection(COLLECTION_STRUCTURED_WEBSITE)
         document = data.model_dump()
 
-        result = collection.update_one(
+        updated_doc = collection.find_one_and_update(
             {"company_slug": data.company_slug},
             {"$set": document},
             upsert=True,
+            return_document=ReturnDocument.AFTER,
         )
 
-        if result.upserted_id:
-            doc_id = str(result.upserted_id)
-            logger.info(f"Inserted website data | slug='{data.company_slug}' id='{doc_id}'")
-        else:
-            existing = collection.find_one({"company_slug": data.company_slug}, {"_id": 1})
-            doc_id = str(existing["_id"]) if existing else "unknown"
-            logger.info(f"Updated website data | slug='{data.company_slug}' id='{doc_id}'")
-
+        doc_id = str(updated_doc["_id"]) if updated_doc and "_id" in updated_doc else "unknown"
+        logger.info(f"Saved website data | slug='{data.company_slug}' id='{doc_id}'")
         return doc_id
 
     def get_website_data(self, company_slug: str) -> Optional[WebsiteData]:

@@ -4,22 +4,24 @@ restore.py
 Restores the complete MongoDB database state from company_scraper_db.zip.
 """
 
-import os
-import shutil
 import zipfile
 from pathlib import Path
 from bson import json_util
+
+from config.settings import settings
+
 
 def restore_database():
     try:
         from utils.db_client import get_database
         db = get_database()
         db_name = db.name
-    except Exception:
+    except Exception as e:
         import pymongo
-        client = pymongo.MongoClient("mongodb://127.0.0.1:27017/")
-        db = client["company_scraper"]
-        db_name = "company_scraper"
+        print(f"[INFO] Using direct PyMongo connection to {settings.MONGO_URI}")
+        client = pymongo.MongoClient(settings.MONGO_URI)
+        db_name = settings.MONGO_DB_NAME
+        db = client[db_name]
 
     PROJECT_ROOT = Path(__file__).resolve().parent
     zip_path = PROJECT_ROOT / "company_scraper_db.zip"
