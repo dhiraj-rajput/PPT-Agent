@@ -11,8 +11,8 @@ const originalFetch = window.fetch;
 window.fetch = async function (url, options = {}) {
   const token = localStorage.getItem('orbitavanya_token');
   const strUrl = String(url);
-  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5050';
-  if (token && (strUrl.startsWith(apiBase) || strUrl.startsWith('http://localhost:5050') || strUrl.startsWith('/api/'))) {
+  const apiBase = import.meta.env.VITE_API_URL || 'http://127.0.0.1:5050';
+  if (token && (strUrl.startsWith(apiBase) || strUrl.startsWith('http://127.0.0.1:5050') || strUrl.startsWith('http://localhost:5050') || strUrl.startsWith('/api/'))) {
     options.headers = options.headers || {};
     if (options.headers instanceof Headers) {
       if (!options.headers.has('Authorization')) {
