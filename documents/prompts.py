@@ -422,7 +422,7 @@ RULES
 - Write in a professional, confident tone
 - Use concrete numbers from the data — never invent prices or quantities
 - If any information is missing or marked "Not specified", note it as "To be discussed"
-- Keep sections concise but thorough
+- Make the proposal extremely thorough, detailed, and comprehensive. Expand on each section (Executive Summary, Scope of Work, Competitive Positioning, Implementation Timeline, T&Cs) with detailed paragraphs, elaborate context, specific industry best practices, and thorough descriptions of each item to ensure the proposal is a substantive, high-quality, professional document exceeding 2500 words (at least 15,000 characters). Do not write stubs, short summaries, or generic placeholders.
 - Use Markdown formatting: headers, tables, bold, bullet points
 - The document should be ready to convert to PDF
 - Do NOT include internal notes, competitor names, or strategic reasoning — this is customer-facing
