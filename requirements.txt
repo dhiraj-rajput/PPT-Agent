@@ -34,6 +34,7 @@ tavily-python>=0.3.0
 # Utilities
 tenacity>=8.2.0
 typing-extensions>=4.0.0
+json_repair>=0.25.0
 
 # Ollama LLM client (free cloud model support)
 ollama>=0.4.0

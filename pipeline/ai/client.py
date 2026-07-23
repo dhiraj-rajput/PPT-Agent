@@ -522,8 +522,9 @@ class OllamaAIClient:
 
             if parsed is None:
                 try:
-                    # 2. Try escaping inner quotes and regex fixing
-                    repaired = self._escape_inner_quotes(text_clean)
+                    # 2. Try unclosed quote repair & escaping inner quotes
+                    repaired = self._repair_unclosed_quotes(text_clean)
+                    repaired = self._escape_inner_quotes(repaired)
                     parsed = json.loads(repaired, strict=False)
                 except Exception:
                     # 3. Try to extract the first JSON object or array from the text
@@ -531,7 +532,9 @@ class OllamaAIClient:
                     if not match:
                         raise ValueError(f"No JSON found in AI response. First 500 chars: {text[:500]}") from exc
                     try:
-                        parsed = json.loads(match.group(1), strict=False)
+                        repaired_match = self._repair_unclosed_quotes(match.group(1))
+                        repaired_match = self._escape_inner_quotes(repaired_match)
+                        parsed = json.loads(repaired_match, strict=False)
                     except json.JSONDecodeError:
                         if _JSON_REPAIR_AVAILABLE and _json_repair_lib is not None:
                             try:
@@ -547,6 +550,37 @@ class OllamaAIClient:
         if not isinstance(parsed, dict):
             raise ValueError(f"AI response must be a JSON object or array, got {type(parsed).__name__}.")
         return parsed
+
+    def _repair_unclosed_quotes(self, text_str: str) -> str:
+        """Repair common LLM JSON syntax errors like unclosed quotes before newlines and truncated JSON structures."""
+        # 1. Unclosed quote before a newline when followed by another key (e.g. "website": "https:\n"industry")
+        text_str = re.sub(
+            r'("[a-zA-Z0-9_]+\s*:\s*"[^"\r\n]*?)(?=\r?\n\s*"[a-zA-Z0-9_]+\s*:)',
+            r'\1"',
+            text_str
+        )
+        # 2. Unclosed quote before a newline when followed by a closing brace or comma
+        text_str = re.sub(
+            r'("[a-zA-Z0-9_]+\s*:\s*"[^"\r\n]*?)(?=\r?\n\s*[\}\],])',
+            r'\1"',
+            text_str
+        )
+        # 3. Truncated string at end of text (odd number of double quotes)
+        if text_str.count('"') % 2 != 0:
+            text_str = text_str.rstrip() + '"'
+
+        # 4. Strip trailing comma before closing structural elements
+        text_str = re.sub(r",\s*$", "", text_str.strip())
+
+        # 5. Auto-close unclosed brackets/braces at the end of truncated JSON
+        open_brackets = text_str.count('[') - text_str.count(']')
+        open_braces = text_str.count('{') - text_str.count('}')
+        if open_brackets > 0:
+            text_str += '\n' + (']' * open_brackets)
+        if open_braces > 0:
+            text_str += '\n' + ('}' * open_braces)
+
+        return text_str
 
     def _escape_inner_quotes(self, json_str: str) -> str:
         """Resiliently escape unescaped double quotes inside JSON string values.

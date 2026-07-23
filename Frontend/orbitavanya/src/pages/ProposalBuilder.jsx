@@ -965,8 +965,8 @@ export default function ProposalBuilder() {
       {/* Edit Company Profile Modal */}
       {showEditCompanyModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/70 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-lg rounded-2xl bg-white shadow-soft dark:bg-navy-800 border border-slate-100 dark:border-navy-700 overflow-hidden">
-            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-navy-700">
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-soft dark:bg-navy-800 border border-slate-100 dark:border-navy-700 overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-navy-700 shrink-0">
               <h3 className="text-sm font-bold text-navy-900 dark:text-white">Edit Company Profile</h3>
               <button
                 onClick={() => setShowEditCompanyModal(false)}
@@ -975,7 +975,7 @@ export default function ProposalBuilder() {
                 <X size={18} />
               </button>
             </div>
-            <div className="p-5">
+            <div className="p-5 overflow-y-auto flex-1">
               <div className="grid grid-cols-2 gap-4">
                 {['name', 'description', 'uei', 'cage_code', 'primary_naics', 'primary_naics_desc', 'state', 'email', 'phone', 'size', 'certifications'].map(field => (
                   <div key={field} className={field === 'certifications' || field === 'name' || field === 'description' || field === 'primary_naics_desc' ? 'col-span-2' : ''}>
@@ -1196,8 +1196,8 @@ export default function ProposalBuilder() {
       {/* Sub Company Modal */}
       {showSubCompanyModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/70 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-lg rounded-2xl bg-white shadow-soft dark:bg-navy-800 border border-slate-100 dark:border-navy-700 overflow-hidden">
-            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-navy-700">
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-soft dark:bg-navy-800 border border-slate-100 dark:border-navy-700 overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-navy-700 shrink-0">
               <h3 className="text-sm font-bold text-navy-900 dark:text-white">
                 {subCompanyEditingIndex !== null ? 'Edit Sub-Company' : 'Add Sub-Company'}
               </h3>
@@ -1208,7 +1208,7 @@ export default function ProposalBuilder() {
                 <X size={18} />
               </button>
             </div>
-            <div className="p-5 max-h-[60vh] overflow-y-auto">
+            <div className="p-5 overflow-y-auto flex-1">
               <div className="grid grid-cols-2 gap-4">
                 {['name', 'description', 'uei', 'cage_code', 'primary_naics', 'primary_naics_desc', 'state', 'email', 'phone', 'size', 'certifications'].map(field => (
                   <div key={field} className={field === 'certifications' || field === 'name' || field === 'description' || field === 'primary_naics_desc' ? 'col-span-2' : ''}>

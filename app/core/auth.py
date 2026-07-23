@@ -137,7 +137,12 @@ async def decode_and_get_user_async(token: str) -> Optional[dict]:
         if not user_id:
             return None
         users_col = get_async_collection("users")
-        user = await users_col.find_one({"_id": ObjectId(user_id)})
+        query_list = [{"_id": user_id}]
+        if ObjectId.is_valid(user_id):
+            query_list.append({"_id": ObjectId(user_id)})
+        user = await users_col.find_one({"$or": query_list})
+        if not user and payload.get("email"):
+            user = await users_col.find_one({"email": payload.get("email")})
         return user
     except (JWTError, InvalidId, PyMongoError) as e:
         import logging
@@ -156,7 +161,12 @@ def decode_and_get_user(token: str) -> Optional[dict]:
         user_id = payload.get("sub", "")
         if not user_id:
             return None
-        user = get_collection("users").find_one({"_id": ObjectId(user_id)})
+        query_list = [{"_id": user_id}]
+        if ObjectId.is_valid(user_id):
+            query_list.append({"_id": ObjectId(user_id)})
+        user = get_collection("users").find_one({"$or": query_list})
+        if not user and payload.get("email"):
+            user = get_collection("users").find_one({"email": payload.get("email")})
         return user
     except (JWTError, InvalidId, PyMongoError) as e:
         import logging

@@ -18,6 +18,8 @@ from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from pydantic import BaseModel
+from bson import ObjectId
+from bson.errors import InvalidId
 
 from app.core.auth import get_current_user
 from utils.db_client import (
@@ -342,7 +344,7 @@ async def get_companies(
 
         if wants_researched_filter:
             want_true = researched_norm in ("true", "researched")
-            all_matching = await col.find(filter_query, {"_id": 0}).to_list(length=10000)
+            all_matching = await col.find(filter_query).to_list(length=10000)
             filtered = [c for c in all_matching if _is_researched(c) == want_true]
             total = len(filtered)
             skip = (page - 1) * limit
@@ -350,7 +352,14 @@ async def get_companies(
         else:
             total = await col.count_documents(filter_query)
             skip = (page - 1) * limit
-            results = await col.find(filter_query, {"_id": 0}).skip(skip).limit(limit).to_list(length=limit)
+            results = await col.find(filter_query).skip(skip).limit(limit).to_list(length=limit)
+
+        for c in results:
+            if "_id" in c:
+                c["id"] = str(c["_id"])
+                del c["_id"]
+            if not c.get("uei"):
+                c["uei"] = c.get("id", "")
 
         # Batch lookup profiles for the paginated results (Fixes N+1 query)
         company_names = [c["name"] for c in results if c.get("name")]
@@ -887,9 +896,16 @@ async def get_company_detail(
     uei: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """Retrieve full details of a specific company by its UEI identifier."""
+    """Retrieve full details of a specific company by its UEI, slug, or ID identifier."""
     col = get_async_collection("companies")
-    company = await col.find_one({"uei": uei}, {"_id": 0})
+    query_conditions = [{"uei": uei}, {"company_slug": uei}, {"id": uei}, {"name": uei}]
+    if ObjectId.is_valid(uei):
+        query_conditions.append({"_id": ObjectId(uei)})
+        
+    company = await col.find_one({"$or": query_conditions})
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
+    if "_id" in company:
+        company["id"] = str(company["_id"])
+        del company["_id"]
     return company

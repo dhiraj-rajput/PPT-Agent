@@ -380,16 +380,27 @@ async def get_task_status(
 async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = None):
     if not token:
         await websocket.accept()
-        await websocket.close(code=1008)
+        await websocket.close(code=1008, reason="Token missing")
         return
     
+    user_id = None
     user = await decode_and_get_user_async(token)
-    if not user:
+    if user:
+        user_id = str(user.get("_id") or user.get("id", ""))
+    else:
+        # Fallback decode if user collection record wasn't retrieved
+        try:
+            from app.core.auth import SECRET_KEY, ALGORITHM, jwt
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            user_id = str(payload.get("sub", ""))
+        except Exception:
+            pass
+
+    if not user_id:
         await websocket.accept()
-        await websocket.close(code=1008)
+        await websocket.close(code=1008, reason="Unauthorized")
         return
 
-    user_id = str(user["_id"])
     await manager.connect(websocket, user_id)
     try:
         await websocket.send_json(await get_user_proposal_tasks_dict_async(user_id))
