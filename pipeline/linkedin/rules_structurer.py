@@ -73,7 +73,7 @@ class RulesStructurer:
             sort=[("scraped_at", -1)]
         )
         raw_text = raw_doc.get("raw_text") if raw_doc else ""
-        meta_tags = raw_doc.get("meta_tags") if raw_doc else {}
+        meta_tags = (raw_doc.get("meta_tags") or {}) if raw_doc else {}
 
         structured_identity = self._structure_company_identity_rules(
             company_slug=company_slug,
@@ -133,8 +133,9 @@ class RulesStructurer:
         linkedin_url: str,
         layer1_partial_identity: Optional[CompanyIdentity],
         raw_text: str,
-        meta_tags: dict,
+        meta_tags: Optional[dict] = None,
     ) -> CompanyIdentity:
+        meta_tags = meta_tags or {}
         company_name = None
         website_url = None
         logo_url = None
