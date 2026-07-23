@@ -306,7 +306,10 @@ class OllamaAIClient:
         chat_kwargs: Dict[str, Any] = {
             "model": model,
             "messages": messages,
-            "options": {"temperature": self.temperature},
+            "options": {
+                "temperature": self.temperature,
+                "num_predict": 8192
+            },
         }
         if json_mode:
             chat_kwargs["format"] = "json"
@@ -374,7 +377,8 @@ class OllamaAIClient:
                 payload["systemInstruction"] = system_instruction
 
             generation_config: Dict[str, Any] = {
-                "temperature": self.temperature
+                "temperature": self.temperature,
+                "maxOutputTokens": 8192
             }
             if json_mode:
                 generation_config["responseMimeType"] = "application/json"
@@ -442,6 +446,7 @@ class OllamaAIClient:
                 "model": model,
                 "messages": messages,
                 "temperature": self.temperature,
+                "max_tokens": 8192,
             }
             if json_mode:
                 payload["response_format"] = {"type": "json_object"}
