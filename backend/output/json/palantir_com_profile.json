@@ -1,0 +1,144 @@
+{
+  "company_name": "Palantir Technologies",
+  "website": "https://www.palantir.com",
+  "industry": "AI-powered Data Analytics & Software",
+  "description": "Palantir Technologies is an AI-native software company providing critical decision-automation platforms for Western government and commercial enterprises. The company specializes in integrating fragmented data sources into a unified operational picture, enabling real-time, AI-driven decisions across diverse environments ranging from industrial factory floors to classified defense networks.",
+  "headquarters": "Miami, Florida",
+  "locations": [
+    "Colorado",
+    "California",
+    "Washington DC",
+    "London",
+    "New York",
+    "Ontario",
+    "Washington State",
+    "Copenhagen",
+    "Munich",
+    "Oslo",
+    "Paris",
+    "Stockholm",
+    "Tel Aviv",
+    "Canberra",
+    "Sydney",
+    "Amsterdam",
+    "Abu Dhabi"
+  ],
+  "employee_count": "1,001-5,000 employees",
+  "founded_year": null,
+  "specialties": [
+    "AI-powered automation",
+    "Data Integration",
+    "Decision-making software",
+    "AI Sovereignty",
+    "Classified Defense Networks"
+  ],
+  "products": [
+    "Artificial Intelligence Platform (AIP)",
+    "Foundry",
+    "Gotham",
+    "Apollo",
+    "Vantage",
+    "TITAN",
+    "Ontology"
+  ],
+  "services": [
+    "Customer Success Services",
+    "Foundry Enablement Services",
+    "User Development Support",
+    "Foundry Certification"
+  ],
+  "technology_stack": [
+    "Go",
+    "AWS",
+    "Azure",
+    "Google Cloud",
+    "ISO 27001",
+    "SOC 2",
+    "GDPR",
+    "HIPAA"
+  ],
+  "business_model": "Enterprise software provider focusing on high-value, long-term embedded infrastructure contracts for government and commercial sectors.",
+  "pricing_model": "Enterprise licensing and long-term contract value (TCV) based agreements.",
+  "financial_highlights": [
+    "Q1 2026 Revenue: $1.633 billion (85% YoY growth)",
+    "Q1 2026 GAAP Net Income: $871 million (53% margin)",
+    "Q1 2026 U.S. Revenue: $1.282 billion (104% YoY growth)",
+    "FY 2026 Revenue Guidance: $7.650 billion to $7.662 billion",
+    "Total Contract Value (TCV) bookings: $2.41 billion (Q1 2026)",
+    "Cash and short-term U.S. Treasury balance: $8.0 billion (Q1 2026)"
+  ],
+  "leadership": [
+    "Alex Karp (CEO)"
+  ],
+  "competitors": [
+    "Large enterprise software companies (General AI/Data analytics)",
+    "Specialized tech startups (AI/Decision intelligence)"
+  ],
+  "value_proposition": "Enables organizations to integrate fragmented data into a unified operational picture to accelerate decision-making and operational efficiency through AI and advanced analytics.",
+  "rfp_strengths": [
+    "Full Technical Operational Capability (FOC) and accreditation on NATO's classified network",
+    "Proven delivery track record with high-security government and defense agencies",
+    "Deep integration into critical Western infrastructure",
+    "Strong compliance certifications (ISO 27001, SOC 2, HIPAA, GDPR)",
+    "Ability to deploy across diverse environments (factory floor to front lines)"
+  ],
+  "rfp_weaknesses": [
+    "High valuation may lead to premium pricing compared to competitors",
+    "Regulatory scrutiny in specific markets (UK, Switzerland)",
+    "Perceived as highly specialized, potentially limiting appeal for low-complexity use cases"
+  ],
+  "opportunities": [
+    "Expansion into civilian government agencies (e.g., USDA $300M agreement)",
+    "Growth in U.S. commercial AI adoption (133% growth in Q1 2026)",
+    "Pivoting toward 'AI Sovereignty' and open-source model flexibility"
+  ],
+  "challenges": [
+    "Intense competition from players with broader product portfolios",
+    "Resource-intensive adaptation to varying global regulatory environments",
+    "Maintaining high growth rates to justify market valuation"
+  ],
+  "recent_news": [
+    "May 2026: Reported Q1 2026 revenue jump of 85% and raised FY 2026 guidance",
+    "April 2026: Signed $300 million software agreement with USDA",
+    "January 2026: Secured £240.6 million UK Ministry of Defence contract",
+    "January 2026: Launched Brave1 Dataroom platform for Ukraine"
+  ],
+  "clients": [
+    "USDA",
+    "UK Ministry of Defence",
+    "Stellantis",
+    "Jacobs",
+    "Sonnedix",
+    "Southern California Edison",
+    "Trafigura",
+    "Kirkland & Ellis",
+    "GNP Seguros",
+    "McCarthy Building Companies"
+  ],
+  "partners": [
+    "Google Cloud",
+    "AWS",
+    "Azure",
+    "Castrol"
+  ],
+  "emails": [
+    "employee-verifications@palantir.com",
+    "media@palantir.com"
+  ],
+  "phone_numbers": [
+    "0.10.20.30.4"
+  ],
+  "social_links": [
+    "https://linkedin.com/company/palantir-technologies",
+    "https://twitter.com/PalantirTech",
+    "https://github.com/palantir",
+    "https://youtube.com/c/palantirtech"
+  ],
+  "sources_used": [
+    "Website",
+    "LinkedIn",
+    "Google Search",
+    "SEC Filings (8-K)"
+  ],
+  "last_updated": "2026-07-09T06:03:16.178235+00:00"
+}

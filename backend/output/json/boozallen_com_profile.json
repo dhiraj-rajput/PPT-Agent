@@ -1,0 +1,111 @@
+{
+  "company_name": "Booz Allen Hamilton",
+  "website": "https://www.boozallen.com",
+  "industry": "Defense and Government Technology Consulting",
+  "description": "Booz Allen Hamilton is a leading advanced technology company providing consulting and technology solutions focused on AI, cybersecurity, and digital modernization. The firm specializes in supporting the U.S. government's most critical defense, civil, and national security priorities, transitioning from a traditional consulting model to a product-led AI and software firm.",
+  "headquarters": "McLean, VA",
+  "locations": [
+    "McLean, VA",
+    "United States (National)"
+  ],
+  "employee_count": "35,800",
+  "founded_year": null,
+  "specialties": [
+    "AI-speed cybersecurity",
+    "Resilient edge computing",
+    "National security modernization",
+    "Digital transformation"
+  ],
+  "products": [
+    "Vellox Reverser™",
+    "Zero Trust Cybersecurity Suite",
+    "Mission-Critical Software",
+    "Edge-Compute Products",
+    "AI & Automation Tools"
+  ],
+  "services": [
+    "AI Deployment",
+    "Cybersecurity Services",
+    "Digital Modernization",
+    "Workforce Planning and Training",
+    "Cloud Migration",
+    "Encryption Services"
+  ],
+  "technology_stack": [
+    "Spring",
+    "Digital Twin",
+    "Rapid Prototyping",
+    "OpenAI Integration"
+  ],
+  "business_model": "Advanced technology consulting and software provider primarily serving the U.S. federal government through high-value contracts.",
+  "pricing_model": "Outcomes-based contracting (shifting away from traditional time-and-materials)",
+  "financial_highlights": [
+    "FY2025 Revenue: $12.0 billion (12.4% growth)",
+    "FY2025 Adjusted EBITDA: $1.32 billion (11.9% increase)",
+    "FY2025 Adjusted EPS: $6.35 (15.5% increase)",
+    "Q3 FY2026 Backlog: Record $38 billion",
+    "Revenue Dependence: Approximately 90-97% tied to U.S. federal government spending"
+  ],
+  "leadership": [
+    "Horacio Rozanski (Chairman, President, and CEO)",
+    "Eric Cahoon",
+    "Ron Cote",
+    "Merland Halisky",
+    "Marta Dunn"
+  ],
+  "competitors": [],
+  "value_proposition": "Delivering mission-critical outcomes with speed by leveraging cutting-edge AI and cybersecurity expertise to protect and advance the nation and its citizens.",
+  "rfp_strengths": [
+    "Largest provider of AI to the U.S. federal government",
+    "Deep penetration into US Defense and National Security sectors",
+    "Proven track record in high-stakes environments (space, borders, battlefields)",
+    "Strong partnership with OpenAI for mission-ready AI",
+    "Capability in rapid prototyping for advanced technology"
+  ],
+  "rfp_weaknesses": [
+    "Extreme revenue concentration risk (90%+ dependence on U.S. federal budget)",
+    "Vulnerability to government shutdowns (e.g., late 2025 shutdown impacted revenue/profit)"
+  ],
+  "opportunities": [
+    "Expansion of AI-driven cybersecurity tools",
+    "Growth in edge-compute and encryption via Ultra Mission Solutions acquisition",
+    "Increased demand for Zero Trust architectures in government"
+  ],
+  "challenges": [
+    "Budgetary volatility associated with federal government funding",
+    "Transitioning legacy consulting revenue to product-led software revenue"
+  ],
+  "recent_news": [
+    "Acquisition of Ultra I&C Mission Solutions for $720 million (June 2026)",
+    "Partnership with OpenAI to deploy mission-ready AI (June 2026)",
+    "Reported Q3 FY2026 revenue decline of 10.2% due to government shutdown (January 2026)"
+  ],
+  "clients": [
+    "U.S. Department of Defense",
+    "U.S. Intelligence Community",
+    "U.S. Federal Civil Agencies"
+  ],
+  "partners": [
+    "OpenAI",
+    "Pacific Northwest National Laboratory (PNNL)",
+    "Department of Energy (DOE)"
+  ],
+  "emails": [
+    "andrea.copping@pnnl.gov",
+    "hayley.farr@pnnl.gov",
+    "jonathan.whiting@pnnl.gov",
+    "lysel.garavelli@pnnl.gov"
+  ],
+  "phone_numbers": [],
+  "social_links": [
+    "https://www.linkedin.com/company/booz-allen-hamilton"
+  ],
+  "sources_used": [
+    "Website",
+    "LinkedIn",
+    "Google Search",
+    "SEC Filings (8-K)",
+    "Financial Reports"
+  ],
+  "last_updated": "2026-07-09T06:45:47.130884+00:00"
+}

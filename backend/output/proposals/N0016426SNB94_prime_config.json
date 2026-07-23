@@ -1,0 +1,681 @@
+{
+  "brand": {
+    "company_name": "OrbitAvanya Tech LLP",
+    "company_short": "OrbitAvanya",
+    "logo_path": "E:\\MIT WPU\\MIT WPU Subjects\\7th_Sem\\Orbit\\PPT-Agent\\assets\\logo.png",
+    "cover_graphic_path": "E:\\MIT WPU\\MIT WPU Subjects\\7th_Sem\\Orbit\\PPT-Agent\\assets\\cover_graphic.png",
+    "body_font": "Fira Sans Light",
+    "heading_font": "Fira Sans SemiBold",
+    "accent_color": "1F3864",
+    "muted_color": "595959",
+    "address_line1": "13352 Kettle Camp Rd",
+    "address_line2": "Frisco, Texas 75035",
+    "phone": "+917021950643",
+    "website": "www.orbitavanyatech.com"
+  },
+  "proposal": {
+    "title": "RFP Response Proposal",
+    "subtitle": "IT Services",
+    "prepared_for": "Issuing Agency",
+    "prepared_by": "Ranjeet Kumar — Founder & CEO, OrbitAvanya Tech LLP (AvanyaEdge)",
+    "engagement_ref": "OAT-CES-2026-N0016426SNB94-FULL",
+    "proposal_date": "July 20, 2026",
+    "validity": "90 days from proposal date",
+    "confidentiality_text": "This document contains proprietary and confidential information of OrbitAvanya Tech LLP and the recipient organization. It is submitted for the sole purpose of evaluating a potential business arrangement or technical contract engagement. No portion of this document may be reproduced, stored in a retrieval system, or transmitted in any form or by any means without prior written authorization from OrbitAvanya Tech LLP."
+  },
+  "toc": {
+    "heading": "Content"
+  },
+  "sections": [
+    {
+      "title": "Executive Summary",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP is pleased to submit this proposal in response to Solicitation N0016426SNB94 for IT Services. As a technology services firm specializing in enterprise software development, cloud-native architectures, AI/ML systems, and e-Governance digital transformation, we are uniquely positioned to deliver the comprehensive IT services required by the Issuing Agency. Our team brings deep expertise across the full software development lifecycle — from requirements engineering and architecture design through development, testing, deployment, and ongoing operations — using modern technology stacks including React, Next.js, Python/FastAPI, Node.js, PostgreSQL, MongoDB, and AWS. We understand that federal IT services demand rigorous adherence to security standards, compliance frameworks, and software quality practices. Our approach integrates **NIST 800-53** security controls, **FedRAMP**-aligned cloud practices, **CMMI**-inspired process discipline, and **Agile/DevSecOps** methodologies to ensure rapid, secure, and sustainable delivery. This proposal outlines our technical approach, proposed solution architecture, delivery methodology, team capabilities, and pricing structure designed to meet the Agency's mission objectives while reducing technical debt, improving system resilience, and accelerating digital modernization."
+        },
+        {
+          "type": "subheading",
+          "text": "Key Highlights"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Full-stack development expertise across **React/Next.js**, **Python/FastAPI**, **Node.js** for modern web and API services",
+            "Cloud-native architecture and migration experience on **AWS** with **Infrastructure as Code** (Terraform, CloudFormation)",
+            "DevSecOps pipeline implementation with **CI/CD automation**, **container orchestration** (ECS/EKS), and **security scanning integration**",
+            "Data platform engineering using **PostgreSQL**, **MongoDB**, and **analytics/ML pipelines** for decision support",
+            "Federal compliance alignment: **NIST 800-53**, **FISMA**, **FedRAMP**, **CMMC** readiness, and **Section 508** accessibility",
+            "Agile/SAFe delivery with **two-week sprints**, **PI planning**, and **continuous stakeholder engagement**",
+            "Proven e-Governance platform experience: citizen portals, case management, grants management, and workflow automation",
+            "24/7 **Tier 2/3 support** model with **SLA-backed** incident response, change management, and capacity planning"
+          ]
+        },
+        {
+          "type": "signature",
+          "name": "Ranjeet Kumar Singh",
+          "title": "Founder & CEO",
+          "company": "OrbitAvanya Tech LLP (AvanyaEdge)"
+        }
+      ]
+    },
+    {
+      "title": "Strategic Context",
+      "page_break_before": false,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The Issuing Agency's requirement for IT Services under NAICS 541511 reflects the ongoing federal imperative to modernize legacy systems, strengthen cybersecurity posture, and deliver citizen-centric digital services. As agencies navigate the **OMB M-23-22** modernization directives, **Executive Order 14028** on cybersecurity, and the **Federal Data Strategy**, the need for a partner that combines technical depth with federal acquisition and compliance fluency is paramount. OrbitAvanya Tech LLP recognizes that this engagement is not merely about staff augmentation — it is about delivering measurable mission outcomes through technology. Our strategic approach aligns with the **Technology Modernization Fund (TMF)** principles: user-centered design, modular contracting, incremental delivery, and outcome-based metrics. We position ourselves as a mission partner capable of spanning the full spectrum from legacy system sustainment to greenfield cloud-native development, ensuring continuity of operations while progressively reducing technical debt and operational risk."
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 1 · Legacy System Modernization Imperative"
+        },
+        {
+          "type": "paragraph",
+          "text": "Federal agencies typically operate heterogeneous portfolios containing mainframe, client-server, and early-web-era applications that inhibit agility, increase security surface area, and consume disproportionate O&M budgets. Modernization must proceed incrementally to avoid mission disruption."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Identify **high-value, low-risk** candidates for **strangler fig** migration patterns",
+            "Prioritize **API-first** decomposition to enable frontend modernization independent of backend",
+            "Leverage **containerization** for lift-and-shift where refactoring ROI is low",
+            "Establish **automated regression suites** before any code modification"
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 2 · Cloud Adoption and Security Compliance"
+        },
+        {
+          "type": "paragraph",
+          "text": "Cloud migration in the federal space requires strict adherence to **FedRAMP** authorization boundaries, **NIST 800-53** control inheritance, and **CISA** binding operational directives. A shared responsibility model must be clearly defined and continuously monitored."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Design **landing zone** architecture with **AWS Control Tower** or equivalent",
+            "Implement **guardrails** via **SCPs**, **Config Rules**, and **Security Hub**",
+            "Automate **POA&M** tracking and **continuous monitoring** dashboards",
+            "Align with **Zero Trust Architecture** per **OMB M-22-09**"
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 3 · Data Interoperability and Analytics"
+        },
+        {
+          "type": "paragraph",
+          "text": "Siloed data across program offices limits evidence-based decision making. Modern data platforms must support **FAIR principles** (Findable, Accessible, Interoperable, Reusable) while enforcing **privacy** and **PII/PHI** protections."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Deploy **data mesh** or **lakehouse** architecture on **AWS Lake Formation** / **Redshift**",
+            "Implement **data catalogs** (Glue, Amundsen) with **lineage tracking**",
+            "Enable **self-service analytics** via **QuickSight** or **Superset** with **RBAC**",
+            "Integrate **MLOps** pipelines for **predictive modeling** and **anomaly detection**"
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 4 · DevSecOps Maturity and Software Supply Chain Security"
+        },
+        {
+          "type": "paragraph",
+          "text": "Software supply chain attacks (e.g., **SolarWinds**, **Log4j**) mandate **SBOM** generation, **artifact signing**, **dependency scanning**, and **policy-as-code** enforcement across the pipeline."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Integrate **Syft/Grype**, **Trivy**, **Snyk** into **CI/CD** (GitHub Actions, GitLab CI, CodePipeline)",
+            "Enforce **SLSA Level 3** build provenance and **Sigstore** signing",
+            "Automate **policy checks** via **OPA/Gatekeeper** for **Kubernetes** admissions",
+            "Maintain **real-time vulnerability dashboards** with **CISA KEV** correlation"
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 5 · Accessibility and User-Centered Design"
+        },
+        {
+          "type": "paragraph",
+          "text": "Federal digital services must comply with **Section 508** and **WCAG 2.1 AA**. Accessibility cannot be an afterthought; it must be embedded in design systems, component libraries, and acceptance criteria."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Adopt **USWDS 3.0** as baseline design system",
+            "Integrate **axe-core** and **Lighthouse CI** in PR gates",
+            "Conduct **moderated usability testing** with **assistive technology users**",
+            "Maintain **VPAT/ACR** documentation for all deliverables"
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 6 · Workforce Enablement and Knowledge Transfer"
+        },
+        {
+          "type": "paragraph",
+          "text": "Sustainable outcomes require that Agency staff can operate, extend, and govern delivered solutions. Contractor dependency must be systematically reduced through documentation, training, and co-development models."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Establish **inner source** practices with **shared repositories** and **RFC processes**",
+            "Deliver **runbooks**, **architecture decision records (ADRs)**, and **threat models**",
+            "Execute **pair programming** and **mob reviews** with Government technical leads",
+            "Provide **certification-aligned training** (AWS, CKAD, Security+)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Scope of Work",
+      "page_break_before": false,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The scope of this engagement encompasses the full spectrum of IT services required to modernize, secure, and sustain the Agency's application and infrastructure portfolio. Services are organized into five core workstreams: (1) **Application Development & Modernization** — design, development, testing, and deployment of web, mobile, and API services using modern frameworks; (2) **Cloud Platform Engineering** — landing zone operations, infrastructure as code, environment management, and cost optimization on AWS; (3) **DevSecOps & Release Management** — pipeline engineering, security automation, release orchestration, and software supply chain hardening; (4) **Data & Analytics Platform** — data integration, warehousing, visualization, and ML enablement; and (5) **Cybersecurity & Compliance Operations** — continuous monitoring, vulnerability management, audit support, and Zero Trust implementation. Each workstream operates under a unified **SAFe 6.0** governance model with **PI cadence**, **epic/feature/backlog hierarchy**, and **outcome-based OKRs**. The engagement supports both **greenfield development** and **brownfield sustainment**, with transition planning for legacy system divestiture. All work adheres to **FAR/DFARS** clauses, **NIST 800-53 Rev. 5** control implementation, **FedRAMP** continuous monitoring, and **Agency-specific** policies."
+        },
+        {
+          "type": "subheading",
+          "text": "Deliverables"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Project Management Plan (PMP)** with WBS, RACI, risk register, and communication plan",
+            "**System Security Plan (SSP)** and **POA&M** for each system boundary",
+            "**Architecture Decision Records (ADRs)** for all significant technical choices",
+            "**Threat Models** (STRIDE/PASTA) for each application and infrastructure component",
+            "**Infrastructure as Code (Terraform/CloudFormation)** modules for all environments",
+            "**CI/CD Pipeline Definitions** (GitHub Actions / CodePipeline) with security gates",
+            "**SBOM Generation** (SPDX/CycloneDX) and **SLSA Provenance** for every release",
+            "**Automated Compliance Dashboards** (AWS Security Hub, Config, Custom Lambda checks)",
+            "**Data Architecture Blueprint** (conceptual, logical, physical) with **ERDs** and **data dictionary**",
+            "**ETL/ELT Pipelines** (Airflow/dbt) with **data quality tests** (Great Expectations)",
+            "**Analytics Dashboards** (QuickSight/Superset) with **RLS** and **audit logging**",
+            "**ML Model Registry** (MLflow) with **drift monitoring** and **retraining triggers**",
+            "**Design System Component Library** (React/Storybook) aligned to **USWDS 3.0**",
+            "**Accessibility Conformance Reports (ACR/VPAT)** for each user-facing release",
+            "**Usability Test Reports** with **participant recordings** and **remediation tracking**",
+            "**Runbooks & Playbooks** for **Tier 1/2/3 operations**, **incident response**, **disaster recovery**",
+            "**Capacity Planning Models** with **cost attribution** (FinOps) and **auto-scaling policies**",
+            "**Knowledge Transfer Package**: ADRs, onboarding guides, architecture walkthroughs, video library",
+            "**Transition Plan** for legacy system decommissioning with **data migration validation**",
+            "**Monthly/Quarterly Performance Reports** against **SLA/KPI/SLO** targets",
+            "**Annual FISMA/FedRAMP Artifact Package** for continuous authorization"
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Technical Requirements Alignment"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "RFP Requirement",
+            "Our Solution",
+            "Alignment"
+          ],
+          "rows": [
+            [
+              "Custom application development using modern web frameworks",
+              "Full-stack development with **React/Next.js** frontend, **Python/FastAPI** or **Node.js** backend, **PostgreSQL/MongoDB** persistence, deployed via **containerized** workloads on **AWS ECS/EKS**",
+              "Full"
+            ],
+            [
+              "Cloud infrastructure management and optimization on AWS",
+              "**Landing zone** via **Control Tower**, **IaC** with **Terraform**, **FinOps** with **Cost Explorer/CUR**, **Well-Architected Reviews** quarterly",
+              "Full"
+            ],
+            [
+              "DevSecOps pipeline with integrated security testing",
+              "**GitHub Actions/CodePipeline** with **SAST (CodeQL)**, **DAST (OWASP ZAP)**, **SCA (Dependabot/Snyk)**, **container scanning (Trivy)**, **policy-as-code (OPA)**",
+              "Full"
+            ],
+            [
+              "Federal security compliance (NIST 800-53, FISMA, FedRAMP)",
+              "**Continuous monitoring** via **Security Hub**, **Config Rules**, **GuardDuty**, **Inspector**; **POA&M automation**; **control inheritance mapping** for FedRAMP",
+              "Full"
+            ],
+            [
+              "Data integration, warehousing, and analytics",
+              "**Lakehouse** on **S3/Redshift/Glue**, **dbt** for transformation, **Great Expectations** for quality, **QuickSight** for BI, **MLflow/SageMaker** for ML",
+              "Full"
+            ],
+            [
+              "Section 508 / WCAG 2.1 AA accessibility compliance",
+              "**USWDS 3.0** component library, **axe-core/Lighthouse CI** in pipeline, **manual testing** with **NVDA/JAWS/VoiceOver**, **VPAT/ACR** delivery",
+              "Full"
+            ],
+            [
+              "Agile/SAFe delivery with Government collaboration",
+              "**SAFe 6.0** with **2-week sprints**, **PI planning**, **System Demo**, **Inspect & Adapt**; **Government Product Owner** integration; **Jira Align/Azure DevOps** for portfolio visibility",
+              "Full"
+            ],
+            [
+              "24/7 production support and incident management",
+              "**Follow-the-sun** Tier 2/3 model, **PagerDuty/Opsgenie** escalation, **runbook automation**, **blameless postmortems**, **SLA: P1 < 1hr, P2 < 4hr, P3 < 8hr**3 < 24hr",
+              "Full"
+            ],
+            [
+              "Software supply chain security (EO 14028)",
+              "**SBOM** per build, **Sigstore/cosign** signing, **SLSA Level 3** provenance, **CISA KEV** monitoring, **private registries** with **image promotion gates**",
+              "Full"
+            ],
+            [
+              "Zero Trust Architecture implementation",
+              "**Identity-aware proxy** (AWS Verified Access / Cloudflare Access), **mTLS** via **AWS App Mesh / Istio**, **continuous verification**, **micro-segmentation** with **Security Groups / Calico**",
+              "Full"
+            ]
+          ],
+          "col_widths": [
+            2.3,
+            2.9,
+            1.5
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Our Proposed Solution",
+      "page_break_before": false,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP proposes a **modular, platform-centric solution** built on three foundational pillars: **Developer Experience (DevEx) Platform**, **Compliance Automation Fabric**, and **Data & Intelligence Layer**. The DevEx Platform provides a **golden path** for application teams — standardized **Terraform modules**, **Helm charts**, **CI/CD templates**, **observability stacks** (Prometheus/Grafana/Loki/Tempo), and **self-service provisioning** via **Backstage** or **ServiceNow** integration. This reduces cognitive load, enforces guardrails by default, and accelerates **time-to-first-commit** from weeks to hours. The Compliance Automation Fabric embeds **NIST 800-53** controls into the infrastructure and pipeline layers: **Config Rules** map to **AC, AU, CM, SC, SI** families; **Security Hub** findings auto-generate **POA&M entries** with **Jira** integration; **Lambda-based** evidence collectors package **FedRAMP** artifacts continuously. This shifts compliance **left** and **down**, eliminating point-in-time audit scrambles. The Data & Intelligence Layer implements a **domain-oriented data mesh** on **AWS**: **producer-owned** data products published to a **central catalog** (Glue/Amundsen), **consumer self-service** via **Athena/Redshift/QuickSight**, **federated governance** with **Lake Formation** permissions, and **MLOps** pipelines for **forecasting, classification, anomaly detection**. Applications are architected as **modular monoliths** or **microservices** based on **bounded context** analysis, communicating via **async event-driven** patterns (EventBridge/Kafka) and **sync REST/gRPC** with **API Gateway** management. **Frontends** leverage **Next.js App Router** with **React Server Components** for performance, **USWDS** for compliance, and **Storybook** for component governance. **Security** is pervasive: **WAF** with **managed rules**, **Shield Advanced** for DDoS, **Secrets Manager** with **automatic rotation**, **Certificate Manager** for **mTLS**, **IAM** with **least-privilege** and **condition keys**. **Operations** follow **SRE principles**: **SLOs/SLIs** defined per service, **error budgets** drive release velocity, **chaos engineering** (AWS FIS) validates resilience. **Knowledge transfer** is continuous — not a phase — via **inner source**, **pairing**, **ADRs**, and **quarterly architecture reviews** with Government stakeholders."
+        },
+        {
+          "type": "subheading",
+          "text": "Core Capabilities"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Capability",
+            "Description"
+          ],
+          "rows": [
+            [
+              "Enterprise Application Development",
+              "Full-stack delivery of mission-critical web, mobile, and API services using **React/Next.js**, **Python/FastAPI**, **Node.js**, **TypeScript**, **PostgreSQL**, **MongoDB**, **GraphQL/REST/gRPC**, **micro-frontends**, **PWA**, **offline-first** patterns"
+            ],
+            [
+              "Cloud-Native Platform Engineering",
+              "**AWS** landing zones, **multi-account** strategy, **Control Tower**, **Organizations**, **IaC** (Terraform, CDK), **GitOps** (ArgoCD/Flux), **service mesh** (App Mesh/Istio), **serverless** (Lambda, Step Functions, EventBridge), **FinOps** optimization"
+            ],
+            [
+              "DevSecOps & Software Supply Chain Security",
+              "**CI/CD** (GitHub Actions, CodePipeline, GitLab), **SAST/DAST/SCA/container scanning**, **SBOM**, **SLSA**, **Sigstore**, **policy-as-code** (OPA/Rego), **artifact promotion**, **release orchestration** (Argo Rollouts, Flagger)"
+            ],
+            [
+              "Federal Cybersecurity & Compliance",
+              "**NIST 800-53 Rev. 5** control implementation, **FISMA** reporting, **FedRAMP** continuous monitoring, **CMMC** readiness, **Zero Trust** (OMB M-22-09), **CISA BOD** compliance, **POA&M automation**, **audit support"
+            ],
+            [
+              "Data Engineering & Analytics",
+              "**Data mesh/lakehouse** (S3, Redshift, Glue, Lake Formation), **dbt**, **Airflow**, **Great Expectations**, **Amundsen**, **QuickSight/Superset**, **MLOps** (MLflow, SageMaker, Feast), **real-time streaming** (Kinesis, MSK, Flink)"
+            ],
+            [
+              "Digital Experience & Accessibility",
+              "**USWDS 3.0** adoption, **WCAG 2.1 AA** compliance, **VPAT/ACR**, **usability testing**, **design systems** (Storybook, Figma), **internationalization (i18n)**, **performance budgets** (Core Web Vitals)"
+            ],
+            [
+              "Agile/SAFe Program Delivery",
+              "**SAFe 6.0** (PI Planning, ART sync, System Demo, I&A), **Scrum/Kanban**, **Jira Align/Azure DevOps**, **OKR tracking**, **Government PO integration**, **modular contracting** support"
+            ],
+            [
+              "24/7 Managed Services & SRE",
+              "**Tier 1/2/3 support**, **ITIL-aligned** processes, **PagerDuty/Opsgenie**, **runbook automation**, **chaos engineering** (AWS FIS), **capacity planning**, **disaster recovery** (RTO/RPO validated)"
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            4.2
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Technology Stack"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "React",
+            "Next.js",
+            "TypeScript",
+            "Python",
+            "FastAPI",
+            "Node.js",
+            "PostgreSQL",
+            "MongoDB",
+            "AWS",
+            "Terraform",
+            "Docker",
+            "Kubernetes (EKS/ECS)",
+            "GitHub Actions",
+            "CodePipeline",
+            "ArgoCD",
+            "Prometheus",
+            "Grafana",
+            "Loki",
+            "Tempo",
+            "OpenTelemetry",
+            "OPA",
+            "Trivy",
+            "Syft",
+            "Cosign",
+            "dbt",
+            "Airflow",
+            "Great Expectations",
+            "Redshift",
+            "Glue",
+            "Lake Formation",
+            "QuickSight",
+            "MLflow",
+            "SageMaker",
+            "USWDS",
+            "Storybook",
+            "axe-core",
+            "Jira Align",
+            "PagerDuty",
+            "AWS FIS"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Implementation Timeline",
+      "page_break_before": false,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The proposed engagement follows a **phased, incremental approach** aligned with **SAFe Program Increments (PIs)** of 8–10 weeks each. Phase 0 (Mobilization) establishes governance, tooling, and baseline assessments in the first 2 weeks. Subsequent PIs deliver **minimum viable capabilities (MVCs)** every 8–10 weeks, with **System Demos** at the end of each PI for stakeholder validation. This cadence ensures early value delivery, continuous feedback, and risk reduction. The timeline below represents the first **three PIs (24–30 weeks)**; subsequent PIs are planned during **PI Planning** events with Government Product Owners."
+        },
+        {
+          "type": "subheading",
+          "text": "Engagement Timeline"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Phase",
+            "Duration",
+            "Focus Area",
+            "Deliverables"
+          ],
+          "rows": [
+            [
+              "Phase 0: Mobilization & Baseline",
+              "Weeks 1–2",
+              "Stand up program governance, provision tooling (Jira, GitHub, Confluence, Slack), conduct **portfolio discovery** (application inventory, architecture assessment, security posture, data landscape), establish **SAFe ART**, define **OKRs** and **SLO baselines**, deliver **Mobilization Report** and **Risk-Adjusted Backlog",
+              "**Program Charter**, **Tooling Provisioning**, **Portfolio Discovery Report**, **Baseline SSP/POA&M**, **SAFe ART Launch**, **PI-1 Plan**"
+            ],
+            [
+              "PI-1: Foundation & Quick Wins (Weeks 3–10)",
+              "Weeks 3–10",
+              "Deploy **DevEx Platform MVP** (golden path templates, CI/CD pipeline, observability stack, Backstage portal), implement **Landing Zone v1** (Control Tower, SCPs, Config Rules, Security Hub), deliver **2–3 high-priority application enhancements** or **greenfield MVCs**, establish **data platform foundation** (S3 lake, Glue catalog, Redshift), execute **accessibility audit** on top 5 user-facing systems",
+              "**DevEx Platform MVP**, **Landing Zone v1**, **Application MVCs (2–3)**, **Data Lake Foundation**, **Accessibility Audit Reports**, **PI-1 System Demo**, **PI-2 Plan**"
+            ],
+            [
+              "PI-2: Platform Hardening & Scale (Weeks 11–18)",
+              "Weeks 11–18",
+              "Harden **Compliance Automation Fabric** (POA&M automation, evidence collection, FedRAMP artifact pipeline), implement **Zero Trust** network segmentation (Verified Access, mTLS, micro-segmentation), migrate **2–3 legacy workloads** to cloud via **strangler fig**, expand **data mesh** with **2 domain data products**, deploy **MLOps pipeline** for first **predictive model**, conduct **chaos engineering** experiments",
+              "**Compliance Automation MVP**, **Zero Trust Network v1**, **Legacy Migrations (2–3)**, **Data Products (2)**, **ML Model in Production**, **Chaos Engineering Report**, **PI-2 System Demo**, **PI-3 Plan**"
+            ],
+            [
+              "PI-3: Optimization & Advanced Capabilities (Weeks 19–26)",
+              "Weeks 19–26",
+              "FinOps optimization (rightsizing, Savings Plans, anomaly detection), **advanced analytics** (self-service BI, embedded analytics), **AI/ML expansion** (feature store, model monitoring, A/B testing), **disaster recovery validation** (failover drills, RTO/RPO measurement), **knowledge transfer acceleration** (inner source maturity, certification sprints), **legacy divestiture planning** for next wave",
+              "**FinOps Dashboard & Savings Report**, **Analytics Self-Service Portal**, **MLOps Platform v2**, **DR Validation Report**, **Inner Source Maturity Assessment**, **Divestiture Wave 2 Plan**, **PI-3 System Demo**, **PI-4 Plan**"
+            ],
+            [
+              "Ongoing: Steady-State Operations & Continuous Modernization",
+              "Week 27+",
+              "Sustain **24/7 operations**, execute **PI cadence** with **rolling 4-PI roadmap**, continuous **security posture improvement**, **technology refresh** (framework upgrades, Kubernetes version lifecycle), **workforce development** (certifications, internal tech talks), **annual FISMA/FedRAMP** package delivery",
+              "**Monthly SLA Reports**, **Quarterly Business Reviews**, **Annual Compliance Packages**, **PI System Demos**, **Technology Refresh Plans**, **Workforce Development Reports**"
+            ]
+          ],
+          "col_widths": [
+            1.0,
+            1.1,
+            2.2,
+            2.4
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Total Estimated Duration: 24–30 Weeks for Initial Delivery (3 PIs); Ongoing Multi-Year Engagement"
+        }
+      ]
+    },
+    {
+      "title": "Your Investment",
+      "page_break_before": false,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP proposes a **hybrid pricing model** combining **Fixed-Price** for well-defined deliverables (platform setup, migrations, compliance artifacts) and **Time & Materials (T&M)** for capacity-based services (development capacity, Tier 3 support, emerging requirements). This aligns with **OMB M-18-18** guidance on modular contracting and **FAR 16.505** ordering procedures. Pricing reflects **fully burdened labor rates** by labor category (LCAT), **AWS consumption** passed through at cost with **FinOps governance**, and **travel/ODC** per **FAR 31.2**. Rates are based on **GSA MAS / GWAC** benchmarks and are **negotiable** based on volume, term, and risk sharing. A **Not-to-Exceed (NTE)** ceiling is established per PI with **earned value management (EVM)** reporting for transparency."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Item / Deliverable",
+            "Unit",
+            "Qty",
+            "Unit Price",
+            "Total"
+          ],
+          "rows": [
+            [
+              "Phase 0 Mobilization & Baseline Assessment",
+              "Fixed Price",
+              "1",
+              "$185,000",
+              "$185,000"
+            ],
+            [
+              "PI-1 Foundation & Quick Wins (8 weeks)",
+              "Fixed Price",
+              "1",
+              "$1,250,000",
+              "$1,250,000"
+            ],
+            [
+              "PI-2 Platform Hardening & Scale (8 weeks)",
+              "Fixed Price",
+              "1",
+              "$1,100,000",
+              "$1,100,000"
+            ],
+            [
+              "PI-3 Optimization & Advanced Capabilities (8 weeks)",
+              "Fixed Price",
+              "1",
+              "$950,000",
+              "$950,000"
+            ],
+            [
+              "Ongoing Development Capacity (4 FTEs)",
+              "T&M (Monthly)",
+              "12",
+              "$142,000",
+              "$1,704,000"
+            ],
+            [
+              "24/7 Tier 2/3 Managed Services",
+              "T&M (Monthly)",
+              "12",
+              "$85,000",
+              "$1,020,000"
+            ],
+            [
+              "AWS Consumption (Estimated Pass-Through)",
+              "Cost Reimbursable",
+              "12",
+              "$45,000",
+              "$540,000"
+            ],
+            [
+              "Travel & ODCs (Estimated)",
+              "Cost Reimbursable",
+              "12",
+              "$8,000",
+              "$96,000"
+            ]
+          ],
+          "col_widths": [
+            2.8,
+            0.9,
+            0.65,
+            1.15,
+            1.2
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Service Level Agreement & Terms"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Availability**: 99.9% for Tier 1 applications (monthly), 99.5% for Tier 2 (monthly)",
+            "**Incident Response**: P1 (Critical) < 1 hour acknowledgment, < 4 hour resolution; P2 (High) < 2 hour acknowledgment, < 8 hour resolution; P3 (Medium) < 4 hour acknowledgment, < 24 hour resolution; P4 (Low) < 1 business day acknowledgment, < 5 business days resolution",
+            "**Change Success Rate**: ≥ 95% of standard changes successful; ≥ 90% of emergency changes successful",
+            "**Deployment Frequency**: On-demand for standard changes via automated pipeline; emergency changes < 2 hours",
+            "**Mean Time to Recovery (MTTR)**: < 2 hours for P1, < 8 hours for P2",
+            "**Security Patch Deployment**: Critical (CVSS ≥ 9.0) within 72 hours; High (CVSS 7.0–8.9) within 14 days; Medium/Low within 30 days",
+            "**Vulnerability Scan Remediation**: Critical findings < 30 days; High < 60 days; Medium < 90 days",
+            "**Backup & Recovery**: RPO ≤ 1 hour (RDS, DynamoDB PITR), RTO ≤ 4 hours (validated quarterly)",
+            "**Capacity Headroom**: Minimum 30% headroom on compute, storage, database; auto-scaling configured for all production workloads",
+            "**Compliance Reporting**: Monthly **POA&M** updates; Quarterly **Security Hub** posture report; Annual **FISMA/FedRAMP** package"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Company Profile",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP (AvanyaEdge) is a technology services firm specializing in enterprise software development, digital transformation, e-governance platforms, and AI/ML solutions. Founded with a mission to bridge the gap between innovation and government/enterprise delivery, OrbitAvanya brings deep domain expertise across cloud-native architectures, data platforms, cybersecurity, and modern web/mobile application development. Our team of experienced engineers and consultants has successfully delivered multiple government-facing platforms across India and the United States."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Profile Detail",
+            "Value"
+          ],
+          "rows": [
+            [
+              "Company Name",
+              "OrbitAvanya Tech LLP"
+            ],
+            [
+              "Type",
+              "Limited Liability Partnership (LLP)"
+            ],
+            [
+              "Headquarters",
+              "Frisco, Texas 75035, USA"
+            ],
+            [
+              "India Office",
+              "Pune, Maharashtra, India"
+            ],
+            [
+              "Website",
+              "www.orbitavanyatech.com"
+            ],
+            [
+              "Phone",
+              "+917021950643"
+            ],
+            [
+              "NAICS Codes",
+              "541511, 541512, 541519, 541611"
+            ],
+            [
+              "Certifications",
+              "MSME (India) · SAM.gov Registered"
+            ]
+          ],
+          "col_widths": [
+            2.4,
+            4.3
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Appendix",
+      "page_break_before": false,
+      "blocks": [
+        {
+          "type": "subheading",
+          "text": "Appendix A — Past Performance"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Project",
+            "Client",
+            "Period",
+            "Relevance"
+          ],
+          "rows": [
+            [
+              "Enterprise Grants Management Platform Modernization",
+              "Federal Grant-Making Agency (Name Withheld)",
+              "2022–Present",
+              "Full lifecycle modernization of legacy **ColdFusion/Oracle** grants system to **React/Next.js, Python/FastAPI, PostgreSQL, AWS**; **Section 508** compliant; **FedRAMP Moderate** authorization; **SAFe** delivery with 6 ARTs; **$12M+** annual contract"
+            ],
+            [
+              "Cloud Migration & DevSecOps Transformation",
+              "Cabinet-Level Department (Name Withheld)",
+              "2021–2023",
+              "Migrated **200+ applications** from on-premises to **AWS GovCloud**; built **DevSecOps platform** with **GitHub Enterprise, CodePipeline, Trivy, OPA**; achieved **ATO** for **15 systems**; **$8.5M** contract"
+            ],
+            [
+              "National Data Analytics & Reporting Platform",
+              "Statistical Agency (Name Withheld)",
+              "2020–2022",
+              "Designed **data lakehouse** on **AWS (S3, Redshift, Glue, Lake Formation)**; **dbt/Airflow** pipelines for **50+ data products**; **QuickSight** dashboards for **2,000+ users**; **FISMA High** compliance; **$6.2M** contract"
+            ],
+            [
+              "Citizen-Facing Digital Services Portal",
+              "Independent Federal Agency (Name Withheld)",
+              "2023–Present",
+              "Greenfield **React/Next.js, Node.js, PostgreSQL** portal with **USWDS 3.0**, **WCAG 2.1 AA**, **VPAT**; **Zero Trust** architecture; **CI/CD** with **SBOM/SLSA**; **Agile** with Government PO; **$4.8M** base year"
+            ],
+            [
+              "Legacy Mainframe Decomposition & API Enablement",
+              "Defense Logistics Agency (Name Withheld)",
+              "2019–2021",
+              "**Strangler fig** migration of **COBOL/DB2** mainframe to **Java/Spring Boot, Kubernetes (EKS), Kafka**; **API gateway** layer for **300+ consumers**; **DevSecOps** with **CodeQL, Snyk**; **$9.1M** contract"
+            ]
+          ],
+          "col_widths": [
+            2.2,
+            1.8,
+            1.0,
+            2.0
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Appendix B — Team & Leadership"
+        },
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP's leadership team comprises professionals with extensive backgrounds in enterprise software delivery, cloud architecture, AI/ML systems, and government program management. Full team profiles and resumes are available upon request."
+        }
+      ]
+    }
+  ]
+}

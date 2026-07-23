@@ -1,0 +1,411 @@
+{
+  "brand": {
+    "company_name": "OrbitAvanya Tech LLP",
+    "company_short": "OrbitAvanya",
+    "logo_path": "assets/logo.png",
+    "cover_graphic_path": "assets/cover_graphic.png",
+    "body_font": "Fira Sans Light",
+    "heading_font": "Fira Sans SemiBold",
+    "accent_color": "1F3864",
+    "muted_color": "595959",
+    "address_line1": "13352 Kettle Camp Rd",
+    "address_line2": "Frisco, Texas 75035",
+    "phone": "+917021950643",
+    "website": "www.orbitavanyatech.com"
+  },
+  "proposal": {
+    "title": "Teaming Proposal",
+    "subtitle": "an Enterprise Financial Analysis & Predictive Modeling System",
+    "prepared_for": "TechForward Solutions LLC",
+    "prepared_by": "Ranjeet Kumar — Founder & CEO, OrbitAvanya Tech LLP (AvanyaEdge)",
+    "engagement_ref": "OAT-CES-2026-N00164-26-R-0001-FULL",
+    "proposal_date": "July 15, 2026",
+    "validity": "90 days from proposal date",
+    "confidentiality_text": "This document contains confidential information of OrbitAvanya Tech LLP and its affiliates and/or licensors (“OrbitAvanya”), which may include trade secrets, proprietary methodology, and business information. The recipient acknowledges that this information has been developed by OrbitAvanya as valuable trade secrets and shall remain its exclusive property, to be disclosed only to persons who have a need to know. The recipient agrees not to copy or reproduce any information supplied herein without prior written permission from an authorized representative of OrbitAvanya.\n\nReciprocally, OrbitAvanya acknowledges that information shared by the recipient during proposal review and any subsequent engagement constitutes confidential information of the recipient, and agrees to protect it to the same standard and to use it solely for the purposes of the engagement contemplated herein."
+  },
+  "toc": {
+    "heading": "Content"
+  },
+  "sections": [
+    {
+      "title": "Executive Summary",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP is pleased to present this formal subcontracting teaming proposal to TechForward Solutions LLC in response to Solicitation N00164-26-R-0001 issued by Federal Agency."
+        },
+        {
+          "type": "paragraph",
+          "text": "We propose to serve as a key subcontractor, contributing 15.0% of the total contract scope, with a specific focus on AI & Analytics. Our AI Analytics Dashboard platform directly addresses the core technical and operational requirements outlined in the solicitation."
+        },
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP brings extensive experience in enterprise software delivery, cloud-native architectures, and government-facing digital transformation initiatives. We are positioned to add measurable value to TechForward Solutions LLC's delivery capability for this engagement."
+        },
+        {
+          "type": "subheading",
+          "text": "Key Highlights"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Proposed work share: 15.0% of total contract value",
+            "Core offering: AI Analytics Dashboard for AI & Analytics",
+            "Demonstrated track record in enterprise digital transformation",
+            "Cloud-native, security-compliant architecture",
+            "Experienced delivery team with government sector expertise",
+            "Committed to on-time, on-budget delivery with SLA guarantees"
+          ]
+        },
+        {
+          "type": "signature",
+          "name": "Ranjeet Kumar Singh",
+          "title": "Founder & CEO",
+          "company": "OrbitAvanya Tech LLP (AvanyaEdge)"
+        }
+      ]
+    },
+    {
+      "title": "Strategic Context",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "This teaming proposal outlines OrbitAvanya Tech LLP's qualifications and commitment to supporting TechForward Solutions LLC in delivering a successful outcome for Federal Agency under Solicitation N00164-26-R-0001."
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 1 · Federal Agency requires specialized technology capabilities"
+        },
+        {
+          "type": "paragraph",
+          "text": "The solicitation from Federal Agency outlines a comprehensive set of technical and operational requirements that demand deep domain expertise in AI & Analytics. TechForward Solutions LLC, as the prime contractor, can significantly strengthen its delivery capability by partnering with OrbitAvanya Tech LLP."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Database Management"
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 2 · OrbitAvanya's capabilities directly address the solicitation requirements"
+        },
+        {
+          "type": "paragraph",
+          "text": "Our AI Analytics Dashboard platform and delivery framework have been purpose-built for engagements of this type. We bring proven methodologies, reusable components, and a track record of successful delivery in similar government and enterprise contexts."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Direct alignment with: Database Management",
+            "Rapid onboarding and integration with prime contractor processes",
+            "Dedicated program management and technical leadership"
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 3 · Structured delivery minimizes risk and ensures compliance"
+        },
+        {
+          "type": "paragraph",
+          "text": "Our phased delivery approach, milestone-based tracking, and robust quality assurance processes ensure that all deliverables meet the standards expected by the government agency and the prime contractor."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "NIST Guidelines"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Scope of Work",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "As the proposed subcontractor for this engagement, OrbitAvanya Tech LLP will be responsible for delivering the following scope of work as part of the prime team:"
+        },
+        {
+          "type": "subheading",
+          "text": "Deliverables"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Database Management"
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Technical Requirements Alignment"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "RFP Requirement",
+            "Our Solution",
+            "Alignment"
+          ],
+          "rows": [
+            [
+              "Database Management",
+              "PostgreSQL & MongoDB Optimization",
+              "✓ Full"
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            3.0,
+            1.5
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Our Proposed Solution",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP proposes to deliver the AI Analytics Dashboard as our core contribution to the TechForward Solutions LLC team for the an Enterprise Financial Analysis & Predictive Modeling System engagement."
+        },
+        {
+          "type": "paragraph",
+          "text": "Our platform is built on a modern, cloud-native architecture designed for the scale, security, and compliance requirements of government and enterprise engagements. It integrates seamlessly with existing infrastructure and can be rapidly deployed within the timeline requirements of this solicitation."
+        },
+        {
+          "type": "paragraph",
+          "text": "The solution leverages industry-leading technologies and best practices, ensuring full alignment with the technical and operational requirements outlined in N00164-26-R-0001."
+        },
+        {
+          "type": "subheading",
+          "text": "Core Capabilities"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Capability",
+            "Description"
+          ],
+          "rows": [
+            [
+              "Database Management",
+              "Enforces database performance optimization, indexing, and clustering using PostgreSQL and MongoDB."
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            4.5
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Technology Stack"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "React",
+            "Next.js",
+            "Python",
+            "FastAPI",
+            "Node.js",
+            "PostgreSQL",
+            "MongoDB",
+            "AWS"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Implementation Timeline",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The following phased delivery plan reflects OrbitAvanya's structured approach to executing our 15.0% work share within the prime contractor's overall project timeline."
+        },
+        {
+          "type": "subheading",
+          "text": "Engagement Timeline"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Phase",
+            "Duration",
+            "Focus Area",
+            "Deliverables"
+          ],
+          "rows": [
+            [
+              "Task: Visual Dashboards & Predictive Widgets Development",
+              "6.0% scope",
+              "Visual Dashboards & Predictive Widgets Development",
+              ""
+            ],
+            [
+              "Task: Data Warehousing & ETL Pipeline Setup",
+              "5.2% scope",
+              "Data Warehousing & ETL Pipeline Setup",
+              ""
+            ],
+            [
+              "Task: Security Enforcement & Compliance Hardening",
+              "3.8% scope",
+              "Security Enforcement & Compliance Hardening",
+              ""
+            ]
+          ],
+          "col_widths": [
+            1.0,
+            1.2,
+            2.3,
+            2.5
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Total Estimated Duration: 8–10 Weeks"
+        }
+      ]
+    },
+    {
+      "title": "Your Investment",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP proposes to assume 15.0% of the total contract value as our subcontract work share under TechForward Solutions LLC's prime contract. Our pricing is competitive, transparent, and structured to ensure maximum value delivery within the contract budget framework."
+        },
+        {
+          "type": "subheading",
+          "text": "Service Level Agreement & Terms"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "100% milestone-based delivery with written sign-offs at each phase",
+            "Response time SLA: 4-hour initial response for critical issues during delivery",
+            "90-day post-deployment warranty and bug-fix commitment at no additional cost",
+            "Dedicated project manager and technical lead throughout engagement",
+            "Weekly progress reports and bi-weekly steering committee updates",
+            "All deliverables subject to acceptance testing prior to payment milestone"
+          ]
+        },
+        {
+          "type": "spacer"
+        },
+        {
+          "type": "paragraph",
+          "text": "Proposed Work Share: OrbitAvanya Tech LLP proposes to assume 15.0% of the total contract value as our subcontract work share."
+        }
+      ]
+    },
+    {
+      "title": "Company Profile",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP (AvanyaEdge) is a technology services firm specializing in enterprise software development, digital transformation, e-governance platforms, and AI/ML solutions. Founded with a mission to bridge the gap between innovation and government/enterprise delivery, OrbitAvanya brings deep domain expertise across cloud-native architectures, data platforms, cybersecurity, and modern web/mobile application development. Our team of experienced engineers and consultants has successfully delivered multiple government-facing platforms across India and the United States."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Profile Detail",
+            "Value"
+          ],
+          "rows": [
+            [
+              "Company Name",
+              "OrbitAvanya Tech LLP"
+            ],
+            [
+              "Type",
+              "Limited Liability Partnership (LLP)"
+            ],
+            [
+              "Headquarters",
+              "Frisco, Texas 75035, USA"
+            ],
+            [
+              "India Office",
+              "Pune, Maharashtra, India"
+            ],
+            [
+              "Website",
+              "www.orbitavanyatech.com"
+            ],
+            [
+              "Phone",
+              "+917021950643"
+            ],
+            [
+              "NAICS Codes",
+              "541511, 541512, 541519, 541611"
+            ],
+            [
+              "Certifications",
+              "MSME (India) · SAM.gov Registered"
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            4.5
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Appendix",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "subheading",
+          "text": "Appendix A — Past Performance"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Project",
+            "Client",
+            "Period",
+            "Relevance"
+          ],
+          "rows": [
+            [
+              "Contractor Management System (CMS)",
+              "Irrigation Department",
+              "Sep 2024",
+              "Full-stack government e-governance platform development"
+            ],
+            [
+              "Enterprise Data Platform",
+              "Confidential (Government)",
+              "2024",
+              "Cloud-native data warehouse and analytics dashboard"
+            ]
+          ],
+          "col_widths": [
+            2.2,
+            1.8,
+            1.0,
+            2.0
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Appendix B — Team & Leadership"
+        },
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP's leadership team comprises professionals with extensive backgrounds in enterprise software delivery, cloud architecture, AI/ML systems, and government program management. Full team profiles and resumes are available upon request."
+        }
+      ]
+    }
+  ]
+}

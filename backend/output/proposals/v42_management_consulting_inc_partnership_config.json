@@ -1,0 +1,446 @@
+{
+  "brand": {
+    "company_name": "OrbitAvanya Tech LLP",
+    "company_short": "OrbitAvanya",
+    "logo_path": "assets/logo.png",
+    "cover_graphic_path": "assets/cover_graphic.png",
+    "body_font": "Fira Sans Light",
+    "heading_font": "Fira Sans SemiBold",
+    "accent_color": "1F3864",
+    "muted_color": "595959",
+    "address_line1": "13352 Kettle Camp Rd",
+    "address_line2": "Frisco, Texas 75035",
+    "phone": "+917021950643",
+    "website": "www.orbitavanyatech.com"
+  },
+  "proposal": {
+    "title": "Partnership Proposal",
+    "subtitle": "Strategic Partnership Proposal",
+    "prepared_for": "V42 MANAGEMENT CONSULTING INC",
+    "prepared_by": "Ranjeet Kumar — Founder & CEO, OrbitAvanya Tech LLP (AvanyaEdge)",
+    "engagement_ref": "OAT-CES-2026-V42_MANAGEMENT_CONSULTING_INC-FULL",
+    "proposal_date": "July 14, 2026",
+    "validity": "90 days from proposal date",
+    "confidentiality_text": "This document contains confidential information of OrbitAvanya Tech LLP and its affiliates and/or licensors (“OrbitAvanya”), which may include trade secrets, proprietary methodology, and business information. The recipient acknowledges that this information has been developed by OrbitAvanya as valuable trade secrets and shall remain its exclusive property, to be disclosed only to persons who have a need to know. The recipient agrees not to copy or reproduce any information supplied herein without prior written permission from an authorized representative of OrbitAvanya.\n\nReciprocally, OrbitAvanya acknowledges that information shared by the recipient during proposal review and any subsequent engagement constitutes confidential information of the recipient, and agrees to protect it to the same standard and to use it solely for the purposes of the engagement contemplated herein."
+  },
+  "toc": {
+    "heading": "Content"
+  },
+  "sections": [
+    {
+      "title": "Executive Summary",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP is pleased to propose a strategic partnership with V42 Management Consulting Inc. to bridge the gap between high-level data strategy and technical execution. While V42 Management Consulting Inc. excels in **Data Architecture, Modeling, and Governance**, OrbitAvanya Tech LLP provides the **cutting-edge software engineering** and proprietary product suite necessary to operationalize these blueprints into scalable digital assets."
+        },
+        {
+          "type": "paragraph",
+          "text": "By integrating V42's strategic consulting with OrbitAvanya's technical prowess, we can offer a comprehensive 'Strategy-to-Software' lifecycle. This collaboration will allow V42 to move beyond advisory roles and provide clients with **tangible, deployed technical solutions**, thereby increasing client retention and expanding the total contract value of every engagement."
+        },
+        {
+          "type": "paragraph",
+          "text": "Our joint value proposition centers on transforming complex data frameworks into intuitive, AI-driven interfaces. By leveraging the **OrbitAvanya AI Analytics Dashboard** and our expertise in **FastAPI and AWS**, we can turn V42's data quality and metadata management strategies into real-time, actionable business intelligence tools for the **Financial Services and Fintech** sectors."
+        },
+        {
+          "type": "subheading",
+          "text": "Key Highlights"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Accelerated Time-to-Market**: Combining V42's blueprints with OrbitAvanya's rapid development cycles.",
+            "**End-to-End Delivery**: Transitioning from 'Consulting' to 'Implementation' to capture a larger share of the project budget.",
+            "**Enhanced Data Visualization**: Pairing V42's Data Modeling with the **OrbitAvanya AI Analytics Dashboard**.",
+            "**Scalable Fintech Infrastructure**: Utilizing **AWS and PostgreSQL** to implement V42's data security and storage strategies.",
+            "**Increased Competitive Edge**: Offering a unique hybrid of management consulting and bespoke software engineering.",
+            "**Mutual Revenue Growth**: Creating new joint service packages targeting the **Fintech maturity assessment** market."
+          ]
+        },
+        {
+          "type": "signature",
+          "name": "Ranjeet Kumar Singh",
+          "title": "Founder & CEO",
+          "company": "OrbitAvanya Tech LLP (AvanyaEdge)"
+        }
+      ]
+    },
+    {
+      "title": "Strategic Context",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The Financial Services industry is currently undergoing a massive shift toward data-driven decision-making, yet many firms struggle with the 'execution gap'—the space between a consultant's data architecture and a functioning software product. V42 Management Consulting Inc. possesses the intellectual capital to design these systems, while OrbitAvanya Tech LLP possesses the engineering engine to build them.\n\nThis partnership aims to capture the growing demand for **Data Maturity Transformations**, where clients require not just a roadmap, but the actual tools to manage metadata, ensure data quality, and secure their assets in a cloud-native environment."
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 1 · The Execution Gap in Data Architecture"
+        },
+        {
+          "type": "paragraph",
+          "text": "V42 provides world-class Data Architecture and Modeling, but clients often lack the internal technical capacity to implement these designs."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Clients may experience delays in moving from **Data Modeling** to actual deployment.",
+            "Opportunity to offer **Custom Technical Solutions** as a direct extension of V42's consulting phase."
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 2 · Need for Real-time Data Visibility"
+        },
+        {
+          "type": "paragraph",
+          "text": "Data Quality and Metadata Management are critical, but their value is only realized when stakeholders can visualize the health of their data in real-time."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "V42's governance frameworks can be operationalized via the **OrbitAvanya AI Analytics Dashboard**.",
+            "Synergy between **Metadata Management** and automated reporting tools."
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Scope of Work",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The proposed collaboration will focus on a 'Co-Delivery Model' where V42 Management Consulting Inc. leads the strategic discovery and architectural design, and OrbitAvanya Tech LLP handles the full-stack development and deployment. We will specifically target the **Fintech and Financial Services** verticals, offering integrated packages that combine governance with software."
+        },
+        {
+          "type": "subheading",
+          "text": "Deliverables"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Joint 'Data Maturity' Implementation Package**: A combined offering of assessment and deployment.",
+            "**Custom Data Governance Portals**: Bespoke software to manage V42's metadata and quality frameworks.",
+            "**Integrated AI Analytics Layer**: Deployment of OrbitAvanya's dashboard on top of V42's data models.",
+            "**Cloud Migration Frameworks**: Technical execution of V42's storage and operations strategies using **AWS**."
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Technical Requirements Alignment"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "RFP Requirement",
+            "Our Solution",
+            "Alignment"
+          ],
+          "rows": [
+            [
+              "Operationalizing Data Models into Software",
+              "OrbitAvanya's **React/Next.js and Python/FastAPI** engineering capabilities",
+              "Full Synergy"
+            ],
+            [
+              "Real-time Data Quality Monitoring",
+              "**OrbitAvanya AI Analytics Dashboard**",
+              "Full Synergy"
+            ],
+            [
+              "Secure, Scalable Data Storage Execution",
+              "Expertise in **PostgreSQL, MongoDB, and AWS Cloud Architecture**",
+              "Full Synergy"
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            3.0,
+            1.5
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Our Proposed Solution",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "We propose the creation of a **Joint Fintech Data Excellence Suite**. In this model, V42 Management Consulting Inc. performs the initial 'Maturity Assessment' and defines the **Data Architecture and Security** requirements. OrbitAvanya Tech LLP then steps in to build the technical infrastructure, utilizing a modern stack of **Next.js for the frontend and FastAPI for the backend**, ensuring the solution is high-performance and scalable."
+        },
+        {
+          "type": "paragraph",
+          "text": "To add immediate value, we will integrate the **OrbitAvanya AI Analytics Dashboard** as the primary interface for V42's clients. This allows the client to see their **Data Quality Management** metrics in real-time, transforming a static consulting report into a living software product. This shift from 'document-based' to 'product-based' consulting significantly increases the perceived value of V42's services."
+        },
+        {
+          "type": "paragraph",
+          "text": "Furthermore, for clients requiring legacy system modernization, we will deploy our **Cloud Migrator** tools to facilitate the transition to the architectures designed by V42. This ensures that the transition from old systems to the new **Data Modeling & Design** is seamless, reducing risk and increasing client satisfaction."
+        },
+        {
+          "type": "subheading",
+          "text": "Core Capabilities"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Capability",
+            "Description"
+          ],
+          "rows": [
+            [
+              "Full-Stack Engineering",
+              "Rapid development of enterprise-grade applications using **React, Node.js, and Python**."
+            ],
+            [
+              "AI & Analytics",
+              "Proprietary **AI Analytics Dashboards** for real-time data visualization and insight."
+            ],
+            [
+              "Cloud Infrastructure",
+              "Expert-level deployment and scaling on **AWS**, ensuring high availability and security."
+            ],
+            [
+              "Database Optimization",
+              "Implementation of complex schemas using **PostgreSQL and MongoDB** to support V42's data models."
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            4.5
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Technology Stack"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "React",
+            "Next.js",
+            "Python",
+            "FastAPI",
+            "Node.js",
+            "PostgreSQL",
+            "MongoDB",
+            "AWS"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Implementation Timeline",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "We propose a phased approach to ensure alignment and a successful first joint engagement."
+        },
+        {
+          "type": "subheading",
+          "text": "Engagement Timeline"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Phase",
+            "Duration",
+            "Focus Area",
+            "Deliverables"
+          ],
+          "rows": [
+            [
+              "Phase 1: Alignment",
+              "Month 1",
+              "Initial Alignment & Joint Offering Definition",
+              "Joint Service Catalog, Revenue Share Agreement, and Partner Playbook."
+            ],
+            [
+              "Phase 2: Pilot Project",
+              "Month 2-3",
+              "Co-Delivery of a Pilot Client Engagement",
+              "Deployed MVP of a Data Governance Tool or Analytics Dashboard for a mutual client."
+            ],
+            [
+              "Phase 3: Scale",
+              "Month 4-6",
+              "Market Expansion and Product Integration",
+              "Full-scale marketing of the Joint Value Proposition to the Fintech sector."
+            ]
+          ],
+          "col_widths": [
+            1.0,
+            1.2,
+            2.3,
+            2.5
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Total Estimated Duration: 3-6 Months (Phase 1)"
+        }
+      ]
+    },
+    {
+      "title": "Your Investment",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "We propose a **Revenue-Sharing and Resource-Allocation model** to minimize risk and maximize mutual incentive. OrbitAvanya Tech LLP will provide the technical labor and product licenses, while V42 provides the strategic lead and client access."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Item / Deliverable",
+            "Unit",
+            "Qty",
+            "Unit Price",
+            "Total"
+          ],
+          "rows": [
+            [
+              "Joint Solution Delivery",
+              "RevShare",
+              "N/A",
+              "Negotiable %",
+              "Based on Project Value"
+            ],
+            [
+              "OrbitAvanya Product Licensing",
+              "Co-Investment",
+              "N/A",
+              "Preferential Partner Rate",
+              "TBD"
+            ]
+          ],
+          "col_widths": [
+            2.8,
+            1.0,
+            0.7,
+            1.2,
+            1.3
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Service Level Agreement & Terms"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Mutual Non-Disclosure**: Protection of proprietary data models and software code.",
+            "**Joint Account Management**: Weekly syncs between V42 consultants and OrbitAvanya engineers.",
+            "**Quality Assurance**: All joint deliverables must pass a dual-review process (Strategic by V42, Technical by OrbitAvanya).",
+            "**Client Ownership**: Clear agreement on lead-generation and client ownership protocols."
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Company Profile",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP (AvanyaEdge) is a technology services firm specializing in enterprise software development, digital transformation, e-governance platforms, and AI/ML solutions. Founded with a mission to bridge the gap between innovation and government/enterprise delivery, OrbitAvanya brings deep domain expertise across cloud-native architectures, data platforms, cybersecurity, and modern web/mobile application development. Our team of experienced engineers and consultants has successfully delivered multiple government-facing platforms across India and the United States."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Profile Detail",
+            "Value"
+          ],
+          "rows": [
+            [
+              "Company Name",
+              "OrbitAvanya Tech LLP"
+            ],
+            [
+              "Type",
+              "Limited Liability Partnership (LLP)"
+            ],
+            [
+              "Headquarters",
+              "Frisco, Texas 75035, USA"
+            ],
+            [
+              "India Office",
+              "Pune, Maharashtra, India"
+            ],
+            [
+              "Website",
+              "www.orbitavanyatech.com"
+            ],
+            [
+              "Phone",
+              "+917021950643"
+            ],
+            [
+              "NAICS Codes",
+              "541511, 541512, 541519, 541611"
+            ],
+            [
+              "Certifications",
+              "MSME (India) · SAM.gov Registered"
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            4.5
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Appendix",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "subheading",
+          "text": "Appendix A — Past Performance"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Project",
+            "Client",
+            "Period",
+            "Relevance"
+          ],
+          "rows": [
+            [
+              "Enterprise ERP Implementation",
+              "Confidential",
+              "2023",
+              "Demonstrated ability to turn complex business requirements into a functioning **OrbitAvanya ERP** system."
+            ],
+            [
+              "AI-Driven Data Dashboard",
+              "Confidential",
+              "2022-2023",
+              "Successfully implemented real-time analytics for a financial entity, mirroring the needs of V42's clients."
+            ]
+          ],
+          "col_widths": [
+            2.2,
+            1.8,
+            1.0,
+            2.0
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Appendix B — Team & Leadership"
+        },
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP's leadership team comprises professionals with extensive backgrounds in enterprise software delivery, cloud architecture, AI/ML systems, and government program management. Full team profiles and resumes are available upon request."
+        }
+      ]
+    }
+  ]
+}

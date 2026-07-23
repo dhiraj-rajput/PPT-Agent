@@ -1,0 +1,462 @@
+{
+  "brand": {
+    "company_name": "OrbitAvanya Tech LLP",
+    "company_short": "OrbitAvanya",
+    "logo_path": "assets/logo.png",
+    "cover_graphic_path": "assets/cover_graphic.png",
+    "body_font": "Fira Sans Light",
+    "heading_font": "Fira Sans SemiBold",
+    "accent_color": "1F3864",
+    "muted_color": "595959",
+    "address_line1": "13352 Kettle Camp Rd",
+    "address_line2": "Frisco, Texas 75035",
+    "phone": "+917021950643",
+    "website": "www.orbitavanyatech.com"
+  },
+  "proposal": {
+    "title": "Partnership Proposal",
+    "subtitle": "Strategic Partnership Proposal",
+    "prepared_for": "KIRCT KILIMANJARO HOSPITAL",
+    "prepared_by": "Ranjeet Kumar — Founder & CEO, OrbitAvanya Tech LLP (AvanyaEdge)",
+    "engagement_ref": "OAT-CES-2026-KIRCT_KILIMANJARO_HOSPITAL-FULL",
+    "proposal_date": "July 14, 2026",
+    "validity": "90 days from proposal date",
+    "confidentiality_text": "This document contains confidential information of OrbitAvanya Tech LLP and its affiliates and/or licensors (“OrbitAvanya”), which may include trade secrets, proprietary methodology, and business information. The recipient acknowledges that this information has been developed by OrbitAvanya as valuable trade secrets and shall remain its exclusive property, to be disclosed only to persons who have a need to know. The recipient agrees not to copy or reproduce any information supplied herein without prior written permission from an authorized representative of OrbitAvanya.\n\nReciprocally, OrbitAvanya acknowledges that information shared by the recipient during proposal review and any subsequent engagement constitutes confidential information of the recipient, and agrees to protect it to the same standard and to use it solely for the purposes of the engagement contemplated herein."
+  },
+  "toc": {
+    "heading": "Content"
+  },
+  "sections": [
+    {
+      "title": "Executive Summary",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP is pleased to propose a strategic partnership with the Kano Independent Research Centre Trust (KIRCT) to bridge the gap between advanced biomedical research and scalable digital infrastructure. By integrating OrbitAvanya's high-performance software engineering with KIRCT's leadership in genomics, AMR research, and public health analytics, we aim to create a **digitally-driven healthcare ecosystem** that accelerates the delivery of clinical insights to the community."
+        },
+        {
+          "type": "paragraph",
+          "text": "KIRCT's impressive portfolio, including the Community Priority Index and Collective Impact Index, represents a goldmine of data that requires **sophisticated AI-driven analytics** and secure cloud orchestration to reach its full potential. OrbitAvanya proposes to act as the primary technology partner, transforming these research frameworks into **scalable SaaS platforms** and integrated digital tools that enhance the capacity-building competencies of healthcare providers."
+        },
+        {
+          "type": "paragraph",
+          "text": "Our collaboration will focus on digitizing the operational workflows of the Kilimanjaro Hospital complex and automating the data pipelines for genomics and clinical trials. This synergy will not only **increase the operational efficiency** of KIRCT's research initiatives but also establish a new benchmark for **tech-enabled public health interventions** in the region."
+        },
+        {
+          "type": "paragraph",
+          "text": "Through this partnership, we envision a joint value proposition where KIRCT provides the domain expertise and research validation, while OrbitAvanya provides the **cutting-edge technical architecture**, ensuring that life-saving research is translated into accessible, real-time digital solutions."
+        },
+        {
+          "type": "subheading",
+          "text": "Key Highlights"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Digital Transformation** of the Community Priority and Collective Impact Indices into interactive AI dashboards.",
+            "**Enhanced Data Security** and scalability for Genomics and AMR research data using AWS cloud infrastructure.",
+            "**Operational Optimization** of the Kilimanjaro Hospital complex through a custom OrbitAvanya ERP implementation.",
+            "**Accelerated Capacity Building** by converting training modules into an integrated e-Learning and Analytics portal.",
+            "**Real-time Public Health Monitoring** via the deployment of an AI Analytics Dashboard for clinical trial tracking.",
+            "**Mutual Market Expansion** by offering joint 'Research-as-a-Service' (RaaS) digital products to global health organizations."
+          ]
+        },
+        {
+          "type": "signature",
+          "name": "Ranjeet Kumar Singh",
+          "title": "Founder & CEO",
+          "company": "OrbitAvanya Tech LLP (AvanyaEdge)"
+        }
+      ]
+    },
+    {
+      "title": "Strategic Context",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The intersection of biotechnology and software engineering is the next frontier in global health. KIRCT possesses world-class research capabilities and validated indices, yet there is a significant opportunity to transition these from static publications and manual processes to **dynamic, data-driven digital assets**. OrbitAvanya Tech LLP envisions a partnership where technology acts as the force multiplier for KIRCT's scientific breakthroughs."
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 1 · Data Silos in Clinical Research"
+        },
+        {
+          "type": "paragraph",
+          "text": "KIRCT manages complex data from genomics and AMR research, which often resides in fragmented formats, hindering real-time analysis."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Need for **centralized data lakes** to store multi-omic data.",
+            "Requirement for **automated data pipelines** to reduce manual entry errors in clinical trials."
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 2 · Scalability of Public Health Indices"
+        },
+        {
+          "type": "paragraph",
+          "text": "The Community Priority Index and Collective Impact Index are powerful tools, but their impact is limited by the lack of a user-facing digital interface."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Opportunity to build a **SaaS-based Index Calculator** for global health practitioners.",
+            "Potential for **predictive modeling** using OrbitAvanya's AI capabilities to forecast health threats."
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Scope of Work",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The proposed collaboration will focus on three primary pillars: the digitization of research indices, the modernization of hospital management systems, and the creation of a secure research data cloud. OrbitAvanya will provide the full-stack development team and architectural oversight to turn KIRCT's intellectual property into functional software."
+        },
+        {
+          "type": "subheading",
+          "text": "Deliverables"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**KIRCT Digital Index Suite**: A web-based platform for the Community Priority and Collective Impact Indices.",
+            "**Genomics Data Vault**: A secure, AWS-hosted repository for AMR and genomics research with encrypted access.",
+            "**Hospital Operations ERP**: A customized management system for the Kilimanjaro Hospital complex.",
+            "**AI Health Analytics Dashboard**: A real-time visualization tool for clinical trial outcomes and public health trends.",
+            "**Capacity Building Portal**: An e-Gov style portal for health analytics training and certification."
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Technical Requirements Alignment"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "RFP Requirement",
+            "Our Solution",
+            "Alignment"
+          ],
+          "rows": [
+            [
+              "Complex biological data management and analysis",
+              "Python/FastAPI backend with PostgreSQL and MongoDB for flexible schema research data",
+              "Full Synergy"
+            ],
+            [
+              "High-availability hospital management and patient records",
+              "OrbitAvanya ERP customized for healthcare workflows with React/Next.js frontend",
+              "Full Synergy"
+            ],
+            [
+              "Secure, scalable hosting for international research collaboration",
+              "AWS Cloud Migration and Infrastructure as Code (IaC)",
+              "Full Synergy"
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            3.0,
+            1.5
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Our Proposed Solution",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Our joint solution centers on the creation of the **KIRCT Digital Health Intelligence Ecosystem**. This ecosystem will integrate the Kilimanjaro Hospital's operational data with the research findings from the Genomics and AMR labs, creating a closed-loop system where clinical data informs research, and research improves clinical outcomes."
+        },
+        {
+          "type": "paragraph",
+          "text": "At the core, we will deploy the **OrbitAvanya AI Analytics Dashboard**, tailored specifically for KIRCT's indices. This will allow stakeholders to input community data and receive instant, visualized priority rankings and impact scores, transforming the 'Collective Impact Index' from a methodology into a **real-time decision-making tool**."
+        },
+        {
+          "type": "paragraph",
+          "text": "To support the hospital complex, we will implement a **Custom Healthcare ERP** that manages everything from patient intake to laboratory sample tracking. This ensures that the 'capacity-building competencies' mentioned in KIRCT's profile are supported by a seamless digital workflow, reducing administrative overhead and increasing patient throughput."
+        },
+        {
+          "type": "paragraph",
+          "text": "Finally, we will establish a **Secure Research Cloud** using AWS, ensuring that all genomic data is stored with HIPAA-level compliance and is accessible to authorized global collaborators via a secure API gateway, thereby increasing KIRCT's visibility and influence in the international scientific community."
+        },
+        {
+          "type": "subheading",
+          "text": "Core Capabilities"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Capability",
+            "Description"
+          ],
+          "rows": [
+            [
+              "Full-Stack Software Engineering",
+              "Expertise in React, Next.js, and Node.js for building high-performance, responsive user interfaces."
+            ],
+            [
+              "AI & Data Analytics",
+              "Advanced Python-based machine learning models for predictive health analytics and data visualization."
+            ],
+            [
+              "Cloud Architecture",
+              "Specialized AWS deployment strategies for secure, scalable, and compliant data storage."
+            ],
+            [
+              "Enterprise Resource Planning (ERP)",
+              "Proprietary ERP frameworks that can be customized for complex institutional management."
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            4.5
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Technology Stack"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "React",
+            "Next.js",
+            "Python",
+            "FastAPI",
+            "Node.js",
+            "PostgreSQL",
+            "MongoDB",
+            "AWS"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Implementation Timeline",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "We propose a phased rollout to ensure that digital tools are integrated without disrupting ongoing clinical research and hospital operations."
+        },
+        {
+          "type": "subheading",
+          "text": "Engagement Timeline"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Phase",
+            "Duration",
+            "Focus Area",
+            "Deliverables"
+          ],
+          "rows": [
+            [
+              "Phase 1: Discovery & Blueprinting",
+              "Month 1",
+              "Initial Alignment & Joint Offering Definition",
+              "Technical Requirement Document (TRD) and UI/UX Prototypes for the Index Suite."
+            ],
+            [
+              "Phase 2: MVP Development",
+              "Month 2-3",
+              "Core Product Build",
+              "Beta launch of the Digital Index Suite and the Genomics Data Vault."
+            ],
+            [
+              "Phase 3: Enterprise Integration",
+              "Month 4-6",
+              "Hospital ERP & AI Dashboard Deployment",
+              "Full deployment of Hospital ERP and AI Analytics Dashboard across KIRCT facilities."
+            ]
+          ],
+          "col_widths": [
+            1.0,
+            1.2,
+            2.3,
+            2.5
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Total Estimated Duration: 6 Months (Phase 1-3)"
+        }
+      ]
+    },
+    {
+      "title": "Your Investment",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya proposes a **Hybrid Value-Share Model**. We will invest our technical resources and engineering hours in exchange for a revenue-share agreement on any commercialized SaaS versions of the research indices, alongside a project-based fee for the hospital ERP implementation."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Item / Deliverable",
+            "Unit",
+            "Qty",
+            "Unit Price",
+            "Total"
+          ],
+          "rows": [
+            [
+              "Digital Index SaaS Development",
+              "Co-Investment / RevShare",
+              "N/A",
+              "N/A",
+              "Shared Equity in Product"
+            ],
+            [
+              "Hospital ERP Implementation",
+              "Project-Based",
+              "1",
+              "Custom Quote",
+              "Milestone-based Payments"
+            ],
+            [
+              "Cloud Infrastructure Management",
+              "Monthly Retainer",
+              "N/A",
+              "TBD",
+              "Operational Expense"
+            ]
+          ],
+          "col_widths": [
+            2.8,
+            1.0,
+            0.7,
+            1.2,
+            1.3
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Service Level Agreement & Terms"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**99.9% Uptime Guarantee** for all deployed hospital and research platforms.",
+            "**Strict Data Privacy Compliance** adhering to international healthcare data standards (GDPR/HIPAA).",
+            "**Quarterly Strategic Reviews** to align technical roadmaps with new research breakthroughs.",
+            "**Dedicated Technical Account Manager** from OrbitAvanya for KIRCT's administrative team."
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Company Profile",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP (AvanyaEdge) is a technology services firm specializing in enterprise software development, digital transformation, e-governance platforms, and AI/ML solutions. Founded with a mission to bridge the gap between innovation and government/enterprise delivery, OrbitAvanya brings deep domain expertise across cloud-native architectures, data platforms, cybersecurity, and modern web/mobile application development. Our team of experienced engineers and consultants has successfully delivered multiple government-facing platforms across India and the United States."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Profile Detail",
+            "Value"
+          ],
+          "rows": [
+            [
+              "Company Name",
+              "OrbitAvanya Tech LLP"
+            ],
+            [
+              "Type",
+              "Limited Liability Partnership (LLP)"
+            ],
+            [
+              "Headquarters",
+              "Frisco, Texas 75035, USA"
+            ],
+            [
+              "India Office",
+              "Pune, Maharashtra, India"
+            ],
+            [
+              "Website",
+              "www.orbitavanyatech.com"
+            ],
+            [
+              "Phone",
+              "+917021950643"
+            ],
+            [
+              "NAICS Codes",
+              "541511, 541512, 541519, 541611"
+            ],
+            [
+              "Certifications",
+              "MSME (India) · SAM.gov Registered"
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            4.5
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Appendix",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "subheading",
+          "text": "Appendix A — Past Performance"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Project",
+            "Client",
+            "Period",
+            "Relevance"
+          ],
+          "rows": [
+            [
+              "Enterprise ERP Deployment",
+              "Confidential",
+              "2022-2023",
+              "Successfully digitized complex operational workflows for a large-scale organization, similar to the Kilimanjaro Hospital needs."
+            ],
+            [
+              "AI Analytics Dashboard",
+              "Confidential",
+              "2023",
+              "Developed a real-time data visualization tool that converted complex datasets into actionable business insights."
+            ]
+          ],
+          "col_widths": [
+            2.2,
+            1.8,
+            1.0,
+            2.0
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Appendix B — Team & Leadership"
+        },
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP's leadership team comprises professionals with extensive backgrounds in enterprise software delivery, cloud architecture, AI/ML systems, and government program management. Full team profiles and resumes are available upon request."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1757 @@
+[
+  {
+    "_id": {
+      "$oid": "orbitavanya001"
+    },
+    "company_slug": "orbit-avanya-lms",
+    "company_name": "Orbit Avanya LLP",
+    "industry_domain": "Education",
+    "product_name": "LMS",
+    "about_text": "Orbit Avanya LLP delivers LMS solutions designed for digital transformation, automation, analytics, and operational efficiency.",
+    "company_overview": {
+      "headquarters": "Pune, Maharashtra, India",
+      "company_type": "Limited Liability Partnership",
+      "business_model": "SaaS + Enterprise Implementation + Managed Services",
+      "delivery_model": [
+        "Cloud",
+        "On-Premise",
+        "Hybrid"
+      ]
+    },
+    "ai_adoption_level": "Scaled",
+    "digital_transformation_status": "Advanced",
+    "target_customers": [
+      "SMEs",
+      "Enterprises",
+      "Government Organizations",
+      "Educational Institutions"
+    ],
+    "key_features": [
+      "Role Based Access Control",
+      "Analytics Dashboard",
+      "Workflow Automation",
+      "API Integration",
+      "Mobile Accessibility",
+      "AI-driven Insights"
+    ],
+    "technology_stack": {
+      "frontend": [
+        "React",
+        "Next.js"
+      ],
+      "backend": [
+        "Python",
+        "FastAPI",
+        "Node.js"
+      ],
+      "database": [
+        "PostgreSQL",
+        "MongoDB"
+      ],
+      "cloud": [
+        "AWS",
+        "Azure"
+      ],
+      "ai": [
+        "OpenAI",
+        "Llama",
+        "LangChain"
+      ]
+    },
+    "business_challenges": [
+      "Increasing market competition",
+      "Scaling deployments globally",
+      "Maintaining regulatory compliance"
+    ],
+    "competitive_advantages": [
+      "AI-first architecture",
+      "Rapid deployment framework",
+      "Customizable workflows",
+      "Industry specific modules"
+    ],
+    "deployment_time_weeks": 6,
+    "pricing_model": {
+      "starter": "\u20b949,999 setup + subscription",
+      "enterprise": "Custom pricing"
+    },
+    "integrations_supported": [
+      "SAP",
+      "Oracle",
+      "Microsoft 365",
+      "Google Workspace",
+      "Payment Gateways"
+    ],
+    "security_and_compliance": [
+      "ISO 27001 Ready",
+      "GDPR Compatible",
+      "Role Based Security",
+      "Audit Logs"
+    ],
+    "competitors": [
+      "Zoho",
+      "Oracle",
+      "SAP",
+      "Salesforce",
+      "Freshworks"
+    ],
+    "data_sources": [
+      "website",
+      "linkedin",
+      "news",
+      "customer_feedback"
+    ],
+    "emails": [
+      "sales@orbitavanya.com",
+      "support@orbitavanya.com",
+      "partnerships@orbitavanya.com"
+    ],
+    "executive_summary": "LMS by Orbit Avanya LLP enables organizations to modernize operations, improve productivity, and leverage AI for data-driven decision making.",
+    "external_structured_insights": {
+      "value_proposition": "Enterprise-grade LMS with AI, analytics, automation, and seamless integrations.",
+      "products_and_services": [
+        "LMS"
+      ],
+      "implementation_support": true,
+      "managed_services": true,
+      "customer_success_program": true
+    }
+  },
+  {
+    "_id": {
+      "$oid": "orbitavanya002"
+    },
+    "company_slug": "orbit-avanya-hms",
+    "company_name": "Orbit Avanya LLP",
+    "industry_domain": "Healthcare",
+    "product_name": "HMS",
+    "about_text": "Orbit Avanya LLP delivers HMS solutions designed for digital transformation, automation, analytics, and operational efficiency.",
+    "company_overview": {
+      "headquarters": "Pune, Maharashtra, India",
+      "company_type": "Limited Liability Partnership",
+      "business_model": "SaaS + Enterprise Implementation + Managed Services",
+      "delivery_model": [
+        "Cloud",
+        "On-Premise",
+        "Hybrid"
+      ]
+    },
+    "ai_adoption_level": "Scaled",
+    "digital_transformation_status": "Advanced",
+    "target_customers": [
+      "SMEs",
+      "Enterprises",
+      "Government Organizations",
+      "Educational Institutions"
+    ],
+    "key_features": [
+      "Role Based Access Control",
+      "Analytics Dashboard",
+      "Workflow Automation",
+      "API Integration",
+      "Mobile Accessibility",
+      "AI-driven Insights"
+    ],
+    "technology_stack": {
+      "frontend": [
+        "React",
+        "Next.js"
+      ],
+      "backend": [
+        "Python",
+        "FastAPI",
+        "Node.js"
+      ],
+      "database": [
+        "PostgreSQL",
+        "MongoDB"
+      ],
+      "cloud": [
+        "AWS",
+        "Azure"
+      ],
+      "ai": [
+        "OpenAI",
+        "Llama",
+        "LangChain"
+      ]
+    },
+    "business_challenges": [
+      "Increasing market competition",
+      "Scaling deployments globally",
+      "Maintaining regulatory compliance"
+    ],
+    "competitive_advantages": [
+      "AI-first architecture",
+      "Rapid deployment framework",
+      "Customizable workflows",
+      "Industry specific modules"
+    ],
+    "deployment_time_weeks": 6,
+    "pricing_model": {
+      "starter": "\u20b949,999 setup + subscription",
+      "enterprise": "Custom pricing"
+    },
+    "integrations_supported": [
+      "SAP",
+      "Oracle",
+      "Microsoft 365",
+      "Google Workspace",
+      "Payment Gateways"
+    ],
+    "security_and_compliance": [
+      "ISO 27001 Ready",
+      "GDPR Compatible",
+      "Role Based Security",
+      "Audit Logs"
+    ],
+    "competitors": [
+      "Zoho",
+      "Oracle",
+      "SAP",
+      "Salesforce",
+      "Freshworks"
+    ],
+    "data_sources": [
+      "website",
+      "linkedin",
+      "news",
+      "customer_feedback"
+    ],
+    "emails": [
+      "sales@orbitavanya.com",
+      "support@orbitavanya.com",
+      "partnerships@orbitavanya.com"
+    ],
+    "executive_summary": "HMS by Orbit Avanya LLP enables organizations to modernize operations, improve productivity, and leverage AI for data-driven decision making.",
+    "external_structured_insights": {
+      "value_proposition": "Enterprise-grade HMS with AI, analytics, automation, and seamless integrations.",
+      "products_and_services": [
+        "HMS"
+      ],
+      "implementation_support": true,
+      "managed_services": true,
+      "customer_success_program": true
+    }
+  },
+  {
+    "_id": {
+      "$oid": "orbitavanya003"
+    },
+    "company_slug": "orbit-avanya-erp",
+    "company_name": "Orbit Avanya LLP",
+    "industry_domain": "Enterprise",
+    "product_name": "ERP",
+    "about_text": "Orbit Avanya LLP delivers ERP solutions designed for digital transformation, automation, analytics, and operational efficiency.",
+    "company_overview": {
+      "headquarters": "Pune, Maharashtra, India",
+      "company_type": "Limited Liability Partnership",
+      "business_model": "SaaS + Enterprise Implementation + Managed Services",
+      "delivery_model": [
+        "Cloud",
+        "On-Premise",
+        "Hybrid"
+      ]
+    },
+    "ai_adoption_level": "Scaled",
+    "digital_transformation_status": "Advanced",
+    "target_customers": [
+      "SMEs",
+      "Enterprises",
+      "Government Organizations",
+      "Educational Institutions"
+    ],
+    "key_features": [
+      "Role Based Access Control",
+      "Analytics Dashboard",
+      "Workflow Automation",
+      "API Integration",
+      "Mobile Accessibility",
+      "AI-driven Insights"
+    ],
+    "technology_stack": {
+      "frontend": [
+        "React",
+        "Next.js"
+      ],
+      "backend": [
+        "Python",
+        "FastAPI",
+        "Node.js"
+      ],
+      "database": [
+        "PostgreSQL",
+        "MongoDB"
+      ],
+      "cloud": [
+        "AWS",
+        "Azure"
+      ],
+      "ai": [
+        "OpenAI",
+        "Llama",
+        "LangChain"
+      ]
+    },
+    "business_challenges": [
+      "Increasing market competition",
+      "Scaling deployments globally",
+      "Maintaining regulatory compliance"
+    ],
+    "competitive_advantages": [
+      "AI-first architecture",
+      "Rapid deployment framework",
+      "Customizable workflows",
+      "Industry specific modules"
+    ],
+    "deployment_time_weeks": 6,
+    "pricing_model": {
+      "starter": "\u20b949,999 setup + subscription",
+      "enterprise": "Custom pricing"
+    },
+    "integrations_supported": [
+      "SAP",
+      "Oracle",
+      "Microsoft 365",
+      "Google Workspace",
+      "Payment Gateways"
+    ],
+    "security_and_compliance": [
+      "ISO 27001 Ready",
+      "GDPR Compatible",
+      "Role Based Security",
+      "Audit Logs"
+    ],
+    "competitors": [
+      "Zoho",
+      "Oracle",
+      "SAP",
+      "Salesforce",
+      "Freshworks"
+    ],
+    "data_sources": [
+      "website",
+      "linkedin",
+      "news",
+      "customer_feedback"
+    ],
+    "emails": [
+      "sales@orbitavanya.com",
+      "support@orbitavanya.com",
+      "partnerships@orbitavanya.com"
+    ],
+    "executive_summary": "ERP by Orbit Avanya LLP enables organizations to modernize operations, improve productivity, and leverage AI for data-driven decision making.",
+    "external_structured_insights": {
+      "value_proposition": "Enterprise-grade ERP with AI, analytics, automation, and seamless integrations.",
+      "products_and_services": [
+        "ERP"
+      ],
+      "implementation_support": true,
+      "managed_services": true,
+      "customer_success_program": true
+    }
+  },
+  {
+    "_id": {
+      "$oid": "orbitavanya004"
+    },
+    "company_slug": "orbit-avanya-corporate-website-solutions",
+    "company_name": "Orbit Avanya LLP",
+    "industry_domain": "Business",
+    "product_name": "Corporate Website Solutions",
+    "about_text": "Orbit Avanya LLP delivers Corporate Website Solutions solutions designed for digital transformation, automation, analytics, and operational efficiency.",
+    "company_overview": {
+      "headquarters": "Pune, Maharashtra, India",
+      "company_type": "Limited Liability Partnership",
+      "business_model": "SaaS + Enterprise Implementation + Managed Services",
+      "delivery_model": [
+        "Cloud",
+        "On-Premise",
+        "Hybrid"
+      ]
+    },
+    "ai_adoption_level": "Scaled",
+    "digital_transformation_status": "Advanced",
+    "target_customers": [
+      "SMEs",
+      "Enterprises",
+      "Government Organizations",
+      "Educational Institutions"
+    ],
+    "key_features": [
+      "Role Based Access Control",
+      "Analytics Dashboard",
+      "Workflow Automation",
+      "API Integration",
+      "Mobile Accessibility",
+      "AI-driven Insights"
+    ],
+    "technology_stack": {
+      "frontend": [
+        "React",
+        "Next.js"
+      ],
+      "backend": [
+        "Python",
+        "FastAPI",
+        "Node.js"
+      ],
+      "database": [
+        "PostgreSQL",
+        "MongoDB"
+      ],
+      "cloud": [
+        "AWS",
+        "Azure"
+      ],
+      "ai": [
+        "OpenAI",
+        "Llama",
+        "LangChain"
+      ]
+    },
+    "business_challenges": [
+      "Increasing market competition",
+      "Scaling deployments globally",
+      "Maintaining regulatory compliance"
+    ],
+    "competitive_advantages": [
+      "AI-first architecture",
+      "Rapid deployment framework",
+      "Customizable workflows",
+      "Industry specific modules"
+    ],
+    "deployment_time_weeks": 6,
+    "pricing_model": {
+      "starter": "\u20b949,999 setup + subscription",
+      "enterprise": "Custom pricing"
+    },
+    "integrations_supported": [
+      "SAP",
+      "Oracle",
+      "Microsoft 365",
+      "Google Workspace",
+      "Payment Gateways"
+    ],
+    "security_and_compliance": [
+      "ISO 27001 Ready",
+      "GDPR Compatible",
+      "Role Based Security",
+      "Audit Logs"
+    ],
+    "competitors": [
+      "Zoho",
+      "Oracle",
+      "SAP",
+      "Salesforce",
+      "Freshworks"
+    ],
+    "data_sources": [
+      "website",
+      "linkedin",
+      "news",
+      "customer_feedback"
+    ],
+    "emails": [
+      "sales@orbitavanya.com",
+      "support@orbitavanya.com",
+      "partnerships@orbitavanya.com"
+    ],
+    "executive_summary": "Corporate Website Solutions by Orbit Avanya LLP enables organizations to modernize operations, improve productivity, and leverage AI for data-driven decision making.",
+    "external_structured_insights": {
+      "value_proposition": "Enterprise-grade Corporate Website Solutions with AI, analytics, automation, and seamless integrations.",
+      "products_and_services": [
+        "Corporate Website Solutions"
+      ],
+      "implementation_support": true,
+      "managed_services": true,
+      "customer_success_program": true
+    }
+  },
+  {
+    "_id": {
+      "$oid": "orbitavanya005"
+    },
+    "company_slug": "orbit-avanya-help-desk-portal",
+    "company_name": "Orbit Avanya LLP",
+    "industry_domain": "Support",
+    "product_name": "Help Desk Portal",
+    "about_text": "Orbit Avanya LLP delivers Help Desk Portal solutions designed for digital transformation, automation, analytics, and operational efficiency.",
+    "company_overview": {
+      "headquarters": "Pune, Maharashtra, India",
+      "company_type": "Limited Liability Partnership",
+      "business_model": "SaaS + Enterprise Implementation + Managed Services",
+      "delivery_model": [
+        "Cloud",
+        "On-Premise",
+        "Hybrid"
+      ]
+    },
+    "ai_adoption_level": "Scaled",
+    "digital_transformation_status": "Advanced",
+    "target_customers": [
+      "SMEs",
+      "Enterprises",
+      "Government Organizations",
+      "Educational Institutions"
+    ],
+    "key_features": [
+      "Role Based Access Control",
+      "Analytics Dashboard",
+      "Workflow Automation",
+      "API Integration",
+      "Mobile Accessibility",
+      "AI-driven Insights"
+    ],
+    "technology_stack": {
+      "frontend": [
+        "React",
+        "Next.js"
+      ],
+      "backend": [
+        "Python",
+        "FastAPI",
+        "Node.js"
+      ],
+      "database": [
+        "PostgreSQL",
+        "MongoDB"
+      ],
+      "cloud": [
+        "AWS",
+        "Azure"
+      ],
+      "ai": [
+        "OpenAI",
+        "Llama",
+        "LangChain"
+      ]
+    },
+    "business_challenges": [
+      "Increasing market competition",
+      "Scaling deployments globally",
+      "Maintaining regulatory compliance"
+    ],
+    "competitive_advantages": [
+      "AI-first architecture",
+      "Rapid deployment framework",
+      "Customizable workflows",
+      "Industry specific modules"
+    ],
+    "deployment_time_weeks": 6,
+    "pricing_model": {
+      "starter": "\u20b949,999 setup + subscription",
+      "enterprise": "Custom pricing"
+    },
+    "integrations_supported": [
+      "SAP",
+      "Oracle",
+      "Microsoft 365",
+      "Google Workspace",
+      "Payment Gateways"
+    ],
+    "security_and_compliance": [
+      "ISO 27001 Ready",
+      "GDPR Compatible",
+      "Role Based Security",
+      "Audit Logs"
+    ],
+    "competitors": [
+      "Zoho",
+      "Oracle",
+      "SAP",
+      "Salesforce",
+      "Freshworks"
+    ],
+    "data_sources": [
+      "website",
+      "linkedin",
+      "news",
+      "customer_feedback"
+    ],
+    "emails": [
+      "sales@orbitavanya.com",
+      "support@orbitavanya.com",
+      "partnerships@orbitavanya.com"
+    ],
+    "executive_summary": "Help Desk Portal by Orbit Avanya LLP enables organizations to modernize operations, improve productivity, and leverage AI for data-driven decision making.",
+    "external_structured_insights": {
+      "value_proposition": "Enterprise-grade Help Desk Portal with AI, analytics, automation, and seamless integrations.",
+      "products_and_services": [
+        "Help Desk Portal"
+      ],
+      "implementation_support": true,
+      "managed_services": true,
+      "customer_success_program": true
+    }
+  },
+  {
+    "_id": {
+      "$oid": "orbitavanya006"
+    },
+    "company_slug": "orbit-avanya-agriculture-portal",
+    "company_name": "Orbit Avanya LLP",
+    "industry_domain": "AgriTech",
+    "product_name": "Agriculture Portal",
+    "about_text": "Orbit Avanya LLP delivers Agriculture Portal solutions designed for digital transformation, automation, analytics, and operational efficiency.",
+    "company_overview": {
+      "headquarters": "Pune, Maharashtra, India",
+      "company_type": "Limited Liability Partnership",
+      "business_model": "SaaS + Enterprise Implementation + Managed Services",
+      "delivery_model": [
+        "Cloud",
+        "On-Premise",
+        "Hybrid"
+      ]
+    },
+    "ai_adoption_level": "Scaled",
+    "digital_transformation_status": "Advanced",
+    "target_customers": [
+      "SMEs",
+      "Enterprises",
+      "Government Organizations",
+      "Educational Institutions"
+    ],
+    "key_features": [
+      "Role Based Access Control",
+      "Analytics Dashboard",
+      "Workflow Automation",
+      "API Integration",
+      "Mobile Accessibility",
+      "AI-driven Insights"
+    ],
+    "technology_stack": {
+      "frontend": [
+        "React",
+        "Next.js"
+      ],
+      "backend": [
+        "Python",
+        "FastAPI",
+        "Node.js"
+      ],
+      "database": [
+        "PostgreSQL",
+        "MongoDB"
+      ],
+      "cloud": [
+        "AWS",
+        "Azure"
+      ],
+      "ai": [
+        "OpenAI",
+        "Llama",
+        "LangChain"
+      ]
+    },
+    "business_challenges": [
+      "Increasing market competition",
+      "Scaling deployments globally",
+      "Maintaining regulatory compliance"
+    ],
+    "competitive_advantages": [
+      "AI-first architecture",
+      "Rapid deployment framework",
+      "Customizable workflows",
+      "Industry specific modules"
+    ],
+    "deployment_time_weeks": 6,
+    "pricing_model": {
+      "starter": "\u20b949,999 setup + subscription",
+      "enterprise": "Custom pricing"
+    },
+    "integrations_supported": [
+      "SAP",
+      "Oracle",
+      "Microsoft 365",
+      "Google Workspace",
+      "Payment Gateways"
+    ],
+    "security_and_compliance": [
+      "ISO 27001 Ready",
+      "GDPR Compatible",
+      "Role Based Security",
+      "Audit Logs"
+    ],
+    "competitors": [
+      "Zoho",
+      "Oracle",
+      "SAP",
+      "Salesforce",
+      "Freshworks"
+    ],
+    "data_sources": [
+      "website",
+      "linkedin",
+      "news",
+      "customer_feedback"
+    ],
+    "emails": [
+      "sales@orbitavanya.com",
+      "support@orbitavanya.com",
+      "partnerships@orbitavanya.com"
+    ],
+    "executive_summary": "Agriculture Portal by Orbit Avanya LLP enables organizations to modernize operations, improve productivity, and leverage AI for data-driven decision making.",
+    "external_structured_insights": {
+      "value_proposition": "Enterprise-grade Agriculture Portal with AI, analytics, automation, and seamless integrations.",
+      "products_and_services": [
+        "Agriculture Portal"
+      ],
+      "implementation_support": true,
+      "managed_services": true,
+      "customer_success_program": true
+    }
+  },
+  {
+    "_id": {
+      "$oid": "orbitavanya007"
+    },
+    "company_slug": "orbit-avanya-crm",
+    "company_name": "Orbit Avanya LLP",
+    "industry_domain": "Sales",
+    "product_name": "CRM",
+    "about_text": "Orbit Avanya LLP delivers CRM solutions designed for digital transformation, automation, analytics, and operational efficiency.",
+    "company_overview": {
+      "headquarters": "Pune, Maharashtra, India",
+      "company_type": "Limited Liability Partnership",
+      "business_model": "SaaS + Enterprise Implementation + Managed Services",
+      "delivery_model": [
+        "Cloud",
+        "On-Premise",
+        "Hybrid"
+      ]
+    },
+    "ai_adoption_level": "Scaled",
+    "digital_transformation_status": "Advanced",
+    "target_customers": [
+      "SMEs",
+      "Enterprises",
+      "Government Organizations",
+      "Educational Institutions"
+    ],
+    "key_features": [
+      "Role Based Access Control",
+      "Analytics Dashboard",
+      "Workflow Automation",
+      "API Integration",
+      "Mobile Accessibility",
+      "AI-driven Insights"
+    ],
+    "technology_stack": {
+      "frontend": [
+        "React",
+        "Next.js"
+      ],
+      "backend": [
+        "Python",
+        "FastAPI",
+        "Node.js"
+      ],
+      "database": [
+        "PostgreSQL",
+        "MongoDB"
+      ],
+      "cloud": [
+        "AWS",
+        "Azure"
+      ],
+      "ai": [
+        "OpenAI",
+        "Llama",
+        "LangChain"
+      ]
+    },
+    "business_challenges": [
+      "Increasing market competition",
+      "Scaling deployments globally",
+      "Maintaining regulatory compliance"
+    ],
+    "competitive_advantages": [
+      "AI-first architecture",
+      "Rapid deployment framework",
+      "Customizable workflows",
+      "Industry specific modules"
+    ],
+    "deployment_time_weeks": 6,
+    "pricing_model": {
+      "starter": "\u20b949,999 setup + subscription",
+      "enterprise": "Custom pricing"
+    },
+    "integrations_supported": [
+      "SAP",
+      "Oracle",
+      "Microsoft 365",
+      "Google Workspace",
+      "Payment Gateways"
+    ],
+    "security_and_compliance": [
+      "ISO 27001 Ready",
+      "GDPR Compatible",
+      "Role Based Security",
+      "Audit Logs"
+    ],
+    "competitors": [
+      "Zoho",
+      "Oracle",
+      "SAP",
+      "Salesforce",
+      "Freshworks"
+    ],
+    "data_sources": [
+      "website",
+      "linkedin",
+      "news",
+      "customer_feedback"
+    ],
+    "emails": [
+      "sales@orbitavanya.com",
+      "support@orbitavanya.com",
+      "partnerships@orbitavanya.com"
+    ],
+    "executive_summary": "CRM by Orbit Avanya LLP enables organizations to modernize operations, improve productivity, and leverage AI for data-driven decision making.",
+    "external_structured_insights": {
+      "value_proposition": "Enterprise-grade CRM with AI, analytics, automation, and seamless integrations.",
+      "products_and_services": [
+        "CRM"
+      ],
+      "implementation_support": true,
+      "managed_services": true,
+      "customer_success_program": true
+    }
+  },
+  {
+    "_id": {
+      "$oid": "orbitavanya008"
+    },
+    "company_slug": "orbit-avanya-hrms",
+    "company_name": "Orbit Avanya LLP",
+    "industry_domain": "Human Resources",
+    "product_name": "HRMS",
+    "about_text": "Orbit Avanya LLP delivers HRMS solutions designed for digital transformation, automation, analytics, and operational efficiency.",
+    "company_overview": {
+      "headquarters": "Pune, Maharashtra, India",
+      "company_type": "Limited Liability Partnership",
+      "business_model": "SaaS + Enterprise Implementation + Managed Services",
+      "delivery_model": [
+        "Cloud",
+        "On-Premise",
+        "Hybrid"
+      ]
+    },
+    "ai_adoption_level": "Scaled",
+    "digital_transformation_status": "Advanced",
+    "target_customers": [
+      "SMEs",
+      "Enterprises",
+      "Government Organizations",
+      "Educational Institutions"
+    ],
+    "key_features": [
+      "Role Based Access Control",
+      "Analytics Dashboard",
+      "Workflow Automation",
+      "API Integration",
+      "Mobile Accessibility",
+      "AI-driven Insights"
+    ],
+    "technology_stack": {
+      "frontend": [
+        "React",
+        "Next.js"
+      ],
+      "backend": [
+        "Python",
+        "FastAPI",
+        "Node.js"
+      ],
+      "database": [
+        "PostgreSQL",
+        "MongoDB"
+      ],
+      "cloud": [
+        "AWS",
+        "Azure"
+      ],
+      "ai": [
+        "OpenAI",
+        "Llama",
+        "LangChain"
+      ]
+    },
+    "business_challenges": [
+      "Increasing market competition",
+      "Scaling deployments globally",
+      "Maintaining regulatory compliance"
+    ],
+    "competitive_advantages": [
+      "AI-first architecture",
+      "Rapid deployment framework",
+      "Customizable workflows",
+      "Industry specific modules"
+    ],
+    "deployment_time_weeks": 6,
+    "pricing_model": {
+      "starter": "\u20b949,999 setup + subscription",
+      "enterprise": "Custom pricing"
+    },
+    "integrations_supported": [
+      "SAP",
+      "Oracle",
+      "Microsoft 365",
+      "Google Workspace",
+      "Payment Gateways"
+    ],
+    "security_and_compliance": [
+      "ISO 27001 Ready",
+      "GDPR Compatible",
+      "Role Based Security",
+      "Audit Logs"
+    ],
+    "competitors": [
+      "Zoho",
+      "Oracle",
+      "SAP",
+      "Salesforce",
+      "Freshworks"
+    ],
+    "data_sources": [
+      "website",
+      "linkedin",
+      "news",
+      "customer_feedback"
+    ],
+    "emails": [
+      "sales@orbitavanya.com",
+      "support@orbitavanya.com",
+      "partnerships@orbitavanya.com"
+    ],
+    "executive_summary": "HRMS by Orbit Avanya LLP enables organizations to modernize operations, improve productivity, and leverage AI for data-driven decision making.",
+    "external_structured_insights": {
+      "value_proposition": "Enterprise-grade HRMS with AI, analytics, automation, and seamless integrations.",
+      "products_and_services": [
+        "HRMS"
+      ],
+      "implementation_support": true,
+      "managed_services": true,
+      "customer_success_program": true
+    }
+  },
+  {
+    "_id": {
+      "$oid": "orbitavanya009"
+    },
+    "company_slug": "orbit-avanya-inventory-management-system",
+    "company_name": "Orbit Avanya LLP",
+    "industry_domain": "Supply Chain",
+    "product_name": "Inventory Management System",
+    "about_text": "Orbit Avanya LLP delivers Inventory Management System solutions designed for digital transformation, automation, analytics, and operational efficiency.",
+    "company_overview": {
+      "headquarters": "Pune, Maharashtra, India",
+      "company_type": "Limited Liability Partnership",
+      "business_model": "SaaS + Enterprise Implementation + Managed Services",
+      "delivery_model": [
+        "Cloud",
+        "On-Premise",
+        "Hybrid"
+      ]
+    },
+    "ai_adoption_level": "Scaled",
+    "digital_transformation_status": "Advanced",
+    "target_customers": [
+      "SMEs",
+      "Enterprises",
+      "Government Organizations",
+      "Educational Institutions"
+    ],
+    "key_features": [
+      "Role Based Access Control",
+      "Analytics Dashboard",
+      "Workflow Automation",
+      "API Integration",
+      "Mobile Accessibility",
+      "AI-driven Insights"
+    ],
+    "technology_stack": {
+      "frontend": [
+        "React",
+        "Next.js"
+      ],
+      "backend": [
+        "Python",
+        "FastAPI",
+        "Node.js"
+      ],
+      "database": [
+        "PostgreSQL",
+        "MongoDB"
+      ],
+      "cloud": [
+        "AWS",
+        "Azure"
+      ],
+      "ai": [
+        "OpenAI",
+        "Llama",
+        "LangChain"
+      ]
+    },
+    "business_challenges": [
+      "Increasing market competition",
+      "Scaling deployments globally",
+      "Maintaining regulatory compliance"
+    ],
+    "competitive_advantages": [
+      "AI-first architecture",
+      "Rapid deployment framework",
+      "Customizable workflows",
+      "Industry specific modules"
+    ],
+    "deployment_time_weeks": 6,
+    "pricing_model": {
+      "starter": "\u20b949,999 setup + subscription",
+      "enterprise": "Custom pricing"
+    },
+    "integrations_supported": [
+      "SAP",
+      "Oracle",
+      "Microsoft 365",
+      "Google Workspace",
+      "Payment Gateways"
+    ],
+    "security_and_compliance": [
+      "ISO 27001 Ready",
+      "GDPR Compatible",
+      "Role Based Security",
+      "Audit Logs"
+    ],
+    "competitors": [
+      "Zoho",
+      "Oracle",
+      "SAP",
+      "Salesforce",
+      "Freshworks"
+    ],
+    "data_sources": [
+      "website",
+      "linkedin",
+      "news",
+      "customer_feedback"
+    ],
+    "emails": [
+      "sales@orbitavanya.com",
+      "support@orbitavanya.com",
+      "partnerships@orbitavanya.com"
+    ],
+    "executive_summary": "Inventory Management System by Orbit Avanya LLP enables organizations to modernize operations, improve productivity, and leverage AI for data-driven decision making.",
+    "external_structured_insights": {
+      "value_proposition": "Enterprise-grade Inventory Management System with AI, analytics, automation, and seamless integrations.",
+      "products_and_services": [
+        "Inventory Management System"
+      ],
+      "implementation_support": true,
+      "managed_services": true,
+      "customer_success_program": true
+    }
+  },
+  {
+    "_id": {
+      "$oid": "orbitavanya010"
+    },
+    "company_slug": "orbit-avanya-e-commerce-platform",
+    "company_name": "Orbit Avanya LLP",
+    "industry_domain": "Retail",
+    "product_name": "E-Commerce Platform",
+    "about_text": "Orbit Avanya LLP delivers E-Commerce Platform solutions designed for digital transformation, automation, analytics, and operational efficiency.",
+    "company_overview": {
+      "headquarters": "Pune, Maharashtra, India",
+      "company_type": "Limited Liability Partnership",
+      "business_model": "SaaS + Enterprise Implementation + Managed Services",
+      "delivery_model": [
+        "Cloud",
+        "On-Premise",
+        "Hybrid"
+      ]
+    },
+    "ai_adoption_level": "Scaled",
+    "digital_transformation_status": "Advanced",
+    "target_customers": [
+      "SMEs",
+      "Enterprises",
+      "Government Organizations",
+      "Educational Institutions"
+    ],
+    "key_features": [
+      "Role Based Access Control",
+      "Analytics Dashboard",
+      "Workflow Automation",
+      "API Integration",
+      "Mobile Accessibility",
+      "AI-driven Insights"
+    ],
+    "technology_stack": {
+      "frontend": [
+        "React",
+        "Next.js"
+      ],
+      "backend": [
+        "Python",
+        "FastAPI",
+        "Node.js"
+      ],
+      "database": [
+        "PostgreSQL",
+        "MongoDB"
+      ],
+      "cloud": [
+        "AWS",
+        "Azure"
+      ],
+      "ai": [
+        "OpenAI",
+        "Llama",
+        "LangChain"
+      ]
+    },
+    "business_challenges": [
+      "Increasing market competition",
+      "Scaling deployments globally",
+      "Maintaining regulatory compliance"
+    ],
+    "competitive_advantages": [
+      "AI-first architecture",
+      "Rapid deployment framework",
+      "Customizable workflows",
+      "Industry specific modules"
+    ],
+    "deployment_time_weeks": 6,
+    "pricing_model": {
+      "starter": "\u20b949,999 setup + subscription",
+      "enterprise": "Custom pricing"
+    },
+    "integrations_supported": [
+      "SAP",
+      "Oracle",
+      "Microsoft 365",
+      "Google Workspace",
+      "Payment Gateways"
+    ],
+    "security_and_compliance": [
+      "ISO 27001 Ready",
+      "GDPR Compatible",
+      "Role Based Security",
+      "Audit Logs"
+    ],
+    "competitors": [
+      "Zoho",
+      "Oracle",
+      "SAP",
+      "Salesforce",
+      "Freshworks"
+    ],
+    "data_sources": [
+      "website",
+      "linkedin",
+      "news",
+      "customer_feedback"
+    ],
+    "emails": [
+      "sales@orbitavanya.com",
+      "support@orbitavanya.com",
+      "partnerships@orbitavanya.com"
+    ],
+    "executive_summary": "E-Commerce Platform by Orbit Avanya LLP enables organizations to modernize operations, improve productivity, and leverage AI for data-driven decision making.",
+    "external_structured_insights": {
+      "value_proposition": "Enterprise-grade E-Commerce Platform with AI, analytics, automation, and seamless integrations.",
+      "products_and_services": [
+        "E-Commerce Platform"
+      ],
+      "implementation_support": true,
+      "managed_services": true,
+      "customer_success_program": true
+    }
+  },
+  {
+    "_id": {
+      "$oid": "orbitavanya011"
+    },
+    "company_slug": "orbit-avanya-school-management-system",
+    "company_name": "Orbit Avanya LLP",
+    "industry_domain": "Education",
+    "product_name": "School Management System",
+    "about_text": "Orbit Avanya LLP delivers School Management System solutions designed for digital transformation, automation, analytics, and operational efficiency.",
+    "company_overview": {
+      "headquarters": "Pune, Maharashtra, India",
+      "company_type": "Limited Liability Partnership",
+      "business_model": "SaaS + Enterprise Implementation + Managed Services",
+      "delivery_model": [
+        "Cloud",
+        "On-Premise",
+        "Hybrid"
+      ]
+    },
+    "ai_adoption_level": "Scaled",
+    "digital_transformation_status": "Advanced",
+    "target_customers": [
+      "SMEs",
+      "Enterprises",
+      "Government Organizations",
+      "Educational Institutions"
+    ],
+    "key_features": [
+      "Role Based Access Control",
+      "Analytics Dashboard",
+      "Workflow Automation",
+      "API Integration",
+      "Mobile Accessibility",
+      "AI-driven Insights"
+    ],
+    "technology_stack": {
+      "frontend": [
+        "React",
+        "Next.js"
+      ],
+      "backend": [
+        "Python",
+        "FastAPI",
+        "Node.js"
+      ],
+      "database": [
+        "PostgreSQL",
+        "MongoDB"
+      ],
+      "cloud": [
+        "AWS",
+        "Azure"
+      ],
+      "ai": [
+        "OpenAI",
+        "Llama",
+        "LangChain"
+      ]
+    },
+    "business_challenges": [
+      "Increasing market competition",
+      "Scaling deployments globally",
+      "Maintaining regulatory compliance"
+    ],
+    "competitive_advantages": [
+      "AI-first architecture",
+      "Rapid deployment framework",
+      "Customizable workflows",
+      "Industry specific modules"
+    ],
+    "deployment_time_weeks": 6,
+    "pricing_model": {
+      "starter": "\u20b949,999 setup + subscription",
+      "enterprise": "Custom pricing"
+    },
+    "integrations_supported": [
+      "SAP",
+      "Oracle",
+      "Microsoft 365",
+      "Google Workspace",
+      "Payment Gateways"
+    ],
+    "security_and_compliance": [
+      "ISO 27001 Ready",
+      "GDPR Compatible",
+      "Role Based Security",
+      "Audit Logs"
+    ],
+    "competitors": [
+      "Zoho",
+      "Oracle",
+      "SAP",
+      "Salesforce",
+      "Freshworks"
+    ],
+    "data_sources": [
+      "website",
+      "linkedin",
+      "news",
+      "customer_feedback"
+    ],
+    "emails": [
+      "sales@orbitavanya.com",
+      "support@orbitavanya.com",
+      "partnerships@orbitavanya.com"
+    ],
+    "executive_summary": "School Management System by Orbit Avanya LLP enables organizations to modernize operations, improve productivity, and leverage AI for data-driven decision making.",
+    "external_structured_insights": {
+      "value_proposition": "Enterprise-grade School Management System with AI, analytics, automation, and seamless integrations.",
+      "products_and_services": [
+        "School Management System"
+      ],
+      "implementation_support": true,
+      "managed_services": true,
+      "customer_success_program": true
+    }
+  },
+  {
+    "_id": {
+      "$oid": "orbitavanya012"
+    },
+    "company_slug": "orbit-avanya-payroll-management-system",
+    "company_name": "Orbit Avanya LLP",
+    "industry_domain": "Finance",
+    "product_name": "Payroll Management System",
+    "about_text": "Orbit Avanya LLP delivers Payroll Management System solutions designed for digital transformation, automation, analytics, and operational efficiency.",
+    "company_overview": {
+      "headquarters": "Pune, Maharashtra, India",
+      "company_type": "Limited Liability Partnership",
+      "business_model": "SaaS + Enterprise Implementation + Managed Services",
+      "delivery_model": [
+        "Cloud",
+        "On-Premise",
+        "Hybrid"
+      ]
+    },
+    "ai_adoption_level": "Scaled",
+    "digital_transformation_status": "Advanced",
+    "target_customers": [
+      "SMEs",
+      "Enterprises",
+      "Government Organizations",
+      "Educational Institutions"
+    ],
+    "key_features": [
+      "Role Based Access Control",
+      "Analytics Dashboard",
+      "Workflow Automation",
+      "API Integration",
+      "Mobile Accessibility",
+      "AI-driven Insights"
+    ],
+    "technology_stack": {
+      "frontend": [
+        "React",
+        "Next.js"
+      ],
+      "backend": [
+        "Python",
+        "FastAPI",
+        "Node.js"
+      ],
+      "database": [
+        "PostgreSQL",
+        "MongoDB"
+      ],
+      "cloud": [
+        "AWS",
+        "Azure"
+      ],
+      "ai": [
+        "OpenAI",
+        "Llama",
+        "LangChain"
+      ]
+    },
+    "business_challenges": [
+      "Increasing market competition",
+      "Scaling deployments globally",
+      "Maintaining regulatory compliance"
+    ],
+    "competitive_advantages": [
+      "AI-first architecture",
+      "Rapid deployment framework",
+      "Customizable workflows",
+      "Industry specific modules"
+    ],
+    "deployment_time_weeks": 6,
+    "pricing_model": {
+      "starter": "\u20b949,999 setup + subscription",
+      "enterprise": "Custom pricing"
+    },
+    "integrations_supported": [
+      "SAP",
+      "Oracle",
+      "Microsoft 365",
+      "Google Workspace",
+      "Payment Gateways"
+    ],
+    "security_and_compliance": [
+      "ISO 27001 Ready",
+      "GDPR Compatible",
+      "Role Based Security",
+      "Audit Logs"
+    ],
+    "competitors": [
+      "Zoho",
+      "Oracle",
+      "SAP",
+      "Salesforce",
+      "Freshworks"
+    ],
+    "data_sources": [
+      "website",
+      "linkedin",
+      "news",
+      "customer_feedback"
+    ],
+    "emails": [
+      "sales@orbitavanya.com",
+      "support@orbitavanya.com",
+      "partnerships@orbitavanya.com"
+    ],
+    "executive_summary": "Payroll Management System by Orbit Avanya LLP enables organizations to modernize operations, improve productivity, and leverage AI for data-driven decision making.",
+    "external_structured_insights": {
+      "value_proposition": "Enterprise-grade Payroll Management System with AI, analytics, automation, and seamless integrations.",
+      "products_and_services": [
+        "Payroll Management System"
+      ],
+      "implementation_support": true,
+      "managed_services": true,
+      "customer_success_program": true
+    }
+  },
+  {
+    "_id": {
+      "$oid": "orbitavanya013"
+    },
+    "company_slug": "orbit-avanya-fleet-management-system",
+    "company_name": "Orbit Avanya LLP",
+    "industry_domain": "Logistics",
+    "product_name": "Fleet Management System",
+    "about_text": "Orbit Avanya LLP delivers Fleet Management System solutions designed for digital transformation, automation, analytics, and operational efficiency.",
+    "company_overview": {
+      "headquarters": "Pune, Maharashtra, India",
+      "company_type": "Limited Liability Partnership",
+      "business_model": "SaaS + Enterprise Implementation + Managed Services",
+      "delivery_model": [
+        "Cloud",
+        "On-Premise",
+        "Hybrid"
+      ]
+    },
+    "ai_adoption_level": "Scaled",
+    "digital_transformation_status": "Advanced",
+    "target_customers": [
+      "SMEs",
+      "Enterprises",
+      "Government Organizations",
+      "Educational Institutions"
+    ],
+    "key_features": [
+      "Role Based Access Control",
+      "Analytics Dashboard",
+      "Workflow Automation",
+      "API Integration",
+      "Mobile Accessibility",
+      "AI-driven Insights"
+    ],
+    "technology_stack": {
+      "frontend": [
+        "React",
+        "Next.js"
+      ],
+      "backend": [
+        "Python",
+        "FastAPI",
+        "Node.js"
+      ],
+      "database": [
+        "PostgreSQL",
+        "MongoDB"
+      ],
+      "cloud": [
+        "AWS",
+        "Azure"
+      ],
+      "ai": [
+        "OpenAI",
+        "Llama",
+        "LangChain"
+      ]
+    },
+    "business_challenges": [
+      "Increasing market competition",
+      "Scaling deployments globally",
+      "Maintaining regulatory compliance"
+    ],
+    "competitive_advantages": [
+      "AI-first architecture",
+      "Rapid deployment framework",
+      "Customizable workflows",
+      "Industry specific modules"
+    ],
+    "deployment_time_weeks": 6,
+    "pricing_model": {
+      "starter": "\u20b949,999 setup + subscription",
+      "enterprise": "Custom pricing"
+    },
+    "integrations_supported": [
+      "SAP",
+      "Oracle",
+      "Microsoft 365",
+      "Google Workspace",
+      "Payment Gateways"
+    ],
+    "security_and_compliance": [
+      "ISO 27001 Ready",
+      "GDPR Compatible",
+      "Role Based Security",
+      "Audit Logs"
+    ],
+    "competitors": [
+      "Zoho",
+      "Oracle",
+      "SAP",
+      "Salesforce",
+      "Freshworks"
+    ],
+    "data_sources": [
+      "website",
+      "linkedin",
+      "news",
+      "customer_feedback"
+    ],
+    "emails": [
+      "sales@orbitavanya.com",
+      "support@orbitavanya.com",
+      "partnerships@orbitavanya.com"
+    ],
+    "executive_summary": "Fleet Management System by Orbit Avanya LLP enables organizations to modernize operations, improve productivity, and leverage AI for data-driven decision making.",
+    "external_structured_insights": {
+      "value_proposition": "Enterprise-grade Fleet Management System with AI, analytics, automation, and seamless integrations.",
+      "products_and_services": [
+        "Fleet Management System"
+      ],
+      "implementation_support": true,
+      "managed_services": true,
+      "customer_success_program": true
+    }
+  },
+  {
+    "_id": {
+      "$oid": "orbitavanya014"
+    },
+    "company_slug": "orbit-avanya-citizen-service-portal",
+    "company_name": "Orbit Avanya LLP",
+    "industry_domain": "Government",
+    "product_name": "Citizen Service Portal",
+    "about_text": "Orbit Avanya LLP delivers Citizen Service Portal solutions designed for digital transformation, automation, analytics, and operational efficiency.",
+    "company_overview": {
+      "headquarters": "Pune, Maharashtra, India",
+      "company_type": "Limited Liability Partnership",
+      "business_model": "SaaS + Enterprise Implementation + Managed Services",
+      "delivery_model": [
+        "Cloud",
+        "On-Premise",
+        "Hybrid"
+      ]
+    },
+    "ai_adoption_level": "Scaled",
+    "digital_transformation_status": "Advanced",
+    "target_customers": [
+      "SMEs",
+      "Enterprises",
+      "Government Organizations",
+      "Educational Institutions"
+    ],
+    "key_features": [
+      "Role Based Access Control",
+      "Analytics Dashboard",
+      "Workflow Automation",
+      "API Integration",
+      "Mobile Accessibility",
+      "AI-driven Insights"
+    ],
+    "technology_stack": {
+      "frontend": [
+        "React",
+        "Next.js"
+      ],
+      "backend": [
+        "Python",
+        "FastAPI",
+        "Node.js"
+      ],
+      "database": [
+        "PostgreSQL",
+        "MongoDB"
+      ],
+      "cloud": [
+        "AWS",
+        "Azure"
+      ],
+      "ai": [
+        "OpenAI",
+        "Llama",
+        "LangChain"
+      ]
+    },
+    "business_challenges": [
+      "Increasing market competition",
+      "Scaling deployments globally",
+      "Maintaining regulatory compliance"
+    ],
+    "competitive_advantages": [
+      "AI-first architecture",
+      "Rapid deployment framework",
+      "Customizable workflows",
+      "Industry specific modules"
+    ],
+    "deployment_time_weeks": 6,
+    "pricing_model": {
+      "starter": "\u20b949,999 setup + subscription",
+      "enterprise": "Custom pricing"
+    },
+    "integrations_supported": [
+      "SAP",
+      "Oracle",
+      "Microsoft 365",
+      "Google Workspace",
+      "Payment Gateways"
+    ],
+    "security_and_compliance": [
+      "ISO 27001 Ready",
+      "GDPR Compatible",
+      "Role Based Security",
+      "Audit Logs"
+    ],
+    "competitors": [
+      "Zoho",
+      "Oracle",
+      "SAP",
+      "Salesforce",
+      "Freshworks"
+    ],
+    "data_sources": [
+      "website",
+      "linkedin",
+      "news",
+      "customer_feedback"
+    ],
+    "emails": [
+      "sales@orbitavanya.com",
+      "support@orbitavanya.com",
+      "partnerships@orbitavanya.com"
+    ],
+    "executive_summary": "Citizen Service Portal by Orbit Avanya LLP enables organizations to modernize operations, improve productivity, and leverage AI for data-driven decision making.",
+    "external_structured_insights": {
+      "value_proposition": "Enterprise-grade Citizen Service Portal with AI, analytics, automation, and seamless integrations.",
+      "products_and_services": [
+        "Citizen Service Portal"
+      ],
+      "implementation_support": true,
+      "managed_services": true,
+      "customer_success_program": true
+    }
+  },
+  {
+    "_id": {
+      "$oid": "orbitavanya015"
+    },
+    "company_slug": "orbit-avanya-ai-analytics-dashboard",
+    "company_name": "Orbit Avanya LLP",
+    "industry_domain": "AI",
+    "product_name": "AI Analytics Dashboard",
+    "about_text": "Orbit Avanya LLP delivers AI Analytics Dashboard solutions designed for digital transformation, automation, analytics, and operational efficiency.",
+    "company_overview": {
+      "headquarters": "Pune, Maharashtra, India",
+      "company_type": "Limited Liability Partnership",
+      "business_model": "SaaS + Enterprise Implementation + Managed Services",
+      "delivery_model": [
+        "Cloud",
+        "On-Premise",
+        "Hybrid"
+      ]
+    },
+    "ai_adoption_level": "Scaled",
+    "digital_transformation_status": "Advanced",
+    "target_customers": [
+      "SMEs",
+      "Enterprises",
+      "Government Organizations",
+      "Educational Institutions"
+    ],
+    "key_features": [
+      "Role Based Access Control",
+      "Analytics Dashboard",
+      "Workflow Automation",
+      "API Integration",
+      "Mobile Accessibility",
+      "AI-driven Insights"
+    ],
+    "technology_stack": {
+      "frontend": [
+        "React",
+        "Next.js"
+      ],
+      "backend": [
+        "Python",
+        "FastAPI",
+        "Node.js"
+      ],
+      "database": [
+        "PostgreSQL",
+        "MongoDB"
+      ],
+      "cloud": [
+        "AWS",
+        "Azure"
+      ],
+      "ai": [
+        "OpenAI",
+        "Llama",
+        "LangChain"
+      ]
+    },
+    "business_challenges": [
+      "Increasing market competition",
+      "Scaling deployments globally",
+      "Maintaining regulatory compliance"
+    ],
+    "competitive_advantages": [
+      "AI-first architecture",
+      "Rapid deployment framework",
+      "Customizable workflows",
+      "Industry specific modules"
+    ],
+    "deployment_time_weeks": 6,
+    "pricing_model": {
+      "starter": "\u20b949,999 setup + subscription",
+      "enterprise": "Custom pricing"
+    },
+    "integrations_supported": [
+      "SAP",
+      "Oracle",
+      "Microsoft 365",
+      "Google Workspace",
+      "Payment Gateways"
+    ],
+    "security_and_compliance": [
+      "ISO 27001 Ready",
+      "GDPR Compatible",
+      "Role Based Security",
+      "Audit Logs"
+    ],
+    "competitors": [
+      "Zoho",
+      "Oracle",
+      "SAP",
+      "Salesforce",
+      "Freshworks"
+    ],
+    "data_sources": [
+      "website",
+      "linkedin",
+      "news",
+      "customer_feedback"
+    ],
+    "emails": [
+      "sales@orbitavanya.com",
+      "support@orbitavanya.com",
+      "partnerships@orbitavanya.com"
+    ],
+    "executive_summary": "AI Analytics Dashboard by Orbit Avanya LLP enables organizations to modernize operations, improve productivity, and leverage AI for data-driven decision making.",
+    "external_structured_insights": {
+      "value_proposition": "Enterprise-grade AI Analytics Dashboard with AI, analytics, automation, and seamless integrations.",
+      "products_and_services": [
+        "AI Analytics Dashboard"
+      ],
+      "implementation_support": true,
+      "managed_services": true,
+      "customer_success_program": true
+    }
+  }
+]

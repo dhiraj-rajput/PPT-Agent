@@ -1,0 +1,93 @@
+{
+  "company_name": "The Empire Inc.",
+  "website": "https://www.linkedin.com/company/the-empire-inc/",
+  "industry": "IT Consulting / Cloud Computing / DevOps",
+  "description": "The Empire Inc. is a Tokyo-based IT technology consulting firm founded in 2013, specializing in cloud computing, Infrastructure as Code (IaC), and DevOps practices. The company works with global clients on modern IT infrastructure and software development projects. Led by founder Zack (Daisuke) Dolby (Kitagawa), who also serves as Executive Officer at Toyo Kako Co., Ltd. and Board Member at Japan OpenStack User Group.",
+  "headquarters": "Tokyo, Japan",
+  "locations": [
+    "Tokyo, Japan"
+  ],
+  "employee_count": "2-10 employees",
+  "founded_year": 2013,
+  "specialties": [
+    "IT Infrastructure",
+    "Cloud Computing",
+    "Software Development",
+    "Infrastructure as Code",
+    "DevOps"
+  ],
+  "products": [],
+  "services": [
+    "Cloud Computing Consulting",
+    "Infrastructure as Code (IaC) Implementation",
+    "DevOps Consulting",
+    "IT Infrastructure Consulting",
+    "Software Development Services"
+  ],
+  "technology_stack": [
+    "OpenStack",
+    "Python",
+    "Java",
+    "JavaScript",
+    "Go"
+  ],
+  "business_model": "Project-based IT consulting and professional services for cloud infrastructure, DevOps transformation, and software development engagements with global clients.",
+  "pricing_model": "Project-based / Time & Materials consulting rates",
+  "financial_highlights": [],
+  "leadership": [
+    "Zack (Daisuke) Dolby (Kitagawa) - Founder, The Empire Inc.; Executive Officer, Toyo Kako Co., Ltd.; Board Member, Japan OpenStack User Group"
+  ],
+  "competitors": [
+    "NTT Data",
+    "Fujitsu",
+    "NEC",
+    "Accenture Japan",
+    "Deloitte Japan",
+    "AWS Professional Services",
+    "Google Cloud Professional Services"
+  ],
+  "value_proposition": "Specialized expertise in cloud-native technologies, Infrastructure as Code, and DevOps practices with global delivery capability from Tokyo, backed by leadership involvement in OpenStack community.",
+  "rfp_strengths": [
+    "Deep technical expertise in cloud computing and DevOps",
+    "Founder's leadership role in Japan OpenStack User Group indicates community recognition",
+    "Global client experience",
+    "Multi-language technology stack capability (Python, Java, JavaScript, Go)"
+  ],
+  "rfp_weaknesses": [
+    "Very small team (2-10 employees) limits capacity for large engagements",
+    "Limited public track record / case studies",
+    "No disclosed certifications (ISO, CMMI, etc.)",
+    "Single location in Tokyo may challenge global delivery",
+    "Minimal online presence beyond LinkedIn"
+  ],
+  "opportunities": [
+    "Growing demand for cloud migration and DevOps in Japan and APAC",
+    "OpenStack expertise aligns with private/hybrid cloud trends",
+    "Potential partnerships with major cloud providers (AWS, Azure, GCP)",
+    "Expansion into managed services for recurring revenue"
+  ],
+  "challenges": [
+    "Scaling beyond founder-led model",
+    "Competing with large SI firms and cloud provider professional services",
+    "Limited brand recognition",
+    "Resource constraints for simultaneous large projects"
+  ],
+  "recent_news": [],
+  "clients": [
+    "Global clients (unspecified)"
+  ],
+  "partners": [
+    "Toyo Kako Co., Ltd.",
+    "Japan OpenStack User Group"
+  ],
+  "emails": [],
+  "phone_numbers": [],
+  "social_links": [
+    "https://www.linkedin.com/company/the-empire-inc/"
+  ],
+  "sources_used": [
+    "LinkedIn",
+    "Website (ABR - irrelevant)"
+  ],
+  "last_updated": "2026-07-16T12:46:55.372474+00:00"
+}

@@ -1,0 +1,460 @@
+{
+  "brand": {
+    "company_name": "OrbitAvanya Tech LLP",
+    "company_short": "OrbitAvanya",
+    "logo_path": "assets/logo.png",
+    "cover_graphic_path": "assets/cover_graphic.png",
+    "body_font": "Fira Sans Light",
+    "heading_font": "Fira Sans SemiBold",
+    "accent_color": "1F3864",
+    "muted_color": "595959",
+    "address_line1": "13352 Kettle Camp Rd",
+    "address_line2": "Frisco, Texas 75035",
+    "phone": "+917021950643",
+    "website": "www.orbitavanyatech.com"
+  },
+  "proposal": {
+    "title": "Partnership Proposal",
+    "subtitle": "Strategic Partnership Proposal",
+    "prepared_for": "The Faciem-Valorem Corporation",
+    "prepared_by": "Ranjeet Kumar — Founder & CEO, OrbitAvanya Tech LLP (AvanyaEdge)",
+    "engagement_ref": "OAT-CES-2026-THE_FACIEM_VALOREM_CORPORATION-FULL",
+    "proposal_date": "July 14, 2026",
+    "validity": "90 days from proposal date",
+    "confidentiality_text": "This document contains confidential information of OrbitAvanya Tech LLP and its affiliates and/or licensors (“OrbitAvanya”), which may include trade secrets, proprietary methodology, and business information. The recipient acknowledges that this information has been developed by OrbitAvanya as valuable trade secrets and shall remain its exclusive property, to be disclosed only to persons who have a need to know. The recipient agrees not to copy or reproduce any information supplied herein without prior written permission from an authorized representative of OrbitAvanya.\n\nReciprocally, OrbitAvanya acknowledges that information shared by the recipient during proposal review and any subsequent engagement constitutes confidential information of the recipient, and agrees to protect it to the same standard and to use it solely for the purposes of the engagement contemplated herein."
+  },
+  "toc": {
+    "heading": "Content"
+  },
+  "sections": [
+    {
+      "title": "Executive Summary",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP is pleased to propose a strategic partnership with The Faciem-Valorem Corporation to create a powerhouse of **integrated technology services**. By combining OrbitAvanya's cutting-edge software engineering and proprietary product suite with The Faciem-Valorem Corporation's established market presence, we aim to deliver high-impact, scalable digital transformations for a global clientele."
+        },
+        {
+          "type": "paragraph",
+          "text": "Our proposal focuses on bridging the gap between high-level business consultancy and deep-tier technical execution. Through this collaboration, we will integrate the **OrbitAvanya ERP** and **AI Analytics Dashboard** into The Faciem-Valorem Corporation's service portfolio, allowing for a **turnkey digital ecosystem** that drives operational efficiency and data-driven decision-making for end-users."
+        },
+        {
+          "type": "paragraph",
+          "text": "This partnership is designed to be mutually beneficial, leveraging a **joint-go-to-market strategy** to capture untapped market segments. By aligning our technical agility with your corporate reach, we can significantly reduce time-to-market for complex software solutions while ensuring **enterprise-grade stability and scalability**."
+        },
+        {
+          "type": "subheading",
+          "text": "Key Highlights"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Accelerated Revenue Growth** through the introduction of high-margin proprietary software products.",
+            "**Enhanced Service Depth** by integrating OrbitAvanya's full-stack engineering capabilities into existing offerings.",
+            "**Reduced Operational Overhead** via the deployment of the **OrbitAvanya ERP** for internal and client optimization.",
+            "**Competitive Edge** in the AI/ML space using the **OrbitAvanya AI Analytics Dashboard**.",
+            "**Seamless Cloud Transition** for legacy clients using the **OrbitAvanya Cloud Migrator**.",
+            "**Joint Market Expansion** targeting government and enterprise sectors via the **e-Gov Portal** framework."
+          ]
+        },
+        {
+          "type": "signature",
+          "name": "Ranjeet Kumar Singh",
+          "title": "Founder & CEO",
+          "company": "OrbitAvanya Tech LLP (AvanyaEdge)"
+        }
+      ]
+    },
+    {
+      "title": "Strategic Context",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "In an era of rapid digitalization, the market demands a seamless blend of strategic business value and robust technical implementation. The Faciem-Valorem Corporation possesses the strategic vision and market positioning required to lead industry trends, while OrbitAvanya Tech LLP provides the **technical engine** to materialize that vision.\n\nWe see a significant opportunity to transition from a vendor-client relationship to a **Strategic Alliance**, where joint value propositions allow both entities to bid for larger, more complex contracts that require both high-level management and **deep-stack software development**."
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 1 · Technical Execution Gap"
+        },
+        {
+          "type": "paragraph",
+          "text": "While The Faciem-Valorem Corporation excels in service delivery and industry positioning, there is a clear opportunity to enhance the **technical delivery layer** to avoid reliance on third-party fragmented vendors."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Need for a **unified technical partner** to ensure architectural consistency.",
+            "Opportunity to implement **custom-built software** rather than off-the-shelf limitations."
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 2 · Data Monetization Opportunity"
+        },
+        {
+          "type": "paragraph",
+          "text": "Many of the clients served by The Faciem-Valorem Corporation likely possess vast amounts of untapped data that could be converted into actionable insights."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Integration of **OrbitAvanya AI Analytics** to provide predictive insights.",
+            "Creation of **automated reporting dashboards** to increase client retention and LTV."
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Scope of Work",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The proposed collaboration will focus on three primary pillars: **Product Integration**, **Joint Service Delivery**, and **Co-Innovation**. We will work together to bundle OrbitAvanya's proprietary tools with The Faciem-Valorem Corporation's strategic services to create a unique 'Value-Tech' offering."
+        },
+        {
+          "type": "subheading",
+          "text": "Deliverables"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Jointly branded **Digital Transformation Suite**",
+            "Integrated **ERP & Analytics Implementation Framework**",
+            "Co-developed **Industry-Specific SaaS Modules**",
+            "Shared **Technical Resource Pool** for rapid prototyping",
+            "Quarterly **Joint Innovation Roadmap**"
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Technical Requirements Alignment"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "RFP Requirement",
+            "Our Solution",
+            "Alignment"
+          ],
+          "rows": [
+            [
+              "Need for scalable enterprise resource planning",
+              "OrbitAvanya ERP",
+              "Full Synergy"
+            ],
+            [
+              "Advanced data visualization and predictive modeling",
+              "OrbitAvanya AI Analytics Dashboard",
+              "Full Synergy"
+            ],
+            [
+              "Modernization of legacy infrastructure",
+              "OrbitAvanya Cloud Migrator",
+              "Full Synergy"
+            ],
+            [
+              "Rapid development of custom web/mobile portals",
+              "Full-stack React/Node.js/Python Engineering",
+              "Full Synergy"
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            3.0,
+            1.5
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Our Proposed Solution",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Our joint solution centers on the creation of a **Comprehensive Digital Ecosystem**. Instead of offering standalone services, we will propose a holistic transformation package where The Faciem-Valorem Corporation leads the strategic roadmap and OrbitAvanya Tech LLP implements the **technical architecture** using our proven product suite."
+        },
+        {
+          "type": "paragraph",
+          "text": "For instance, a client requiring operational overhaul would receive a strategic audit from The Faciem-Valorem Corporation, followed by the deployment of the **OrbitAvanya ERP** for process automation and the **AI Analytics Dashboard** for executive oversight. This creates a **closed-loop value chain** where strategy is immediately validated by technical execution."
+        },
+        {
+          "type": "paragraph",
+          "text": "Furthermore, we will leverage our **modern tech stack (Next.js, FastAPI, AWS)** to ensure that all joint offerings are cloud-native, secure, and capable of handling massive scale, providing The Faciem-Valorem Corporation with a **technological moat** against competitors."
+        },
+        {
+          "type": "subheading",
+          "text": "Core Capabilities"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Capability",
+            "Description"
+          ],
+          "rows": [
+            [
+              "Full-Stack Engineering",
+              "Expertise in React, Next.js, and Node.js for high-performance frontend and backend systems."
+            ],
+            [
+              "AI & Data Science",
+              "Advanced Python-based analytics and machine learning integration via FastAPI."
+            ],
+            [
+              "Cloud Architecture",
+              "End-to-end AWS deployment, migration, and serverless optimization."
+            ],
+            [
+              "Enterprise Product Suite",
+              "Ready-to-deploy ERP, e-Gov portals, and Cloud Migration tools."
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            4.5
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Technology Stack"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "React",
+            "Next.js",
+            "Python",
+            "FastAPI",
+            "Node.js",
+            "PostgreSQL",
+            "MongoDB",
+            "AWS"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Implementation Timeline",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "We propose a phased integration approach to ensure alignment and minimize risk, moving from a pilot project to a full-scale strategic alliance."
+        },
+        {
+          "type": "subheading",
+          "text": "Engagement Timeline"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Phase",
+            "Duration",
+            "Focus Area",
+            "Deliverables"
+          ],
+          "rows": [
+            [
+              "Phase 1: Alignment",
+              "Month 1",
+              "Initial Alignment & Joint Offering Definition",
+              "Partnership Agreement, Joint Value Proposition Document, Pilot Client Identification"
+            ],
+            [
+              "Phase 2: Integration",
+              "Month 2",
+              "Technical Integration & Product Bundling",
+              "Integrated Service Catalog, Technical API Mapping, Co-branded Marketing Collateral"
+            ],
+            [
+              "Phase 3: Market Launch",
+              "Month 3",
+              "Joint Go-To-Market Execution",
+              "First 3 Joint Client Onboardings, Performance Review, Scaling Roadmap"
+            ]
+          ],
+          "col_widths": [
+            1.0,
+            1.2,
+            2.3,
+            2.5
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Total Estimated Duration: 3 Months (Phase 1-3)"
+        }
+      ]
+    },
+    {
+      "title": "Your Investment",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "We propose a **Flexible Revenue-Sharing Model** to ensure mutual skin-in-the-game. This minimizes upfront capital expenditure while maximizing the incentive for joint growth."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Item / Deliverable",
+            "Unit",
+            "Qty",
+            "Unit Price",
+            "Total"
+          ],
+          "rows": [
+            [
+              "Joint Product Licensing",
+              "RevShare",
+              "N/A",
+              "Percentage based on contract value",
+              "TBD"
+            ],
+            [
+              "Custom Engineering Services",
+              "Co-Investment",
+              "N/A",
+              "Blended Hourly/Project Rate",
+              "TBD"
+            ],
+            [
+              "Strategic Consulting",
+              "RevShare",
+              "N/A",
+              "Percentage of Management Fee",
+              "TBD"
+            ]
+          ],
+          "col_widths": [
+            2.8,
+            1.0,
+            0.7,
+            1.2,
+            1.3
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Service Level Agreement & Terms"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Mutual Non-Disclosure Agreement (NDA)** to protect proprietary IP.",
+            "**Dedicated Account Management** with bi-weekly synchronization meetings.",
+            "**Quality Assurance Guarantee** on all joint technical deliverables.",
+            "**Priority Resource Allocation** for joint-venture projects.",
+            "**Joint Governance Committee** to resolve strategic conflicts."
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Company Profile",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP (AvanyaEdge) is a technology services firm specializing in enterprise software development, digital transformation, e-governance platforms, and AI/ML solutions. Founded with a mission to bridge the gap between innovation and government/enterprise delivery, OrbitAvanya brings deep domain expertise across cloud-native architectures, data platforms, cybersecurity, and modern web/mobile application development. Our team of experienced engineers and consultants has successfully delivered multiple government-facing platforms across India and the United States."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Profile Detail",
+            "Value"
+          ],
+          "rows": [
+            [
+              "Company Name",
+              "OrbitAvanya Tech LLP"
+            ],
+            [
+              "Type",
+              "Limited Liability Partnership (LLP)"
+            ],
+            [
+              "Headquarters",
+              "Frisco, Texas 75035, USA"
+            ],
+            [
+              "India Office",
+              "Pune, Maharashtra, India"
+            ],
+            [
+              "Website",
+              "www.orbitavanyatech.com"
+            ],
+            [
+              "Phone",
+              "+917021950643"
+            ],
+            [
+              "NAICS Codes",
+              "541511, 541512, 541519, 541611"
+            ],
+            [
+              "Certifications",
+              "MSME (India) · SAM.gov Registered"
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            4.5
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Appendix",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "subheading",
+          "text": "Appendix A — Past Performance"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Project",
+            "Client",
+            "Period",
+            "Relevance"
+          ],
+          "rows": [
+            [
+              "Enterprise ERP Deployment",
+              "Confidential Enterprise Client",
+              "2023",
+              "Demonstrated ability to scale internal operations using **OrbitAvanya ERP**."
+            ],
+            [
+              "AI-Driven Analytics Suite",
+              "Confidential Tech Firm",
+              "2022-2023",
+              "Implemented **AI Analytics Dashboard** resulting in 20% increase in operational efficiency."
+            ]
+          ],
+          "col_widths": [
+            2.2,
+            1.8,
+            1.0,
+            2.0
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Appendix B — Team & Leadership"
+        },
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP's leadership team comprises professionals with extensive backgrounds in enterprise software delivery, cloud architecture, AI/ML systems, and government program management. Full team profiles and resumes are available upon request."
+        }
+      ]
+    }
+  ]
+}

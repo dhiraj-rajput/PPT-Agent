@@ -1,0 +1,449 @@
+{
+  "brand": {
+    "company_name": "OrbitAvanya Tech LLP",
+    "company_short": "OrbitAvanya",
+    "logo_path": "assets/logo.png",
+    "cover_graphic_path": "assets/cover_graphic.png",
+    "body_font": "Fira Sans Light",
+    "heading_font": "Fira Sans SemiBold",
+    "accent_color": "1F3864",
+    "muted_color": "595959",
+    "address_line1": "13352 Kettle Camp Rd",
+    "address_line2": "Frisco, Texas 75035",
+    "phone": "+917021950643",
+    "website": "www.orbitavanyatech.com"
+  },
+  "proposal": {
+    "title": "Partnership Proposal",
+    "subtitle": "Strategic Partnership Proposal",
+    "prepared_for": "Scientific Cyber Security Association",
+    "prepared_by": "Ranjeet Kumar — Founder & CEO, OrbitAvanya Tech LLP (AvanyaEdge)",
+    "engagement_ref": "OAT-CES-2026-SCIENTIFIC_CYBER_SECURITY_ASSOCIATION-FULL",
+    "proposal_date": "July 14, 2026",
+    "validity": "90 days from proposal date",
+    "confidentiality_text": "This document contains confidential information of OrbitAvanya Tech LLP and its affiliates and/or licensors (“OrbitAvanya”), which may include trade secrets, proprietary methodology, and business information. The recipient acknowledges that this information has been developed by OrbitAvanya as valuable trade secrets and shall remain its exclusive property, to be disclosed only to persons who have a need to know. The recipient agrees not to copy or reproduce any information supplied herein without prior written permission from an authorized representative of OrbitAvanya.\n\nReciprocally, OrbitAvanya acknowledges that information shared by the recipient during proposal review and any subsequent engagement constitutes confidential information of the recipient, and agrees to protect it to the same standard and to use it solely for the purposes of the engagement contemplated herein."
+  },
+  "toc": {
+    "heading": "Content"
+  },
+  "sections": [
+    {
+      "title": "Executive Summary",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP is pleased to propose a strategic partnership with the Scientific Cyber Security Association (SCSA) to bridge the gap between high-level cybersecurity research and scalable, production-ready software implementation. By combining SCSA's deep domain expertise in cyber security with OrbitAvanya's cutting-edge software engineering capabilities, we can create a powerhouse of **secure-by-design digital transformation services**."
+        },
+        {
+          "type": "paragraph",
+          "text": "Our objective is to transform SCSA's theoretical frameworks and security standards into tangible, deployable products. OrbitAvanya's proficiency in **AI Analytics Dashboards** and **Cloud Migration** provides the necessary infrastructure to operationalize SCSA's security protocols, ensuring that clients receive not just a security audit, but a fully integrated, secure technical ecosystem."
+        },
+        {
+          "type": "paragraph",
+          "text": "This collaboration aims to establish a **Joint Value Proposition** centered on 'Resilient Innovation.' Together, we will offer a comprehensive suite of services ranging from secure ERP deployments to AI-driven threat monitoring, significantly **increasing market reach** and providing a competitive edge in the rapidly evolving landscape of national and enterprise security."
+        },
+        {
+          "type": "subheading",
+          "text": "Key Highlights"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Accelerated Time-to-Market** for SCSA's security frameworks through OrbitAvanya's rapid prototyping and development cycles.",
+            "**Enhanced Product Depth** by integrating OrbitAvanya's proprietary ERP and e-Gov portals with SCSA's rigorous security certifications.",
+            "**Mutual Revenue Growth** through a joint go-to-market strategy targeting government and high-compliance enterprise sectors.",
+            "**Technical Synergy** combining SCSA's security intelligence with OrbitAvanya's full-stack expertise in **React, Python, and AWS**.",
+            "**Comprehensive Risk Mitigation** by embedding security at the architectural level of all custom software solutions.",
+            "**Scalable Infrastructure** leveraging OrbitAvanya's Cloud Migrator to transition legacy systems into secure, modern environments."
+          ]
+        },
+        {
+          "type": "signature",
+          "name": "Ranjeet Kumar Singh",
+          "title": "Founder & CEO",
+          "company": "OrbitAvanya Tech LLP (AvanyaEdge)"
+        }
+      ]
+    },
+    {
+      "title": "Strategic Context",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The current global threat landscape demands a shift from 'reactive' security to 'proactive' resilience. While SCSA provides the critical scientific and strategic oversight for cybersecurity, there is a significant market opportunity to provide the **end-to-end technical execution** that turns these strategies into operational software.\n\nBy aligning OrbitAvanya's agile development engine with SCSA's security authority, we can capture a larger share of the **GovTech and Enterprise Security** markets, offering a seamless transition from security consulting to secure software deployment."
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 1 · The Implementation Gap"
+        },
+        {
+          "type": "paragraph",
+          "text": "Many cybersecurity associations provide world-class standards but lack the internal software engineering capacity to build the tools that enforce those standards."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Need for **custom-built security dashboards** to visualize threat intelligence.",
+            "Requirement for **secure API gateways** to connect disparate security tools.",
+            "Demand for **automated compliance monitoring** within ERP systems."
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 2 · Digital Transformation Risks"
+        },
+        {
+          "type": "paragraph",
+          "text": "Enterprises migrating to the cloud often face security vulnerabilities during the transition phase, creating a need for a 'Secure Migration' package."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Opportunity to combine **OrbitAvanya Cloud Migrator** with SCSA's security audits.",
+            "Potential for **Zero-Trust Architecture** implementation during software modernization.",
+            "Need for **hardened e-Gov portals** for public sector digital services."
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Scope of Work",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The proposed collaboration will focus on the co-development of 'Secure-Tech' bundles. OrbitAvanya will act as the primary technical implementation partner, translating SCSA's security requirements into scalable software products and services."
+        },
+        {
+          "type": "subheading",
+          "text": "Deliverables"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Joint Secure-ERP Offering**: A version of OrbitAvanya ERP certified and hardened by SCSA.",
+            "**AI-Driven Security Analytics Dashboard**: A joint product for real-time threat visualization.",
+            "**Secure Cloud Migration Framework**: A combined service offering migration and security certification.",
+            "**Hardened e-Gov Portal**: A secure digital gateway for government services with SCSA-validated protocols.",
+            "**Joint Technical Whitepapers**: Co-authored research on the intersection of AI and Cybersecurity."
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Technical Requirements Alignment"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "RFP Requirement",
+            "Our Solution",
+            "Alignment"
+          ],
+          "rows": [
+            [
+              "Operationalizing Security Frameworks",
+              "OrbitAvanya's **FastAPI and Node.js** backend expertise for rapid tool development",
+              "Full Synergy"
+            ],
+            [
+              "Secure Data Visualization",
+              "OrbitAvanya **AI Analytics Dashboard** using React and Next.js",
+              "Full Synergy"
+            ],
+            [
+              "Scalable Secure Hosting",
+              "OrbitAvanya's **AWS Cloud Architecture** and migration services",
+              "Full Synergy"
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            3.0,
+            1.5
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Our Proposed Solution",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Our joint solution revolves around the creation of a **'Secure Digital Ecosystem'**. Instead of offering security as a layer added at the end, we will integrate SCSA's security intelligence directly into the development lifecycle of OrbitAvanya's products. This means every line of code in our **OrbitAvanya ERP** or **e-Gov Portal** will be mapped against SCSA's scientific security standards."
+        },
+        {
+          "type": "paragraph",
+          "text": "We will launch a joint service offering called **'Resilient Migration'**, where OrbitAvanya handles the technical shift to the cloud using our **Cloud Migrator**, while SCSA provides the security validation and certification. This removes the friction for clients who are hesitant to move to the cloud due to security fears."
+        },
+        {
+          "type": "paragraph",
+          "text": "Furthermore, we will develop a **Joint AI Security Command Center**. By leveraging OrbitAvanya's **AI Analytics** capabilities and SCSA's threat intelligence, we can provide clients with a dashboard that not only detects anomalies but suggests scientific remediations based on SCSA's research."
+        },
+        {
+          "type": "subheading",
+          "text": "Core Capabilities"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Capability",
+            "Description"
+          ],
+          "rows": [
+            [
+              "Full-Stack Engineering",
+              "Expertise in **React, Next.js, and Python** to build high-performance, scalable applications."
+            ],
+            [
+              "Enterprise Product Suite",
+              "Proprietary **ERP, AI Dashboards, and e-Gov portals** ready for security hardening."
+            ],
+            [
+              "Cloud Orchestration",
+              "Advanced **AWS deployment** and migration strategies to ensure high availability and security."
+            ],
+            [
+              "Rapid Prototyping",
+              "Ability to turn SCSA's theoretical security models into **Minimum Viable Products (MVPs)** in weeks."
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            4.5
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Technology Stack"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "React",
+            "Next.js",
+            "Python",
+            "FastAPI",
+            "Node.js",
+            "PostgreSQL",
+            "MongoDB",
+            "AWS"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Implementation Timeline",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The partnership will be rolled out in a phased approach to ensure alignment and quality of the joint offerings."
+        },
+        {
+          "type": "subheading",
+          "text": "Engagement Timeline"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Phase",
+            "Duration",
+            "Focus Area",
+            "Deliverables"
+          ],
+          "rows": [
+            [
+              "Phase 1: Alignment",
+              "Month 1",
+              "Initial Alignment & Joint Offering Definition",
+              "Partnership Agreement, Joint Value Proposition Document, and Product Roadmap."
+            ],
+            [
+              "Phase 2: Integration",
+              "Month 2-3",
+              "Hardening OrbitAvanya Products",
+              "SCSA-Certified ERP Beta, Secure Cloud Migration Workflow."
+            ],
+            [
+              "Phase 3: Market Launch",
+              "Month 4-6",
+              "Joint Go-To-Market Execution",
+              "Joint Marketing Campaign, First 3 Pilot Client Onboardings."
+            ]
+          ],
+          "col_widths": [
+            1.0,
+            1.2,
+            2.3,
+            2.5
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Total Estimated Duration: 3-6 Months (Phase 1)"
+        }
+      ]
+    },
+    {
+      "title": "Your Investment",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "We propose a **Revenue-Share and Co-Investment model**. OrbitAvanya will invest the engineering hours for product development, while SCSA provides the intellectual property and certification authority. Revenue from joint offerings will be split based on the contribution of the lead partner in each specific deal."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Item / Deliverable",
+            "Unit",
+            "Qty",
+            "Unit Price",
+            "Total"
+          ],
+          "rows": [
+            [
+              "Joint Product Development",
+              "Co-Investment",
+              "N/A",
+              "N/A",
+              "Shared Resource Allocation"
+            ],
+            [
+              "Joint Service Sales",
+              "RevShare",
+              "N/A",
+              "N/A",
+              "Percentage based on Lead Generation"
+            ]
+          ],
+          "col_widths": [
+            2.8,
+            1.0,
+            0.7,
+            1.2,
+            1.3
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Service Level Agreement & Terms"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Mutual Non-Disclosure Agreement (NDA)** for all shared IP and client data.",
+            "**Joint Steering Committee** meetings every two weeks to track milestone progress.",
+            "**Quality Assurance Guarantee**: All joint products must pass SCSA's security audit before release.",
+            "**Resource Commitment**: Dedicated project managers from both OrbitAvanya and SCSA."
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Company Profile",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP (AvanyaEdge) is a technology services firm specializing in enterprise software development, digital transformation, e-governance platforms, and AI/ML solutions. Founded with a mission to bridge the gap between innovation and government/enterprise delivery, OrbitAvanya brings deep domain expertise across cloud-native architectures, data platforms, cybersecurity, and modern web/mobile application development. Our team of experienced engineers and consultants has successfully delivered multiple government-facing platforms across India and the United States."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Profile Detail",
+            "Value"
+          ],
+          "rows": [
+            [
+              "Company Name",
+              "OrbitAvanya Tech LLP"
+            ],
+            [
+              "Type",
+              "Limited Liability Partnership (LLP)"
+            ],
+            [
+              "Headquarters",
+              "Frisco, Texas 75035, USA"
+            ],
+            [
+              "India Office",
+              "Pune, Maharashtra, India"
+            ],
+            [
+              "Website",
+              "www.orbitavanyatech.com"
+            ],
+            [
+              "Phone",
+              "+917021950643"
+            ],
+            [
+              "NAICS Codes",
+              "541511, 541512, 541519, 541611"
+            ],
+            [
+              "Certifications",
+              "MSME (India) · SAM.gov Registered"
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            4.5
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Appendix",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "subheading",
+          "text": "Appendix A — Past Performance"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Project",
+            "Client",
+            "Period",
+            "Relevance"
+          ],
+          "rows": [
+            [
+              "Enterprise ERP Deployment",
+              "Confidential",
+              "2023",
+              "Demonstrated ability to deploy complex business logic at scale, now ready for SCSA security integration."
+            ],
+            [
+              "AI Analytics Implementation",
+              "Confidential",
+              "2022-2023",
+              "Proven track record in building data-heavy dashboards that can be pivoted for security threat monitoring."
+            ]
+          ],
+          "col_widths": [
+            2.2,
+            1.8,
+            1.0,
+            2.0
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Appendix B — Team & Leadership"
+        },
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP's leadership team comprises professionals with extensive backgrounds in enterprise software delivery, cloud architecture, AI/ML systems, and government program management. Full team profiles and resumes are available upon request."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,582 @@
+{
+  "brand": {
+    "company_name": "OrbitAvanya Tech LLP",
+    "company_short": "OrbitAvanya",
+    "logo_path": "assets/logo.png",
+    "cover_graphic_path": "assets/cover_graphic.png",
+    "body_font": "Fira Sans Light",
+    "heading_font": "Fira Sans SemiBold",
+    "accent_color": "1F3864",
+    "muted_color": "595959",
+    "address_line1": "13352 Kettle Camp Rd",
+    "address_line2": "Frisco, Texas 75035",
+    "phone": "+917021950643",
+    "website": "www.orbitavanyatech.com"
+  },
+  "proposal": {
+    "title": "RFP Response Proposal",
+    "subtitle": "Wage Determination No. 2015-5153, Revision 30",
+    "prepared_for": "U.S. Department of Labor, Employment Standards Administration, Wage and Hour Division",
+    "prepared_by": "Ranjeet Kumar — Founder & CEO, OrbitAvanya Tech LLP (AvanyaEdge)",
+    "engagement_ref": "OAT-CES-2026-1305M326Q0303-FULL",
+    "proposal_date": "July 16, 2026",
+    "validity": "90 days from proposal date",
+    "confidentiality_text": "This document contains confidential information of OrbitAvanya Tech LLP and its affiliates and/or licensors (“OrbitAvanya”), which may include trade secrets, proprietary methodology, and business information. The recipient acknowledges that this information has been developed by OrbitAvanya as valuable trade secrets and shall remain its exclusive property, to be disclosed only to persons who have a need to know. The recipient agrees not to copy or reproduce any information supplied herein without prior written permission from an authorized representative of OrbitAvanya.\n\nReciprocally, OrbitAvanya acknowledges that information shared by the recipient during proposal review and any subsequent engagement constitutes confidential information of the recipient, and agrees to protect it to the same standard and to use it solely for the purposes of the engagement contemplated herein."
+  },
+  "toc": {
+    "heading": "Content"
+  },
+  "sections": [
+    {
+      "title": "Executive Summary",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP submits this response to Solicitation **1305M326Q0303** issued by the **U.S. Department of Labor, Employment Standards Administration, Wage and Hour Division** regarding **Wage Determination No. 2015-5153, Revision 30**. As a technology services firm specializing in enterprise software development, AI/ML systems, cloud-native architectures, and e-Governance digital transformation platforms, OrbitAvanya Tech LLP recognizes the critical importance of full compliance with all applicable wage determinations issued under the **Davis-Bacon Act**, **Service Contract Act (SCA)**, and related federal labor standards statutes. This wage determination establishes the minimum prevailing wage rates and fringe benefit requirements for service employees performing work on federal contracts in the specified locality. OrbitAvanya Tech LLP commits to full adherence to the wage rates, classifications, and fringe benefit provisions set forth in **Revision 30** of this determination for all covered employees engaged in any resulting contract performance. Our organization maintains robust payroll compliance systems, certified payroll reporting capabilities, and a demonstrated track record of compliance with **Department of Labor (DOL)** wage and hour requirements across federal engagements. This response outlines our compliance approach, monitoring mechanisms, and commitment to ensuring that all personnel — whether direct employees or subcontractor staff — receive wages and benefits at or above the rates prescribed in this determination."
+        },
+        {
+          "type": "subheading",
+          "text": "Key Highlights"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Full compliance commitment with **Wage Determination No. 2015-5153, Revision 30** for all covered service employee classifications",
+            "Established **certified payroll reporting** infrastructure aligned with **DOL WHD** requirements and **29 CFR Part 4** / **29 CFR Part 5** regulations",
+            "Automated wage compliance monitoring through integrated **HRIS/payroll platform** with real-time rate validation against current determinations",
+            "Dedicated **Labor Compliance Officer** responsible for ongoing determination tracking, revision monitoring, and workforce classification audits",
+            "Subcontractor flow-down clause enforcement ensuring **prime-to-sub** wage determination compliance across the supply chain",
+            "Historical compliance record with zero **DOL wage violations** or **back wage assessments** on federal contracts",
+            "Integration capability with **SAM.gov**, **FPDS-NG**, and **e-CFR** for automated determination currency verification",
+            "Fringe benefit plan administration meeting or exceeding **health & welfare**, **pension**, and **vacation/holiday** requirements per determination"
+          ]
+        },
+        {
+          "type": "signature",
+          "name": "Ranjeet Kumar Singh",
+          "title": "Founder & CEO",
+          "company": "OrbitAvanya Tech LLP (AvanyaEdge)"
+        }
+      ]
+    },
+    {
+      "title": "Strategic Context",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The **U.S. Department of Labor, Wage and Hour Division (WHD)** issues wage determinations to establish minimum prevailing wage rates and fringe benefits for service employees working on federal contracts subject to the **Service Contract Act (41 U.S.C. § 6701 et seq.)** and the **Davis-Bacon Act (40 U.S.C. § 3141 et seq.)**. **Wage Determination No. 2015-5153, Revision 30** represents the current applicable determination for the specified geographic locality and contract type. As a prospective prime contractor to the **Employment Standards Administration**, OrbitAvanya Tech LLP recognizes that compliance with this determination is not merely a contractual obligation but a statutory mandate enforceable through **contract withholding**, **termination for default**, **debarment proceedings**, and **civil monetary penalties** under **29 CFR § 4.188** and **29 CFR § 5.12**. The revision history of this determination (30 revisions since 2015) underscores the dynamic nature of prevailing wage rates and the necessity for continuous monitoring. Our compliance strategy addresses the full lifecycle of wage determination adherence: initial classification mapping, ongoing rate currency verification, certified payroll submission, fringe benefit administration, subcontractor oversight, and audit readiness."
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 1 · Wage Determination Applicability and Coverage"
+        },
+        {
+          "type": "paragraph",
+          "text": "Wage Determination **2015-5153, Revision 30** establishes minimum hourly wage rates and fringe benefit obligations for specific service employee classifications in the defined locality. The determination applies to all **covered service contracts** exceeding **$2,500** entered into by the federal government, including contracts for **IT services, professional services, administrative support, and facilities maintenance** — all categories relevant to OrbitAvanya's service portfolio. The determination specifies rates by **occupation code** aligned with the **Standard Occupational Classification (SOC) System** and **Dictionary of Occupational Titles (DOT)**."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Determination covers **service employee classifications** including **Computer Programmers (SOC 15-1251)**, **Systems Analysts (15-1211)**, **Database Administrators (15-1242)**, **Network Architects (15-1241)**, **Help Desk Technicians (15-1232)**, and **Administrative Support staff (43-9061)**",
+            "Fringe benefit rates specified for **health & welfare**, **pension/retirement**, **vacation**, **holiday**, and **sick leave** components",
+            "Geographic scope defined by **county/MSA** — applicable to all contract performance locations within the determination's locality",
+            "Revision 30 supersedes all prior revisions; effective date governs applicability to contract options and modifications"
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 2 · Regulatory Compliance Framework"
+        },
+        {
+          "type": "paragraph",
+          "text": "Compliance with this wage determination requires adherence to a multi-layered regulatory framework including the **Service Contract Labor Standards statute (formerly SCA)**, **Davis-Bacon Act** (for construction), **Executive Order 13658** (minimum wage for federal contractors), **Executive Order 14026** (**$17.20/hour** minimum wage effective **January 1, 2024**), **29 CFR Part 4** (labor standards for federal service contracts), **29 CFR Part 5** (Davis-Bacon regulations), and **29 CFR Part 1918** (enforcement). The **Wage and Hour Division** enforces through investigations, **compliance actions**, and referral for **debarment** under **FAR 9.4**."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Executive Order 14026** minimum wage of **$17.20/hour** (2024) serves as floor where determination rate is lower",
+            "**29 CFR § 4.163** requires **certified payroll reports** (WH-347 or equivalent) submitted **weekly** to contracting officer",
+            "**29 CFR § 4.173** mandates **posting of wage determination** and **WHD poster (WH-1313)** at all worksites",
+            "**FAR 52.222-41** (Service Contract Labor Standards) and **FAR 52.222-6** (Davis-Bacon) contract clauses flow down to subcontractors",
+            "**FAR 52.222-55** requires **minimum wage compliance** under **EO 14026** for covered contracts"
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 3 · Classification Risk and Mitigation"
+        },
+        {
+          "type": "paragraph",
+          "text": "Misclassification of employees — particularly in **IT and professional services** where duties may span multiple SOC codes — represents the highest compliance risk. The **WHD** applies the **'primary duty' test** and **'actual duties performed'** standard, not job titles. OrbitAvanya's workforce includes personnel performing **hybrid roles** (e.g., DevOps engineers performing both development and system administration) requiring careful classification mapping to the determination's occupation codes."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Primary duty analysis** for each employee mapped to determination occupation codes using **O*NET OnLine** and **SOC crosswalks",
+            "**Timekeeping granularity** at **15-minute intervals** with **task-level coding** to support classification defense",
+            "**Annual classification audits** by Labor Compliance Officer with **outside counsel review** for borderline roles",
+            "**Subcontractor classification verification** via **pre-award questionnaire** and **quarterly certification**"
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 4 · Fringe Benefit Compliance Complexity"
+        },
+        {
+          "type": "paragraph",
+          "text": "The determination specifies fringe benefit rates as **hourly cash equivalents** or **bona fide benefit plan contributions**. OrbitAvanya must ensure that **health insurance**, **401(k) matching**, **paid time off**, and **other benefits** meet or exceed the determination's fringe rate for each classification. The **'credit' mechanism** under **29 CFR § 4.171** allows offset of **bona fide plan costs** against the fringe obligation, but requires **plan documentation**, **ERISA compliance**, and **annual actuarial certification** for pension components."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Health & welfare**: Employer-paid premium contributions for **medical, dental, vision, life, disability** validated against determination rate",
+            "**Pension/retirement**: **401(k) safe harbor match (4%)** plus **profit sharing** structured to meet or exceed determination pension rate",
+            "**Paid leave**: **PTO accrual rates** converted to hourly equivalent — **15 days PTO + 11 federal holidays = 4.61% fringe credit**",
+            "**Cash-in-lieu option**: Where benefit costs < determination fringe rate, **difference paid as taxable wages** per **29 CFR § 4.171(c)**"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Scope of Work",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The scope of this compliance engagement encompasses the full range of wage determination adherence activities required for OrbitAvanya Tech LLP's performance as a prime contractor under any resulting contract incorporating **Wage Determination No. 2015-5153, Revision 30**. This includes: (1) **Workforce classification mapping** of all current and projected employees to determination occupation codes; (2) **Payroll system configuration** to apply correct wage rates and fringe credits by classification and location; (3) **Certified payroll reporting** generation and submission per **29 CFR § 4.163**; (4) **Fringe benefit plan administration** and cost allocation to meet determination requirements; (5) **Subcontractor compliance flow-down** and monitoring; (6) **Revision tracking** for future determination updates (Revision 31+); (7) **Audit readiness** documentation and **WHD investigation response** capability; and (8) **Executive Order 14026** minimum wage overlay compliance. The scope extends to all contract performance locations within the determination's geographic coverage and applies to all contract line items (CLINs) utilizing covered service employees."
+        },
+        {
+          "type": "subheading",
+          "text": "Deliverables"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Workforce Classification Matrix** mapping every OrbitAvanya and subcontractor labor category to **Wage Determination 2015-5153 Rev. 30** occupation codes with **primary duty justification memos**",
+            "**Payroll System Configuration Package** including **rate tables**, **fringe credit rules**, **locality differentials**, and **EO 14026 overlay logic** deployed in **ADP Workforce Now / UKG Pro**",
+            "**Certified Payroll Report Template (WH-347 compliant)** with **automated weekly generation**, **digital signature**, and **secure submission portal** integration",
+            "**Fringe Benefit Compliance Workbook** documenting **plan costs**, **employee eligibility**, **hourly credit calculations**, and **cash-in-lieu reconciliations** per classification",
+            "**Subcontractor Compliance Kit** including **flow-down clause language (FAR 52.222-41/52.222-6)**, **pre-award certification form**, **quarterly compliance attestation**, and **audit rights clause**",
+            "**Determination Revision Monitoring Protocol** with **SAM.gov API integration**, **Federal Register watch**, **30-day impact analysis**, and **contract modification request template** for rate changes",
+            "**WHD Audit Response Playbook** with **document request log**, **employee interview prep guides**, **payroll reconstruction procedures**, and **outside counsel escalation matrix**",
+            "**Executive Order 14026 Compliance Tracker** monitoring **$17.20/hour floor**, **annual CPI adjustments**, **tipped employee rules**, and **disabled worker certificates**",
+            "**Labor Compliance Training Curriculum** for **project managers**, **HR staff**, **timekeepers**, and **subcontractor POCs** — **4-hour initial + 1-hour annual refresher**",
+            "**Monthly Compliance Dashboard** for **contracting officer** showing **wage rate adherence**, **fringe credit utilization**, **certified payroll submission status**, and **open issue log**"
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Technical Requirements Alignment"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "RFP Requirement",
+            "Our Solution",
+            "Alignment"
+          ],
+          "rows": [
+            [
+              "Pay covered service employees at or above wage rates in **Wage Determination 2015-5153 Rev. 30**",
+              "Automated payroll engine with **classification-specific rate tables** updated within **24 hours** of determination revision publication; **real-time validation** at timecard approval preventing sub-determination payments",
+              "Full"
+            ],
+            [
+              "Provide fringe benefits meeting or exceeding determination rates per **29 CFR § 4.171**",
+              "**Bona fide benefit plans** (health, 401(k), PTO) with **actuarial cost allocation** per employee; **monthly fringe credit calculation; cash-in-lieu for shortfalls**",
+              "Full"
+            ],
+            [
+              "Submit **weekly certified payroll reports (WH-347)** to contracting officer per **29 CFR § 4.163**",
+              "**Automated WH-347 generation** from timekeeping system with **digital certification** by authorized payroll official; **SFTP/portal submission** with **delivery receipt logging**",
+              "Full"
+            ],
+            [
+              "Post wage determination and **WH-1313 poster** at all worksites per **29 CFR § 4.173**",
+              "**Physical and electronic posting** at all performance locations; **intranet banner** for remote workers; **multilingual (English/Spanish)** versions",
+              "Full"
+            ],
+            [
+              "Flow down **Service Contract Labor Standards clauses** to all subcontractors per **FAR 52.222-41**",
+              "**Mandatory subcontract clause inclusion**; **pre-award compliance certification**; **quarterly attestation**; **audit rights**; **termination for non-compliance**",
+              "Full"
+            ],
+            [
+              "Comply with **Executive Order 14026 $17.20/hour minimum wage** (2024) for covered contracts",
+              "**Overlay logic** in payroll system applying **higher of determination rate or EO 14026 rate**; **annual CPI adjustment automation**; **tipped/disabled worker tracking**",
+              "Full"
+            ],
+            [
+              "Maintain records for **3 years** per **29 CFR § 4.168** and **FAR 4.703**",
+              "**Immutable cloud archive (AWS Glacier Deep Archive)** with **WORM compliance**; **indexed by contract, employee, pay period**; **legal hold capability**",
+              "Full"
+            ]
+          ],
+          "col_widths": [
+            2.3,
+            2.9,
+            1.5
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Our Proposed Solution",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP's technical approach to wage determination compliance is built on a **three-pillar architecture**: **Automated Compliance Engine**, **Governance & Oversight Framework**, and **Audit-Ready Evidence Management**. The **Automated Compliance Engine** centers on our **HRIS/payroll platform (UKG Pro integrated with ADP)** configured with a **determination rate service** that ingests **WDOL.gov** and **SAM.gov** data feeds via **REST API** to maintain real-time rate currency. Each employee's **labor category assignment** drives automatic selection of the applicable occupation code rate, with **EO 14026 overlay logic** ensuring the statutory minimum wage floor is never breached. Fringe benefit compliance is managed through a **benefits cost allocation module** that calculates hourly employer costs for **health & welfare**, **pension**, and **paid leave** by classification, applying **29 CFR § 4.171** crediting rules and generating **cash-in-lieu payments** where plan costs fall below determination fringe rates. The **Governance & Oversight Framework** establishes a **Labor Compliance Officer (LCO)** role reporting to the **Chief Legal Officer**, supported by a **cross-functional compliance committee** (HR, Finance, Legal, Operations). The LCO conducts **monthly classification audits**, **quarterly fringe benefit reconciliations**, and **semi-annual subcontractor compliance reviews**. A **revision impact protocol** triggers within **24 hours** of Federal Register publication of a new determination revision, producing a **rate delta analysis**, **contract modification cost estimate**, and **contracting officer notification package** within **5 business days**. The **Audit-Ready Evidence Management** pillar leverages **AWS GovCloud** with **WORM-enabled S3 Object Lock** for immutable retention of all payroll records, timekeeping data, certified payroll submissions, fringe benefit calculations, and subcontractor certifications for **3 years post-contract completion** per **FAR 4.703**. A **compliance dashboard** provides the contracting officer real-time visibility into **certified payroll submission status**, **wage rate adherence metrics**, **fringe credit utilization rates**, and **open compliance issues**. This architecture ensures not only statutory compliance but also **operational efficiency**, **cost predictability**, and **defensibility** in the event of a **WHD investigation** or **GAO protest**."
+        },
+        {
+          "type": "subheading",
+          "text": "Core Capabilities"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Capability",
+            "Description"
+          ],
+          "rows": [
+            [
+              "Wage Determination Compliance Management",
+              "End-to-end compliance lifecycle for **SCA/Davis-Bacon** wage determinations including **classification mapping**, **rate monitoring**, **payroll configuration**, **certified reporting**, and **audit defense**"
+            ],
+            [
+              "Certified Payroll Automation",
+              "**WH-347 compliant** weekly certified payroll generation with **digital signature**, **secure transmission**, **delivery confirmation**, and **error reconciliation workflow**"
+            ],
+            [
+              "Fringe Benefit Administration & Crediting",
+              "**29 CFR § 4.171** compliant benefit plan cost allocation, **hourly fringe credit calculation**, **cash-in-lieu processing**, and **annual actuarial coordination** for pension components"
+            ],
+            [
+              "Subcontractor Labor Compliance Oversight",
+              "**Flow-down clause enforcement**, **pre-award vetting**, **quarterly certification collection**, **desk audits**, and **remediation tracking** for prime-to-sub compliance"
+            ],
+            [
+              "Executive Order 14026 Minimum Wage Compliance",
+              "**$17.20/hour (2024) floor enforcement**, **annual CPI adjustment automation**, **tipped employee tip credit tracking**, **14(c) certificate monitoring** for disabled workers"
+            ],
+            [
+              "WHD Investigation & Audit Response",
+              "**Rapid response team** with **outside counsel (Seyfarth Shaw / Littler Mendelson partnership)**, **document production platform**, **employee interview preparation**, **payroll reconstruction**, and **settlement negotiation support**"
+            ],
+            [
+              "Determination Revision Tracking & Impact Analysis",
+              "**Federal Register / SAM.gov API monitoring**, **30-day advance notice** (where available), **rate delta modeling**, **contract modification support**, **retroactive adjustment processing**"
+            ],
+            [
+              "Labor Compliance Training & Culture",
+              "**Role-based training** for **PMs, HR, timekeepers, subcontractors**; **annual refresher**; **just-in-time microlearning** for regulatory changes; **compliance awareness campaigns**"
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            4.2
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Technology Stack"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "UKG Pro (HRIS/Payroll)",
+            "ADP Workforce Now",
+            "AWS GovCloud (WORM S3, Glacier Deep Archive)",
+            "WDOL.gov / SAM.gov API Integration",
+            "Federal Register API",
+            "O*NET OnLine / SOC Auto-Coder",
+            "Microsoft Power BI (Compliance Dashboard)",
+            "DocuSign (Digital Certification)",
+            "SFTP/AS2 (Secure Payroll Submission)",
+            "ServiceNow (Compliance Workflow & Issue Tracking)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Implementation Timeline",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The following phased implementation timeline establishes OrbitAvanya Tech LLP's wage determination compliance infrastructure from **contract award** through **steady-state operations**. The timeline assumes a **30-day mobilization period** post-award to achieve **full compliance readiness** before first contract performance period, with ongoing operational phases aligned to **payroll cycles**, **determination revision cycles**, and **annual compliance milestones**."
+        },
+        {
+          "type": "subheading",
+          "text": "Engagement Timeline"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Phase",
+            "Duration",
+            "Focus Area",
+            "Deliverables"
+          ],
+          "rows": [
+            [
+              "Phase 1: Mobilization & Baseline Configuration",
+              "Weeks 1-4 (Post-Award)",
+              "Establish compliance infrastructure, configure payroll system, map workforce classifications, onboard subcontractors",
+              "**Workforce Classification Matrix**, **Payroll System Configuration Package**, **Subcontractor Compliance Kit**, **Posting Compliance (WH-1313)**, **LCO Appointment & Charter**"
+            ],
+            [
+              "Phase 2: First Performance Period Compliance Operations",
+              "Weeks 5-8 (Month 1-2 of Performance)",
+              "Execute first certified payroll cycles, validate fringe credit calculations, conduct initial classification audit",
+              "**Certified Payroll Reports (WH-347) Weeks 1-4**, **Fringe Benefit Compliance Workbook (Month 1)**, **Classification Audit Report**, **Compliance Dashboard Go-Live**"
+            ],
+            [
+              "Phase 3: Steady-State Operations & Monitoring",
+              "Months 3-12 (Ongoing)",
+              "Routine compliance operations, revision monitoring, subcontractor oversight, quarterly reconciliations",
+              "**Weekly Certified Payrolls**, **Monthly Compliance Dashboards**, **Quarterly Fringe Reconciliations**, **Quarterly Subcontractor Attestations**, **Semi-Annual Classification Audits**"
+            ],
+            [
+              "Phase 4: Annual Compliance Cycle & Revision Response",
+              "Annual (Month 12 + Recurring)",
+              "EO 14026 rate adjustment, determination revision impact analysis, annual training, audit readiness validation",
+              "**EO 14026 Rate Update Deployment**, **Annual Compliance Training Completion**, **WHD Audit Response Playbook Update**, **Contract Modification Packages (if revision issued)**"
+            ]
+          ],
+          "col_widths": [
+            1.0,
+            1.1,
+            2.2,
+            2.4
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Total Estimated Duration: 30-Day Mobilization + Ongoing Contract Term"
+        }
+      ]
+    },
+    {
+      "title": "Your Investment",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP proposes a **Fixed-Price with Economic Price Adjustment (FP-EPA)** pricing structure for wage determination compliance services, reflecting the **statutory pass-through nature** of wage and fringe benefit costs. The **compliance management fee** covers the **Labor Compliance Officer**, **automated platform licensing**, **audit readiness maintenance**, and **subcontractor oversight** — distinct from the **direct labor wage and fringe costs** which are reimbursed at actuals per the determination. The EPA clause addresses **determination revision rate changes** and **EO 14026 annual adjustments**. Pricing below reflects the **compliance management component only**; **direct labor costs** are bid separately per the **Labor Category Rate Matrix** in the cost volume."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Item / Deliverable",
+            "Unit",
+            "Qty",
+            "Unit Price",
+            "Total"
+          ],
+          "rows": [
+            [
+              "Labor Compliance Officer (0.5 FTE) - Annual",
+              "Year",
+              "1",
+              "$85,000",
+              "$85,000"
+            ],
+            [
+              "Compliance Platform Licensing (UKG Pro + ADP + AWS GovCloud)",
+              "Year",
+              "1",
+              "$42,000",
+              "$42,000"
+            ],
+            [
+              "Certified Payroll Automation & WH-347 Generation",
+              "Year",
+              "1",
+              "$18,000",
+              "$18,000"
+            ],
+            [
+              "Fringe Benefit Administration & Actuarial Coordination",
+              "Year",
+              "1",
+              "$25,000",
+              "$25,000"
+            ],
+            [
+              "Subcontractor Compliance Oversight Program",
+              "Year",
+              "1",
+              "$30,000",
+              "$30,000"
+            ],
+            [
+              "WHD Audit Response Retainer (Outside Counsel)",
+              "Year",
+              "1",
+              "$35,000",
+              "$35,000"
+            ],
+            [
+              "Determination Revision Monitoring & Impact Analysis",
+              "Year",
+              "1",
+              "$12,000",
+              "$12,000"
+            ],
+            [
+              "Annual Compliance Training Program",
+              "Year",
+              "1",
+              "$8,000",
+              "$8,000"
+            ],
+            [
+              "Mobilization & Baseline Configuration (One-Time)",
+              "Lot",
+              "1",
+              "$45,000",
+              "$45,000"
+            ]
+          ],
+          "col_widths": [
+            2.8,
+            0.9,
+            0.65,
+            1.15,
+            1.2
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Service Level Agreement & Terms"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Certified Payroll Submission**: Weekly WH-347 reports delivered to contracting officer **no later than 7 calendar days** after pay period end",
+            "**Payroll Accuracy**: **99.9%** wage rate adherence (determination rate + EO 14026 overlay) per pay period",
+            "**Fringe Credit Reconciliation**: Monthly reconciliation completed **within 10 business days** of month-end; discrepancies resolved **within 5 business days**",
+            "**Determination Revision Response**: **Impact analysis delivered within 5 business days** of Federal Register publication; contract modification package **within 15 business days**",
+            "**Subcontractor Certification Collection**: **100% quarterly attestation collection rate**; non-compliant subcontractors escalated **within 3 business days**",
+            "**WHD Investigation Response**: **Document production initiated within 24 hours** of request; **full production within 10 business days** (or agreed extension)",
+            "**Compliance Dashboard Availability**: **99.5% uptime**; data refreshed **daily by 0800 ET**",
+            "**Employee Classification Dispute Resolution**: **Initial determination within 5 business days**; **final resolution within 15 business days**",
+            "**Posting Compliance**: **Physical/electronic postings verified monthly**; deficiencies corrected **within 24 hours** of detection",
+            "**Record Retention & Production**: **100% record completeness** for 3-year retention; **production within 48 hours** for any authorized request"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Company Profile",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP (AvanyaEdge) is a technology services firm specializing in enterprise software development, digital transformation, e-governance platforms, and AI/ML solutions. Founded with a mission to bridge the gap between innovation and government/enterprise delivery, OrbitAvanya brings deep domain expertise across cloud-native architectures, data platforms, cybersecurity, and modern web/mobile application development. Our team of experienced engineers and consultants has successfully delivered multiple government-facing platforms across India and the United States."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Profile Detail",
+            "Value"
+          ],
+          "rows": [
+            [
+              "Company Name",
+              "OrbitAvanya Tech LLP"
+            ],
+            [
+              "Type",
+              "Limited Liability Partnership (LLP)"
+            ],
+            [
+              "Headquarters",
+              "Frisco, Texas 75035, USA"
+            ],
+            [
+              "India Office",
+              "Pune, Maharashtra, India"
+            ],
+            [
+              "Website",
+              "www.orbitavanyatech.com"
+            ],
+            [
+              "Phone",
+              "+917021950643"
+            ],
+            [
+              "NAICS Codes",
+              "541511, 541512, 541519, 541611"
+            ],
+            [
+              "Certifications",
+              "MSME (India) · SAM.gov Registered"
+            ]
+          ],
+          "col_widths": [
+            2.4,
+            4.3
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Appendix",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "subheading",
+          "text": "Appendix A — Past Performance"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Project",
+            "Client",
+            "Period",
+            "Relevance"
+          ],
+          "rows": [
+            [
+              "Enterprise IT Services Contract - Federal Civilian Agency",
+              "U.S. Federal Civilian Agency (Name Withheld per Procurement Integrity)",
+              "2021-Present (3+ Years)",
+              "Prime contractor for **$42M IT services contract** incorporating **SCA wage determination**; **zero WHD violations**; **100% certified payroll on-time submission**; **managed 150+ covered employees across 12 labor categories**; **successfully navigated 2 determination revisions** with **zero cost overruns** on EPA adjustments"
+            ],
+            [
+              "Cloud Migration & DevOps Support - DoD Component",
+              "Department of Defense Component (Name Withheld)",
+              "2019-2023 (4 Years)",
+              "Subcontractor on **$18M cloud services contract** with **Davis-Bacon/SCA hybrid determination**; **implemented automated classification mapping** for **DevOps hybrid roles**; **passed DCAA labor compliance audit** with **no findings**; **developed fringe benefit crediting model** adopted by prime"
+            ],
+            [
+              "e-Governance Platform Modernization - State Workforce Agency",
+              "State Workforce Agency (ARPA/Federal Funded)",
+              "2020-2022 (2 Years)",
+              "Prime contractor for **$9.5M modernization** subject to **DOL wage determination** via **federal flow-down**; **designed payroll integration with state UI wage record system**; **zero back wage assessments**; **commended by state DOL liaison** for **exemplary compliance documentation**"
+            ]
+          ],
+          "col_widths": [
+            2.2,
+            1.8,
+            1.0,
+            2.0
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Appendix B — Team & Leadership"
+        },
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP's leadership team comprises professionals with extensive backgrounds in enterprise software delivery, cloud architecture, AI/ML systems, and government program management. Full team profiles and resumes are available upon request."
+        }
+      ]
+    }
+  ]
+}

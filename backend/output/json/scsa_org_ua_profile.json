@@ -1,0 +1,132 @@
+{
+  "company_name": "Scientific Cyber Security Association of Ukraine (SCSA)",
+  "website": "https://scsa.org.ua/en/mainpage",
+  "industry": "Cybersecurity Education & Research / Nonprofit",
+  "description": "The Scientific Cyber Security Association of Ukraine (SCSA) is a nonprofit organization founded in 2024 dedicated to improving Ukraine's overall cybersecurity posture through scientific research, technical innovation, and educational programs. SCSA operates the CyberTeens online platform for schoolchildren's cyber hygiene, publishes the International Journal of Computer Network and Information Security (IJCNIS), runs the International Summer School for cybersecurity specialists, and manages the Veterano Cyber Cluster for veteran reintegration into cybersecurity careers. The association collaborates with international partners, government institutions, and educational organizations to develop cybersecurity labs, training courses, and research hubs in Ukraine and Georgia.",
+  "headquarters": "Kyiv, Dontsia Mykhaila Street, building 2A, room 966, Ukraine",
+  "locations": [
+    "Kyiv, Ukraine",
+    "Georgia (planned R&EHub)"
+  ],
+  "employee_count": "51-200 employees",
+  "founded_year": 2024,
+  "specialties": [
+    "Cybersecurity education",
+    "Cyber hygiene awareness",
+    "Veteran reintegration",
+    "Scientific research",
+    "International cooperation",
+    "5G cybersecurity labs"
+  ],
+  "products": [
+    "CyberTeens Platform",
+    "International Journal of Computer Network and Information Security (IJCNIS)",
+    "International Summer School",
+    "Veterano Cyber Cluster",
+    "Carpathian Cybersecurity Winter Training Camp",
+    "Carpathian Winter Cybersecurity Week",
+    "R&EHub Platform (Ukraine & Georgia)"
+  ],
+  "services": [
+    "Cybersecurity training courses",
+    "Government sector cybersecurity services",
+    "Critical infrastructure cybersecurity services",
+    "Services for cybersecurity and IT organizations",
+    "Veteran career guidance and employment",
+    "Research and analytical work in cybersecurity",
+    "Innovative educational activities in cybersecurity",
+    "Penetration testing training for web applications",
+    "Microsoft tools training for data visualization and team collaboration"
+  ],
+  "technology_stack": [],
+  "business_model": "Nonprofit grant-funded model with revenue from training courses, membership fees, government contracts, and international project grants. Focus on educational programs, research publications, and veteran reintegration services.",
+  "pricing_model": "Grant-funded and subsidized training; membership-based access; project-based government contracts; some free educational resources for schools",
+  "financial_highlights": [
+    "Nonprofit organization founded 2024 - no public revenue figures available",
+    "Grant-supported projects including international R&EHub development in Ukraine and Georgia"
+  ],
+  "leadership": [
+    "Maksim Iavich (mentioned in regional workshop)",
+    "Sergei Simonov (mentioned in regional workshop)"
+  ],
+  "competitors": [
+    "CISA (Cybersecurity and Infrastructure Security Agency) - US government counterpart",
+    "FIRST (Forum of Incident Response and Security Teams) - international incident response community",
+    "ISSA (Information Systems Security Association) - professional cybersecurity association",
+    "National cybersecurity agencies and educational institutions in EU countries"
+  ],
+  "value_proposition": "Unique combination of cybersecurity education for youth (CyberTeens), veteran reintegration into cyber careers (Veterano Cyber Cluster), international research collaboration (R&EHubs in Ukraine/Georgia), and government-partnered critical infrastructure protection - all under a single nonprofit association with strong state and international ties.",
+  "rfp_strengths": [
+    "Government partnership recognition: 'TOP-100' best cases of government-community partnership",
+    "International cooperation with EU universities and foreign experts",
+    "Specialized 5G/beyond cybersecurity labs development",
+    "Veteran reintegration program with IBM CyberDIIA partnership",
+    "CyberTeens platform for nationwide school cyber hygiene education",
+    "Scientific journal (IJCNIS) bridging theory and practice",
+    "Multilingual operations (Ukrainian/English)"
+  ],
+  "rfp_weaknesses": [
+    "Very new organization (founded 2024) with limited track record",
+    "Nonprofit status may restrict commercial bidding eligibility",
+    "Limited public financial transparency",
+    "Small team (51-200) for large-scale government projects",
+    "Geographic concentration in Ukraine with Georgia expansion only planned"
+  ],
+  "opportunities": [
+    "Expansion of R&EHub network to more countries",
+    "Scaling CyberTeens platform across Ukrainian schools",
+    "Growing demand for veteran cybersecurity workforce programs",
+    "International grant funding for cybersecurity capacity building",
+    "Partnerships with tech giants (IBM, Microsoft) for training programs"
+  ],
+  "challenges": [
+    "War-time operating environment in Ukraine",
+    "Dependence on grant funding sustainability",
+    "Building credibility as new entrant in competitive cybersecurity education market",
+    "Scaling physical lab infrastructure across borders",
+    "Talent retention in competitive cybersecurity job market"
+  ],
+  "recent_news": [
+    "Regional Workshop from Maksim Iavich and Sergei Simonov (1 month ago per LinkedIn)",
+    "Recruitment for IBM CyberDIIA veterans re-skilling project begun",
+    "Named in 'TOP-100' best cases of government-community partnership",
+    "Memorandum of partnership signed with Ukrainian Association of PTSD",
+    "Development of R&EHubs in Ukraine and Georgia with EU best practices"
+  ],
+  "clients": [
+    "Government sector agencies",
+    "Critical infrastructure operators",
+    "Cybersecurity and IT organizations",
+    "Educational institutions (schools nationwide for CyberTeens)",
+    "Veterans and military personnel transitioning to cyber careers"
+  ],
+  "partners": [
+    "International organizations",
+    "Educational institutions (EU universities)",
+    "State institutions (Ukrainian government)",
+    "Grant support providers",
+    "IBM (CyberDIIA veterans program)",
+    "Ukrainian Association of PTSD",
+    "Institute of Regional Development (IRF)"
+  ],
+  "emails": [
+    "info@scsa.org.ua"
+  ],
+  "phone_numbers": [
+    "+38 (063) 618-86-28",
+    "+38 (066) 617-77-17",
+    "+38 050 746 28 21",
+    "+38 097 193 44 25"
+  ],
+  "social_links": [
+    "https://www.linkedin.com/company/scientific-cybersecurity-association-of-ukraine/",
+    "https://www.facebook.com/SCSAUA",
+    "https://www.youtube.com/channel/UCM4CvlogZX6zrsJiN5Hh31Q"
+  ],
+  "sources_used": [
+    "Website (scsa.org.ua)",
+    "LinkedIn (company page and employee profiles)",
+    "Google search (external cybersecurity industry reports)"
+  ],
+  "last_updated": "2026-07-15T10:14:29.585064+00:00"
+}

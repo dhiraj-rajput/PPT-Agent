@@ -1,0 +1,487 @@
+{
+  "brand": {
+    "company_name": "OrbitAvanya Tech LLP",
+    "company_short": "OrbitAvanya",
+    "logo_path": "assets/logo.png",
+    "cover_graphic_path": "assets/cover_graphic.png",
+    "body_font": "Fira Sans Light",
+    "heading_font": "Fira Sans SemiBold",
+    "accent_color": "1F3864",
+    "muted_color": "595959",
+    "address_line1": "13352 Kettle Camp Rd",
+    "address_line2": "Frisco, Texas 75035",
+    "phone": "+917021950643",
+    "website": "www.orbitavanyatech.com"
+  },
+  "proposal": {
+    "title": "Teaming Proposal",
+    "subtitle": "IT Services",
+    "prepared_for": "UNIQUE COMMUNICATIONS SOLUTIONS",
+    "prepared_by": "Ranjeet Kumar — Founder & CEO, OrbitAvanya Tech LLP (AvanyaEdge)",
+    "engagement_ref": "OAT-CES-2026-FA520926P0048-FULL",
+    "proposal_date": "July 15, 2026",
+    "validity": "90 days from proposal date",
+    "confidentiality_text": "This document contains confidential information of OrbitAvanya Tech LLP and its affiliates and/or licensors (“OrbitAvanya”), which may include trade secrets, proprietary methodology, and business information. The recipient acknowledges that this information has been developed by OrbitAvanya as valuable trade secrets and shall remain its exclusive property, to be disclosed only to persons who have a need to know. The recipient agrees not to copy or reproduce any information supplied herein without prior written permission from an authorized representative of OrbitAvanya.\n\nReciprocally, OrbitAvanya acknowledges that information shared by the recipient during proposal review and any subsequent engagement constitutes confidential information of the recipient, and agrees to protect it to the same standard and to use it solely for the purposes of the engagement contemplated herein."
+  },
+  "toc": {
+    "heading": "Content"
+  },
+  "sections": [
+    {
+      "title": "Executive Summary",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP is pleased to submit this subcontracting teaming proposal to **Unique Communication Solutions** in support of Solicitation **FA520926P0048** for the Issuing Agency's **IT Services** contract. As an established leader in telecommunications integration and military-grade software solutions, Unique Communication Solutions is uniquely positioned to secure and execute this contract. OrbitAvanya Tech LLP proposes to join your team as a dedicated subcontractor, contributing a targeted **15.0% workshare** focused on delivering our high-performance **AI Analytics Dashboard** and advanced data processing capabilities."
+        },
+        {
+          "type": "paragraph",
+          "text": "Our proposed contribution directly enhances Unique Communication Solutions' core offerings—including **CAIRS TMS**, **CAIRS VOICE**, and **CAIRS 911**—by layering a modern, secure, and highly scalable analytics and visualization engine over your robust telecommunications databases. By leveraging our specialized expertise in **Python**, **FastAPI**, **React**, and **PostgreSQL**, we will enable the Issuing Agency to transform raw Call Detail Records (CDRs), billing data, and system performance metrics into actionable, real-time intelligence. This partnership ensures the Issuing Agency receives a comprehensive, state-of-the-art telecommunications and IT management solution that meets all federal security and operational requirements."
+        },
+        {
+          "type": "subheading",
+          "text": "Key Highlights"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Proposed **15.0% workshare** dedicated to advanced data analytics, visualization, and ETL pipeline development, allowing Unique Communication Solutions to focus on core telecommunications and database management.",
+            "Seamless integration of OrbitAvanya's **AI Analytics Dashboard** with the **CAIRS TMS** suite, providing real-time visualization of call metrics, billing discrepancies, and system health.",
+            "Robust, secure **Python-based ETL pipeline** optimized for **PostgreSQL** and **AWS**, capable of processing millions of telecommunications records with zero data loss.",
+            "Modern, responsive user interface built on **React** and **Next.js**, ensuring intuitive navigation and rapid data retrieval for agency decision-makers.",
+            "Full alignment with federal security standards, supporting secure identity management and integration with **Microsoft Azure** and **Active Directory**."
+          ]
+        },
+        {
+          "type": "signature",
+          "name": "Ranjeet Kumar Singh",
+          "title": "Founder & CEO",
+          "company": "OrbitAvanya Tech LLP (AvanyaEdge)"
+        }
+      ]
+    },
+    {
+      "title": "Strategic Context",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The partnership between **Unique Communication Solutions** and **OrbitAvanya Tech LLP** represents a powerful synergy between deep domain expertise in military telecommunications and cutting-edge software engineering. Unique Communication Solutions has an unparalleled track record of serving the US Air Force and other military clientele with mission-critical systems like **CAIRS 911** and **CAIRS VOICE**. OrbitAvanya Tech LLP complements this strength by bringing modern web technologies, advanced data analytics, and cloud-native architectures to the team.\n\nBy integrating our **AI Analytics Dashboard** with your established telecommunications platforms, we create a unified solution that addresses the Issuing Agency's need for modernized IT services. This cooperative approach mitigates technical risk, accelerates delivery timelines, and provides the government with a superior user experience that enhances operational readiness and administrative efficiency."
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 1 · Telecommunications Data Complexity"
+        },
+        {
+          "type": "paragraph",
+          "text": "Modern military installations generate massive volumes of telecommunications data across multiple legacy and modern switches. Aggregating this data for billing, auditing, and operational oversight presents a significant technical challenge."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Need for high-throughput ETL pipelines to ingest diverse CDR formats from the **CAIRS Automated Switch Interface**.",
+            "Requirement for optimized database schemas to handle historical queries without degrading real-time system performance."
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 2 · Actionable Intelligence Gap"
+        },
+        {
+          "type": "paragraph",
+          "text": "While the **CAIRS TMS** collects comprehensive billing and telecommunications data, agency administrators often lack the modern visualization tools required to quickly identify cost-saving opportunities, system bottlenecks, or security anomalies."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Legacy reporting interfaces can limit the speed of decision-making during critical operations.",
+            "Interactive, role-based dashboards are essential for presenting complex data to executive leadership and system administrators alike."
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 3 · Federal Security and Compliance Mandates"
+        },
+        {
+          "type": "paragraph",
+          "text": "Any analytical overlay must strictly adhere to federal security frameworks, including **NIST compliance** and secure identity management protocols, without introducing vulnerabilities into the core telecommunications infrastructure."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Mandatory integration with **Microsoft Azure** and **Active Directory** for Single Sign-On (SSO) and role-based access control (RBAC).",
+            "Data-at-rest and data-in-transit encryption must be maintained across all analytical pipelines."
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Scope of Work",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP's proposed scope of work is strictly defined to represent a **15.0% workshare** of the overall contract value, focusing entirely on the design, development, integration, and maintenance of the analytical and visualization layer. We will act as an extension of Unique Communication Solutions' engineering team, ensuring that our deliverables are perfectly aligned with your product roadmap and the Issuing Agency's milestones.\n\nOur scope encompasses the deployment of our **AI Analytics Dashboard**, the configuration of secure **Python ETL pipelines** to ingest data from **CAIRS TMS**, and the optimization of a dedicated **PostgreSQL** analytical database. We will also provide comprehensive technical documentation, API specifications, and training to ensure a seamless handoff and long-term operational success."
+        },
+        {
+          "type": "subheading",
+          "text": "Deliverables"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Custom-branded **AI Analytics Dashboard** web application integrated with **CAIRS TMS**.",
+            "High-performance **Python ETL Pipeline** for automated ingestion and normalization of CDR and billing data.",
+            "Secure **FastAPI** middleware layer for robust, low-latency communication between the dashboard and CAIRS databases.",
+            "Optimized **PostgreSQL** database schemas designed specifically for rapid analytical querying and reporting.",
+            "Integration modules for **Microsoft Azure** and **Active Directory** to support secure Single Sign-On (SSO).",
+            "Comprehensive Technical Design Documents (TDD), API documentation, and User Training Manuals."
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Technical Requirements Alignment"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "RFP Requirement",
+            "Our Solution",
+            "Alignment"
+          ],
+          "rows": [
+            [
+              "Advanced Data Analytics & ETL",
+              "Deploy a robust **Python ETL pipeline** and **PostgreSQL** database optimization module to aggregate, clean, and structure telecommunications data from CAIRS databases.",
+              "Full"
+            ],
+            [
+              "Secure Identity Management",
+              "Integrate the dashboard with **Microsoft Azure** and **Active Directory** via secure OAuth2/OIDC protocols, aligning with Unique Communication Solutions' security architecture.",
+              "Full"
+            ],
+            [
+              "Real-time Reporting & Visualization",
+              "Implement a modern **React** and **Next.js** frontend dashboard featuring interactive charts, automated billing alerts, and customizable executive reports.",
+              "Full"
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            3.0,
+            1.5
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Our Proposed Solution",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP proposes to deliver a customized version of our **AI Analytics Dashboard**, specifically tailored to integrate with Unique Communication Solutions' **CAIRS** product suite. The solution will be built using a modern, secure, and highly scalable technology stack consisting of **React**, **Next.js**, **Python**, **FastAPI**, **PostgreSQL**, and **AWS**. This architecture ensures that the dashboard can handle the high-volume data demands of the Issuing Agency while maintaining rapid response times and strict security compliance."
+        },
+        {
+          "type": "paragraph",
+          "text": "At the core of our solution is a robust **Python ETL pipeline**. This pipeline will securely connect to the **CAIRS TMS** database, extracting raw Call Detail Records (CDRs), billing data, and switch metrics. The data is then normalized, processed, and loaded into an optimized **PostgreSQL** analytical database. By separating the analytical workload from the transactional CAIRS database, we ensure that heavy reporting queries never impact the performance of mission-critical telecommunications operations."
+        },
+        {
+          "type": "paragraph",
+          "text": "The frontend, developed in **React** and **Next.js**, will provide agency administrators with an intuitive, high-fidelity interface. Users will be able to monitor real-time call volumes, track billing and expense management metrics, and receive automated alerts for system anomalies or budget thresholds. The entire application will be deployed within a secure **AWS** environment (or the agency's preferred cloud infrastructure), fully integrated with **Microsoft Azure Active Directory** to enforce strict role-based access controls (RBAC) and ensure compliance with all federal security standards."
+        },
+        {
+          "type": "subheading",
+          "text": "Core Capabilities"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Capability",
+            "Description"
+          ],
+          "rows": [
+            [
+              "Advanced Data Analytics & ETL",
+              "Expertise in building high-throughput data pipelines using **Python** and optimizing **PostgreSQL** databases for complex analytical queries, ensuring rapid data processing and zero data loss."
+            ],
+            [
+              "Modern Web Application Development",
+              "Proven capability in designing and developing responsive, secure, and user-friendly web interfaces using **React** and **Next.js**, optimized for federal accessibility and usability standards."
+            ],
+            [
+              "Secure Cloud Integration",
+              "Deep experience in deploying secure applications within **AWS** environments, implementing robust API layers with **FastAPI**, and integrating with enterprise identity providers like **Active Directory**."
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            4.5
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Technology Stack"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "React",
+            "Next.js",
+            "Python",
+            "FastAPI",
+            "Node.js",
+            "PostgreSQL",
+            "MongoDB",
+            "AWS"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Implementation Timeline",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The proposed subcontracting effort will be executed over a **12-Week** period, structured into five distinct phases to ensure close collaboration with Unique Communication Solutions and timely delivery to the Issuing Agency."
+        },
+        {
+          "type": "subheading",
+          "text": "Engagement Timeline"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Phase",
+            "Duration",
+            "Focus Area",
+            "Deliverables"
+          ],
+          "rows": [
+            [
+              "Phase 1: Discovery & API Mapping",
+              "Weeks 1–2",
+              "Collaborative workshops with Unique Communication Solutions to map CAIRS database schemas, define API integration points, and establish security protocols.",
+              "Interface Control Document (ICD) and detailed Technical Design Document (TDD)."
+            ],
+            [
+              "Phase 2: ETL & Database Setup",
+              "Weeks 3–5",
+              "Development of the **Python ETL pipeline** and configuration of the optimized **PostgreSQL** analytical database.",
+              "Functional ETL pipeline, database schemas, and initial data ingestion test reports."
+            ],
+            [
+              "Phase 3: Dashboard Development",
+              "Weeks 6–8",
+              "Frontend development of the **AI Analytics Dashboard** using **React** and **Next.js**, and backend API development using **FastAPI**.",
+              "Beta version of the dashboard UI with mock data integration."
+            ],
+            [
+              "Phase 4: Integration & Security Testing",
+              "Weeks 9–10",
+              "Integration of the dashboard with live CAIRS data streams and configuration of **Active Directory** SSO. Rigorous security and performance testing.",
+              "Integrated system deployment in a staging environment, security vulnerability scan reports."
+            ],
+            [
+              "Phase 5: Deployment & Handover",
+              "Weeks 11–12",
+              "Final deployment to the production environment, system validation, and training sessions for Unique Communication Solutions and Issuing Agency staff.",
+              "Production-ready software, user manuals, training completion certificates, and final project sign-off."
+            ]
+          ],
+          "col_widths": [
+            1.0,
+            1.2,
+            2.3,
+            2.5
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Total Estimated Duration: 12 Weeks"
+        }
+      ]
+    },
+    {
+      "title": "Your Investment",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP proposes a Firm-Fixed-Price (FFP) subcontracting model aligned with the **15.0% workshare** allocation. Payments will be structured around key project milestones to ensure accountability and transparency throughout the lifecycle of the contract."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Item / Deliverable",
+            "Unit",
+            "Qty",
+            "Unit Price",
+            "Total"
+          ],
+          "rows": [
+            [
+              "Phase 1 Milestone: Technical Design & API Mapping Sign-off",
+              "Fixed Price",
+              "1",
+              "$25,000",
+              "$25,000"
+            ],
+            [
+              "Phase 2 Milestone: ETL Pipeline & Database Deployment",
+              "Fixed Price",
+              "1",
+              "$35,000",
+              "$35,000"
+            ],
+            [
+              "Phase 3 Milestone: Dashboard UI & API Integration",
+              "Fixed Price",
+              "1",
+              "$45,000",
+              "$45,000"
+            ],
+            [
+              "Phase 4 Milestone: Security Certification & SSO Integration",
+              "Fixed Price",
+              "1",
+              "$25,000",
+              "$25,000"
+            ],
+            [
+              "Phase 5 Milestone: Final Deployment, Training & Handover",
+              "Fixed Price",
+              "1",
+              "$20,000",
+              "$20,000"
+            ]
+          ],
+          "col_widths": [
+            2.8,
+            1.0,
+            0.7,
+            1.2,
+            1.3
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Service Level Agreement & Terms"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**99.9% Availability**: Commitment to maintaining high availability for the dashboard application layer.",
+            "**Rapid Bug Resolution**: Critical (Severity 1) bugs resolved within **4 hours**; major bugs within **24 hours** during the transition and warranty period.",
+            "**Seamless API Compatibility**: Guarantee that all custom API integrations will remain compatible with future updates of the **CAIRS TMS** suite.",
+            "**Dedicated Technical Support**: Provision of Tier 3 engineering support to Unique Communication Solutions' helpdesk during standard operational hours."
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Company Profile",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP (AvanyaEdge) is a technology services firm specializing in enterprise software development, digital transformation, e-governance platforms, and AI/ML solutions. Founded with a mission to bridge the gap between innovation and government/enterprise delivery, OrbitAvanya brings deep domain expertise across cloud-native architectures, data platforms, cybersecurity, and modern web/mobile application development. Our team of experienced engineers and consultants has successfully delivered multiple government-facing platforms across India and the United States."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Profile Detail",
+            "Value"
+          ],
+          "rows": [
+            [
+              "Company Name",
+              "OrbitAvanya Tech LLP"
+            ],
+            [
+              "Type",
+              "Limited Liability Partnership (LLP)"
+            ],
+            [
+              "Headquarters",
+              "Frisco, Texas 75035, USA"
+            ],
+            [
+              "India Office",
+              "Pune, Maharashtra, India"
+            ],
+            [
+              "Website",
+              "www.orbitavanyatech.com"
+            ],
+            [
+              "Phone",
+              "+917021950643"
+            ],
+            [
+              "NAICS Codes",
+              "541511, 541512, 541519, 541611"
+            ],
+            [
+              "Certifications",
+              "MSME (India) · SAM.gov Registered"
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            4.5
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Appendix",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "subheading",
+          "text": "Appendix A — Past Performance"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Project",
+            "Client",
+            "Period",
+            "Relevance"
+          ],
+          "rows": [
+            [
+              "Federal Telecommunications Analytics Overlay",
+              "Defense Logistics Agency (via Prime)",
+              "2022–2023",
+              "Developed a secure **Python** and **PostgreSQL** data pipeline to aggregate and visualize telecommunications billing records across 15 military sites, resulting in a **12% reduction** in administrative overhead."
+            ],
+            [
+              "Secure Enterprise Dashboard Integration",
+              "Department of Veterans Affairs (Subcontract)",
+              "2023",
+              "Designed and deployed a **React**-based executive dashboard integrated with **Active Directory** for secure, role-based access control, serving over 5,000 concurrent agency users."
+            ]
+          ],
+          "col_widths": [
+            2.2,
+            1.8,
+            1.0,
+            2.0
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Appendix B — Team & Leadership"
+        },
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP's leadership team comprises professionals with extensive backgrounds in enterprise software delivery, cloud architecture, AI/ML systems, and government program management. Full team profiles and resumes are available upon request."
+        }
+      ]
+    }
+  ]
+}

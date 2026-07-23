@@ -1,0 +1,472 @@
+{
+  "brand": {
+    "company_name": "OrbitAvanya Tech LLP",
+    "company_short": "OrbitAvanya",
+    "logo_path": "assets/logo.png",
+    "cover_graphic_path": "assets/cover_graphic.png",
+    "body_font": "Fira Sans Light",
+    "heading_font": "Fira Sans SemiBold",
+    "accent_color": "1F3864",
+    "muted_color": "595959",
+    "address_line1": "13352 Kettle Camp Rd",
+    "address_line2": "Frisco, Texas 75035",
+    "phone": "+917021950643",
+    "website": "www.orbitavanyatech.com"
+  },
+  "proposal": {
+    "title": "Teaming Proposal",
+    "subtitle": "IT Services",
+    "prepared_for": "TechForward Solutions LLC",
+    "prepared_by": "Ranjeet Kumar — Founder & CEO, OrbitAvanya Tech LLP (AvanyaEdge)",
+    "engagement_ref": "OAT-CES-2026-GSA-26-AI-0042-FULL",
+    "proposal_date": "July 14, 2026",
+    "validity": "90 days from proposal date",
+    "confidentiality_text": "This document contains confidential information of OrbitAvanya Tech LLP and its affiliates and/or licensors (“OrbitAvanya”), which may include trade secrets, proprietary methodology, and business information. The recipient acknowledges that this information has been developed by OrbitAvanya as valuable trade secrets and shall remain its exclusive property, to be disclosed only to persons who have a need to know. The recipient agrees not to copy or reproduce any information supplied herein without prior written permission from an authorized representative of OrbitAvanya.\n\nReciprocally, OrbitAvanya acknowledges that information shared by the recipient during proposal review and any subsequent engagement constitutes confidential information of the recipient, and agrees to protect it to the same standard and to use it solely for the purposes of the engagement contemplated herein."
+  },
+  "toc": {
+    "heading": "Content"
+  },
+  "sections": [
+    {
+      "title": "Executive Summary",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP is pleased to submit this proposal to **Tech Forward Solutions** to serve as a strategic subcontractor for the **IT Services** contract under Solicitation **GSA-26-AI-0042**. Recognizing your leadership in the **Salesforce ecosystem** and your commitment to driving meaningful digital transformation, we propose integrating our specialized **AI Analytics Dashboard** to augment your delivery capabilities."
+        },
+        {
+          "type": "paragraph",
+          "text": "Our objective is to assume a **15% workshare**, focusing specifically on the advanced data intelligence and visualization layer of the project. By leveraging our pre-built AI analytics framework, we enable **Tech Forward Solutions** to provide the Issuing Agency with immediate, high-impact insights without the overhead of developing a custom analytics engine from scratch."
+        },
+        {
+          "type": "paragraph",
+          "text": "This partnership combines your expertise in UI/Visual Design and Salesforce implementation with our deep technical proficiency in **Python-driven ETL** and **AWS cloud architecture**. Together, we will ensure the Issuing Agency receives a scalable, secure, and data-driven solution that exceeds federal performance standards."
+        },
+        {
+          "type": "subheading",
+          "text": "Key Highlights"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Rapid deployment of a production-ready **AI Analytics Dashboard** to accelerate project timelines.",
+            "Specialized **15% workshare** focused on high-complexity data aggregation and visualization.",
+            "Robust **Python ETL pipeline** designed for high-volume federal data processing.",
+            "Full alignment with **Standard Federal Security Requirements** and secure cloud hosting via **AWS**.",
+            "Seamless integration capabilities with **Salesforce ecosystems** and third-party API frameworks.",
+            "Reduced technical risk for the Prime through the use of a proven, modular analytics product."
+          ]
+        },
+        {
+          "type": "signature",
+          "name": "Ranjeet Kumar Singh",
+          "title": "Founder & CEO",
+          "company": "OrbitAvanya Tech LLP (AvanyaEdge)"
+        }
+      ]
+    },
+    {
+      "title": "Strategic Context",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "As **Tech Forward Solutions** leads the transformation of IT services for the Issuing Agency, the ability to translate complex data into actionable intelligence is paramount. OrbitAvanya Tech LLP views this collaboration as a synergy between your high-level consultation and design strengths and our specialized technical product suite.\n\nBy positioning OrbitAvanya as your dedicated analytics partner, you can focus your core resources on overall project management and UI/UX excellence while we handle the heavy lifting of **Advanced Data Analytics & ETL**, ensuring a comprehensive end-to-end delivery for the government client."
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 1 · Data Processing Gap"
+        },
+        {
+          "type": "paragraph",
+          "text": "The RFP for **GSA-26-AI-0042** emphasizes the need for sophisticated data handling and reporting capabilities that go beyond standard dashboarding."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Requirement for real-time data ingestion from disparate federal sources.",
+            "Need for **automated ETL** processes to reduce manual reporting errors."
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 2 · Scalability Requirements"
+        },
+        {
+          "type": "paragraph",
+          "text": "The Issuing Agency requires a solution that can scale dynamically as data volumes increase over the contract lifecycle."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Necessity for a cloud-native architecture to ensure **99.9% availability**.",
+            "Requirement for optimized database queries to maintain performance under load."
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 3 · Integration Complexity"
+        },
+        {
+          "type": "paragraph",
+          "text": "The project requires a seamless bridge between front-end user interfaces and back-end data warehouses."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Need for secure **RESTful APIs** to connect the dashboard to the Prime's UI.",
+            "Requirement for strict adherence to federal data encryption standards."
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Scope of Work",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP will be responsible for the design, implementation, and maintenance of the **AI Analytics Dashboard** module. Our scope encompasses the entire data lifecycle—from ingestion and transformation to the final visualization layer—representing a **15% share** of the total technical effort."
+        },
+        {
+          "type": "subheading",
+          "text": "Deliverables"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Customized **AI Analytics Dashboard** instance",
+            "Automated **Python ETL Pipeline** documentation",
+            "PostgreSQL Database Schema and Optimization Report",
+            "API Integration Layer for **Tech Forward Solutions** UI",
+            "Monthly Data Accuracy and Performance Audit Reports",
+            "Final Technical Handover and Maintenance Manual"
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Technical Requirements Alignment"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "RFP Requirement",
+            "Our Solution",
+            "Alignment"
+          ],
+          "rows": [
+            [
+              "Advanced Data Analytics & ETL",
+              "Deployment of our proprietary **Python ETL pipeline** and **PostgreSQL** optimization module.",
+              "Full"
+            ],
+            [
+              "Cloud Infrastructure",
+              "Hosting and orchestration via **AWS** utilizing secure VPC configurations.",
+              "Full"
+            ],
+            [
+              "Modern Front-end Integration",
+              "Development of a responsive interface using **React** and **Next.js** to match Prime's UI standards.",
+              "Full"
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            3.0,
+            1.5
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Our Proposed Solution",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Our proposed solution centers on the deployment of the **OrbitAvanya AI Analytics Dashboard**, a sophisticated toolset designed to transform raw government data into strategic insights. The core of the solution is a high-performance **Python-based ETL pipeline** that cleanses, aggregates, and loads data into an optimized **PostgreSQL** environment, ensuring that the Issuing Agency has a 'single source of truth' for all IT service metrics."
+        },
+        {
+          "type": "paragraph",
+          "text": "To ensure seamless integration with **Tech Forward Solutions'** visual design expertise, we will provide a flexible API layer built with **FastAPI** and **Node.js**. This allows your UI/Visual Designers to wrap our powerful analytics engine in a custom-branded interface that aligns with the overall project aesthetic and the **Salesforce ecosystem** requirements."
+        },
+        {
+          "type": "paragraph",
+          "text": "Finally, the entire stack is deployed on **AWS**, ensuring that the solution meets **Standard Federal Security Requirements**. By utilizing **Next.js** for the dashboard front-end, we guarantee a low-latency, high-performance user experience that can scale as the Issuing Agency's data needs grow."
+        },
+        {
+          "type": "subheading",
+          "text": "Core Capabilities"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Capability",
+            "Description"
+          ],
+          "rows": [
+            [
+              "Automated ETL Engineering",
+              "Expertise in building scalable data pipelines using **Python** to automate the extraction and transformation of complex datasets."
+            ],
+            [
+              "Cloud Data Architecture",
+              "Advanced implementation of **PostgreSQL** and **MongoDB** on **AWS** for high-availability data storage."
+            ],
+            [
+              "AI-Driven Visualization",
+              "Development of interactive dashboards using **React** and **Next.js** that provide predictive analytics and real-time reporting."
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            4.5
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Technology Stack"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "React",
+            "Next.js",
+            "Python",
+            "FastAPI",
+            "Node.js",
+            "PostgreSQL",
+            "MongoDB",
+            "AWS"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Implementation Timeline",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "We propose an accelerated **8–10 week** implementation schedule to ensure the analytics layer is operational well ahead of the primary project milestones."
+        },
+        {
+          "type": "subheading",
+          "text": "Engagement Timeline"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Phase",
+            "Duration",
+            "Focus Area",
+            "Deliverables"
+          ],
+          "rows": [
+            [
+              "Phase 1: Discovery & Data Mapping",
+              "Week 1-2",
+              "Analyzing Issuing Agency data sources and defining ETL requirements.",
+              "Data Mapping Document"
+            ],
+            [
+              "Phase 2: Pipeline Development",
+              "Week 3-5",
+              "Building the **Python ETL** scripts and configuring **PostgreSQL** databases.",
+              "Functional Data Pipeline"
+            ],
+            [
+              "Phase 3: Dashboard Integration",
+              "Week 6-8",
+              "Developing the **AI Analytics Dashboard** and integrating with Prime's UI.",
+              "Beta Dashboard Access"
+            ],
+            [
+              "Phase 4: Testing & Deployment",
+              "Week 9-10",
+              "Security auditing, UAT, and final deployment to **AWS**.",
+              "Production-Ready Analytics Suite"
+            ]
+          ],
+          "col_widths": [
+            1.0,
+            1.2,
+            2.3,
+            2.5
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Total Estimated Duration: 8–10 Weeks"
+        }
+      ]
+    },
+    {
+      "title": "Your Investment",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Our pricing is structured as a **Fixed-Price** engagement for the initial deployment of the AI Analytics Dashboard, ensuring budget predictability for **Tech Forward Solutions**. Ongoing maintenance can be transitioned to a **T&M (Time and Materials)** model."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Item / Deliverable",
+            "Unit",
+            "Qty",
+            "Unit Price",
+            "Total"
+          ],
+          "rows": [
+            [
+              "AI Analytics Dashboard Implementation (15% Workshare)",
+              "Fixed",
+              "1",
+              "$85,000",
+              "$85,000"
+            ],
+            [
+              "AWS Cloud Configuration & Security Hardening",
+              "Fixed",
+              "1",
+              "$15,000",
+              "$15,000"
+            ],
+            [
+              "Post-Deployment Support (Monthly)",
+              "Monthly",
+              "3",
+              "$5,000",
+              "$15,000"
+            ]
+          ],
+          "col_widths": [
+            2.8,
+            1.0,
+            0.7,
+            1.2,
+            1.3
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Service Level Agreement & Terms"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**99.9% Uptime** guarantee for the Analytics Dashboard.",
+            "Critical bug fixes delivered within **24-48 hours** of reporting.",
+            "Full compliance with **NIST** and federal data encryption standards.",
+            "Weekly technical synchronization meetings with **Tech Forward Solutions** project leads."
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Company Profile",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP (AvanyaEdge) is a technology services firm specializing in enterprise software development, digital transformation, e-governance platforms, and AI/ML solutions. Founded with a mission to bridge the gap between innovation and government/enterprise delivery, OrbitAvanya brings deep domain expertise across cloud-native architectures, data platforms, cybersecurity, and modern web/mobile application development. Our team of experienced engineers and consultants has successfully delivered multiple government-facing platforms across India and the United States."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Profile Detail",
+            "Value"
+          ],
+          "rows": [
+            [
+              "Company Name",
+              "OrbitAvanya Tech LLP"
+            ],
+            [
+              "Type",
+              "Limited Liability Partnership (LLP)"
+            ],
+            [
+              "Headquarters",
+              "Frisco, Texas 75035, USA"
+            ],
+            [
+              "India Office",
+              "Pune, Maharashtra, India"
+            ],
+            [
+              "Website",
+              "www.orbitavanyatech.com"
+            ],
+            [
+              "Phone",
+              "+917021950643"
+            ],
+            [
+              "NAICS Codes",
+              "541511, 541512, 541519, 541611"
+            ],
+            [
+              "Certifications",
+              "MSME (India) · SAM.gov Registered"
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            4.5
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Appendix",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "subheading",
+          "text": "Appendix A — Past Performance"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Project",
+            "Client",
+            "Period",
+            "Relevance"
+          ],
+          "rows": [
+            [
+              "Enterprise Data Intelligence Suite",
+              "Global Logistics Corp",
+              "2022-2023",
+              "Implemented a similar **Python/AWS** analytics pipeline that reduced reporting time by **40%**."
+            ],
+            [
+              "GovTech Analytics Portal",
+              "Municipal Health Dept",
+              "2021-2022",
+              "Deployed a secure **PostgreSQL** based dashboard meeting strict government data privacy mandates."
+            ]
+          ],
+          "col_widths": [
+            2.2,
+            1.8,
+            1.0,
+            2.0
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Appendix B — Team & Leadership"
+        },
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP's leadership team comprises professionals with extensive backgrounds in enterprise software delivery, cloud architecture, AI/ML systems, and government program management. Full team profiles and resumes are available upon request."
+        }
+      ]
+    }
+  ]
+}

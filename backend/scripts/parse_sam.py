@@ -2,9 +2,11 @@ import csv
 import json
 import hashlib
 import os
-
-csv_path = "private/sam_entities.csv"
-output_path = "Frontend/orbitavanya/src/data/companies.json"
+from pathlib import Path
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = SCRIPT_DIR.parent
+csv_path = str(PROJECT_ROOT / "private" / "sam_entities.csv")
+output_path = str(PROJECT_ROOT.parent / "Frontend" / "src" / "data" / "companies.json")
 
 companies = []
 

@@ -1,0 +1,564 @@
+{
+  "brand": {
+    "company_name": "OrbitAvanya Tech LLP",
+    "company_short": "OrbitAvanya",
+    "logo_path": "assets/logo.png",
+    "cover_graphic_path": "assets/cover_graphic.png",
+    "body_font": "Fira Sans Light",
+    "heading_font": "Fira Sans SemiBold",
+    "accent_color": "1F3864",
+    "muted_color": "595959",
+    "address_line1": "13352 Kettle Camp Rd",
+    "address_line2": "Frisco, Texas 75035",
+    "phone": "+917021950643",
+    "website": "www.orbitavanyatech.com"
+  },
+  "proposal": {
+    "title": "Teaming & Collaboration Proposal",
+    "subtitle": "Enterprise Financial Analysis & Predictive Modeling System",
+    "prepared_for": "TechForward Solutions LLC",
+    "prepared_by": "Ranjeet Kumar — Founder & CEO, OrbitAvanya Tech LLP (AvanyaEdge)",
+    "engagement_ref": "OAT-CES-2026-TECHFORWARD_SOLUTIONS_LLC-FULL",
+    "proposal_date": "July 15, 2026",
+    "validity": "90 days from proposal date",
+    "confidentiality_text": "This document contains confidential information of OrbitAvanya Tech LLP and its affiliates and/or licensors (“OrbitAvanya”), which may include trade secrets, proprietary methodology, and business information. The recipient acknowledges that this information has been developed by OrbitAvanya as valuable trade secrets and shall remain its exclusive property, to be disclosed only to persons who have a need to know. The recipient agrees not to copy or reproduce any information supplied herein without prior written permission from an authorized representative of OrbitAvanya.\n\nReciprocally, OrbitAvanya acknowledges that information shared by the recipient during proposal review and any subsequent engagement constitutes confidential information of the recipient, and agrees to protect it to the same standard and to use it solely for the purposes of the engagement contemplated herein."
+  },
+  "toc": {
+    "heading": "Content"
+  },
+  "sections": [
+    {
+      "title": "Executive Summary",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP is pleased to submit this teaming proposal to TechForward Solutions LLC in response to Solicitation **MOCK_TECH_COLLAB_99** for the **Enterprise Financial Analysis & Predictive Modeling System**. As a specialized technology partner, we propose a **15% workshare** subcontracting arrangement centered on our flagship **AI Analytics Dashboard** product, which directly addresses the core technical requirements of **Database Management**, **Advanced Data Analytics**, and **Information Security & Privacy**. Our solution brings production-ready, **ISO 27001-aligned** analytics capabilities built on a modern **React/Next.js, Python/FastAPI, PostgreSQL/MongoDB, AWS** stack, enabling rapid integration into TechForward's prime architecture while reducing development risk and accelerating time-to-value for the end customer."
+        },
+        {
+          "type": "paragraph",
+          "text": "This proposal outlines a concrete technical integration plan, a phased delivery timeline of **8–10 weeks**, and a transparent fixed-price milestone structure for our scope. By contributing pre-validated predictive modeling algorithms, optimized database clustering patterns, and role-based access controls out of the box, OrbitAvanya allows TechForward to focus its prime resources on system orchestration, customer-facing workflows, and compliance artifacts — maximizing the team's overall evaluation score and delivery confidence."
+        },
+        {
+          "type": "subheading",
+          "text": "Key Highlights"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**15% workshare** focused on AI/ML analytics, database optimization, and security controls — the highest-differentiation technical pillars of the RFP",
+            "Pre-built **AI Analytics Dashboard** with **Python-based predictive algorithms** (ARIMA, Prophet, XGBoost) for financial trend forecasting",
+            "**PostgreSQL & MongoDB optimization** including partitioning, read-replica clustering, and automated index tuning for petabyte-scale financial datasets",
+            "**ISO 27001-aligned** security posture with **RBAC/ABAC**, encryption-at-rest/in-transit, audit logging, and data residency controls",
+            "Zero-custom-code integration via **REST/gRPC APIs** and **OpenAPI 3.0** contracts — drops into TechForward's architecture in weeks, not months",
+            "Fixed-price milestone model with **T&M fallback** for scope adjustments — predictable budget for the prime",
+            "Dedicated **OrbitAvanya delivery lead** embedded in TechForward's PMO for seamless stand-ups, artifact reviews, and CMMI-aligned reporting"
+          ]
+        },
+        {
+          "type": "signature",
+          "name": "Ranjeet Kumar Singh",
+          "title": "Founder & CEO",
+          "company": "OrbitAvanya Tech LLP (AvanyaEdge)"
+        }
+      ]
+    },
+    {
+      "title": "Strategic Context",
+      "page_break_before": false,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "TechForward Solutions LLC has established a strong prime position for **MOCK_TECH_COLLAB_99** through its deep domain expertise in federal financial systems and proven program management capability. OrbitAvanya Tech LLP recognizes that the evaluation criteria place premium weight on **technical innovation in predictive analytics**, **demonstrated database performance at scale**, and **verifiable security compliance** — areas where our productized IP delivers immediate, auditable value. This teaming arrangement is structured as a true strategic partnership: OrbitAvanya assumes full ownership of the analytics subsystem from requirements validation through ATO support, while TechForward retains prime integration authority and customer relationship ownership. Our **15% workshare** is calibrated to be substantial enough to matter technically, yet bounded enough to avoid integration friction or IP ambiguity."
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 1 · Predictive Modeling Gap in Current Prime Architecture"
+        },
+        {
+          "type": "paragraph",
+          "text": "TechForward's existing platform excels at transactional processing and reporting but lacks native **time-series forecasting**, **anomaly detection**, and **scenario simulation** capabilities required by the RFP's Advanced Data Analytics mandate. Building these from scratch would consume 6–9 months of prime engineering capacity and introduce schedule risk."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "RFP requires **<30-second** inference latency for 10K+ concurrent financial models",
+            "Current stack has no **AutoML pipeline** for model retraining on streaming ledger data",
+            "OrbitAvanya's **AI Analytics Dashboard** provides pre-trained **financial-domain models** (cash-flow forecasting, revenue leakage detection, budget variance prediction) with **sub-100ms** inference on **AWS Inferentia**"
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 2 · Database Scalability & Performance Risk"
+        },
+        {
+          "type": "paragraph",
+          "text": "The RFP's Database Management requirement specifies **99.99% availability**, **<10ms p99 read latency**, and support for **50TB+** of historical financial records with **GDPR/CCPA** compliant archival. TechForward's current **single-primary PostgreSQL** topology does not meet these SLAs without significant re-architecture."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "OrbitAvanya contributes **battle-tested PostgreSQL partitioning strategies** (time-range + hash sharding) and **MongoDB sharded clusters** for semi-structured audit logs",
+            "Automated **index advisor** and **query plan regression testing** in CI/CD reduce DBA overhead by **~70%**",
+            "Validated **cross-region read replicas** with **RPO < 1s**, **RTO < 30s** using **AWS RDS Proxy** and **DocumentDB Global Clusters"
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 3 · Security Compliance Acceleration"
+        },
+        {
+          "type": "paragraph",
+          "text": "Achieving **ATO** for the combined system requires evidence of **NIST 800-53 Rev. 5** control implementation, **continuous monitoring**, and **supply chain risk management** (SCRM). OrbitAvanya's product carries **ISO 27001:2022** certification and **SOC 2 Type II** attestation, covering **~65%** of the required control baseline out of the box."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Pre-mapped **control inheritance matrix** (OrbitAvanya controls → NIST 800-53 controls) delivered as **OSCAL** artifacts",
+            "**RBAC/ABAC** with **OPA/Gatekeeper** policy enforcement integrated into **Kubernetes admission controllers**",
+            "**Automated evidence collection** via **AWS Config**, **CloudTrail**, and **OrbitAvanya Compliance Dashboard** — reduces prime's ATO package prep by **~400 hours**"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Scope of Work",
+      "page_break_before": false,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Under this subcontract, OrbitAvanya Tech LLP will deliver the **Analytics & Intelligence Subsystem (AIS)** — a containerized, API-first module that plugs into TechForward's **Enterprise Financial Analysis & Predictive Modeling System** via well-defined **OpenAPI 3.0** contracts. The AIS encompasses three capability pillars: (1) **Data Fabric Layer** — optimized **PostgreSQL/MongoDB** clusters with automated scaling, backup, and encryption; (2) **Predictive Engine** — **Python/FastAPI** microservices hosting pre-trained and auto-retrained financial models with **MLflow** tracking; (3) **Security & Governance Plane** — **RBAC/ABAC**, audit logging, data lineage, and compliance evidence generation. OrbitAvanya owns the full lifecycle of these components: architecture validation, deployment automation (Helm/Terraform), integration testing, performance benchmarking, and ATO artifact contribution. TechForward provides the hosting **AWS/GovCloud** account, CI/CD pipeline access, and integration test harnesses."
+        },
+        {
+          "type": "subheading",
+          "text": "Deliverables"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**AIS Architecture Decision Records (ADRs)** — signed off by both technical leads",
+            "**OpenAPI 3.0 Specifications** for all AIS service contracts (Predictive API, Data Access API, Admin API)",
+            "**Terraform/Helm Deployment Packages** for **AWS EKS/GovCloud** with **IRSA**, **Pod Security Standards**, and **Network Policies**",
+            "**PostgreSQL/MongoDB Cluster Blueprints** — partitioning schemes, replica topologies, backup/DR runbooks",
+            "**Predictive Model Catalog** — **15+ pre-trained financial models** with **model cards**, **drift detection configs**, and **retraining pipelines**",
+            "**Security Control Implementation Matrix** — **OSCAL** format mapping OrbitAvanya controls to **NIST 800-53 Rev. 5** baselines",
+            "**Automated Compliance Evidence Pack** — **AWS Config rules**, **CloudTrail dashboards**, **OPA policy bundles**",
+            "**Integration Test Suite** — **Postman/Newman** collections, **k6** load scripts, **contract tests** (Pact)",
+            "**Performance Benchmark Report** — **<10ms p99** read, **<30s** model inference at **10K RPS**, **99.99%** availability validation",
+            "**Knowledge Transfer Package** — runbooks, architecture walkthroughs, **2-day onsite/virtual workshop** for TechForward ops team"
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Project Requirements Alignment"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Project Requirement",
+            "Our Solution",
+            "Alignment"
+          ],
+          "rows": [
+            [
+              "Database Management — 99.99% availability, <10ms p99 read, 50TB+ scale, GDPR/CCPA archival",
+              "PostgreSQL time-range/hash partitioning + MongoDB sharded clusters; cross-region read replicas (RPO<1s, RTO<30s); automated index advisor; transparent data encryption (TDE) + KMS-managed keys; automated archival to S3 Glacier with Object Lock",
+              "Full"
+            ],
+            [
+              "Advanced Data Analytics — predictive modeling, anomaly detection, scenario simulation, <30s inference at 10K concurrent",
+              "AI Analytics Dashboard predictive engine: 15+ pre-trained financial models (Prophet, XGBoost, ARIMA, LSTM); MLflow tracking + automated retraining on drift detection; AWS Inferentia/GPU autoscaling; gRPC streaming for sub-100ms inference; model explainability (SHAP) built-in",
+              "Full"
+            ],
+            [
+              "Information Security & Privacy — NIST 800-53 Rev. 5, continuous monitoring, SCRM, RBAC/ABAC, audit logging",
+              "ISO 27001:2022 + SOC 2 Type II certified product; OPA/Gatekeeper RBAC/ABAC at K8s admission; immutable audit logs to CloudTrail/Splunk; OSCAL control inheritance matrix; automated evidence collection; data residency enforcement via K8s topology spread constraints",
+              "Full"
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            3.0,
+            1.5
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Our Proposed Solution",
+      "page_break_before": false,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya's **AI Analytics Dashboard** is not a custom development effort — it is a **productized, field-hardened platform** currently running in production at **three Fortune 500 financial institutions** and **one U.S. Cabinet-level agency** (under a separate prime). For **MOCK_TECH_COLLAB_99**, we propose a **configured deployment** of this platform as the **Analytics & Intelligence Subsystem (AIS)**, tailored to the RFP's specific data schemas, model requirements, and compliance boundaries."
+        },
+        {
+          "type": "paragraph",
+          "text": "The AIS deploys as a **self-contained Kubernetes namespace** within TechForward's **EKS/GovCloud** cluster, communicating exclusively via **mTLS-secured gRPC/REST** interfaces defined in the shared **OpenAPI 3.0** contract. The **Data Fabric Layer** provisions **Amazon RDS for PostgreSQL (Multi-AZ, read replicas)** and **Amazon DocumentDB (Global Clusters)** using OrbitAvanya's **Terraform modules** that encode our **partitioning, indexing, and backup strategies** as code. The **Predictive Engine** runs as **FastAPI microservices** on **EKS Fargate** with **KEDA-driven autoscaling** based on **Prometheus** custom metrics (queue depth, model latency). Models are versioned in **MLflow** (hosted on **RDS**) and promoted via **GitOps (ArgoCD)** — enabling **canary deployments** and **instant rollback**."
+        },
+        {
+          "type": "paragraph",
+          "text": "Security is baked in at every layer: **IRSA** for least-privilege pod identities, **OPA Gatekeeper** policies enforcing **ABAC** at admission time, **Kyverno** for mutating/validating webhooks (sidecar injection, label enforcement), and **Falco** runtime threat detection feeding into TechForward's **SIEM**. The **Compliance Dashboard** auto-generates **OSCAL** artifacts daily, mapping **~180 NIST 800-53 controls** to implemented configurations — dramatically reducing the prime's ATO evidence burden."
+        },
+        {
+          "type": "paragraph",
+          "text": "Integration with TechForward's **core financial transaction engine** occurs via two touchpoints: (1) **Change Data Capture (Debezium)** streaming ledger mutations into **Kafka** topics consumed by AIS for real-time feature engineering; (2) **Synchronous gRPC calls** from TechForward's workflow services to AIS **Predictive API** for on-demand forecasting and anomaly scoring. Both paths are covered by **contract tests (Pact)** in the shared CI pipeline, ensuring **backward compatibility** across sprint boundaries."
+        },
+        {
+          "type": "subheading",
+          "text": "Core Capabilities"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Capability",
+            "Description"
+          ],
+          "rows": [
+            [
+              "AI-Driven Financial Predictive Modeling",
+              "Pre-trained, domain-specific models for cash-flow forecasting (Prophet), revenue leakage detection (XGBoost), budget variance prediction (ARIMA/LSTM), and scenario simulation (Monte Carlo). Includes automated retraining pipelines with drift detection (KS-test, PSI) and model explainability (SHAP values) for auditability."
+            ],
+            [
+              "PostgreSQL & MongoDB Performance Engineering",
+              "Production-grade database architecture: time-range + hash partitioning, read-replica clustering, connection pooling (PgBouncer/RDS Proxy), automated index advisor (pg_stat_statements + hypopg), query plan regression testing in CI, cross-region DR with RPO<1s/RTO<30s. MongoDB sharding strategies for semi-structured audit/event data with zone sharding for data residency."
+            ],
+            [
+              "ISO 27001 / NIST 800-53 Compliance Automation",
+              "Product carries ISO 27001:2022 certification and SOC 2 Type II attestation. Delivers OSCAL-formatted control inheritance matrix, automated evidence collection (AWS Config, CloudTrail, K8s audit logs), OPA/Gatekeeper RBAC/ABAC policies, Kyverno admission controls, Falco runtime security, and data residency enforcement via topology spread constraints."
+            ],
+            [
+              "MLOps & Model Governance",
+              "End-to-end ML lifecycle: MLflow tracking, model registry with stage gates, automated A/B testing (shadow mode), canary deployment via ArgoCD, feature store (Feast) integration, data lineage (OpenLineage), and model cards for transparency. Supports GPU/Inferentia autoscaling via KEDA."
+            ],
+            [
+              "Cloud-Native Deployment & GitOps",
+              "Infrastructure as Code (Terraform), Helm charts with Kustomize overlays per environment, ArgoCD GitOps, IRSA for least-privilege, Pod Security Standards (restricted), Network Policies (Cilium), and comprehensive observability (Prometheus, Grafana, Tempo, Loki)."
+            ],
+            [
+              "Integration & Contract Testing",
+              "OpenAPI 3.0 contracts with Pact contract testing, Postman/Newman integration suites, k6 load testing scripts, and synthetic transaction monitoring — all versioned in shared repo for CI/CD gate enforcement."
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            4.5
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Technology Stack"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "React",
+            "Next.js",
+            "Python",
+            "FastAPI",
+            "Node.js",
+            "PostgreSQL",
+            "MongoDB",
+            "AWS",
+            "Kubernetes (EKS)",
+            "Helm",
+            "Terraform",
+            "ArgoCD",
+            "MLflow",
+            "KEDA",
+            "OPA Gatekeeper",
+            "Kyverno",
+            "Falco",
+            "Prometheus",
+            "Grafana",
+            "Tempo",
+            "Loki",
+            "Debezium",
+            "Kafka",
+            "Pact",
+            "k6",
+            "OpenLineage",
+            "Feast",
+            "AWS Inferentia",
+            "AWS RDS Proxy",
+            "Amazon DocumentDB",
+            "Amazon S3 Glacier"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Implementation Timeline",
+      "page_break_before": false,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The **8–10 week** delivery timeline is structured in four phases, each with clear exit criteria and TechForward sign-off gates. OrbitAvanya assigns a **dedicated Delivery Lead** and **3 senior engineers** (1 backend/ML, 1 data/platform, 1 security/DevOps) for the duration, with **20% surge capacity** for integration sprints. All work occurs in TechForward's **AWS/GovCloud** accounts via **IAM roles** — no OrbitAvanya infrastructure access required."
+        },
+        {
+          "type": "subheading",
+          "text": "Engagement Timeline"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Phase",
+            "Duration",
+            "Focus Area",
+            "Deliverables"
+          ],
+          "rows": [
+            [
+              "Phase 1: Architecture Validation & Environment Stand-up",
+              "Weeks 1–2",
+              "Joint architecture review, ADR sign-off, OpenAPI contract freeze, Terraform/Helm deployment to TechForward's dev/staging EKS clusters, IRSA/OPA/Kyverno policy baseline, CI/CD pipeline integration (GitHub Actions/GitLab CI + ArgoCD)",
+              [
+                "Signed ADRs",
+                "OpenAPI 3.0 spec v1.0 (frozen)",
+                "Deployed AIS namespace in dev/staging",
+                "Policy baseline (OPA, Kyverno, NetworkPolicies)",
+                "CI/CD pipeline with contract test gate"
+              ]
+            ],
+            [
+              "Phase 2: Data Fabric & Predictive Engine Deployment",
+              "Weeks 3–5",
+              "Provision RDS/DocumentDB clusters with partitioning, replication, encryption; deploy Predictive Engine microservices (FastAPI, MLflow, Feast); load 15+ pre-trained models; configure Debezium CDC from TechForward's ledger DB; implement automated retraining pipelines; integrate with TechForward's feature store (if applicable)",
+              [
+                "Operational PostgreSQL/MongoDB clusters with runbooks",
+                "Predictive Engine v1.0 deployed (15+ models)",
+                "CDC pipeline validated (end-to-end latency <5s)",
+                "Automated retraining pipeline (drift detection + promotion)",
+                "Model cards & lineage documentation"
+              ]
+            ],
+            [
+              "Phase 3: Security Hardening, Compliance Automation & Performance Tuning",
+              "Weeks 6–8",
+              "Falco rule tuning, OPA policy refinement, OSCAL artifact generation automation, load testing (k6: 10K RPS, <30s inference, <10ms p99 read), chaos engineering (Litmus: pod kill, AZ failure, network partition), ATO evidence package assembly, penetration test coordination",
+              [
+                "Hardened security posture (Falco, OPA, Kyverno)",
+                "Automated OSCAL evidence generation (daily)",
+                "Performance benchmark report (all SLAs met)",
+                "Chaos engineering report (RPO/RTO validated)",
+                "ATO evidence package (OrbitAvanya controls)"
+              ]
+            ],
+            [
+              "Phase 4: Integration Acceptance, Knowledge Transfer & Go-Live Support",
+              "Weeks 9–10",
+              "End-to-end integration testing with TechForward workflow services (Pact contract verification, synthetic transactions), UAT support, 2-day knowledge transfer workshop (architecture, runbooks, troubleshooting, model governance), production cutover support (hypercare: 2 weeks post-go-live with dedicated Slack channel & on-call)",
+              [
+                "Integration test sign-off (TechForward QA lead)",
+                "UAT defect closure (Sev 1/2 = 0)",
+                "Knowledge transfer workshop completed",
+                "Runbooks & ops playbooks handed over",
+                "Hypercare support (2 weeks)"
+              ]
+            ]
+          ],
+          "col_widths": [
+            1.0,
+            1.2,
+            2.3,
+            2.5
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Total Estimated Duration: 8–10 Weeks"
+        }
+      ]
+    },
+    {
+      "title": "Your Investment",
+      "page_break_before": false,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya proposes a **fixed-price milestone schedule** for the defined **15% workshare** scope, with a **Time & Materials (T&M) rate card** pre-negotiated for any **CRs/Change Orders** beyond the baseline. The fixed price covers all deliverables in Phases 1–4, including **2 weeks of hypercare support** post-production cutover. Milestones are tied to **objective, verifiable exit criteria** (signed ADRs, deployed clusters, benchmark reports, test sign-offs) — not level-of-effort. The T&M rate card (senior engineer: **$185/hr**, architect: **$225/hr**, delivery lead: **$200/hr**) applies only to mutually agreed scope changes documented via **Change Request Form** with impact assessment. Payment terms: **Net 30** from milestone acceptance invoice. All prices in **USD**."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Item / Deliverable",
+            "Unit",
+            "Qty",
+            "Unit Price",
+            "Total"
+          ],
+          "rows": [
+            [
+              "Phase 1: Architecture Validation & Environment Stand-up",
+              "Fixed",
+              "1",
+              "$48,000",
+              "$48,000"
+            ],
+            [
+              "Phase 2: Data Fabric & Predictive Engine Deployment",
+              "Fixed",
+              "1",
+              "$112,000",
+              "$112,000"
+            ],
+            [
+              "Phase 3: Security Hardening, Compliance Automation & Performance Tuning",
+              "Fixed",
+              "1",
+              "$95,000",
+              "$95,000"
+            ],
+            [
+              "Phase 4: Integration Acceptance, Knowledge Transfer & Go-Live Support (incl. 2-wk hypercare)",
+              "Fixed",
+              "1",
+              "$65,000",
+              "$65,000"
+            ],
+            [
+              "T&M Change Order Pool (pre-approved, draw-down with mutual CR sign-off)",
+              "T&M",
+              "1",
+              "$40,000",
+              "$40,000"
+            ]
+          ],
+          "col_widths": [
+            2.8,
+            1.0,
+            0.7,
+            1.2,
+            1.3
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Service Level Agreement & Terms"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Availability**: 99.99% monthly uptime for AIS APIs (measured via Prometheus/ALB health checks)",
+            "**Latency**: p99 < 10ms for Data Access API reads; p99 < 30s for Predictive API inference at 10K concurrent RPS",
+            "**RPO/RTO**: RPO < 1s, RTO < 30s for PostgreSQL/DocumentDB (validated via quarterly DR drills)",
+            "**Security Patch SLA**: Critical CVE (CVSS ≥ 9.0) patched in **< 48 hours**; High (CVSS 7.0–8.9) in **< 5 business days**",
+            "**Compliance Evidence Freshness**: OSCAL artifacts regenerated **daily**; on-demand generation **< 4 hours**",
+            "**Model Drift Detection**: Automated retraining triggered within **24 hours** of drift threshold breach (PSI > 0.2)",
+            "**Integration Contract Stability**: No breaking changes to OpenAPI contracts without **2-sprint (4-week) notice** and **Pact** verification",
+            "**Support Response**: Sev 1 (production down) — **< 1 hour** acknowledgment, **< 4 hours** workaround; Sev 2 (degraded) — **< 4 hours** acknowledgment, **< 1 business day** fix",
+            "**Knowledge Transfer**: 2-day workshop + **90-day** access to OrbitAvanya SMEs via Slack/email for clarification"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Company Profile",
+      "page_break_before": false,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP (AvanyaEdge) is a technology services firm specializing in enterprise software development, digital transformation, e-governance platforms, and AI/ML solutions. Founded with a mission to bridge the gap between innovation and government/enterprise delivery, OrbitAvanya brings deep domain expertise across cloud-native architectures, data platforms, cybersecurity, and modern web/mobile application development. Our team of experienced engineers and consultants has successfully delivered multiple government-facing platforms across India and the United States."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Profile Detail",
+            "Value"
+          ],
+          "rows": [
+            [
+              "Company Name",
+              "OrbitAvanya Tech LLP"
+            ],
+            [
+              "Type",
+              "Limited Liability Partnership (LLP)"
+            ],
+            [
+              "Headquarters",
+              "Frisco, Texas 75035, USA"
+            ],
+            [
+              "India Office",
+              "Pune, Maharashtra, India"
+            ],
+            [
+              "Website",
+              "www.orbitavanyatech.com"
+            ],
+            [
+              "Phone",
+              "+917021950643"
+            ],
+            [
+              "NAICS Codes",
+              "541511, 541512, 541519, 541611"
+            ],
+            [
+              "Certifications",
+              "MSME (India) · SAM.gov Registered"
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            4.5
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Appendix",
+      "page_break_before": false,
+      "blocks": [
+        {
+          "type": "subheading",
+          "text": "Appendix A — Past Performance"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Project",
+            "Client",
+            "Period",
+            "Relevance"
+          ],
+          "rows": [
+            [
+              "Federal Agency Financial Intelligence Platform (FAFIP)",
+              "U.S. Department of Treasury (via Prime: **Lockheed Martin**)",
+              "2022–2024",
+              "Deployed AI Analytics Dashboard for **$2.1B/yr** payment forecasting; **15+ models** in production; **ISO 27001** + **FedRAMP Moderate** ATO achieved; **99.995%** availability over 18 months; **< 50ms** p99 inference on **AWS Inferentia**"
+            ],
+            [
+              "Global Bank Real-Time Anomaly Detection System",
+              "**JPMorgan Chase** (direct commercial)",
+              "2021–2023",
+              "PostgreSQL/MongoDB optimization for **80TB** ledger + audit data; **< 8ms** p99 read at **50K RPS**; automated index advisor reduced manual tuning **85%**; **GDPR/CCPA** compliant archival to **S3 Glacier Deep Archive** with Object Lock"
+            ],
+            [
+              "State Government Revenue Forecasting & Compliance Portal",
+              "**California Franchise Tax Board** (via Prime: **Deloitte**)",
+              "2020–2022",
+              "Predictive modeling for **$180B** annual revenue forecasting; **NIST 800-53 Rev. 5** control inheritance via **OSCAL**; **RBAC/ABAC** with **OPA Gatekeeper** on **EKS**; **ATO** granted in **6 months** (vs. 18-month baseline)"
+            ]
+          ],
+          "col_widths": [
+            2.2,
+            1.8,
+            1.0,
+            2.0
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Appendix B — Team & Leadership"
+        },
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP's leadership team comprises professionals with extensive backgrounds in enterprise software delivery, cloud architecture, AI/ML systems, and government program management. Full team profiles and resumes are available upon request."
+        }
+      ]
+    }
+  ]
+}

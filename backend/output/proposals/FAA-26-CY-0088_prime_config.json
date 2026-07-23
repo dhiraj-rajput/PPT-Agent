@@ -1,0 +1,445 @@
+{
+  "brand": {
+    "company_name": "OrbitAvanya Tech LLP",
+    "company_short": "OrbitAvanya",
+    "logo_path": "assets/logo.png",
+    "cover_graphic_path": "assets/cover_graphic.png",
+    "body_font": "Fira Sans Light",
+    "heading_font": "Fira Sans SemiBold",
+    "accent_color": "1F3864",
+    "muted_color": "595959",
+    "address_line1": "13352 Kettle Camp Rd",
+    "address_line2": "Frisco, Texas 75035",
+    "phone": "+917021950643",
+    "website": "www.orbitavanyatech.com"
+  },
+  "proposal": {
+    "title": "RFP Response Proposal",
+    "subtitle": "IT Services",
+    "prepared_for": "Issuing Agency",
+    "prepared_by": "Ranjeet Kumar — Founder & CEO, OrbitAvanya Tech LLP (AvanyaEdge)",
+    "engagement_ref": "OAT-CES-2026-FAA-26-CY-0088-FULL",
+    "proposal_date": "July 14, 2026",
+    "validity": "90 days from proposal date",
+    "confidentiality_text": "This document contains confidential information of OrbitAvanya Tech LLP and its affiliates and/or licensors (“OrbitAvanya”), which may include trade secrets, proprietary methodology, and business information. The recipient acknowledges that this information has been developed by OrbitAvanya as valuable trade secrets and shall remain its exclusive property, to be disclosed only to persons who have a need to know. The recipient agrees not to copy or reproduce any information supplied herein without prior written permission from an authorized representative of OrbitAvanya.\n\nReciprocally, OrbitAvanya acknowledges that information shared by the recipient during proposal review and any subsequent engagement constitutes confidential information of the recipient, and agrees to protect it to the same standard and to use it solely for the purposes of the engagement contemplated herein."
+  },
+  "toc": {
+    "heading": "Content"
+  },
+  "sections": [
+    {
+      "title": "Executive Summary",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP is pleased to submit this proposal in response to Solicitation **FAA-26-CY-0088** for the provision of comprehensive **IT Services**. As a specialized technology services firm, we offer a sophisticated blend of enterprise software engineering and cloud-native architecture designed to meet the rigorous operational demands of the **Issuing Agency**. Our approach focuses on enhancing system reliability, scalability, and security through the deployment of modern development frameworks and automated workflows."
+        },
+        {
+          "type": "paragraph",
+          "text": "Our proposed solution leverages a high-performance tech stack featuring **React**, **Python**, and **AWS**, ensuring that the agency's digital infrastructure is not only robust but also adaptable to evolving federal mandates. We recognize the critical nature of the agency's mission and have aligned our delivery model to minimize operational risk while maximizing system uptime and user experience."
+        },
+        {
+          "type": "paragraph",
+          "text": "By integrating **DevOps CI/CD pipelines** and adhering to **Standard Federal Security Requirements**, OrbitAvanya Tech LLP ensures that all deliverables are compliant, secure, and maintainable. We are committed to delivering a digital transformation that optimizes resource allocation and improves the overall efficiency of the agency's IT ecosystem."
+        },
+        {
+          "type": "subheading",
+          "text": "Key Highlights"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Expertise in **Cloud-Native Architectures** utilizing **AWS** for high availability and scalability.",
+            "Full-stack proficiency in **React**, **Node.js**, and **Python** for rapid, secure application development.",
+            "Strict adherence to **Standard Federal Security Requirements** and compliance frameworks.",
+            "Implementation of **CI/CD pipelines** to reduce deployment lead times and eliminate manual errors.",
+            "Proven track record in **e-Governance digital transformation** and enterprise system integration.",
+            "Agile delivery methodology ensuring iterative value and transparent project governance."
+          ]
+        },
+        {
+          "type": "signature",
+          "name": "Ranjeet Kumar Singh",
+          "title": "Founder & CEO",
+          "company": "OrbitAvanya Tech LLP (AvanyaEdge)"
+        }
+      ]
+    },
+    {
+      "title": "Strategic Context",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The current IT landscape for the **Issuing Agency** requires a transition toward more resilient, modular, and secure systems to support critical government functions. This engagement is framed as a strategic modernization effort to replace legacy constraints with scalable, cloud-ready solutions.\n\nOrbitAvanya Tech LLP positions itself as a strategic partner capable of bridging the gap between complex federal requirements and cutting-edge technical execution, ensuring that **NAICS 541511** standards for custom computer programming are exceeded."
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 1 · Infrastructure Modernization Needs"
+        },
+        {
+          "type": "paragraph",
+          "text": "Current federal IT environments often struggle with monolithic architectures that hinder agility."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Requirement for **scalable cloud environments** to handle fluctuating workloads.",
+            "Need for **interoperability** between disparate legacy data silos."
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 2 · Security and Compliance Mandates"
+        },
+        {
+          "type": "paragraph",
+          "text": "The agency requires strict adherence to federal security protocols to protect sensitive data."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Necessity for **encryption at rest and in transit**.",
+            "Requirement for **Role-Based Access Control (RBAC)** and comprehensive audit logging."
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 3 · Operational Efficiency Gaps"
+        },
+        {
+          "type": "paragraph",
+          "text": "Manual deployment processes increase the risk of downtime and security vulnerabilities."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Need for **automated testing** and deployment frameworks.",
+            "Requirement for **real-time monitoring** and proactive system alerting."
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Scope of Work",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The scope of this engagement encompasses the end-to-end design, development, and implementation of IT services as outlined in **FAA-26-CY-0088**. OrbitAvanya Tech LLP will provide comprehensive technical oversight, from initial requirements gathering to final system handover and support."
+        },
+        {
+          "type": "subheading",
+          "text": "Deliverables"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Detailed Technical Design Document (TDD)** including system architecture diagrams.",
+            "**Production-Ready Software Modules** developed in React and Python/FastAPI.",
+            "**Cloud Infrastructure as Code (IaC)** scripts for AWS environment provisioning.",
+            "**Security Compliance Report** validating adherence to federal security standards.",
+            "**CI/CD Pipeline Configuration** for automated build and deployment.",
+            "**User Acceptance Testing (UAT) Report** and Final System Handover Documentation."
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Technical Requirements Alignment"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "RFP Requirement",
+            "Our Solution",
+            "Alignment"
+          ],
+          "rows": [
+            [
+              "Custom Software Development",
+              "Utilization of **React** for frontend and **FastAPI/Node.js** for backend services.",
+              "Full"
+            ],
+            [
+              "Cloud Infrastructure",
+              "Deployment on **AWS** utilizing managed services for scalability and resilience.",
+              "Full"
+            ],
+            [
+              "Federal Security Compliance",
+              "Implementation of **NIST-aligned** security controls and federal encryption standards.",
+              "Full"
+            ],
+            [
+              "Data Management",
+              "Deployment of **PostgreSQL** and **MongoDB** for structured and unstructured data needs.",
+              "Full"
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            3.0,
+            1.5
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Our Proposed Solution",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Our proposed solution centers on a **Microservices Architecture** deployed on **AWS**, ensuring that each component of the IT service can be scaled and updated independently without impacting the entire system. We will employ **React** and **Next.js** to create a highly responsive, accessible user interface that meets federal accessibility standards, while the backend will be powered by **Python (FastAPI)** and **Node.js** for high-performance API orchestration."
+        },
+        {
+          "type": "paragraph",
+          "text": "To ensure data integrity and performance, we will implement a hybrid database strategy using **PostgreSQL** for relational data and **MongoDB** for flexible, document-based storage. This allows the **Issuing Agency** to handle diverse data types with optimal query performance and reliability."
+        },
+        {
+          "type": "paragraph",
+          "text": "Security is integrated into the core of our development lifecycle. We will implement a **Zero Trust Architecture**, utilizing **AWS IAM**, encrypted secrets management, and continuous vulnerability scanning. All code will undergo rigorous static and dynamic analysis before being promoted to production via our **CI/CD pipelines**."
+        },
+        {
+          "type": "paragraph",
+          "text": "Finally, we will establish a comprehensive monitoring and observability suite using cloud-native tools, providing the agency with real-time visibility into system health, user activity, and performance bottlenecks, ensuring maximum availability of critical services."
+        },
+        {
+          "type": "subheading",
+          "text": "Core Capabilities"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Capability",
+            "Description"
+          ],
+          "rows": [
+            [
+              "Enterprise Software Engineering",
+              "Full-lifecycle development of scalable applications using modern frameworks like **React** and **Node.js**."
+            ],
+            [
+              "Cloud Architecture & Migration",
+              "Expertise in designing and deploying **AWS** cloud-native environments with a focus on cost-optimization and resilience."
+            ],
+            [
+              "Cybersecurity & Compliance",
+              "Implementation of federal-grade security controls, including encryption, RBAC, and compliance auditing."
+            ],
+            [
+              "DevOps & Automation",
+              "Streamlining delivery through **CI/CD**, containerization (Docker/K8s), and automated testing."
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            4.5
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Technology Stack"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "React",
+            "Next.js",
+            "Python",
+            "FastAPI",
+            "Node.js",
+            "PostgreSQL",
+            "MongoDB",
+            "AWS"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Implementation Timeline",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The project will be executed over a structured period to ensure quality assurance and iterative feedback from the **Issuing Agency**."
+        },
+        {
+          "type": "subheading",
+          "text": "Engagement Timeline"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Phase",
+            "Duration",
+            "Focus Area",
+            "Deliverables"
+          ],
+          "rows": [
+            [
+              "Phase 1: Discovery & Design",
+              "Week 1-2",
+              "Requirements gathering and architectural blueprinting.",
+              "Technical Design Document (TDD)"
+            ],
+            [
+              "Phase 2: Core Development",
+              "Week 3-6",
+              "Sprints for frontend/backend development and API integration.",
+              "Beta Application Modules"
+            ],
+            [
+              "Phase 3: Security & QA",
+              "Week 7-8",
+              "Security auditing, UAT, and performance tuning.",
+              "Security Compliance Report"
+            ],
+            [
+              "Phase 4: Deployment & Handover",
+              "Week 9-10",
+              "Production cutover and knowledge transfer.",
+              "Final System Handover"
+            ]
+          ],
+          "col_widths": [
+            1.0,
+            1.2,
+            2.3,
+            2.5
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Total Estimated Duration: 10 Weeks"
+        }
+      ]
+    },
+    {
+      "title": "Your Investment",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Our pricing model is designed to provide the **Issuing Agency** with cost predictability and value-driven delivery."
+        },
+        {
+          "type": "subheading",
+          "text": "Service Level Agreement & Terms"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**99.9% System Availability** for all production environments.",
+            "**Critical Incident Response** within 2 hours of notification.",
+            "**Monthly Performance Reviews** and system health reports.",
+            "**Zero-Critical Vulnerability** guarantee upon final delivery."
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Company Profile",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP (AvanyaEdge) is a technology services firm specializing in enterprise software development, digital transformation, e-governance platforms, and AI/ML solutions. Founded with a mission to bridge the gap between innovation and government/enterprise delivery, OrbitAvanya brings deep domain expertise across cloud-native architectures, data platforms, cybersecurity, and modern web/mobile application development. Our team of experienced engineers and consultants has successfully delivered multiple government-facing platforms across India and the United States."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Profile Detail",
+            "Value"
+          ],
+          "rows": [
+            [
+              "Company Name",
+              "OrbitAvanya Tech LLP"
+            ],
+            [
+              "Type",
+              "Limited Liability Partnership (LLP)"
+            ],
+            [
+              "Headquarters",
+              "Frisco, Texas 75035, USA"
+            ],
+            [
+              "India Office",
+              "Pune, Maharashtra, India"
+            ],
+            [
+              "Website",
+              "www.orbitavanyatech.com"
+            ],
+            [
+              "Phone",
+              "+917021950643"
+            ],
+            [
+              "NAICS Codes",
+              "541511, 541512, 541519, 541611"
+            ],
+            [
+              "Certifications",
+              "MSME (India) · SAM.gov Registered"
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            4.5
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Appendix",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "subheading",
+          "text": "Appendix A — Past Performance"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Project",
+            "Client",
+            "Period",
+            "Relevance"
+          ],
+          "rows": [
+            [
+              "Contractor Management System (CMS)",
+              "Irrigation Department",
+              "Sep 2024",
+              "Full-stack government e-governance platform development"
+            ],
+            [
+              "Enterprise Data Platform",
+              "Confidential (Government)",
+              "2024",
+              "Cloud-native data warehouse and analytics dashboard"
+            ]
+          ],
+          "col_widths": [
+            2.2,
+            1.8,
+            1.0,
+            2.0
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Appendix B — Team & Leadership"
+        },
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP's leadership team comprises professionals with extensive backgrounds in enterprise software delivery, cloud architecture, AI/ML systems, and government program management. Full team profiles and resumes are available upon request."
+        }
+      ]
+    }
+  ]
+}

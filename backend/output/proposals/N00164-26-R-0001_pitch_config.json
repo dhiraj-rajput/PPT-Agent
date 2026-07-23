@@ -1,0 +1,150 @@
+{
+  "brand": {
+    "company_name": "OrbitAvanya Tech LLP",
+    "company_short": "OrbitAvanya",
+    "logo_path": "assets/logo.png",
+    "cover_graphic_path": "assets/cover_graphic.png",
+    "body_font": "Fira Sans Light",
+    "heading_font": "Fira Sans SemiBold",
+    "accent_color": "1F3864",
+    "muted_color": "595959",
+    "address_line1": "13352 Kettle Camp Rd",
+    "address_line2": "Frisco, Texas 75035",
+    "phone": "+917021950643",
+    "website": "www.orbitavanyatech.com"
+  },
+  "proposal": {
+    "title": "Teaming & Subcontracting Proposal",
+    "subtitle": "an Enterprise Financial Analysis & Predictive Modeling System",
+    "prepared_for": "Booz Allen Hamilton Inc.",
+    "prepared_by": "Ranjeet Kumar — Founder & CEO, OrbitAvanya Tech LLP (AvanyaEdge)",
+    "engagement_ref": "OAT-CES-2026-N00164-26-R-0001-PITCH",
+    "proposal_date": "July 13, 2026",
+    "validity": "90 days from proposal date",
+    "confidentiality_text": "This document contains confidential information of OrbitAvanya Tech LLP and its affiliates and/or licensors (“OrbitAvanya”), which may include trade secrets, proprietary methodology, and business information. The recipient acknowledges that this information has been developed by OrbitAvanya as valuable trade secrets and shall remain its exclusive property, to be disclosed only to persons who have a need to know. The recipient agrees not to copy or reproduce any information supplied herein without prior written permission from an authorized representative of OrbitAvanya.\n\nReciprocally, OrbitAvanya acknowledges that information shared by the recipient during proposal review and any subsequent engagement constitutes confidential information of the recipient, and agrees to protect it to the same standard and to use it solely for the purposes of the engagement contemplated herein."
+  },
+  "toc": {
+    "heading": "Content"
+  },
+  "sections": [
+    {
+      "title": "Executive Summary",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Dear Team at Booz Allen Hamilton Inc.,"
+        },
+        {
+          "type": "paragraph",
+          "text": "First, congratulations on winning the prime contract award for VA/DHS Solicitation N00164-26-R-0001 (an Enterprise Financial Analysis & Predictive Modeling System)!"
+        },
+        {
+          "type": "paragraph",
+          "text": "Orbit Avanya LLP is writing to propose a strategic subcontracting partnership to support your delivery team on this contract. As an agile technology firm specializing in secure visual dashboards and database integrations, we offer a pre-built AI Analytics Dashboard product framework that fits the technical requirements of this project."
+        },
+        {
+          "type": "paragraph",
+          "text": "We propose taking on a 15.0% subcontracting work share, specifically focusing on building the Next.js dashboards, configuring the Python ETL data pipelines, and implementing the security compliance logging layers. By teaming with Orbit Avanya, Booz Allen Hamilton Inc. gains access to certified visual analytics developers and pre-tested database interfaces, reducing implementation timeframes and mitigating technical execution risk."
+        },
+        {
+          "type": "paragraph",
+          "text": "We look forward to discussing how our AI Analytics Dashboard capabilities can align with your program delivery plans."
+        },
+        {
+          "type": "signature",
+          "name": "Ranjeet Kumar Singh",
+          "title": "Founder & CEO",
+          "company": "OrbitAvanya Tech LLP (AvanyaEdge)"
+        }
+      ]
+    },
+    {
+      "title": "Requirement Alignment",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The following tables demonstrate the alignment between the RFP solicitation requirements and our product capabilities."
+        },
+        {
+          "type": "subheading",
+          "text": "Technical Capability Matrix"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "RFP Required Capability",
+            "Our Matched Capability",
+            "How It Aligns"
+          ],
+          "rows": [
+            [
+              "Database Management",
+              "PostgreSQL & MongoDB Optimization",
+              "Enforces database performance optimization, indexing, and clustering using PostgreSQL and MongoDB."
+            ]
+          ],
+          "col_widths": [
+            2.2,
+            2.3,
+            2.5
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Proposed Work Share",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP proposes a work share allocation of 15.0% of the total contract value. The breakdown is structured as follows:"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Proposed Task Area",
+            "Scope Percentage"
+          ],
+          "rows": [
+            [
+              "Visual Dashboards & Predictive Widgets Development",
+              "6.0%"
+            ],
+            [
+              "Data Warehousing & ETL Pipeline Setup",
+              "5.2%"
+            ],
+            [
+              "Security Enforcement & Compliance Hardening",
+              "3.8%"
+            ]
+          ],
+          "col_widths": [
+            4.5,
+            2.5
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Strategic Outreach",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "subheading",
+          "text": "Strategic Contact Point"
+        },
+        {
+          "type": "paragraph",
+          "text": "Subject: Subcontracting Partnership Proposal: VA/DHS Solicitation N00164-26-R-0001 - Orbit Avanya & Booz Allen Hamilton Inc."
+        },
+        {
+          "type": "paragraph",
+          "text": "Email Text:\n"
+        }
+      ]
+    }
+  ]
+}

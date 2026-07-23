@@ -1,0 +1,149 @@
+{
+  "company_name": "Deloitte",
+  "website": "https://www.deloitte.com/us/en.html",
+  "industry": "Professional Services",
+  "description": "Deloitte is a leading global professional services network providing a comprehensive suite of audit, consulting, financial advisory, risk management, tax, and legal services. The firm specializes in large-scale digital transformation, AI integration, and operating model redesign for enterprise and government clients across 150+ countries.",
+  "headquarters": "London, England, UK",
+  "locations": [
+    "New York, NY",
+    "Hong Kong",
+    "Paris, France",
+    "Singapore",
+    "Tokyo, Japan",
+    "Sydney, Australia",
+    "Toronto, Canada",
+    "Madrid, Spain",
+    "Dubai, UAE",
+    "Johannesburg, South Africa"
+  ],
+  "employee_count": "470,000+",
+  "founded_year": 1845,
+  "specialties": [
+    "Strategy & Business Design",
+    "Digital Transformation",
+    "Risk Management",
+    "Audit & Assurance",
+    "Tax & Legal Advisory"
+  ],
+  "products": [
+    "Deloitte Omnia",
+    "Deloitte Digital",
+    "Monitor Deloitte",
+    "Deloitte University"
+  ],
+  "services": [
+    "Management Consulting",
+    "Financial Advisory",
+    "Audit and Assurance",
+    "Tax Services",
+    "Legal Services",
+    "Risk Advisory",
+    "Human Capital Consulting",
+    "Enterprise Technology Performance",
+    "Cloud Modernization",
+    "ERP Implementation"
+  ],
+  "technology_stack": [
+    "Agentic AI",
+    "Cloud Engineering",
+    "Advanced Analytics",
+    "Blockchain",
+    "ERP Systems"
+  ],
+  "business_model": "Global professional services network operating via member firms providing project-based consulting and recurring audit/tax engagements.",
+  "pricing_model": "Project-based fees and professional service retainers",
+  "financial_highlights": [
+    "Global revenue of approximately US$70.5 billion for FY2025",
+    "Deloitte Digital healthcare revenue grew 5% to $790.6 million in 2025",
+    "Ranked No. 1 in Security Services by revenue in 2026 Gartner Market Share report"
+  ],
+  "leadership": [
+    "Joseph B. Ucuzoglu (CEO Deloitte Global)",
+    "Anna Marks (Chairperson Deloitte Global)",
+    "Mo Reynolds (Chief People Officer, Deloitte U.S.)",
+    "Darren Graves (UK CEO)"
+  ],
+  "competitors": [
+    "PwC (Direct Big Four competitor)",
+    "EY (Direct Big Four competitor)",
+    "KPMG (Direct Big Four competitor)",
+    "Accenture (Strategy and Technology consulting)",
+    "IBM (IT services and consulting)",
+    "Capgemini (IT services and consulting)",
+    "TCS (IT services and consulting)"
+  ],
+  "value_proposition": "Combining deep domain business knowledge with advanced engineering and AI capabilities to help organizations navigate complexity and drive digital transformation at scale.",
+  "rfp_strengths": [
+    "Unmatched global scale and resource capacity (470k+ professionals)",
+    "Multi-disciplinary integration (Audit, Tax, and Consulting under one brand)",
+    "Strong government and public sector track record",
+    "Deep industry-specific expertise in healthcare and financial services",
+    "Proven delivery of large-scale ERP and cloud modernization projects"
+  ],
+  "rfp_weaknesses": [
+    "High cost structure compared to boutique firms",
+    "Potential for 'culture debt' and organizational friction during rapid AI transitions",
+    "Recent reports of reducing pay rises and bonuses in specific regions (UK) indicating financial pressure in certain divisions"
+  ],
+  "opportunities": [
+    "Expansion of Agentic AI within the Deloitte Omnia platform",
+    "Growth in AI-powered agreement management and automated workflows",
+    "Modernization of talent architecture to move away from traditional pyramid consulting models"
+  ],
+  "challenges": [
+    "Disruption of the traditional consulting pyramid model by AI",
+    "Client pressure to 'rescope and restructure' to reduce spending during transformations",
+    "Managing workforce transitions during the 'modernization' of job titles and roles"
+  ],
+  "recent_news": [
+    "Launched Connected Agentic Intelligence in Deloitte Omnia (2026)",
+    "Acquired Vision.bi in Israel to expand AI and data capabilities (June 2026)",
+    "Announced modernization of U.S. job titles to alphanumeric levels (June 2026)",
+    "Partnered with Docusign on AI-powered agreement management study (April 2026)"
+  ],
+  "clients": [
+    "Fortune 500 companies",
+    "Global Government Agencies",
+    "Major Financial Institutions"
+  ],
+  "partners": [
+    "Nvidia",
+    "Microsoft",
+    "Amazon Web Services (AWS)",
+    "Docusign"
+  ],
+  "emails": [
+    "brianhansen@deloitte.com",
+    "diptigulatiusaaceo@deloitte.com",
+    "famuratovic@deloitte.com",
+    "fmilano@deloitte.com",
+    "kprabhakar@deloitte.com",
+    "kunalshah@deloitte.com",
+    "rmassey@deloitte.com",
+    "tbarton@deloitte.com",
+    "timdavis@deloitte.com"
+  ],
+  "phone_numbers": [
+    "+1 206 716 7000",
+    "+1 415 783 2094",
+    "+1 415 783 5410",
+    "+1 415 783 6386",
+    "+1 415 783 6425",
+    "+1 773 620 0784"
+  ],
+  "social_links": [
+    "https://www.linkedin.com/company/deloitte/",
+    "https://x.com/deloitteus",
+    "https://www.youtube.com/user/DeloitteLLP",
+    "https://www.instagram.com/lifeatdeloitteus/"
+  ],
+  "sources_used": [
+    "Website",
+    "LinkedIn",
+    "Google Search",
+    "Fortune",
+    "Wikipedia",
+    "PR Newswire"
+  ],
+  "last_updated": "2026-07-09T05:59:16.856411+00:00"
+}

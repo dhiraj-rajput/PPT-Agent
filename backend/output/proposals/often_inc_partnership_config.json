@@ -1,0 +1,455 @@
+{
+  "brand": {
+    "company_name": "OrbitAvanya Tech LLP",
+    "company_short": "OrbitAvanya",
+    "logo_path": "assets/logo.png",
+    "cover_graphic_path": "assets/cover_graphic.png",
+    "body_font": "Fira Sans Light",
+    "heading_font": "Fira Sans SemiBold",
+    "accent_color": "1F3864",
+    "muted_color": "595959",
+    "address_line1": "13352 Kettle Camp Rd",
+    "address_line2": "Frisco, Texas 75035",
+    "phone": "+917021950643",
+    "website": "www.orbitavanyatech.com"
+  },
+  "proposal": {
+    "title": "Partnership Proposal",
+    "subtitle": "Strategic Partnership Proposal",
+    "prepared_for": "Often Inc",
+    "prepared_by": "Ranjeet Kumar — Founder & CEO, OrbitAvanya Tech LLP (AvanyaEdge)",
+    "engagement_ref": "OAT-CES-2026-OFTEN_INC-FULL",
+    "proposal_date": "July 14, 2026",
+    "validity": "90 days from proposal date",
+    "confidentiality_text": "This document contains confidential information of OrbitAvanya Tech LLP and its affiliates and/or licensors (“OrbitAvanya”), which may include trade secrets, proprietary methodology, and business information. The recipient acknowledges that this information has been developed by OrbitAvanya as valuable trade secrets and shall remain its exclusive property, to be disclosed only to persons who have a need to know. The recipient agrees not to copy or reproduce any information supplied herein without prior written permission from an authorized representative of OrbitAvanya.\n\nReciprocally, OrbitAvanya acknowledges that information shared by the recipient during proposal review and any subsequent engagement constitutes confidential information of the recipient, and agrees to protect it to the same standard and to use it solely for the purposes of the engagement contemplated herein."
+  },
+  "toc": {
+    "heading": "Content"
+  },
+  "sections": [
+    {
+      "title": "Executive Summary",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP is pleased to propose a strategic partnership with Often to catalyze digital transformation within the **Retail and E-commerce sectors**. By merging Often's premier **Enterprise Digital Consulting** and delivery expertise with OrbitAvanya's cutting-edge product suite and software engineering capabilities, we aim to create a powerhouse of technical execution and strategic foresight."
+        },
+        {
+          "type": "paragraph",
+          "text": "Our objective is to bridge the gap between high-level digital strategy and rapid, scalable technical deployment. While Often excels in consulting and delivery, OrbitAvanya provides the **proprietary product accelerators**—such as our AI Analytics Dashboard and Cloud Migrator—that can significantly reduce time-to-market for Often's enterprise clients, ensuring a **competitive edge in a fast-paced retail landscape**."
+        },
+        {
+          "type": "paragraph",
+          "text": "This collaboration is designed to move beyond a traditional vendor-client relationship, evolving into a **Joint Value Proposition (JVP)**. Together, we will offer a comprehensive 'Strategy-to-Scale' ecosystem, combining Often's industry insights with OrbitAvanya's **full-stack engineering excellence** to drive operational efficiency and revenue growth for global retail brands."
+        },
+        {
+          "type": "subheading",
+          "text": "Key Highlights"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Accelerated Time-to-Market** by leveraging OrbitAvanya's pre-built ERP and AI modules within Often's consulting frameworks.",
+            "**Enhanced Service Portfolio** for Often, adding specialized AI Analytics and Cloud Migration capabilities to their delivery suite.",
+            "**Increased Market Penetration** in the E-commerce sector through joint go-to-market strategies and bundled offerings.",
+            "**Reduced Operational Overhead** for clients via the implementation of the **OrbitAvanya ERP** and automated e-Gov portals.",
+            "**Seamless Technical Synergy** combining Often's delivery management with OrbitAvanya's **React, Python, and AWS** expertise.",
+            "**Mutual Revenue Growth** through a shared risk-reward model and joint enterprise account acquisition."
+          ]
+        },
+        {
+          "type": "signature",
+          "name": "Ranjeet Kumar Singh",
+          "title": "Founder & CEO",
+          "company": "OrbitAvanya Tech LLP (AvanyaEdge)"
+        }
+      ]
+    },
+    {
+      "title": "Strategic Context",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The retail and e-commerce industry is currently undergoing a massive shift toward **hyper-personalization and operational automation**. Companies are no longer looking for simple digital storefronts; they require integrated ecosystems that manage supply chains, analyze customer behavior in real-time, and migrate legacy data to the cloud without downtime.\n\nOften possesses the strategic trust and consulting reach to identify these needs, while OrbitAvanya Tech LLP possesses the **technical machinery** to solve them. By aligning our strengths, we can capture a larger share of the **Enterprise Digital Transformation market**, offering a seamless transition from strategic roadmap to a fully functional, AI-driven technical reality."
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 1 · The 'Execution Gap' in Digital Consulting"
+        },
+        {
+          "type": "paragraph",
+          "text": "Many enterprise consulting firms face a gap between the strategic vision presented to the client and the actual speed of technical deployment. Often's focus on delivery can be further optimized by integrating **modular product accelerators**."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Need for **rapid prototyping** to validate consulting hypotheses.",
+            "Demand for **off-the-shelf AI components** to avoid building from scratch for every retail client.",
+            "Opportunity to implement **OrbitAvanya's AI Analytics Dashboard** to provide immediate value during the discovery phase."
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 2 · Retail Infrastructure Modernization"
+        },
+        {
+          "type": "paragraph",
+          "text": "Retailers are struggling with legacy systems that hinder agility. There is a significant opportunity to offer a **unified migration and management suite**."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "High demand for **Cloud Migration** services to move from on-premise to AWS/Azure.",
+            "Need for integrated **ERP solutions** that handle complex retail inventory and omni-channel sales.",
+            "Synergy between Often's industry knowledge and OrbitAvanya's **Cloud Migrator** tool."
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Scope of Work",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The proposed collaboration will focus on three primary pillars: **Joint Product Integration**, **Co-Delivery of Technical Services**, and **Strategic Market Expansion**. We propose a model where OrbitAvanya acts as the 'Technical Engine' powering Often's 'Strategic Interface'."
+        },
+        {
+          "type": "subheading",
+          "text": "Deliverables"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Joint 'Retail Transformation' Package**: A bundled offering combining Often's consulting and OrbitAvanya's ERP/AI tools.",
+            "**Integrated AI Analytics Layer**: Deployment of OrbitAvanya's dashboard into Often's existing client delivery pipelines.",
+            "**Cloud Migration Framework**: A standardized methodology using the **OrbitAvanya Cloud Migrator** for retail legacy systems.",
+            "**Co-branded Technical Case Studies**: Documenting the success of joint deployments to attract Fortune 500 retail clients."
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Technical Requirements Alignment"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "RFP Requirement",
+            "Our Solution",
+            "Alignment"
+          ],
+          "rows": [
+            [
+              "Rapid deployment of data-driven insights for retail clients",
+              "OrbitAvanya AI Analytics Dashboard",
+              "Full Synergy"
+            ],
+            [
+              "Scalable backend for high-traffic e-commerce platforms",
+              "FastAPI, Node.js, and PostgreSQL architecture",
+              "Full Synergy"
+            ],
+            [
+              "Modernization of legacy retail ERPs",
+              "OrbitAvanya ERP & Cloud Migrator",
+              "Full Synergy"
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            3.0,
+            1.5
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Our Proposed Solution",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Our joint solution centers on the creation of the **'Often-OrbitAvanya Digital Accelerator'**. This is not a single product, but a service-product hybrid. When Often identifies a client need for digital transformation, OrbitAvanya provides the **underlying technical architecture** and proprietary tools to execute that vision in a fraction of the traditional time."
+        },
+        {
+          "type": "paragraph",
+          "text": "For instance, in a retail scenario, Often would lead the **Enterprise Digital Consulting** phase, defining the business logic and user journeys. OrbitAvanya would then deploy the **OrbitAvanya ERP** as a foundation, customizing it via our **React/Next.js** frontend and **Python/FastAPI** backend to meet the specific needs of the client, while the **AI Analytics Dashboard** provides the client with immediate visibility into their KPIs."
+        },
+        {
+          "type": "paragraph",
+          "text": "This approach transforms Often's delivery from a 'labor-only' model to a 'solution-led' model. By leveraging our **AWS-certified cloud infrastructure**, we ensure that the solutions are not only innovative but also **enterprise-grade, secure, and infinitely scalable**, providing the client with a future-proof digital core."
+        },
+        {
+          "type": "subheading",
+          "text": "Core Capabilities"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Capability",
+            "Description"
+          ],
+          "rows": [
+            [
+              "Full-Stack Engineering",
+              "Expertise in **React, Next.js, and Node.js** for high-performance user interfaces and scalable server-side logic."
+            ],
+            [
+              "AI & Data Analytics",
+              "Proprietary **AI Analytics Dashboards** capable of processing complex retail datasets into actionable business intelligence."
+            ],
+            [
+              "Enterprise Resource Planning",
+              "The **OrbitAvanya ERP**, a flexible core system designed for operational efficiency and resource management."
+            ],
+            [
+              "Cloud Orchestration",
+              "Specialized **Cloud Migrator** tools and AWS expertise to ensure seamless transitions to the cloud."
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            4.5
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Technology Stack"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "React",
+            "Next.js",
+            "Python",
+            "FastAPI",
+            "Node.js",
+            "PostgreSQL",
+            "MongoDB",
+            "AWS"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Implementation Timeline",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "We propose a phased integration approach to ensure alignment and minimize risk, moving from a pilot project to a full-scale strategic alliance."
+        },
+        {
+          "type": "subheading",
+          "text": "Engagement Timeline"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Phase",
+            "Duration",
+            "Focus Area",
+            "Deliverables"
+          ],
+          "rows": [
+            [
+              "Phase 1: Alignment & Pilot",
+              "Month 1",
+              "Initial Alignment & Joint Offering Definition",
+              "Joint Value Proposition document, selection of one pilot retail client, and technical audit."
+            ],
+            [
+              "Phase 2: Integration",
+              "Month 2",
+              "Product Embedding",
+              "Integration of OrbitAvanya AI/ERP modules into Often's delivery framework."
+            ],
+            [
+              "Phase 3: Market Launch",
+              "Month 3",
+              "Joint Go-To-Market (GTM)",
+              "Co-branded marketing collateral and launch of the 'Retail Transformation' package."
+            ]
+          ],
+          "col_widths": [
+            1.0,
+            1.2,
+            2.3,
+            2.5
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Total Estimated Duration: 3 Months (Phase 1-3)"
+        }
+      ]
+    },
+    {
+      "title": "Your Investment",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "We propose a **Revenue-Share and Resource-Contribution model** to ensure mutual skin-in-the-game and shared success."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Item / Deliverable",
+            "Unit",
+            "Qty",
+            "Unit Price",
+            "Total"
+          ],
+          "rows": [
+            [
+              "Joint Solution Delivery",
+              "Revenue Share",
+              "N/A",
+              "Negotiable %",
+              "Based on Project Value"
+            ],
+            [
+              "Product Licensing (ERP/AI)",
+              "Wholesale Partner Rate",
+              "Per Client",
+              "Discounted",
+              "TBD"
+            ],
+            [
+              "Technical Implementation",
+              "Co-Investment",
+              "Man-hours",
+              "Shared Cost",
+              "TBD"
+            ]
+          ],
+          "col_widths": [
+            2.8,
+            1.0,
+            0.7,
+            1.2,
+            1.3
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Service Level Agreement & Terms"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Mutual Non-Disclosure Agreement (NDA)** to protect proprietary product logic and client data.",
+            "**Dedicated Account Management**: A single point of contact from both OrbitAvanya and Often for all joint projects.",
+            "**Quality Assurance Guarantee**: OrbitAvanya commits to enterprise-grade uptime and bug-fix SLAs for all deployed products.",
+            "**Joint Governance Committee**: Monthly strategic reviews to evaluate partnership KPIs and pipeline health."
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Company Profile",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP (AvanyaEdge) is a technology services firm specializing in enterprise software development, digital transformation, e-governance platforms, and AI/ML solutions. Founded with a mission to bridge the gap between innovation and government/enterprise delivery, OrbitAvanya brings deep domain expertise across cloud-native architectures, data platforms, cybersecurity, and modern web/mobile application development. Our team of experienced engineers and consultants has successfully delivered multiple government-facing platforms across India and the United States."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Profile Detail",
+            "Value"
+          ],
+          "rows": [
+            [
+              "Company Name",
+              "OrbitAvanya Tech LLP"
+            ],
+            [
+              "Type",
+              "Limited Liability Partnership (LLP)"
+            ],
+            [
+              "Headquarters",
+              "Frisco, Texas 75035, USA"
+            ],
+            [
+              "India Office",
+              "Pune, Maharashtra, India"
+            ],
+            [
+              "Website",
+              "www.orbitavanyatech.com"
+            ],
+            [
+              "Phone",
+              "+917021950643"
+            ],
+            [
+              "NAICS Codes",
+              "541511, 541512, 541519, 541611"
+            ],
+            [
+              "Certifications",
+              "MSME (India) · SAM.gov Registered"
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            4.5
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Appendix",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "subheading",
+          "text": "Appendix A — Past Performance"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Project",
+            "Client",
+            "Period",
+            "Relevance"
+          ],
+          "rows": [
+            [
+              "Enterprise ERP Deployment",
+              "Confidential Retail Client",
+              "2023",
+              "Successfully implemented a custom ERP solution that improved inventory tracking by **30%**."
+            ],
+            [
+              "AI-Driven Analytics Suite",
+              "Confidential E-commerce Brand",
+              "2022-2023",
+              "Deployed an AI dashboard that increased customer retention by **15%** through predictive behavior analysis."
+            ]
+          ],
+          "col_widths": [
+            2.2,
+            1.8,
+            1.0,
+            2.0
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Appendix B — Team & Leadership"
+        },
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP's leadership team comprises professionals with extensive backgrounds in enterprise software delivery, cloud architecture, AI/ML systems, and government program management. Full team profiles and resumes are available upon request."
+        }
+      ]
+    }
+  ]
+}

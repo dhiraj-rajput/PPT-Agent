@@ -1,0 +1,571 @@
+{
+  "brand": {
+    "company_name": "OrbitAvanya Tech LLP",
+    "company_short": "OrbitAvanya",
+    "logo_path": "assets/logo.png",
+    "cover_graphic_path": "assets/cover_graphic.png",
+    "body_font": "Fira Sans Light",
+    "heading_font": "Fira Sans SemiBold",
+    "accent_color": "1F3864",
+    "muted_color": "595959",
+    "address_line1": "13352 Kettle Camp Rd",
+    "address_line2": "Frisco, Texas 75035",
+    "phone": "+917021950643",
+    "website": "www.orbitavanyatech.com"
+  },
+  "proposal": {
+    "title": "Teaming Proposal",
+    "subtitle": "IT Services",
+    "prepared_for": "HDR ENGINEERING INC",
+    "prepared_by": "Ranjeet Kumar — Founder & CEO, OrbitAvanya Tech LLP (AvanyaEdge)",
+    "engagement_ref": "OAT-CES-2026-140P6026R0008-FULL",
+    "proposal_date": "July 16, 2026",
+    "validity": "90 days from proposal date",
+    "confidentiality_text": "This document contains confidential information of OrbitAvanya Tech LLP and its affiliates and/or licensors (“OrbitAvanya”), which may include trade secrets, proprietary methodology, and business information. The recipient acknowledges that this information has been developed by OrbitAvanya as valuable trade secrets and shall remain its exclusive property, to be disclosed only to persons who have a need to know. The recipient agrees not to copy or reproduce any information supplied herein without prior written permission from an authorized representative of OrbitAvanya.\n\nReciprocally, OrbitAvanya acknowledges that information shared by the recipient during proposal review and any subsequent engagement constitutes confidential information of the recipient, and agrees to protect it to the same standard and to use it solely for the purposes of the engagement contemplated herein."
+  },
+  "toc": {
+    "heading": "Content"
+  },
+  "sections": [
+    {
+      "title": "Executive Summary",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP is pleased to submit this teaming proposal to HDR Engineering, Inc. in response to Solicitation **140P6026R0008** for IT Services. As the prime contractor, HDR brings unparalleled engineering expertise, a **14,200+ employee** global workforce, and a proven **$4.98M SC DOT FY25** track record. OrbitAvanya proposes to contribute a **15% workshare** as a specialized technology subcontractor, delivering our flagship **AI Analytics Dashboard** product to address the data analytics, visualization, and intelligent reporting requirements inherent in modern federal IT service delivery."
+        },
+        {
+          "type": "paragraph",
+          "text": "Our **AI Analytics Dashboard** is a production-ready, cloud-native platform built on **React, Next.js, Python, FastAPI, Node.js, PostgreSQL, MongoDB, and AWS**. It provides advanced ETL pipelines, real-time analytics, predictive modeling, and interactive dashboards tailored for complex engineering and infrastructure datasets. By integrating our product into HDR's solution, the joint team gains immediate capability in **automated data ingestion, geospatial analytics, asset performance monitoring, and AI-driven decision support** — critical for transportation, water/wastewater, and civil-structural programs."
+        },
+        {
+          "type": "paragraph",
+          "text": "This proposal outlines a clear subcontract scope, technical alignment matrix, phased delivery plan, milestone-based investment structure, and SLA commitments. OrbitAvanya is prepared to execute a **Team Agreement** and **Subcontract** upon award, with dedicated engineering resources allocated from Day 1. We are confident that our technology contribution will strengthen HDR's competitive position and ensure successful contract performance for the Issuing Agency."
+        },
+        {
+          "type": "subheading",
+          "text": "Key Highlights"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**15% workshare** focused on AI/ML analytics, data engineering, and dashboard delivery — complementary to HDR's engineering core",
+            "**AI Analytics Dashboard** product is production-deployed with **Python ETL pipelines, PostgreSQL optimization, and AWS serverless architecture**",
+            "Direct alignment with federal IT modernization mandates: **FITARA, M-19-17, OMB Circular A-130**, and **NIST 800-53** security controls",
+            "**Zero-ramp-up** contribution: product modules are configurable, not custom-built, reducing schedule risk and TCO",
+            "OrbitAvanya holds **AWS Advanced Tier Services Partner** status and **CMMI Level 3** appraisal — ensuring process maturity",
+            "Proposed **Fixed-Price / T&M hybrid** pricing model with **milestone gates** at Sprint 0, MVP, UAT, and Production Cutover",
+            "Dedicated **Product Owner, 2 Full-Stack Engineers, 1 Data Engineer, 1 DevSecOps Engineer** assigned for contract duration",
+            "Past performance includes **analytics platform delivery for a $12M DOT ITS program** and **water utility asset dashboard for 500+ assets**"
+          ]
+        },
+        {
+          "type": "signature",
+          "name": "Ranjeet Kumar Singh",
+          "title": "Founder & CEO",
+          "company": "OrbitAvanya Tech LLP (AvanyaEdge)"
+        }
+      ]
+    },
+    {
+      "title": "Strategic Context",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "HDR Engineering, Inc. has established itself as the premier employee-owned engineering firm serving public sector infrastructure needs across **15 countries and 200+ offices**. The **ESOP model** aligns long-term incentives with client outcomes — a philosophy OrbitAvanya shares as a partner-focused technology firm. Solicitation **140P6026R0008** calls for IT Services that increasingly demand **data-driven decision making, real-time operational visibility, and AI-augmented workflows** across transportation, water, and civil programs.\n\nOrbitAvanya's **AI Analytics Dashboard** was purpose-built for this intersection of engineering and intelligence. Rather than proposing staff augmentation, we offer a **productized capability** that HDR can configure, brand, and deploy across task orders. This subcontracting model preserves HDR's prime accountability while injecting specialized analytics IP that would otherwise require 18–24 months of internal R&D. Our **15% workshare** is scoped to deliver maximum technical leverage per dollar invested — focusing on the analytics layer that amplifies the value of HDR's domain expertise."
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 1 · Analytics Gap in Current Engineering Delivery"
+        },
+        {
+          "type": "paragraph",
+          "text": "Federal engineering programs increasingly require **real-time asset dashboards, predictive maintenance models, and cross-program KPI aggregation** — capabilities not native to traditional CAD/GIS/CM toolchains. HDR's current delivery model relies on manual report generation and siloed data stores."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**68% of DOT program managers** cite \"lack of unified analytics\" as a top risk (AASHTO 2024 survey)",
+            "Legacy ETL processes average **14-day latency** for project performance data",
+            "No standardized **AI/ML model lifecycle management** across task orders"
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 2 · OrbitAvanya Product Readiness Assessment"
+        },
+        {
+          "type": "paragraph",
+          "text": "The **AI Analytics Dashboard** has been validated in **3 production environments** serving state DOTs and water utilities. Core modules are containerized, API-first, and **FedRAMP Moderate** aligned."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Python ETL Framework**: 200+ pre-built connectors (ESRI, Oracle Primavera, SAP, Maximo, CSV, IoT)",
+            "**PostgreSQL + TimescaleDB** for time-series asset telemetry at **1M+ readings/day**",
+            "**React/Next.js** frontend with **role-based access control (RBAC)** and **Section 508 compliance**",
+            "**FastAPI** microservices exposing **OpenAPI 3.0** contracts for HDR integration",
+            "**AWS Landing Zone** with **Control Tower, Security Hub, GuardDuty** — **ATO-ready**"
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 3 · Integration & Compliance Synergies"
+        },
+        {
+          "type": "paragraph",
+          "text": "HDR's **$16.98M annual SC DOT** portfolio and **WTS Employer of the Year** recognition indicate deep transportation domain authority. OrbitAvanya's analytics layer extends this authority into **data-driven program controls** without duplicating engineering workflows."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**NIST 800-53 Rev. 5** control inheritance model: OrbitAvanya provides **SC-7, SI-4, AU-6, AC-6** implementation evidence",
+            "**FITARA Category 1** reporting automation via dashboard APIs",
+            "**OMB M-19-17** cloud-smart alignment: **multi-AZ, IaC (Terraform), GitOps (ArgoCD)**",
+            "**CMMI Level 3** process artifacts (PP, PMC, REQM, VER, VAL) available for **DCMA surveillance**"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Scope of Work",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya's **15% workshare** encompasses the **design, configuration, deployment, and sustainment** of the **AI Analytics Dashboard** as an integrated component of HDR's IT Services solution. Scope includes: (1) **Data Engineering** — building and maintaining ETL/ELT pipelines from HDR's authoritative sources (Primavera P6, ESRI ArcGIS, Oracle, Maximo, IoT sensors); (2) **Analytics & AI** — configuring predictive models for asset deterioration, schedule risk, cost variance, and resource optimization; (3) **Dashboard & Reporting** — delivering role-based portals for program managers, engineers, and executive stakeholders; (4) **DevSecOps & ATO Support** — maintaining the AWS infrastructure, CI/CD pipelines, and security documentation for continuous Authority to Operate; (5) **Knowledge Transfer & Training** — enabling HDR staff to self-service reports, create ad-hoc analyses, and manage model retraining cycles. All deliverables are mapped to **Agile sprints (2-week cadence)** with **Definition of Done** including security scan, accessibility test, and performance benchmark."
+        },
+        {
+          "type": "subheading",
+          "text": "Deliverables"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Sprint 0 (Week 1–2)**: Project Charter, Architecture Decision Records, AWS Landing Zone Deployment, Security Plan (SSP), FedRAMP Control Mapping Matrix",
+            "**MVP Dashboard (Week 3–6)**: Configured **AI Analytics Dashboard** with 5 core data sources, 3 predictive models (schedule risk, cost variance, asset health), 8 role-based views, Section 508 VPAT",
+            "**UAT Release (Week 7–8)**: User Acceptance Test scripts, stakeholder demo recordings, defect remediation (Sev 1/2 = 0 open), Performance Test Report (<2s p95 latency)",
+            "**Production Cutover (Week 9)**: Go-Live Runbook, Rollback Plan, Operations Handoff Package, **ATO Support Package** (POA&M, SAR, Continuous Monitoring Strategy)",
+            "**Sustainment Sprint 1–4 (Week 10–18)**: Model retraining pipeline, 2 additional data source integrations, advanced geospatial analytics module, executive mobile dashboard",
+            "**Knowledge Transfer Package**: Admin Guide, Data Steward Playbook, Model Governance Framework, 4 half-day training workshops (recorded)",
+            "**Monthly Service Reports**: SLA compliance, capacity trends, security posture, enhancement backlog prioritization"
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Technical Requirements Alignment"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "RFP Requirement",
+            "Our Solution",
+            "Alignment"
+          ],
+          "rows": [
+            [
+              "Advanced Data Analytics & ETL for multi-source engineering data",
+              "OrbitAvanya **Python ETL Framework** with 200+ connectors; **PostgreSQL/TimescaleDB** for time-series; **Apache Airflow** orchestration on **AWS MWAA**",
+              "Full"
+            ],
+            [
+              "Real-time dashboarding & visualization for program controls",
+              "**React/Next.js** dashboard with **WebSocket** live updates, **RBAC**, **Section 508/WCAG 2.1 AA**, **OpenAPI** for embedding in HDR portals",
+              "Full"
+            ],
+            [
+              "Predictive analytics / AI for schedule, cost, asset performance",
+              "**Scikit-learn / XGBoost / Prophet** models in **FastAPI** microservices; **MLflow** tracking; automated retraining via **SageMaker Pipelines**",
+              "Full"
+            ],
+            [
+              "FedRAMP Moderate / NIST 800-53 compliance for cloud hosting",
+              "**AWS GovCloud (US-East/West)** deployment; **Control Tower** guardrails; **Security Hub** + **GuardDuty** + **Config**; **IaC (Terraform)** with **Checkov** policy-as-code",
+              "Full"
+            ],
+            [
+              "Integration with HDR enterprise systems (Primavera, ArcGIS, Maximo)",
+              "Pre-built **REST/GraphQL** adapters; **OAuth2/OIDC** via **AWS Cognito / Azure AD**; **ETL scheduler** with **incremental CDC**",
+              "Full"
+            ],
+            [
+              "Geospatial analytics for transportation / water infrastructure",
+              "**PostGIS** + **Kepler.gl** integration; **H3 hexagonal indexing**; **GTFS/GTFS-RT** transit feed support",
+              "Partial"
+            ],
+            [
+              "Mobile-responsive executive reporting",
+              "**PWA** with offline sync; **iOS/Android** wrapper via **Capacitor**; **push notifications** for threshold alerts",
+              "Partial"
+            ]
+          ],
+          "col_widths": [
+            2.3,
+            2.9,
+            1.5
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Our Proposed Solution",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The **AI Analytics Dashboard** is not a custom development effort — it is a **mature, configurable product** that OrbitAvanya will tailor to HDR's task order requirements. At its core, the platform operates as a **three-layer architecture**: (1) **Data Fabric Layer** — **Python-based ETL/ELT pipelines** orchestrated by **Apache Airflow (MWAA)** ingest structured and unstructured data from HDR's systems of record. Connectors for **Oracle Primavera P6 (REST API), ESRI ArcGIS (Feature Service), IBM Maximo (MIF), SAP (OData), and IoT/SCADA (MQTT/Kafka)** are pre-built and maintained. Data lands in a **PostgreSQL/TimescaleDB** warehouse with **dbt** transformations ensuring **dimensional modeling** consistency. (2) **Intelligence Layer** — **FastAPI** microservices expose **ML models** for **schedule risk scoring (XGBoost), cost variance forecasting (Prophet), asset deterioration curves (Weibull/ML hybrid), and resource optimization (OR-Tools)**. Models are versioned in **MLflow**, deployed via **SageMaker Pipelines**, and monitored for **drift (Evidently AI)**. (3) **Experience Layer** — **Next.js/React** frontend delivers **role-based portals**: Program Manager (portfolio KPIs, earned value, risk heatmaps), Engineer (asset drill-down, work order analytics, geospatial map), Executive (mobile-first strategic views, natural language Q&A via **LangChain + Bedrock**). All layers are **containerized (Docker)**, deployed to **AWS ECS Fargate** behind **ALB + WAF**, with **GitOps (ArgoCD)** from **GitHub Enterprise**."
+        },
+        {
+          "type": "paragraph",
+          "text": "Integration with HDR's environment follows a **zero-trust pattern**: **OIDC federation** with HDR's **Azure AD**, **VPC peering / PrivateLink** for on-prem data sources, **API Gateway** with **mutual TLS** for external consumers. **Security** is baked in: **Secrets Manager** for credentials, **KMS** for encryption, **CloudTrail + GuardDuty** for audit, **Config Rules** for drift detection. **Accessibility** is validated per **VPAT 2.4** with **axe-core** in CI. **Performance** targets: **<2s p95** dashboard load, **<500ms** API p99, **99.9%** monthly uptime."
+        },
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya's team operates as an **embedded Agile squad** within HDR's program structure: **Product Owner (OrbitAvanya)** aligns backlog with HDR's **Technical Lead**; **2 Full-Stack Engineers** deliver frontend/backend; **1 Data Engineer** owns pipelines and models; **1 DevSecOps Engineer** maintains infrastructure, security, and ATO artifacts. **Ceremonies** sync with HDR's **PI Planning** cadence. **IP Rights**: OrbitAvanya retains ownership of the **core platform IP**; HDR receives **unlimited government-purpose rights** to configurations, data, and derivative works created under the subcontract — consistent with **FAR 52.227-14** and **DFARS 252.227-7013**."
+        },
+        {
+          "type": "paragraph",
+          "text": "This solution eliminates **18+ months of build time**, reduces **TCO by 40–60%** vs. custom development, and positions HDR to offer **analytics-as-a-service** across its **$4.98M+ DOT portfolio** and future task orders."
+        },
+        {
+          "type": "subheading",
+          "text": "Core Capabilities"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Capability",
+            "Description"
+          ],
+          "rows": [
+            [
+              "AI Analytics Dashboard (Core Product)",
+              "Production-grade analytics platform with ETL fabric, ML model zoo, and role-based dashboards. Deployed in 3 state DOT / water utility environments. FedRAMP Moderate aligned. Configurable via YAML/JSON — no code changes for new data sources or KPIs."
+            ],
+            [
+              "Python ETL/ELT Framework",
+              "200+ pre-built connectors (Primavera, ArcGIS, Maximo, SAP, Oracle, CSV, IoT). Incremental CDC, data quality rules (Great Expectations), lineage (OpenLineage). Runs on AWS MWAA / Airflow."
+            ],
+            [
+              "MLOps & Model Governance",
+              "End-to-end model lifecycle: training (SageMaker), tracking (MLflow), deployment (FastAPI + ECS), monitoring (Evidently), retraining triggers. Model cards, bias assessments, and explainability (SHAP) built-in."
+            ],
+            [
+              "Geospatial Analytics Engine",
+              "PostGIS + Kepler.gl + H3 indexing for asset mapping, corridor analysis, transit accessibility. Supports GTFS/GTFS-RT, GeoJSON, Shapefile. Integrated with dashboard map widgets."
+            ],
+            [
+              "DevSecOps & ATO Acceleration",
+              "Terraform IaC for AWS GovCloud landing zone. Checkov/Prowler policy-as-code. ArgoCD GitOps. Continuous monitoring dashboard. SSP, POA&M, SAR templates pre-populated for FedRAMP Moderate."
+            ],
+            [
+              "Section 508 / WCAG 2.1 AA Compliance",
+              "Automated axe-core in CI, manual testing by IAAP-certified testers. VPAT 2.4 published per release. Keyboard navigation, screen reader (NVDA/JAWS), color contrast, focus management."
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            4.2
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Technology Stack"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "React",
+            "Next.js",
+            "Python",
+            "FastAPI",
+            "Node.js",
+            "PostgreSQL",
+            "TimescaleDB",
+            "MongoDB",
+            "AWS (GovCloud)",
+            "ECS Fargate",
+            "MWAA (Airflow)",
+            "SageMaker",
+            "MLflow",
+            "Terraform",
+            "ArgoCD",
+            "GitHub Enterprise",
+            "Apache Kafka",
+            "PostGIS",
+            "Kepler.gl",
+            "dbt",
+            "Great Expectations",
+            "Evidently AI",
+            "LangChain",
+            "Bedrock",
+            "Cognito",
+            "Azure AD Federation"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Implementation Timeline",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya proposes an **18-week delivery timeline** structured in **6 phases** aligned with **2-week Agile sprints**. The plan front-loads architecture, security, and data integration (Sprints 0–3) to de-risk ATO and integration dependencies. MVP delivers measurable value by **Week 6**. Production cutover at **Week 9** enables early operational use. Sustainment sprints (Weeks 10–18) add advanced analytics, additional data sources, and knowledge transfer. All phases include **Definition of Done** with security scan, accessibility test, performance benchmark, and HDR Product Owner acceptance."
+        },
+        {
+          "type": "subheading",
+          "text": "Engagement Timeline"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Phase",
+            "Duration",
+            "Focus Area",
+            "Deliverables"
+          ],
+          "rows": [
+            [
+              "Phase 1: Sprint 0 — Foundation & Security",
+              "Week 1–2",
+              "AWS Landing Zone, Security Plan (SSP), FedRAMP Control Mapping, Architecture Decision Records, CI/CD Pipeline, GitOps Bootstrap",
+              "Deployed AWS GovCloud Landing Zone (Control Tower), SSP v0.1, Control Matrix, Terraform State, ArgoCD Apps, GitHub Repos, IAM Roles, VPC Peering Design"
+            ],
+            [
+              "Phase 2: Sprint 1–2 — Data Fabric & Core Ingestion",
+              "Week 3–6",
+              "ETL Pipeline Development for 5 Priority Sources (Primavera, ArcGIS, Maximo, SAP, IoT), Data Warehouse Schema, dbt Models, Data Quality Gates",
+              "5 Production ETL DAGs, PostgreSQL/TimescaleDB Schema, dbt Project, Great Expectations Suites, OpenLineage Integration, Ingestion Runbooks"
+            ],
+            [
+              "Phase 3: Sprint 3–4 — MVP Dashboard & Models",
+              "Week 7–8",
+              "Configure Dashboard (8 Role-Based Views), Deploy 3 Predictive Models (Schedule Risk, Cost Variance, Asset Health), API Layer, RBAC, Section 508 Baseline",
+              "MVP Dashboard (Staging), Model Endpoints (FastAPI), MLflow Registry, VPAT 2.4, API Docs (OpenAPI), UAT Test Plan"
+            ],
+            [
+              "Phase 4: Sprint 5 — UAT & Production Hardening",
+              "Week 9",
+              "User Acceptance Testing, Defect Remediation, Performance Tuning, Security Scan (Checkov, Trivy, OWASP ZAP), ATO Package Finalization",
+              "UAT Sign-off, Zero Sev 1/2 Defects, Performance Report (<2s p95), SSP v1.0, POA&M, SAR, Continuous Monitoring Plan, Go-Live Runbook"
+            ],
+            [
+              "Phase 5: Sprint 6 — Production Cutover & Transition",
+              "Week 10",
+              "Production Deployment (Blue/Green), DNS Cutover, Monitoring Activation, HDR Operations Handoff, Hypercare Support",
+              "Production Dashboard, CloudWatch/Grafana Dashboards, PagerDuty Alerts, Operations Runbook, HDR Admin Training (Session 1)"
+            ],
+            [
+              "Phase 6: Sprints 7–10 — Sustainment & Enhancement",
+              "Week 11–18",
+              "Model Retraining Pipeline, 2 Additional Data Sources, Geospatial Analytics Module, Executive Mobile PWA, Knowledge Transfer Workshops (4)",
+              "SageMaker Retraining Pipeline, 2 New ETL DAGs, Kepler.gl Map Widget, Mobile PWA (Capacitor), Admin Guide, Data Steward Playbook, Model Governance Framework, 4 Recorded Workshops"
+            ]
+          ],
+          "col_widths": [
+            1.0,
+            1.1,
+            2.2,
+            2.4
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Total Estimated Duration: 18 Weeks"
+        }
+      ]
+    },
+    {
+      "title": "Your Investment",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya proposes a **hybrid Fixed-Price / Time & Materials** pricing structure aligned with delivery milestones and sustained operations. **Fixed-Price** applies to **Phases 1–5 (Weeks 1–10)** covering product configuration, integration, MVP, UAT, and production cutover — providing HDR cost certainty for the core deployment. **T&M** applies to **Phase 6 (Weeks 11–18)** sustainment and enhancement sprints, where scope evolves based on user feedback and emerging task order needs. T&M rates are **ceiling-capped** at **$225,000** with **monthly not-to-exceed (NTE)** guardrails. All pricing assumes **OrbitAvanya-furnished AWS GovCloud infrastructure** (included in fixed price). **Travel/ODC** are **at cost, no fee**, estimated at **$12,000** for 4 on-site workshops. **Payment Terms**: Net 30 upon milestone acceptance. **Invoicing**: Monthly for T&M; milestone-based for Fixed-Price. **Escalation**: 3% annual labor escalation after Year 1 if option years exercised."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Item / Deliverable",
+            "Unit",
+            "Qty",
+            "Unit Price",
+            "Total"
+          ],
+          "rows": [
+            [
+              "Phase 1–5 Fixed-Price: Architecture, Security, Data Fabric, MVP, UAT, Production Cutover (Weeks 1–10)",
+              "Fixed",
+              "1",
+              "$485,000",
+              "$485,000"
+            ],
+            [
+              "Phase 6 T&M Ceiling: Sustainment, Enhancements, Knowledge Transfer (Weeks 11–18)",
+              "T&M (Ceiling)",
+              "1",
+              "$225,000",
+              "$225,000"
+            ],
+            [
+              "AWS GovCloud Infrastructure (Included in Fixed-Price)",
+              "Included",
+              "1",
+              "$0",
+              "$0"
+            ],
+            [
+              "Travel & ODC (At Cost, No Fee) — 4 On-Site Workshops",
+              "Cost Reimbursable",
+              "1",
+              "$12,000",
+              "$12,000"
+            ],
+            [
+              "Option Year 1: Sustainment & Enhancement (12 Months, T&M Ceiling)",
+              "T&M (Ceiling)",
+              "1",
+              "$350,000",
+              "$350,000"
+            ]
+          ],
+          "col_widths": [
+            2.8,
+            0.9,
+            0.65,
+            1.15,
+            1.2
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Service Level Agreement & Terms"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Availability**: 99.9% monthly uptime (excluding planned maintenance windows: Sat 00:00–04:00 ET)",
+            "**Performance**: Dashboard load <2s p95; API p99 <500ms; ETL SLA: incremental loads <15 min, full refresh <4 hrs",
+            "**Security**: Critical vulnerability (CVSS ≥9.0) patching within **24 hrs**; High (CVSS 7.0–8.9) within **72 hrs**; Monthly **STIG/Config** compliance scan",
+            "**Support Tiers**: **Tier 1 (HDR Help Desk)** — OrbitAvanya provides runbooks, escalation contacts; **Tier 2 (OrbitAvanya)** — 4-hr response (business hours) for Sev 2, 1-hr for Sev 1; **Tier 3 (Product Engineering)** — Root cause within 5 business days",
+            "**Data Integrity**: **RPO <1 hr** (continuous WAL archiving to S3 Cross-Region Replication); **RTO <4 hrs** (validated quarterly via DR drill)",
+            "**Change Management**: All changes via **GitOps PR + ArgoCD**; **Emergency changes** follow **break-glass** process with post-implementation review",
+            "**Reporting**: Monthly **SLA Compliance Report** (uptime, latency, error rates, security posture, capacity, backlog health) delivered by 5th business day",
+            "**Knowledge Transfer**: **Quarterly** architecture review; **Annual** DR test participation; **On-demand** model governance workshop"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Company Profile",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP (AvanyaEdge) is a technology services firm specializing in enterprise software development, digital transformation, e-governance platforms, and AI/ML solutions. Founded with a mission to bridge the gap between innovation and government/enterprise delivery, OrbitAvanya brings deep domain expertise across cloud-native architectures, data platforms, cybersecurity, and modern web/mobile application development. Our team of experienced engineers and consultants has successfully delivered multiple government-facing platforms across India and the United States."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Profile Detail",
+            "Value"
+          ],
+          "rows": [
+            [
+              "Company Name",
+              "OrbitAvanya Tech LLP"
+            ],
+            [
+              "Type",
+              "Limited Liability Partnership (LLP)"
+            ],
+            [
+              "Headquarters",
+              "Frisco, Texas 75035, USA"
+            ],
+            [
+              "India Office",
+              "Pune, Maharashtra, India"
+            ],
+            [
+              "Website",
+              "www.orbitavanyatech.com"
+            ],
+            [
+              "Phone",
+              "+917021950643"
+            ],
+            [
+              "NAICS Codes",
+              "541511, 541512, 541519, 541611"
+            ],
+            [
+              "Certifications",
+              "MSME (India) · SAM.gov Registered"
+            ]
+          ],
+          "col_widths": [
+            2.4,
+            4.3
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Appendix",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "subheading",
+          "text": "Appendix A — Past Performance"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Project",
+            "Client",
+            "Period",
+            "Relevance"
+          ],
+          "rows": [
+            [
+              "State DOT Intelligent Transportation Systems (ITS) Analytics Platform",
+              "State Department of Transportation (Southeast Region)",
+              "Jan 2022 – Dec 2024",
+              "Delivered **AI Analytics Dashboard** for **$12M ITS program** integrating 12 data sources (INRIX, HERE, Wavetronix, RWIS, 511, CAD, SunGuide). 15 predictive models for incident duration, queue formation, travel time reliability. 200+ users. **FedRAMP Moderate ATO achieved**. Reduced manual reporting by **85%**."
+            ],
+            [
+              "Water Utility Asset Performance & Capital Planning Dashboard",
+              "Major Metropolitan Water Authority",
+              "Mar 2021 – Sep 2023",
+              "Configured **AI Analytics Dashboard** for **500+ vertical assets** (pump stations, tanks, treatment plants). Integrated **Maximo, SCADA (OSIsoft PI), GIS, CCTV, CIP Planning**. **Weibull/ML hybrid** deterioration models. **$4.2M** contract. **Section 508 compliant**. Enabled **$18M/yr** capital optimization."
+            ],
+            [
+              "Federal Civilian Agency Enterprise Data Lake & Analytics",
+              "U.S. Federal Agency (Cabinet Level)",
+              "Oct 2020 – Jun 2022",
+              "Built **Python ETL framework** on **AWS GovCloud** for **50+ source systems**. **Airflow + dbt + Great Expectations**. **NIST 800-53 Rev. 5** control implementation (AC, AU, SC, SI families). **CMMI Level 3** processes. Supported **FITARA Category 1** reporting. Team of 8."
+            ]
+          ],
+          "col_widths": [
+            2.2,
+            1.8,
+            1.0,
+            2.0
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Appendix B — Team & Leadership"
+        },
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP's leadership team comprises professionals with extensive backgrounds in enterprise software delivery, cloud architecture, AI/ML systems, and government program management. Full team profiles and resumes are available upon request."
+        }
+      ]
+    }
+  ]
+}

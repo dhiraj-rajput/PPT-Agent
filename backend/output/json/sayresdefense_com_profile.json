@@ -1,0 +1,125 @@
+{
+  "company_name": "Sayres Defense",
+  "website": "https://www.sayresdefense.com",
+  "industry": "Defense Contracting / Government Services",
+  "description": "Founded in 2001 and headquartered in Washington, DC, Sayres Defense is a specialized government contractor providing management, engineering, and technical assistance services primarily to the U.S. Navy and the Department of Defense (DoD). The company focuses on high-stakes naval architecture, missile defense engineering, and fleet operations, operating as a mid-market player that combines small-business agility with large-scale stability. They have expanded their capabilities through strategic acquisitions of Joint Research and Development (JRAD) and Global Systems Technologies (GST).",
+  "headquarters": "Washington, DC, US",
+  "locations": [
+    "Washington, DC",
+    "Maine",
+    "California"
+  ],
+  "employee_count": "201-500 employees",
+  "founded_year": 2001,
+  "specialties": [
+    "Naval Architecture",
+    "Missile Defense Engineering",
+    "Federal Acquisition Management",
+    "Fleet Synthetic Training"
+  ],
+  "products": [
+    "C4I and Combat Systems Integration",
+    "Fleet Synthetic Training & Wargaming",
+    "RF Threat Detection",
+    "Supported Team Trainer",
+    "HSPD-12 Compliance Systems"
+  ],
+  "services": [
+    "Systems Engineering and Technical Assistance (SETA)",
+    "Integrated Logistics Support",
+    "Acquisition Strategy & Planning",
+    "Shipyard Production Planning & Engineering",
+    "Post Delivery Planning & Engineering",
+    "Cyber Security",
+    "Test and Evaluation",
+    "Intelligence and Security Analysis"
+  ],
+  "technology_stack": [
+    "Model-Based Systems Engineering (MBSE)",
+    "Live Virtual Constructive (LVC) Training"
+  ],
+  "business_model": "Government contractor providing professional support services via federal contracts (IDIQs, Task Orders).",
+  "pricing_model": "Project-based / Contract-based federal pricing",
+  "financial_highlights": [
+    "Annual revenue of $16.5 million reported in 2026",
+    "Secured a potential $280 million U.S. Navy contract for Professional Support Services (PMS 300/PMS 325)",
+    "Received debt and equity investment from Granite Creek Capital Partners to fund acquisition of Global Systems Technologies, Inc.",
+    "Backed by private equity sponsor Broadtree Partners LLC"
+  ],
+  "leadership": [
+    "Tim Reardon (Chief Executive Officer)",
+    "Terri Hague (Chief Operating Officer)",
+    "Kevin Darnell (President of Naval Systems)",
+    "Steve Lorentzen (President of Maritime Operations)",
+    "Hank Miranda (SVP of Intelligence & Security)",
+    "Mike Dollens (President, Fleet Operations)"
+  ],
+  "competitors": [
+    "Leidos (Direct competitor in defense and intelligence services)",
+    "Lockheed Martin (Competes in systems integration and defense tech)",
+    "Radiance Technologies (Competes in government technical services)",
+    "L3Harris (Competes in maritime and defense systems)"
+  ],
+  "value_proposition": "Delivering mission-focused capabilities in strategy, planning, and fleet operations to support critical national security programs for the US Navy and Department of Defense with a blend of small-business agility and large-company stability.",
+  "rfp_strengths": [
+    "Proven track record with high-value federal contracts (e.g., MDA SHIELD IDIQ, $280M Navy contract)",
+    "SBA 8(a) Graduate of the Year (2017) status providing historical procurement advantages",
+    "Deep integration into U.S. Navy and Missile Defense Agency (MDA) ecosystems",
+    "Specialized workforce with required SECRET clearances",
+    "Full lifecycle capability from acquisition planning to test and evaluation"
+  ],
+  "rfp_weaknesses": [
+    "Heavy reliance on a single primary customer (U.S. Navy/DoD)",
+    "Potential integration risks following rapid acquisitions of JRAD and GST",
+    "Smaller scale compared to Tier 1 defense primes"
+  ],
+  "opportunities": [
+    "Expansion into TSA and other federal agencies via GST acquisition",
+    "Growth in AI-enabled systems and advanced drone maintenance services",
+    "Scaling data infrastructure to manage expanding federal portfolio"
+  ],
+  "challenges": [
+    "Rising costs and supply chain vulnerabilities in the U.S. Defense Market",
+    "Need to modernize legacy-heavy technical stacks to remain competitive"
+  ],
+  "recent_news": [
+    "Acquired Global Systems Technologies, Inc. (GST) to expand TSA and federal agency reach",
+    "Acquired Joint Research and Development (JRAD) in June 2023",
+    "Awarded $280M Navy contract for Professional Support Services (2026)",
+    "Investment from Granite Creek Capital Partners to support M&A growth"
+  ],
+  "clients": [
+    "U.S. Navy",
+    "Department of Defense (DoD)",
+    "Missile Defense Agency (MDA)",
+    "Transportation Security Administration (TSA)",
+    "NSWC Crane",
+    "COMNAVSURFPAC 3M"
+  ],
+  "partners": [
+    "Broadtree Partners LLC",
+    "Granite Creek Capital Partners",
+    "JP Morgan Chase",
+    "Muzinich BDC"
+  ],
+  "emails": [
+    "Kelly.ashby@sayresdefense.com",
+    "Michael.Dollens@sayresdefense.com"
+  ],
+  "phone_numbers": [
+    "202-355-0922",
+    "619-298-2600",
+    "858-472-0867"
+  ],
+  "social_links": [
+    "https://www.linkedin.com/company/sayres-and-associates-corp"
+  ],
+  "sources_used": [
+    "Website",
+    "LinkedIn",
+    "Google Search",
+    "GovCon Wire",
+    "PR Newswire"
+  ],
+  "last_updated": "2026-07-09T06:58:38.540628+00:00"
+}

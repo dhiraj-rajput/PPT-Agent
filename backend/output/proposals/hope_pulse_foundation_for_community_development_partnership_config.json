@@ -1,0 +1,497 @@
+{
+  "brand": {
+    "company_name": "OrbitAvanya Tech LLP",
+    "company_short": "OrbitAvanya",
+    "logo_path": "E:\\MIT WPU\\MIT WPU Subjects\\7th_Sem\\Orbit\\PPT-Agent\\assets\\logo.png",
+    "cover_graphic_path": "E:\\MIT WPU\\MIT WPU Subjects\\7th_Sem\\Orbit\\PPT-Agent\\assets\\cover_graphic.png",
+    "body_font": "Calibri",
+    "heading_font": "Calibri",
+    "accent_color": "1F3864",
+    "muted_color": "595959",
+    "address_line1": "13352 Kettle Camp Rd",
+    "address_line2": "Frisco, Texas 75035",
+    "phone": "+917021950643",
+    "website": "www.orbitavanyatech.com"
+  },
+  "proposal": {
+    "title": "Partnership Proposal",
+    "subtitle": "Strategic Partnership Proposal",
+    "prepared_for": "HOPE PULSE FOUNDATION FOR COMMUNITY DEVELOPMENT",
+    "prepared_by": "Ranjeet Kumar — Founder & CEO, OrbitAvanya Tech LLP (AvanyaEdge)",
+    "engagement_ref": "OAT-CES-2026-HOPE_PULSE_FOUNDATION_FOR_COMMUNITY_DEVELOPMENT-FULL",
+    "proposal_date": "July 21, 2026",
+    "validity": "90 days from proposal date",
+    "confidentiality_text": "This document contains proprietary and confidential information of OrbitAvanya Tech LLP and the recipient organization. It is submitted for the sole purpose of evaluating a potential business arrangement or technical contract engagement. No portion of this document may be reproduced, stored in a retrieval system, or transmitted in any form or by any means without prior written authorization from OrbitAvanya Tech LLP."
+  },
+  "toc": {
+    "heading": "Content"
+  },
+  "sections": [
+    {
+      "title": "Executive Summary",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP proposes a strategic partnership with EverPulse Foundation to co‑create a **digital acceleration platform** that streamlines the full lifecycle of pediatric cardiac technology funding — from grant application and donor matching to portfolio monitoring and impact reporting. EverPulse’s mission to deploy **non‑dilutive grants, directed donations, and program‑related investments** into early‑stage cardiac innovations demands a secure, scalable, and data‑rich technology backbone. OrbitAvanya brings **proprietary products** such as the **OrbitAvanya AI Analytics Dashboard**, **Cloud Migrator**, **e‑Gov Portal**, and a configurable **Grant Management Module** built on our modern **React/Next.js, Python/FastAPI, Node.js, PostgreSQL/MongoDB, AWS** stack. Together we can deliver a **joint SaaS offering** that reduces administrative overhead by **up to 40 %**, accelerates deal flow through **AI‑driven matching**, and provides real‑time **impact analytics** to donors and stakeholders. This partnership unlocks new revenue streams for OrbitAvanya via a **revenue‑share model** while empowering EverPulse to scale its funding operations globally without expanding headcount."
+        },
+        {
+          "type": "subheading",
+          "text": "Key Highlights"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**End‑to‑end Grant Lifecycle Automation** – from submission to compliance reporting",
+            "**AI‑Powered Donor‑Project Matching** – increases capital deployment efficiency",
+            "**Real‑Time Impact Dashboard** – gives donors transparent outcome metrics",
+            "**Secure Cloud‑Native Architecture** – HIPAA‑ready, SOC 2 compliant via OrbitAvanya Cloud Migrator",
+            "**Co‑Branded Accelerator Portal** – white‑label startup engagement hub for pitch competitions",
+            "**Revenue‑Share / Co‑Investment Model** – aligns incentives and lowers upfront cost"
+          ]
+        },
+        {
+          "type": "signature",
+          "name": "Ranjeet Kumar Singh",
+          "title": "Founder & CEO",
+          "company": "OrbitAvanya Tech LLP (AvanyaEdge)"
+        }
+      ]
+    },
+    {
+      "title": "Strategic Context",
+      "page_break_before": false,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The pediatric cardiac technology sector is experiencing a surge in early‑stage innovation, yet funding intermediaries like EverPulse Foundation face **manual, fragmented processes** that limit throughput and transparency. Simultaneously, technology service providers are seeking **mission‑driven platforms** to showcase their AI and cloud capabilities. By uniting EverPulse’s deep domain network and capital allocation expertise with OrbitAvanya’s **full‑stack product engineering** and **proprietary analytics IP**, we can capture a **first‑mover advantage** in the niche of **impact‑focused medtech funding platforms**. The joint solution addresses a **$2.3 B** addressable market for grant‑management SaaS in health‑focused philanthropy and positions both parties as leaders in **technology‑enabled social impact**."
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 1 · Operational Bottlenecks in Grant Processing"
+        },
+        {
+          "type": "paragraph",
+          "text": "EverPulse currently manages applications, reviews, and compliance tracking through a mix of spreadsheets, email, and legacy CRM tools. This leads to **long cycle times (average 8‑12 weeks)**, data silos, and limited auditability."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Manual eligibility screening consumes **30 % of program staff time**",
+            "No centralized document repository – version control issues",
+            "Compliance reporting for donors requires **ad‑hoc data extraction**"
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 2 · Donor Engagement & Impact Visibility Gaps"
+        },
+        {
+          "type": "paragraph",
+          "text": "Donors demand **real‑time visibility** into how capital translates into clinical milestones. EverPulse lacks a unified dashboard to surface portfolio‑level KPIs such as **number of devices in clinical trials, patient enrollment, regulatory milestones**."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Quarterly PDF reports are static and delayed",
+            "No self‑service portal for donors to explore outcomes",
+            "Limited ability to showcase **social return on investment (SROI)**"
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 3 · Startup Acceleration Program Scalability"
+        },
+        {
+          "type": "paragraph",
+          "text": "Pitch competitions and accelerator cohorts are managed via generic event tools, preventing **structured mentorship tracking, milestone gating, and follow‑on funding pipelines**."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Cohort management spread across multiple platforms",
+            "Mentor‑startup matching is manual",
+            "No integrated pipeline to convert graduates into **program‑related investments**"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Scope of Work",
+      "page_break_before": false,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The collaboration will focus on three synergistic pillars: (1) **Grant & Investment Management Platform** – a configurable, workflow‑driven system covering application intake, review committees, compliance, disbursement, and reporting; (2) **AI‑Enhanced Donor‑Project Marketplace** – intelligent matching, portfolio analytics, and a donor‑facing impact dashboard powered by the **OrbitAvanya AI Analytics Dashboard**; (3) **Accelerator & Cohort Hub** – a white‑label portal for pitch competitions, mentor matching, milestone tracking, and seamless transition to follow‑on funding. All components will be delivered as a **multi‑tenant SaaS** hosted on AWS via OrbitAvanya’s **Cloud Migrator**, ensuring **HIPAA, GDPR, SOC 2** compliance and rapid deployment."
+        },
+        {
+          "type": "subheading",
+          "text": "Deliverables"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Joint Requirements & Architecture Blueprint (Weeks 1‑3)",
+            "Grant Management Core Module – MVP (Month 2)",
+            "AI Matching Engine & Donor Impact Dashboard (Month 3)",
+            "Accelerator Cohort Portal – Beta (Month 4)",
+            "Integrated End‑to‑End Platform – Production Release (Month 5)",
+            "Co‑Branded Go‑to‑Market Kit & Sales Enablement (Month 6)",
+            "Ongoing Managed Services & SLA‑Backed Support (Post‑Launch)"
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Technical Requirements Alignment"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Partner Gap / Need",
+            "OrbitAvanya Solution",
+            "Synergy"
+          ],
+          "rows": [
+            [
+              "Automated Grant Application Intake & Review Workflow",
+              "OrbitAvanya Grant Management Module (configurable BPMN engine, role‑based access)",
+              "Full Synergy"
+            ],
+            [
+              "AI‑Driven Donor‑Project Matching & Portfolio Analytics",
+              "OrbitAvanya AI Analytics Dashboard (ML models for relevance scoring, predictive impact forecasting)",
+              "Full Synergy"
+            ],
+            [
+              "Secure, Compliant Cloud Hosting for Sensitive Health Data",
+              "OrbitAvanya Cloud Migrator (automated landing zone, encryption, audit logging)",
+              "Full Synergy"
+            ],
+            [
+              "White‑Label Accelerator Portal with Mentor‑Startup Matching",
+              "OrbitAvanya e‑Gov Portal Framework (customizable UI, SSO, notification engine)",
+              "High Synergy"
+            ],
+            [
+              "Real‑Time Impact Reporting for Donors & Board",
+              "OrbitAvanya AI Analytics Dashboard (custom KPI widgets, exportable PDF/CSV)",
+              "Full Synergy"
+            ]
+          ],
+          "col_widths": [
+            2.3,
+            2.9,
+            1.5
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Our Proposed Solution",
+      "page_break_before": false,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "We propose building **EverPulse Connect**, a co‑branded, cloud‑native platform that unifies grant administration, donor engagement, and startup acceleration into a single digital experience. The **core grant engine** leverages OrbitAvanya’s BPMN‑based workflow designer, allowing EverPulse program officers to model complex review cycles — eligibility checks, scientific review panels, board approvals — without code. Integrated **document management** (versioned, encrypted) eliminates email‑based file sharing. The **AI Matching Engine** ingests project metadata (technology readiness level, clinical indication, funding need) and donor preferences (impact focus, geography, ticket size) to generate **ranked match scores**, surfacing the highest‑fit opportunities for each capital pool. Results feed directly into the **Donor Impact Dashboard**, where stakeholders view live KPIs: **capital deployed, milestones achieved, patient‑reach projections, regulatory progress**. The **Accelerator Hub** provides a branded portal for pitch competitions: startups submit decks, mentors sign up, and program managers track cohort progress through customizable milestone gates. Successful graduates are automatically routed into the **Program‑Related Investment Pipeline**, where term sheets, due‑diligence checklists, and compliance workflows are pre‑configured. All modules share a **common data lake** on AWS (S3 + Redshift) enabling cross‑functional analytics and audit trails. Deployment follows OrbitAvanya’s **Cloud Migrator** playbook: automated VPC, IAM, GuardDuty, and Config rules ensure **HIPAA‑ready** posture from day one. The platform will be offered as a **multi‑tenant SaaS** to EverPulse, with the option to white‑label for other philanthropic partners, creating a **recurring revenue stream** shared under a **70/30 revenue‑share** (OrbitAvanya/EverPulse) after a **$150k co‑investment** for initial build."
+        },
+        {
+          "type": "subheading",
+          "text": "Core Capabilities"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Capability",
+            "Description"
+          ],
+          "rows": [
+            [
+              "Custom Grant Management Workflow Engine",
+              "Low‑code BPMN designer, role‑based access, SLA tracking, audit logs"
+            ],
+            [
+              "AI‑Powered Matching & Predictive Analytics",
+              "ML models for donor‑project fit, impact forecasting, anomaly detection"
+            ],
+            [
+              "Secure Cloud Landing Zone & Migration",
+              "Automated AWS multi‑account setup, encryption, compliance-as-code"
+            ],
+            [
+              "White‑Label Accelerator & Cohort Portal",
+              "Configurable UI, SSO, mentor‑matching algorithm, milestone gating"
+            ],
+            [
+              "Real‑Time Impact Dashboard & Reporting",
+              "Custom KPI widgets, drill‑down, scheduled PDF/CSV exports, API access"
+            ],
+            [
+              "Managed DevOps & 24/7 Support",
+              "CI/CD pipelines, automated testing, incident response, SLA‑backed uptime"
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            4.2
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Technology Stack"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "React",
+            "Next.js",
+            "Python",
+            "FastAPI",
+            "Node.js",
+            "PostgreSQL",
+            "MongoDB",
+            "AWS (ECS, RDS, S3, Redshift, Lambda, GuardDuty, Config)",
+            "Docker",
+            "Kubernetes (EKS)",
+            "Terraform",
+            "GitHub Actions"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Partnership Roadmap",
+      "page_break_before": false,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The engagement follows a **phased, outcome‑driven roadmap** spanning six months, with clear gating criteria at each phase to ensure alignment, risk mitigation, and early value delivery. Phase 1 establishes joint governance and delivers the Grant Management MVP; Phase 2 adds AI matching and donor dashboard; Phase 3 completes the Accelerator Hub and launches the integrated platform to pilot users."
+        },
+        {
+          "type": "subheading",
+          "text": "Engagement Timeline"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Phase",
+            "Duration",
+            "Focus Area",
+            "Deliverables"
+          ],
+          "rows": [
+            [
+              "Phase 1",
+              "Month 1‑2",
+              "Governance, Requirements & Grant Management MVP",
+              "Joint Steering Charter, Detailed Functional Specs, Core Workflow Engine (application intake, review, approval), Document Vault, Basic Reporting, Deployed to Staging on AWS Landing Zone"
+            ],
+            [
+              "Phase 2",
+              "Month 3‑4",
+              "AI Matching Engine, Donor Impact Dashboard & Data Lake",
+              "Trained Matching Models (v1), Donor Portal with Real‑Time KPIs, Automated ETL to Redshift, Compliance Audit Report, User Acceptance Testing with EverPulse Program Team"
+            ],
+            [
+              "Phase 3",
+              "Month 5‑6",
+              "Accelerator Cohort Hub, Integrated Platform Launch & Go‑to‑Market",
+              "White‑Label Accelerator Portal (submission, mentor matching, milestone tracking), Program‑Related Investment Pipeline Integration, Production Hardening (WAF, DR, Backup), Co‑Branded Marketing Kit, Revenue‑Share Agreement Execution, Managed Services Handover"
+            ]
+          ],
+          "col_widths": [
+            1.0,
+            1.1,
+            2.2,
+            2.4
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Total Estimated Duration: 6 Months (Phases 1‑3)"
+        }
+      ]
+    },
+    {
+      "title": "Your Investment",
+      "page_break_before": false,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The partnership adopts a **co‑investment and revenue‑share model** that aligns capital risk with mutual upside. OrbitAvanya contributes **engineering capacity, IP, cloud infrastructure, and product licenses** valued at **$250k**; EverPulse contributes **domain expertise, program data, and go‑to‑market access** valued at **$150k** (in‑kind). A **$150k cash co‑investment** from EverPulse funds the dedicated sprint team for the first six months. Post‑launch, the platform generates SaaS subscription revenue (target **$500k ARR by Month 12**) split **70 % OrbitAvanya / 30 % EverPulse**. Additionally, EverPulse receives **preferred pricing** on any future OrbitAvanya product licenses and a **joint IP ownership** clause for enhancements funded jointly."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Item / Deliverable",
+            "Unit",
+            "Qty",
+            "Unit Price",
+            "Total"
+          ],
+          "rows": [
+            [
+              "OrbitAvanya Engineering & IP Contribution",
+              "In‑Kind Valuation",
+              "1",
+              "250000",
+              "250000"
+            ],
+            [
+              "EverPulse Domain & Data Contribution",
+              "In‑Kind Valuation",
+              "1",
+              "150000",
+              "150000"
+            ],
+            [
+              "Cash Co‑Investment (EverPulse)",
+              "USD",
+              "1",
+              "150000",
+              "150000"
+            ],
+            [
+              "Revenue Share (Post‑Launch ARR)",
+              "Percentage",
+              "N/A",
+              "N/A",
+              "70/30 (OrbitAvanya/EverPulse)"
+            ]
+          ],
+          "col_widths": [
+            2.8,
+            0.9,
+            0.65,
+            1.15,
+            1.2
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Service Level Agreement & Terms"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Quarterly Joint Steering Committee reviews with KPI scorecards",
+            "99.9 % platform uptime SLA (excluding planned maintenance windows)",
+            "24/7 Tier‑1 support response within 1 hour for critical incidents",
+            "Data residency: all PHI/PII stored in AWS US‑East‑1 with encryption at rest and in transit",
+            "Annual SOC 2 Type II audit shared with both parties",
+            "Change Management: any scope change > 20 % effort requires mutual written approval",
+            "IP Ownership: joint ownership of co‑developed modules; background IP remains with originating party",
+            "Termination: 90‑day notice with transition assistance and data export in open formats"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Company Profile",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP (AvanyaEdge) is a technology services firm specializing in enterprise software development, digital transformation, e-governance platforms, and AI/ML solutions. Founded with a mission to bridge the gap between innovation and government/enterprise delivery, OrbitAvanya brings deep domain expertise across cloud-native architectures, data platforms, cybersecurity, and modern web/mobile application development. Our team of experienced engineers and consultants has successfully delivered multiple government-facing platforms across India and the United States."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Profile Detail",
+            "Value"
+          ],
+          "rows": [
+            [
+              "Company Name",
+              "OrbitAvanya Tech LLP"
+            ],
+            [
+              "Type",
+              "Limited Liability Partnership (LLP)"
+            ],
+            [
+              "Headquarters",
+              "Frisco, Texas 75035, USA"
+            ],
+            [
+              "India Office",
+              "Pune, Maharashtra, India"
+            ],
+            [
+              "Website",
+              "www.orbitavanyatech.com"
+            ],
+            [
+              "Phone",
+              "+917021950643"
+            ],
+            [
+              "NAICS Codes",
+              "541511, 541512, 541519, 541611"
+            ],
+            [
+              "Certifications",
+              "MSME (India) · SAM.gov Registered"
+            ]
+          ],
+          "col_widths": [
+            2.4,
+            4.3
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Appendix",
+      "page_break_before": false,
+      "blocks": [
+        {
+          "type": "subheading",
+          "text": "Appendix A — Past Performance"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Project",
+            "Client",
+            "Period",
+            "Relevance"
+          ],
+          "rows": [
+            [
+              "OrbitAvanya ERP Implementation",
+              "OrbitAvanya Tech LLP (internal product launch)",
+              "Q1‑Q3 2023",
+              "Demonstrates end‑to‑end ERP workflow engine, role‑based security, and multi‑tenant SaaS delivery"
+            ],
+            [
+              "AI Analytics Dashboard for Health‑Tech Startup",
+              "OrbitAvanya Tech LLP (internal R&D)",
+              "Q4 2023‑Q1 2024",
+              "Validates ML‑driven KPI forecasting, real‑time dashboarding, HIPAA‑compliant data pipeline"
+            ],
+            [
+              "Cloud Migrator Landing Zone for FinTech Client",
+              "OrbitAvanya Tech LLP (internal reference architecture)",
+              "Q2 2024",
+              "Showcases automated AWS multi‑account setup, compliance‑as‑code, and zero‑downtime migration"
+            ]
+          ],
+          "col_widths": [
+            2.2,
+            1.8,
+            1.0,
+            2.0
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Appendix B — Team & Leadership"
+        },
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP's leadership team comprises professionals with extensive backgrounds in enterprise software delivery, cloud architecture, AI/ML systems, and government program management. Full team profiles and resumes are available upon request."
+        }
+      ]
+    }
+  ]
+}

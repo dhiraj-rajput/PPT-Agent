@@ -1,0 +1,146 @@
+{
+  "company_name": "English for All",
+  "website": "https://www.nyc.gov/site/dcla/cultural-funding/programs-funding.page",
+  "industry": "Government / Cultural Affairs / Grantmaking",
+  "description": "NYC Department of Cultural Affairs (DCLA) administers the Cultural Development Fund (CDF), a competitive peer-evaluated grant program distributing public funds to over 1,000 nonprofit arts and cultural organizations annually across New York City's five boroughs. DCLA also operates Materials for the Arts (free supplies for nonprofits and public schools) and Percent for Art (commissioning public artworks at city building sites). The agency ensures wide distribution of cultural funding through every council district and discipline, with over 75% of applicants receiving support funded by the Mayor and City Council.",
+  "headquarters": "New York City, NY, USA",
+  "locations": [
+    "New York City (five boroughs)",
+    "Brooklyn Public Library",
+    "Queens Public Library",
+    "Lake Success, NY"
+  ],
+  "employee_count": "11-50 employees",
+  "founded_year": 2021,
+  "specialties": [
+    "Cultural grant administration",
+    "Public arts funding",
+    "Nonprofit arts support",
+    "Peer-evaluated grant review",
+    "Materials for the Arts",
+    "Percent for Art program"
+  ],
+  "products": [
+    "Cultural Development Fund (CDF) grants",
+    "Materials for the Arts free supplies",
+    "Percent for Art commissioned artworks"
+  ],
+  "services": [
+    "Grant administration and peer-evaluated review process",
+    "Panelist recruitment and management for grant review",
+    "Cultural Affairs account registration and application support",
+    "CDF guidelines and application assistance",
+    "Advocacy and promotion of quality arts programming",
+    "Public art commissioning and management",
+    "Free arts supplies distribution to nonprofits and NYC public schools"
+  ],
+  "technology_stack": [
+    "Go",
+    "Online grant application portal",
+    "Cultural Affairs account system"
+  ],
+  "business_model": "Government grant program administered by the NYC Department of Cultural Affairs (DCLA) that provides cultural funding to organizations operating within New York City's five boroughs, with a structured annual grant cycle, reporting requirements, and compliance oversight. Funding sourced from Mayor and City Council allocations.",
+  "pricing_model": "No direct pricing; grants awarded through competitive application process. Organizations apply for funding at no cost. Final disbursement contingent on compliance reporting and approval.",
+  "financial_highlights": [
+    "CDF supports over 1,000 grantees annually",
+    "Over 75% of applicants receive funding",
+    "Funding provided by Mayor and City Council",
+    "Fiscal year July 1–June 30",
+    "Final payment issued upon Final Report approval"
+  ],
+  "leadership": [
+    "Rich McKee",
+    "Bishaara Adam",
+    "Susan Wolter",
+    "Rodrigo Gomes Sobral"
+  ],
+  "competitors": [
+    "Mass Cultural Council (Massachusetts)",
+    "National Endowment for the Arts (NEA)",
+    "New York State Council on the Arts (NYSCA)",
+    "Local arts agencies in other major US cities",
+    "Private arts foundations (e.g., Ford Foundation, Mellon Foundation)"
+  ],
+  "value_proposition": "Enables cultural organizations to receive public funding for eligible activities conducted within NYC's fiscal year (July 1–June 30) and geographic boundaries, supported by a defined reporting and payment process that ensures accountability and timely final disbursement upon approval. Provides widest distribution of public cultural funds across all council districts and disciplines.",
+  "rfp_strengths": [
+    "Government entity with mandated authority and stable public funding",
+    "Proven track record: 1,000+ grantees annually with 75%+ funding rate",
+    "Established peer-evaluated review process ensuring fairness and expertise",
+    "Multi-program portfolio: CDF, Materials for the Arts, Percent for Art",
+    "Official NYC .gov domain with secure infrastructure",
+    "Comprehensive compliance and reporting framework",
+    "Citywide geographic coverage across all five boroughs and council districts",
+    "Dedicated helpdesk and application support (cdfhelpdesk@culture.nyc.gov)"
+  ],
+  "rfp_weaknesses": [
+    "Strict geographic limitation: NYC five boroughs only",
+    "Annual cycle only (FY27 closed April 2, 2026); no rolling applications",
+    "Government bureaucracy may slow decision-making",
+    "Mandatory compliance reporting and scope restrictions (no activities outside NYC or fiscal year)",
+    "Funding dependent on Mayor/City Council budget allocations",
+    "Limited to nonprofit arts/cultural organizations; excludes for-profit entities"
+  ],
+  "opportunities": [
+    "Expansion of digital application and reporting platforms",
+    "Increased panelist diversity for grant review",
+    "Partnerships with private foundations for matching funds",
+    "Leveraging Percent for Art for large-scale public projects",
+    "Materials for the Arts scaling to more schools and nonprofits",
+    "Data-driven impact reporting for advocacy"
+  ],
+  "challenges": [
+    "Budget uncertainty tied to city political cycles",
+    "Compliance burden on small organizations",
+    "Ensuring equitable distribution across all boroughs and disciplines",
+    "Managing high volume of applications with limited staff",
+    "Adapting guidelines for emerging art forms and digital culture",
+    "Balancing accountability with administrative efficiency"
+  ],
+  "recent_news": [
+    "FY27 CDF application cycle closed April 2, 2026",
+    "FY26 Cultural Development Fund Final Report Webinar (deadline August 3, 2026)",
+    "DCLA seeking panelists for FY27 CDF review period",
+    "Mayor Mamdani administration announcements (Pre-K expansion, heat emergency, PIT Crew)",
+    "Cultural Facilities Fund updates from Mass Cultural Council (comparative)",
+    "International Fund for Cultural Diversity 2026 call open (UNESCO)"
+  ],
+  "clients": [
+    "1,000+ nonprofit arts and cultural organizations annually",
+    "NYC public schools (via Materials for the Arts)",
+    "Neighborhood-based cultural groups",
+    "Major cultural institutions (museums, theaters, zoos, botanical gardens)",
+    "Individual artists (via Percent for Art commissions)"
+  ],
+  "partners": [
+    "NYC Mayor's Office",
+    "NYC City Council",
+    "Brooklyn Public Library",
+    "Queens Public Library",
+    "NYC Department of Education (for Materials for the Arts)",
+    "City agencies for Percent for Art site integration"
+  ],
+  "emails": [
+    "cdfhelpdesk@culture.nyc.gov",
+    "notifynyc@oem.nyc.gov"
+  ],
+  "phone_numbers": [
+    "212-504-4115",
+    "212-639-9675",
+    "516-573-7347"
+  ],
+  "social_links": [
+    "https://www.facebook.com/nyc311",
+    "https://www.youtube.com/user/notifynyc",
+    "https://x.com/compose/post?text=About CDF / Registration - DCLA https://www1.nyc.gov/site/dcla/cultural-funding/about-cdf-registration.page? via @nycgov",
+    "https://www.facebook.com/sharer/sharer.php?u=https://www1.nyc.gov/site/dcla/cultural-funding/programs-funding.page?",
+    "https://twitter.com/NYC311",
+    "https://www.instagram.com/nyc311/#",
+    "https://www.youtube.com/user/NYC311"
+  ],
+  "sources_used": [
+    "Website (nyc.gov DCLA cultural funding pages)",
+    "LinkedIn (English for All company page - note: data appears mixed with DCLA)",
+    "Google Search (external cultural funding programs)"
+  ],
+  "last_updated": "2026-07-15T10:34:46.371232+00:00"
+}

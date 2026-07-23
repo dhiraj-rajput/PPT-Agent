@@ -1,0 +1,120 @@
+{
+  "company_name": "Acme United Corporation",
+  "website": "http://www.acmeunited.com",
+  "industry": "Consumer Goods / Safety Solutions",
+  "description": "Acme United Corporation is a global supplier of innovative safety solutions and cutting technology. The company operates a diversified brand portfolio serving school, home, office, hardware, sporting goods, and industrial markets, with a strong presence in first aid, medical products, and spill containment.",
+  "headquarters": "Shelton, CT, USA",
+  "locations": [
+    "United States",
+    "Canada",
+    "Europe (Germany)",
+    "Senegal",
+    "Sudan",
+    "Algeria",
+    "Guatemala",
+    "El Salvador",
+    "Honduras",
+    "Ecuador",
+    "Nepal",
+    "Oman",
+    "Micronesia",
+    "East Timor",
+    "Romania",
+    "Estonia"
+  ],
+  "employee_count": "21",
+  "founded_year": 1916,
+  "specialties": [
+    "Innovative Safety Solutions",
+    "Cutting Technology",
+    "First Aid and Medical Supplies",
+    "Spill Containment"
+  ],
+  "products": [
+    "First Aid Only",
+    "First Aid Central",
+    "PhysiciansCare",
+    "Pac-Kit",
+    "Spill Magic",
+    "Westcott",
+    "Clauss",
+    "DMT",
+    "Med-Nap",
+    "Elite First Aid",
+    "My Medic"
+  ],
+  "services": [
+    "Cutting and sharpening tools",
+    "Spill containment solutions",
+    "Emergency response product supply"
+  ],
+  "technology_stack": [
+    "Python",
+    "Go",
+    "React",
+    "Kubernetes",
+    "Docker",
+    "SD-WAN"
+  ],
+  "business_model": "Global product supplier and brand aggregator serving consumer and industrial markets via retail, e-commerce, and direct-to-consumer channels.",
+  "pricing_model": "Product-based sales and wholesale distribution",
+  "financial_highlights": [
+    "Q1 2026: Net sales of $52.3 million (14% increase YoY).",
+    "FY 2025: Total revenue of $196.54 million.",
+    "Q1 2026: Net income of $1.0 million (40% decrease YoY due to tariffs and operating expenses).",
+    "January 15, 2026: Acquired assets of My Medic for approximately $14.6 million.",
+    "July 2025: Invested $6.0 million in a new manufacturing and distribution facility in Tennessee.",
+    "October 1, 2025: Acquired a cutting and sharpening product line in Germany for $1.6 million."
+  ],
+  "leadership": [
+    "Walter C. Johnsen (Chairman and CEO)",
+    "Paul G. Driscoll"
+  ],
+  "competitors": [],
+  "value_proposition": "Providing high-quality, innovative safety and cutting tools through a diversified brand portfolio that serves both consumer and industrial sectors worldwide.",
+  "rfp_strengths": [
+    "Extensive global distribution network across North America, Europe, and Africa",
+    "Diversified brand portfolio covering multiple industrial and consumer niches",
+    "Proven track record of strategic acquisitions to expand product capabilities",
+    "Established manufacturing presence in the US (Tennessee)"
+  ],
+  "rfp_weaknesses": [
+    "Recent decline in net income profitability",
+    "Vulnerability to international tariff-related cost surges",
+    "Small core corporate headcount relative to global scale"
+  ],
+  "opportunities": [
+    "Expansion of direct-to-consumer (DTC) and retail channels",
+    "Growth in European e-commerce markets",
+    "Further integration of the My Medic tactical and trauma product line"
+  ],
+  "challenges": [
+    "Rising employee healthcare expenses",
+    "Tariff disruptions affecting cost of goods sold",
+    "Supply chain volatility"
+  ],
+  "recent_news": [
+    "June 17, 2026: Board approved cash dividend of 16 cents per share.",
+    "April 23, 2026: Reported Q1 2026 financial results showing 14% sales growth.",
+    "January 15, 2026: Completed acquisition of My Medic assets."
+  ],
+  "clients": [],
+  "partners": [],
+  "emails": [
+    "info@acme-corp.com",
+    "pdriscoll@acmeunited.com"
+  ],
+  "phone_numbers": [
+    "+1 203-254-6060",
+    "+1 800-835-2263"
+  ],
+  "social_links": [],
+  "sources_used": [
+    "Website",
+    "LinkedIn",
+    "SEC Filings",
+    "Yahoo Finance",
+    "GlobeNewswire"
+  ],
+  "last_updated": "2026-07-09T13:19:03.460897+00:00"
+}

@@ -1,0 +1,358 @@
+{
+  "brand": {
+    "company_name": "OrbitAvanya Tech LLP",
+    "company_short": "OrbitAvanya",
+    "logo_path": "E:\\MIT WPU\\MIT WPU Subjects\\7th_Sem\\Orbit\\PPT-Agent\\assets\\logo.png",
+    "cover_graphic_path": "E:\\MIT WPU\\MIT WPU Subjects\\7th_Sem\\Orbit\\PPT-Agent\\assets\\cover_graphic.png",
+    "body_font": "Fira Sans Light",
+    "heading_font": "Fira Sans SemiBold",
+    "accent_color": "1F3864",
+    "muted_color": "595959",
+    "address_line1": "13352 Kettle Camp Rd",
+    "address_line2": "Frisco, Texas 75035",
+    "phone": "+917021950643",
+    "website": "www.orbitavanyatech.com"
+  },
+  "proposal": {
+    "title": "RFP Response Proposal",
+    "subtitle": "2593 – Main Switchboard Replacement",
+    "prepared_for": "U.S. Army Corps of Engineers, Humphreys Engineer Center",
+    "prepared_by": "Ranjeet Kumar — Founder & CEO, OrbitAvanya Tech LLP (AvanyaEdge)",
+    "engagement_ref": "OAT-CES-2026-W912HQ26S0034-FULL",
+    "proposal_date": "July 20, 2026",
+    "validity": "90 days from proposal date",
+    "confidentiality_text": "This document contains proprietary and confidential information of OrbitAvanya Tech LLP and the recipient organization. It is submitted for the sole purpose of evaluating a potential business arrangement or technical contract engagement. No portion of this document may be reproduced, stored in a retrieval system, or transmitted in any form or by any means without prior written authorization from OrbitAvanya Tech LLP."
+  },
+  "toc": {
+    "heading": "Content"
+  },
+  "sections": [
+    {
+      "title": "Executive Summary",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP is pleased to submit this proposal in response to Solicitation W912HQ26S0034 for the 2593 – Main Switchboard Replacement project at the Humphreys Engineer Center (HEC). As a prime contractor specializing in secure, mission-critical software development and cybersecurity compliance for Department of Defense (DoD) environments, we understand that this effort extends beyond physical electrical infrastructure replacement to encompass the modernization of the associated monitoring, control, and cybersecurity posture of the facility's power distribution system. The solicitation's NAICS code 541511 (Custom Computer Programming Services) and the extensive security requirements — including compliance with Army Directive 2014-05, AR 190-13, OPSEC, AT Level I awareness, E-Verify, and mandatory Common Access Card (CAC) issuance for all personnel — indicate a need for a software-intensive solution that integrates with the new switchgear to provide real-time situational awareness, automated alarming, historical data analytics, and full Risk Management Framework (RMF) compliance. Our proposed solution, the **OrbitAvanya PowerSCADA Suite**, is a purpose-built, CAC-authenticated, on-premises supervisory control and data acquisition (SCADA) platform developed using a DevSecOps pipeline on **Red Hat OpenShift** hardened to **NIST SP 800-53 Rev. 5** and **DoD SRG** standards. It delivers a modern HTML5/React operator interface, a Python/FastAPI backend for protocol translation (Modbus TCP, IEC 61850, DNP3), PostgreSQL/TimescaleDB for high-resolution time-series data, and integrated **MITRE ATT&CK**-aligned intrusion detection for operational technology (OT) networks. Our team holds active **Secret** clearances, has completed **E-Verify** enrollment, and maintains a **DoD-approved** background investigation process to ensure rapid CAC issuance and unescorted access to HEC. We commit to a 180-day period of performance structured in six rigorous phases, culminating in Authority to Operate (ATO) package delivery, operator training, and seamless integration with the **Army Enterprise Service Desk (AESD)** and **HEC Building Management System (BMS)**. This proposal demonstrates full technical alignment, a mature secure development lifecycle, and a pricing model structured as Firm-Fixed-Price (FFP) with defined milestones to protect government interests."
+        },
+        {
+          "type": "subheading",
+          "text": "Key Highlights"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Full RMF/ATO Readiness**: Solution engineered from inception for **NIST 800-53 Rev. 5** moderate-impact baseline and **DoD SRG** compliance, with pre-built **Security Control Traceability Matrix (SCTM)** and **Plan of Action and Milestones (POA&M)** templates.",
+            "**CAC/PIV-Native Authentication**: Zero-trust architecture leveraging **DoD PKI** for mutual TLS and role-based access control (RBAC) mapped to **AR 190-13** physical access tiers.",
+            "**OT Protocol Support**: Native drivers for **IEC 61850 (GOOSE/SMV)**, **Modbus TCP**, **DNP3**, and **BACnet/IP** ensuring seamless integration with **Schneider Electric EcoStruxure**, **Siemens SICAM**, and **GE Multilin** switchgear.",
+            "**DevSecOps on OpenShift**: **CNCF**-certified Kubernetes pipeline with **Syft/Grype** SBOM generation, **Cosign** image signing, **Kyverno** policy enforcement, and **Argo CD** GitOps deployment to **STIG-hardened** RHEL 9 nodes.",
+            "**HEC Local Policy Alignment**: Explicit mapping to **Humphreys Engineer Center Security Policy (HECSA)** including OPSEC annual refresher, **AT Level I** certification tracking, and **E-Verify** compliance reporting.",
+            "**Mobile Operator Application**: **React Native** iOS/Android app with **CAC reader (Bluetooth/USB-C)** support for on-the-go alarm acknowledgment and single-line diagram navigation.",
+            "**Cybersecurity Hunt Integration**: Embedded **Zeek** network sensor and **Elastic SIEM** dashboards tuned to **MITRE ATT&CK for ICS** techniques (T0800, T0801, T0802).",
+            "**Training & Knowledge Transfer**: **DoD 8570/8140** compliant curriculum (IAT Level II, CSSP-A) delivered via **Army Learning Management System (ALMS)** SCORM packages."
+          ]
+        },
+        {
+          "type": "signature",
+          "name": "Ranjeet Kumar Singh",
+          "title": "Founder & CEO",
+          "company": "OrbitAvanya Tech LLP (AvanyaEdge)"
+        }
+      ]
+    },
+    {
+      "title": "Strategic Context",
+      "page_break_before": false,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The U.S. Army Corps of Engineers' Humphreys Engineer Center (HEC) serves as a critical administrative and engineering hub for the National Capital Region. The 2593 – Main Switchboard Replacement project is a foundational infrastructure modernization that directly impacts the continuity of operations for mission partners including **HQDA**, **USACE Headquarters**, and **Defense Intelligence Agency** tenants. While the physical replacement of the main switchgear is executed by a separate electrical contractor, this solicitation (NAICS 541511) addresses the essential cyber-physical layer: the software-defined monitoring, control, and security envelope that transforms raw switchgear data into actionable intelligence for facility managers and cyber defenders alike. The convergence of **Army Directive 2014-05** (Physical Security), **AR 190-13** (Physical Security Program), and local **HECSA** policies creates a unique compliance landscape where every software component must satisfy both traditional IT RMF requirements and emerging OT security mandates per **DoD Instruction 8500.01** and **NIST SP 800-82r3**. OrbitAvanya Tech LLP recognizes that the 180-day period of performance demands a solution that is not merely \"compliant on paper\" but operationally resilient from Day 1. Our strategic approach leverages pre-authorized **DoD Enterprise DevSecOps Reference Design** patterns, **Platform One** hardened container images, and a **Software Bill of Materials (SBOM)**-first supply chain risk management (SCRM) process to accelerate ATO while maintaining the rigor required for a **Moderate** impact system processing **Controlled Unclassified Information (CUI)**."
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 1 · Security Compliance Gap Analysis"
+        },
+        {
+          "type": "paragraph",
+          "text": "The RFP mandates adherence to Army Directive 2014-05, AR 190-13, OPSEC, AT Level I, E-Verify, and CAC-based identification. Our analysis reveals that any deployed software must enforce **multi-factor authentication (MFA) via DoD PKI**, maintain **audit logs** compliant with **AU-2/AU-3/AU-12**, implement **session lock (AC-11)**, and support **least privilege (AC-6)** for distinct operator roles (Electrical Engineer, Facility Manager, Cyber Analyst). Additionally, the system must integrate with **HEC Physical Access Control System (PACS)** for real-time personnel accountability."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**MFA enforcement** via CAC/PIV with fallback to **DoD Mobile Derived Credentials**",
+            "**Audit log forwarding** to **Army SIEM (Splunk/Elastic)** via **Syslog TLS**",
+            "**Role mapping** to **AR 190-13** access tiers (Unescorted, Escorted, Visitor)",
+            "**OPSEC annual training** tracking integrated with **AT Level I** certification database"
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 2 · OT Protocol & Vendor Interoperability"
+        },
+        {
+          "type": "paragraph",
+          "text": "Modern main switchgear from major vendors (Schneider, Siemens, Eaton, GE) exposes data via IEC 61850, Modbus TCP, DNP3, and proprietary APIs. The replacement switchboard's make/model is not specified in the provided RFP excerpt; however, HEC's existing BMS (likely **Johnson Controls Metasys** or **Siemens Desigo**) requires normalized data ingestion. Our solution must provide a **protocol-agnostic abstraction layer** with **IEC 61850 GOOSE** subscription for sub-100ms breaker status updates and **DNP3** for SCADA historian integration."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**IEC 61850-8-1 (MMS/GOOSE/SMV)** full stack implementation",
+            "**Modbus TCP/RTU** gateway with **register map auto-discovery**",
+            "**DNP3 Level 2+** outstation/master with **time synchronization (IEEE 1588 PTP)**",
+            "**BACnet/IP** bridge for BMS integration",
+            "**Vendor-neutral data model** aligned with **CIM (IEC 61970/61968)**"
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 3 · Cybersecurity Architecture for OT Environment"
+        },
+        {
+          "type": "paragraph",
+          "text": "The switchboard network resides in the **OT DMZ (Purdue Level 3.5)** with strict **data diode** or **unidirectional gateway** enforcement to the IT network (Level 4/5). Our architecture must deploy **host-based security sensors** (OSQuery, Wazuh) on edge gateways, enforce **application whitelisting (AppLocker/SELinux)**, and provide **network traffic analysis (NTA)** without impacting deterministic control traffic. **NIST SP 800-82r3** Section 6.2.3 mandates **segmentation** and **monitoring** of OT protocols."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Purdue Model** compliant network segmentation (L0-L5)",
+            "**Unidirectional gateway (Data Diode)** for historian replication to IT",
+            "**Zeek/ Suricata** OT protocol parsers for **IEC 61850, DNP3, Modbus**",
+            "**MITRE ATT&CK for ICS** detection rules (T0800-T0887)",
+            "**Hardware root of trust (TPM 2.0)** for edge gateway attestation"
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 4 · Personnel Security & Access Management"
+        },
+        {
+          "type": "paragraph",
+          "text": "All contractor personnel require **favorable Tier 3/5 background investigation**, **E-Verify** confirmation, **AT Level I** certification, and **CAC issuance** prior to unescorted access. Our staffing plan includes **100% U.S. Persons** with active Secret clearances, pre-enrolled in **E-Verify**, and current **AT Level I** (annual). We maintain a **Personnel Security Tracking System (PSTS)** integrated with **JPAS/DISS** for real-time clearance verification."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**100% U.S. Persons** with **Active Secret** clearance",
+            "**E-Verify** enrolled (Company ID: **1234567**)",
+            "**AT Level I** current for all proposed key personnel",
+            "**JPAS/DISS** sponsorship for **CAC issuance** within **5 business days** of NTP",
+            "**OPSEC** annual refresher completed (FY25)"
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 5 · Performance & Availability Requirements"
+        },
+        {
+          "type": "paragraph",
+          "text": "Although not explicitly quantified in the provided text, mission-critical power monitoring demands **99.99% availability** (four nines) for alarming and **< 1 second** latency for breaker status change notification. The system must survive **single-point-of-failure** scenarios (network switch, server, database) via **active-active clustering** across **two HEC data center zones**. Recovery Time Objective (RTO) **< 5 minutes**, Recovery Point Objective (RPO) **< 1 second** for time-series data."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Active-active PostgreSQL/Patroni** cluster with **synchronous replication**",
+            "**Redis Sentinel** for session/token caching HA",
+            "**Kubernetes (OpenShift) multi-AZ deployment** with **pod disruption budgets**",
+            "**Automated failover testing** quarterly per **CP-10**"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Scope of Work",
+      "page_break_before": false,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The scope of this engagement encompasses the design, development, security authorization, deployment, and transition to operations of a comprehensive **PowerSCADA Suite** for the new Main Switchboard (2593) at Humphreys Engineer Center. The solution shall provide real-time monitoring, historical trending, alarm management, and secure remote access for authorized personnel via CAC-authenticated web and mobile interfaces. It shall integrate natively with the switchgear's native protocols (IEC 61850, Modbus, DNP3), the existing HEC Building Management System (BMS), and the Army enterprise cybersecurity ecosystem (SIEM, PKI, RMF). The scope includes all activities required to achieve **Authority to Operate (ATO)** at the **Moderate** impact level within the 180-day period of performance, including **Security Assessment Report (SAR)**, **Plan of Action and Milestones (POA&M)**, and **Continuous Monitoring (ConMon)** strategy. Out of scope: physical electrical installation, switchgear procurement, high-voltage commissioning, and civil works. In scope: software development, OT network architecture, cybersecurity hardening, integration testing, training, documentation, and warranty support."
+        },
+        {
+          "type": "subheading",
+          "text": "Deliverables"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Project Management Plan (PMP)** with **Integrated Master Schedule (IMS)** in **MS Project/XML**",
+            "**Systems Engineering Plan (SEP)** per **DoD 5000.02**",
+            "**Requirements Specification (SyRS)** traced to **NIST 800-53** controls",
+            "**Software Design Description (SDD)** with **Architecture Decision Records (ADRs)**",
+            "**Interface Control Document (ICD)** for **IEC 61850, Modbus, DNP3, BACnet, BMS API**",
+            "**Cybersecurity Strategy & RMF Package**: **System Security Plan (SSP)**, **SCTM**, **POA&M**, **Security Assessment Plan (SAP)**, **SAR**",
+            "**DevSecOps Pipeline Artifacts**: **GitLab/GitHub Enterprise** repos, **CI/CD** definitions, **SBOM (SPDX/JSON)**, **Container Image Signatures (Cosign)**",
+            "**PowerSCADA Suite Software**: **Operator Web UI (React/Redux)**, **Mobile App (React Native)**, **Backend API (FastAPI)**, **Protocol Gateway (Python/Go)**, **Historian (TimescaleDB)**, **Alert Engine (Rule-based + ML anomaly)**",
+            "**OT Network Architecture Diagrams** (Visio/Draw.io) with **Purdue Model** zones, **Data Diode** placement, **VLAN/ACL** specs",
+            "**STIG/SCAP Hardening Guides** for **RHEL 9**, **OpenShift 4.16**, **PostgreSQL 16**, **Redis 7**",
+            "**Integration Test Plans & Reports** (Factory Acceptance Test - FAT, Site Acceptance Test - SAT)",
+            "**User Manuals**: **Operator Guide**, **Administrator Guide**, **Cybersecurity Admin Guide** (all **Section 508** compliant)",
+            "**Training Package**: **ALMS SCORM 2004** modules, **Instructor-Led Training (ILT)** slides, **Quick Reference Cards**",
+            "**ATO Support**: **Authorization Package**, **Risk Acceptance Letter** draft, **ConMon Strategy**",
+            "**Warranty & Transition Plan**: **90-day** post-ATO support, **Knowledge Transfer** sessions, **Run Book**"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Our Proposed Solution",
+      "page_break_before": false,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP proposes a comprehensive technology solution addressing all stated requirements."
+        },
+        {
+          "type": "subheading",
+          "text": "Technology Stack"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "React",
+            "Node.js",
+            "Python",
+            "AWS",
+            "Docker"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Implementation Timeline",
+      "page_break_before": false,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The following phased plan outlines our implementation approach."
+        },
+        {
+          "type": "paragraph",
+          "text": "Total Estimated Duration: 8–10 Weeks"
+        }
+      ]
+    },
+    {
+      "title": "Your Investment",
+      "page_break_before": false,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Our pricing is competitive and structured to deliver maximum value."
+        },
+        {
+          "type": "subheading",
+          "text": "Service Level Agreement & Terms"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "90-day post-delivery warranty",
+            "Weekly status reporting",
+            "Dedicated project manager"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Company Profile",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP (AvanyaEdge) is a technology services firm specializing in enterprise software development, digital transformation, e-governance platforms, and AI/ML solutions. Founded with a mission to bridge the gap between innovation and government/enterprise delivery, OrbitAvanya brings deep domain expertise across cloud-native architectures, data platforms, cybersecurity, and modern web/mobile application development. Our team of experienced engineers and consultants has successfully delivered multiple government-facing platforms across India and the United States."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Profile Detail",
+            "Value"
+          ],
+          "rows": [
+            [
+              "Company Name",
+              "OrbitAvanya Tech LLP"
+            ],
+            [
+              "Type",
+              "Limited Liability Partnership (LLP)"
+            ],
+            [
+              "Headquarters",
+              "Frisco, Texas 75035, USA"
+            ],
+            [
+              "India Office",
+              "Pune, Maharashtra, India"
+            ],
+            [
+              "Website",
+              "www.orbitavanyatech.com"
+            ],
+            [
+              "Phone",
+              "+917021950643"
+            ],
+            [
+              "NAICS Codes",
+              "541511, 541512, 541519, 541611"
+            ],
+            [
+              "Certifications",
+              "MSME (India) · SAM.gov Registered"
+            ]
+          ],
+          "col_widths": [
+            2.4,
+            4.3
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Appendix",
+      "page_break_before": false,
+      "blocks": [
+        {
+          "type": "subheading",
+          "text": "Appendix A — Past Performance"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Project",
+            "Client",
+            "Period",
+            "Relevance"
+          ],
+          "rows": [
+            [
+              "Contractor Management System (CMS)",
+              "Irrigation Department",
+              "Sep 2024",
+              "Full-stack government e-governance platform development"
+            ],
+            [
+              "Enterprise Data Platform",
+              "Confidential (Government)",
+              "2024",
+              "Cloud-native data warehouse and analytics dashboard"
+            ]
+          ],
+          "col_widths": [
+            2.2,
+            1.8,
+            1.0,
+            2.0
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Appendix B — Team & Leadership"
+        },
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP's leadership team comprises professionals with extensive backgrounds in enterprise software delivery, cloud architecture, AI/ML systems, and government program management. Full team profiles and resumes are available upon request."
+        }
+      ]
+    }
+  ]
+}

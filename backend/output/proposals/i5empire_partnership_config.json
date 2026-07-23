@@ -1,0 +1,449 @@
+{
+  "brand": {
+    "company_name": "OrbitAvanya Tech LLP",
+    "company_short": "OrbitAvanya",
+    "logo_path": "assets/logo.png",
+    "cover_graphic_path": "assets/cover_graphic.png",
+    "body_font": "Fira Sans Light",
+    "heading_font": "Fira Sans SemiBold",
+    "accent_color": "1F3864",
+    "muted_color": "595959",
+    "address_line1": "13352 Kettle Camp Rd",
+    "address_line2": "Frisco, Texas 75035",
+    "phone": "+917021950643",
+    "website": "www.orbitavanyatech.com"
+  },
+  "proposal": {
+    "title": "Partnership Proposal",
+    "subtitle": "Strategic Partnership Proposal",
+    "prepared_for": "i5Empire",
+    "prepared_by": "Ranjeet Kumar — Founder & CEO, OrbitAvanya Tech LLP (AvanyaEdge)",
+    "engagement_ref": "OAT-CES-2026-I5EMPIRE-FULL",
+    "proposal_date": "July 14, 2026",
+    "validity": "90 days from proposal date",
+    "confidentiality_text": "This document contains confidential information of OrbitAvanya Tech LLP and its affiliates and/or licensors (“OrbitAvanya”), which may include trade secrets, proprietary methodology, and business information. The recipient acknowledges that this information has been developed by OrbitAvanya as valuable trade secrets and shall remain its exclusive property, to be disclosed only to persons who have a need to know. The recipient agrees not to copy or reproduce any information supplied herein without prior written permission from an authorized representative of OrbitAvanya.\n\nReciprocally, OrbitAvanya acknowledges that information shared by the recipient during proposal review and any subsequent engagement constitutes confidential information of the recipient, and agrees to protect it to the same standard and to use it solely for the purposes of the engagement contemplated herein."
+  },
+  "toc": {
+    "heading": "Content"
+  },
+  "sections": [
+    {
+      "title": "Executive Summary",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP is pleased to propose a strategic partnership with i5Empire to create a powerhouse of technology services and product innovation. By combining i5Empire's established market presence and service delivery model with OrbitAvanya's cutting-edge software engineering and proprietary product suite, we can unlock **unprecedented scalability** and **diversified revenue streams** for both organizations."
+        },
+        {
+          "type": "paragraph",
+          "text": "Our objective is to transition from a traditional vendor-client relationship to a **Joint Value Proposition (JVP)** model. This collaboration will allow i5Empire to offer high-end, custom technical solutions—powered by OrbitAvanya's expertise in AI, Cloud, and ERP systems—without the overhead of building these specialized capabilities from the ground up."
+        },
+        {
+          "type": "paragraph",
+          "text": "Together, we will target mid-to-large scale enterprises requiring digital transformation, leveraging the **OrbitAvanya AI Analytics Dashboard** and **Cloud Migrator** to provide a comprehensive end-to-end technology ecosystem. This synergy will ensure that i5Empire remains at the forefront of the technology services industry while OrbitAvanya expands its deployment footprint through i5Empire's strategic networks."
+        },
+        {
+          "type": "subheading",
+          "text": "Key Highlights"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Accelerated Time-to-Market** for new product offerings through OrbitAvanya's pre-built proprietary frameworks.",
+            "**Enhanced Service Portfolio** for i5Empire, adding high-margin AI and ERP consulting to their existing offerings.",
+            "**Shared Resource Optimization** allowing for flexible scaling of engineering teams based on project demand.",
+            "**Increased Competitive Edge** by offering a unified 'Consultancy + Product' bundle to enterprise clients.",
+            "**Mutual Revenue Growth** through a collaborative co-selling and revenue-sharing model.",
+            "**Technical De-risking** of complex migrations using the **OrbitAvanya Cloud Migrator**."
+          ]
+        },
+        {
+          "type": "signature",
+          "name": "Ranjeet Kumar Singh",
+          "title": "Founder & CEO",
+          "company": "OrbitAvanya Tech LLP (AvanyaEdge)"
+        }
+      ]
+    },
+    {
+      "title": "Strategic Context",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The current technology landscape is shifting from generic service provision to **specialized product-led services**. i5Empire has a strong foundation in technology services, but there is a significant market opportunity to capture the 'Digital Transformation' wave by integrating specialized software products into their service delivery.\n\nOrbitAvanya Tech LLP provides the missing piece of this puzzle: a robust suite of **enterprise-grade products** and a high-velocity engineering team. By aligning our visions, we can move from selling hours to selling **high-value outcomes**."
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 1 · Capability Gap Analysis"
+        },
+        {
+          "type": "paragraph",
+          "text": "While i5Empire excels in service delivery, there is a visible opportunity to integrate **proprietary IP** into their offerings to increase client stickiness and lifetime value."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Lack of a native **ERP solution** to offer clients for operational efficiency.",
+            "Need for advanced **AI-driven analytics** to provide deeper business insights to end-users.",
+            "Opportunity to streamline **cloud transition services** using automated tools."
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Finding 2 · Market Synergy Identification"
+        },
+        {
+          "type": "paragraph",
+          "text": "Both companies operate within the technology sector, meaning there is a **perfect alignment of target personas** and industry verticals."
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Overlapping client bases in the enterprise and SME sectors.",
+            "Complementary strengths: i5Empire's market reach combined with OrbitAvanya's **technical depth**.",
+            "Potential to dominate the **e-Gov and Public Sector** markets using the **OrbitAvanya e-Gov Portal**."
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Scope of Work",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The proposed collaboration focuses on three primary pillars: **Joint Product Distribution**, **Co-Engineered Custom Solutions**, and **Strategic Technical Outsourcing**. We aim to create a seamless integration where OrbitAvanya acts as the 'Innovation Engine' and i5Empire acts as the 'Market Accelerator'."
+        },
+        {
+          "type": "subheading",
+          "text": "Deliverables"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "Jointly branded **Enterprise Digital Transformation Package**.",
+            "Integrated deployment of **OrbitAvanya ERP** within i5Empire's client ecosystem.",
+            "Co-developed **AI-powered Business Intelligence (BI) dashboards** for shared clients.",
+            "A unified **Cloud Migration Framework** utilizing OrbitAvanya's proprietary tools.",
+            "Quarterly joint-innovation workshops to develop new market-ready products."
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Technical Requirements Alignment"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "RFP Requirement",
+            "Our Solution",
+            "Alignment"
+          ],
+          "rows": [
+            [
+              "Need for scalable, modern web architectures",
+              "OrbitAvanya's expertise in **React, Next.js, and FastAPI**",
+              "Full Synergy"
+            ],
+            [
+              "Enterprise data management and storage",
+              "Advanced **PostgreSQL and MongoDB** implementation strategies",
+              "Full Synergy"
+            ],
+            [
+              "Rapid deployment of government-facing portals",
+              "**OrbitAvanya e-Gov Portal**",
+              "High Synergy"
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            3.0,
+            1.5
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Our Proposed Solution",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Our joint solution centers on the creation of a **'Tech-Acceleration Suite'**. Instead of i5Empire building custom software from scratch for every client, we will utilize OrbitAvanya's proprietary products as a foundation. For instance, the **OrbitAvanya ERP** can be customized and white-labeled for i5Empire's clients, drastically reducing development time and increasing profit margins."
+        },
+        {
+          "type": "paragraph",
+          "text": "Furthermore, we will implement a **Joint Delivery Center**. When i5Empire secures a high-complexity project requiring AI or Cloud migration, OrbitAvanya's engineering team will step in as the primary technical executors, ensuring **world-class code quality** and adherence to the latest tech stacks like **FastAPI and AWS**."
+        },
+        {
+          "type": "paragraph",
+          "text": "This value proposition transforms i5Empire from a service provider into a **Solution Provider**. By bundling the **OrbitAvanya AI Analytics Dashboard** with i5Empire's consulting services, the partnership can offer clients a 'Data-to-Decision' pipeline that is virtually unmatched in the current mid-market segment."
+        },
+        {
+          "type": "subheading",
+          "text": "Core Capabilities"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Capability",
+            "Description"
+          ],
+          "rows": [
+            [
+              "Custom Software Engineering",
+              "End-to-end development using **React, Next.js, and Node.js** for high-performance applications."
+            ],
+            [
+              "AI & Data Analytics",
+              "Deployment of the **OrbitAvanya AI Analytics Dashboard** for predictive business insights."
+            ],
+            [
+              "Enterprise Resource Planning",
+              "Implementation and customization of **OrbitAvanya ERP** to streamline business operations."
+            ],
+            [
+              "Cloud Infrastructure",
+              "Seamless transitions and optimizations using the **OrbitAvanya Cloud Migrator** on **AWS**."
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            4.5
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Technology Stack"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "React",
+            "Next.js",
+            "Python",
+            "FastAPI",
+            "Node.js",
+            "PostgreSQL",
+            "MongoDB",
+            "AWS"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Implementation Timeline",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "We propose a phased rollout to ensure alignment and minimize risk, moving from a pilot project to a full-scale strategic alliance over six months."
+        },
+        {
+          "type": "subheading",
+          "text": "Engagement Timeline"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Phase",
+            "Duration",
+            "Focus Area",
+            "Deliverables"
+          ],
+          "rows": [
+            [
+              "Phase 1: Alignment",
+              "Month 1",
+              "Initial Alignment & Joint Offering Definition",
+              "Signed Partnership MOU and defined Joint Value Proposition (JVP) document."
+            ],
+            [
+              "Phase 2: Pilot Integration",
+              "Month 2-3",
+              "Pilot Project Execution",
+              "Deployment of one OrbitAvanya product (e.g., ERP or AI Dashboard) for a select i5Empire client."
+            ],
+            [
+              "Phase 3: Market Scaling",
+              "Month 4-6",
+              "Full Commercial Launch",
+              "Joint marketing campaign and rollout of the 'Tech-Acceleration Suite' to the broader market."
+            ]
+          ],
+          "col_widths": [
+            1.0,
+            1.2,
+            2.3,
+            2.5
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Total Estimated Duration: 3-6 Months (Phase 1)"
+        }
+      ]
+    },
+    {
+      "title": "Your Investment",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "We propose a **Revenue-Share and Co-Investment model**. This ensures that both OrbitAvanya Tech LLP and i5Empire are equally incentivized to drive growth and ensure client success."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Item / Deliverable",
+            "Unit",
+            "Qty",
+            "Unit Price",
+            "Total"
+          ],
+          "rows": [
+            [
+              "Product Licensing (ERP/AI Dashboard)",
+              "RevShare",
+              "N/A",
+              "Tiered %",
+              "Mutual Profit"
+            ],
+            [
+              "Custom Engineering Services",
+              "Co-Investment",
+              "Project Based",
+              "Bespoke",
+              "Project Margin Split"
+            ]
+          ],
+          "col_widths": [
+            2.8,
+            1.0,
+            0.7,
+            1.2,
+            1.3
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Service Level Agreement & Terms"
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "**Mutual Non-Disclosure Agreement (NDA)** to protect proprietary IP of both parties.",
+            "**Dedicated Account Management** with bi-weekly synchronization meetings.",
+            "**Quality Assurance Guarantee**: All joint deliverables must pass OrbitAvanya's rigorous technical audit.",
+            "**Joint Branding Guidelines**: Agreement on how both logos appear in joint proposals."
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Company Profile",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP (AvanyaEdge) is a technology services firm specializing in enterprise software development, digital transformation, e-governance platforms, and AI/ML solutions. Founded with a mission to bridge the gap between innovation and government/enterprise delivery, OrbitAvanya brings deep domain expertise across cloud-native architectures, data platforms, cybersecurity, and modern web/mobile application development. Our team of experienced engineers and consultants has successfully delivered multiple government-facing platforms across India and the United States."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Profile Detail",
+            "Value"
+          ],
+          "rows": [
+            [
+              "Company Name",
+              "OrbitAvanya Tech LLP"
+            ],
+            [
+              "Type",
+              "Limited Liability Partnership (LLP)"
+            ],
+            [
+              "Headquarters",
+              "Frisco, Texas 75035, USA"
+            ],
+            [
+              "India Office",
+              "Pune, Maharashtra, India"
+            ],
+            [
+              "Website",
+              "www.orbitavanyatech.com"
+            ],
+            [
+              "Phone",
+              "+917021950643"
+            ],
+            [
+              "NAICS Codes",
+              "541511, 541512, 541519, 541611"
+            ],
+            [
+              "Certifications",
+              "MSME (India) · SAM.gov Registered"
+            ]
+          ],
+          "col_widths": [
+            2.5,
+            4.5
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Appendix",
+      "page_break_before": true,
+      "blocks": [
+        {
+          "type": "subheading",
+          "text": "Appendix A — Past Performance"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Project",
+            "Client",
+            "Period",
+            "Relevance"
+          ],
+          "rows": [
+            [
+              "Enterprise ERP Deployment",
+              "Confidential",
+              "2023",
+              "Demonstrated the ability to scale **OrbitAvanya ERP** for complex organizational structures."
+            ],
+            [
+              "AI-Driven Analytics Suite",
+              "Confidential",
+              "2022-2023",
+              "Successfully implemented the **AI Analytics Dashboard** to increase operational efficiency by 30%."
+            ]
+          ],
+          "col_widths": [
+            2.2,
+            1.8,
+            1.0,
+            2.0
+          ]
+        },
+        {
+          "type": "subheading",
+          "text": "Appendix B — Team & Leadership"
+        },
+        {
+          "type": "paragraph",
+          "text": "OrbitAvanya Tech LLP's leadership team comprises professionals with extensive backgrounds in enterprise software delivery, cloud architecture, AI/ML systems, and government program management. Full team profiles and resumes are available upon request."
+        }
+      ]
+    }
+  ]
+}

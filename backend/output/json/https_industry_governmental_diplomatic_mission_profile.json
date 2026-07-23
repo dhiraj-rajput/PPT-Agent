@@ -1,0 +1,111 @@
+{
+  "company_name": "U.S. Embassy and Consulates in Brazil",
+  "website": "https:\n  \"industry\": \"Governmental Diplomatic Mission",
+  "description": "The U.S. Embassy and Consulates in Brazil serve as the official diplomatic mission of the United States, facilitating bilateral relations, managing visa and immigration processes, and overseeing international development, cultural, and educational exchange programs.",
+  "headquarters": "Brasília, DF",
+  "locations": [
+    "Brasília, DF",
+    "São Paulo, SP",
+    "Rio de Janeiro, RJ",
+    "Recife, PE",
+    "Porto Alegre, RS",
+    "Belo Horizonte, MG"
+  ],
+  "employee_count": "501-1,000 employees",
+  "founded_year": null,
+  "specialties": [
+    "Diplomatic Relations",
+    "Consular Services",
+    "Visa Processing",
+    "International Development",
+    "Cultural Exchange"
+  ],
+  "products": [],
+  "services": [
+    "Visa and Immigration Services",
+    "U.S. Commercial Service Support",
+    "Department of Agriculture Liaison",
+    "Overseas Security Advisory Council (OSAC)",
+    "Emergency Assistance Services",
+    "Alumni Engagement Innovation Fund"
+  ],
+  "technology_stack": [
+    "Go"
+  ],
+  "business_model": "Governmental diplomatic mission funded by the U.S. Department of State, focused on public service, policy implementation, and bilateral cooperation.",
+  "pricing_model": "N/A (Governmental services)",
+  "financial_highlights": [
+    "DFC approved $630 million in financing for V.tal fiber optic infrastructure (2026)",
+    "Alumni Engagement Innovation Fund grants: $5,000 to $35,000 per project (2026)"
+  ],
+  "leadership": [
+    "Kimberly Kelly (Chargé d’Affaires, a.i.)",
+    "Jason Green (Consul General, Porto Alegre)",
+    "May Baptista (Consul General, Recife)",
+    "Ryan Rowlands (Consul General, Rio de Janeiro)",
+    "Kevin Murakami (Consul General, São Paulo)"
+  ],
+  "competitors": [
+    "U.S. International Development Finance Corporation (DFC) - Competes in the context of development financing and infrastructure investment."
+  ],
+  "value_proposition": "Facilitating diplomatic engagement, promoting economic and clean energy partnerships, managing visa and immigration processes, and supporting cultural and educational exchange programs between the U.S. and Brazil.",
+  "rfp_strengths": [
+    "Extensive diplomatic network and infrastructure across Brazil",
+    "Strong regulatory and legal authority in visa and immigration matters",
+    "Established track record in bilateral clean energy and infrastructure partnerships",
+    "Direct access to U.S. government resources and funding mechanisms"
+  ],
+  "rfp_weaknesses": [
+    "Subject to shifting U.S. foreign policy and executive orders",
+    "Operational delays due to stringent vetting and security protocols",
+    "Limited agility compared to private sector entities"
+  ],
+  "opportunities": [
+    "Expansion of clean energy industrial partnerships",
+    "Digital infrastructure development projects",
+    "Increased collaboration on cybersecurity and AI initiatives"
+  ],
+  "challenges": [
+    "Fluctuating visa processing volumes",
+    "Macroeconomic headwinds in Brazil impacting bilateral trade",
+    "Complex regulatory environment for international development projects"
+  ],
+  "recent_news": [
+    "Alumni Engagement Innovation Fund (AEIF) 2026 launch",
+    "USCIS Asylum Hold and new visa processing suspensions (January 2026)",
+    "Brazil-U.S. Partnership for the Energy Transition initiatives"
+  ],
+  "clients": [],
+  "partners": [
+    "BNDES (Brazilian Development Bank)",
+    "U.S. International Development Finance Corporation (DFC)",
+    "Ministério das Relações Exteriores (Itamaraty)"
+  ],
+  "emails": [
+    "ACSRio@state.gov",
+    "BrasiliaACS@state.gov",
+    "FortalezaACS@state.gov",
+    "PortoAlegreACS@state.gov",
+    "RecifeACS@state.gov",
+    "SalvadorACS@state.gov",
+    "SaoPauloACS@state.gov",
+    "manausACS@state.gov"
+  ],
+  "phone_numbers": [
+    "+55-61-3312-7000",
+    "+55-11-3250-5000",
+    "+55-21-3823-2000",
+    "+1-301-985-8850"
+  ],
+  "social_links": [
+    "https:\n    \"https:\n    \"https:\n    ",
+    "https:"
+  ],
+  "sources_used": [
+    "Official Website",
+    "LinkedIn",
+    "Google Search",
+    "U.S. Department of State Press Releases"
+  ],
+  "last_updated": "2026-07-23T05:00:32.012394+00:00"
+}

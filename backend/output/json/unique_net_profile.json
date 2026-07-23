@@ -1,0 +1,94 @@
+{
+  "company_name": "Unique Communication Solutions",
+  "website": "https://www.unique.net/about",
+  "industry": "Telecommunications / Software",
+  "description": "Unique Communication Solutions is a specialized telecommunications software provider that designs and delivers telephone management, emergency 9-1-1, and auto-attendant systems. Originally founded to address cable management needs for the US Air Force, the company provides robust operations support systems and interoperability solutions across complex enterprise networks.",
+  "headquarters": "Las Vegas, Nevada, USA",
+  "locations": [
+    "Nevada, USA"
+  ],
+  "employee_count": "2-10 employees",
+  "founded_year": 2017,
+  "specialties": [
+    "Telephone Management Systems",
+    "Emergency 9-1-1 Solutions",
+    "Auto-Attendant & IVR",
+    "Enterprise Network Interoperability",
+    "Operations Support Systems"
+  ],
+  "products": [
+    "CAIRS TMS",
+    "CAIRS 911",
+    "CAIRS VOICE",
+    "CAIRS Automated Switch Interface"
+  ],
+  "services": [
+    "Technical Support",
+    "Telecommunications Integration",
+    "Database Management",
+    "Billing and Expense Management"
+  ],
+  "technology_stack": [
+    "Go",
+    "Azure",
+    "Azure Entra Connect",
+    "Active Directory"
+  ],
+  "business_model": "B2B Software Licensing and Support Services",
+  "pricing_model": "Enterprise licensing and annual support/maintenance contracts",
+  "financial_highlights": [],
+  "leadership": [
+    "Leonard Vanderhoven (Co-Founder)",
+    "Richard Motzkus (Co-Founder)"
+  ],
+  "competitors": [
+    "Cisco (Enterprise telephony and network management)",
+    "Avaya (Unified communications and contact center solutions)",
+    "Mitel (Business phone systems and unified communications)"
+  ],
+  "value_proposition": "Providing secure, reliable, and highly interoperable telecommunications management and emergency response software tailored for mission-critical enterprise and military environments.",
+  "rfp_strengths": [
+    "Established history of serving the US Air Force and military clientele",
+    "NG 9-1-1 and E 9-1-1 compliance capabilities",
+    "Seamless integration with Microsoft Azure and Active Directory for secure identity management",
+    "Comprehensive automated billing and call detail record (CDR) collection"
+  ],
+  "rfp_weaknesses": [
+    "Extremely small workforce (2-10 employees) posing key-person and scalability risks",
+    "Limited global presence outside of the United States",
+    "Lack of publicly disclosed financial data to prove long-term fiscal capacity in large RFPs"
+  ],
+  "opportunities": [
+    "Transitioning legacy on-premise telecom management to cloud-based SaaS models",
+    "Capitalizing on the mandatory transition to Next-Generation 9-1-1 (NG 9-1-1) systems across US municipalities",
+    "Integrating AI-driven voice recognition and automated transcription into CAIRS VOICE"
+  ],
+  "challenges": [
+    "Market consolidation by massive UCaaS and CCaaS platforms (e.g., RingCentral, Zoom, Nextiva)",
+    "Maintaining compatibility with rapidly evolving enterprise network architectures"
+  ],
+  "recent_news": [
+    "TMCnet Announces Winners of the 2026 Unified Communications Product of the Year Awards (May 2026)"
+  ],
+  "clients": [
+    "United States Air Force"
+  ],
+  "partners": [
+    "Enterprise Network Providers",
+    "Emergency Communications and Public Safety Integrators"
+  ],
+  "emails": [
+    "sales@unique.net",
+    "support@unique.net"
+  ],
+  "phone_numbers": [
+    "+1-702-216-0266"
+  ],
+  "social_links": [],
+  "sources_used": [
+    "Website",
+    "LinkedIn",
+    "Google Search"
+  ],
+  "last_updated": "2026-07-15T08:25:25.949391+00:00"
+}
