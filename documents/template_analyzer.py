@@ -74,21 +74,23 @@ class BrandProfile:
         logo_path = ""
         cover_path = ""
 
-        # Save logo bytes to temp file if available
+        out_dir = Path("downloads") / "extracted"
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        # Save logo bytes to designated file if available
         if self.logo_bytes:
             try:
-                suffix = ".png"
-                with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
-                    f.write(self.logo_bytes)
-                    logo_path = f.name
+                target_logo = out_dir / "logo.png"
+                target_logo.write_bytes(self.logo_bytes)
+                logo_path = str(target_logo.resolve())
             except Exception as e:
                 logger.warning(f"Could not save extracted logo: {e}")
 
         if self.cover_graphic_bytes:
             try:
-                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
-                    f.write(self.cover_graphic_bytes)
-                    cover_path = f.name
+                target_cover = out_dir / "cover.png"
+                target_cover.write_bytes(self.cover_graphic_bytes)
+                cover_path = str(target_cover.resolve())
             except Exception as e:
                 logger.warning(f"Could not save cover graphic: {e}")
 

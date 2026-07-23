@@ -106,13 +106,6 @@ class CreateNewsletterBody(BaseModel):
     category: Optional[str] = "General"
 
 
-class CreateEditionBody(BaseModel):
-    subject: str
-    body: str
-    imageUrl: Optional[str] = None
-    sendNow: Optional[bool] = False
-
-
 class SubscriberInput(BaseModel):
     email: str
     name: Optional[str] = ""

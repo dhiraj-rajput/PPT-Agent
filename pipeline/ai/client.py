@@ -42,6 +42,13 @@ except ImportError:
     _ollama_lib = None
     _OLLAMA_AVAILABLE = False
 
+try:
+    import json_repair as _json_repair_lib
+    _JSON_REPAIR_AVAILABLE = True
+except ImportError:
+    _json_repair_lib = None
+    _JSON_REPAIR_AVAILABLE = False
+
 
 class RateLimitError(RuntimeError):
     """Raised when the Ollama Cloud API returns a 429 / rate-limit response.
@@ -504,12 +511,16 @@ class OllamaAIClient:
         try:
             parsed = json.loads(text_clean, strict=False)
         except json.JSONDecodeError as exc:
-            # 1. Try json_repair library
-            try:
-                import json_repair
-                repaired_str = json_repair.repair_json(text_clean, return_objects=False)
-                parsed = json.loads(repaired_str, strict=False)
-            except Exception:
+            # 1. Try json_repair library if available
+            parsed = None
+            if _JSON_REPAIR_AVAILABLE and _json_repair_lib is not None:
+                try:
+                    repaired_str = _json_repair_lib.repair_json(text_clean, return_objects=False)
+                    parsed = json.loads(repaired_str, strict=False)
+                except Exception:
+                    pass
+
+            if parsed is None:
                 try:
                     # 2. Try escaping inner quotes and regex fixing
                     repaired = self._escape_inner_quotes(text_clean)
@@ -522,11 +533,13 @@ class OllamaAIClient:
                     try:
                         parsed = json.loads(match.group(1), strict=False)
                     except json.JSONDecodeError:
-                        try:
-                            import json_repair
-                            parsed = json_repair.repair_json(match.group(1), return_objects=True)
-                        except Exception as inner_exc:
-                            raise ValueError(f"Extracted JSON is malformed: {inner_exc}. First 500 chars: {text[:500]}") from exc
+                        if _JSON_REPAIR_AVAILABLE and _json_repair_lib is not None:
+                            try:
+                                parsed = _json_repair_lib.repair_json(match.group(1), return_objects=True)
+                            except Exception as inner_exc:
+                                raise ValueError(f"Extracted JSON is malformed: {inner_exc}. First 500 chars: {text[:500]}") from exc
+                        else:
+                            raise ValueError(f"Extracted JSON is malformed. First 500 chars: {text[:500]}") from exc
         
         # Wrap arrays in a dict for backwards compatibility
         if isinstance(parsed, list):

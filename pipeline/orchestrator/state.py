@@ -13,10 +13,26 @@ from typing_extensions import TypedDict
 
 
 def merge_optional_str(left: Optional[str], right: Optional[str]) -> Optional[str]:
-    """Reducer that keeps the right-hand value if it's not None, otherwise keeps left."""
-    if right is not None:
+    """
+    Reducer that deterministically merges optional string fields across parallel graph nodes.
+    Prefers non-empty strings over None/empty strings, and longer/richer values if both are non-empty.
+    """
+    l_str = (left or "").strip()
+    r_str = (right or "").strip()
+
+    if not l_str:
+        return right if right is not None else left
+    if not r_str:
+        return left
+
+    # If both are non-empty, prefer non-generic strings
+    generic_placeholders = {"n/a", "none", "unknown", "null"}
+    if r_str.lower() in generic_placeholders and l_str.lower() not in generic_placeholders:
+        return left
+    if l_str.lower() in generic_placeholders and r_str.lower() not in generic_placeholders:
         return right
-    return left
+
+    return right if len(r_str) > len(l_str) else left
 
 
 def merge_errors(left: List[str], right: List[str]) -> List[str]:
@@ -35,6 +51,9 @@ class AgentState(TypedDict):
     # --- Input ---
     user_input: str                        # Raw string from the user
     input_type: str                        # Classified: "website_url" | "company_name" | "linkedin_url"
+
+    # --- Options ---
+    force: Optional[bool]                  # Force re-scrape even if cached
 
     # --- Discovered URLs (Annotated with reducers for concurrent safety) ---
     company_name: Annotated[Optional[str], merge_optional_str]            # Human-readable company name

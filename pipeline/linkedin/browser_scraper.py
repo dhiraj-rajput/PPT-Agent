@@ -8,6 +8,7 @@ This removes all AI API calls during scraping, preventing rate limits (429)
 and 404 errors completely. The raw text/markdown is still collected and saved.
 """
 
+import asyncio
 from typing import Optional
 
 from crawl4ai import AsyncWebCrawler, CacheMode, CrawlerRunConfig, BrowserConfig
@@ -54,35 +55,20 @@ class BrowserLinkedInScraper:
         raw_records: list[RawLinkedInScrapedData] = []
 
         async with AsyncWebCrawler(config=browser_config) as crawler:
-            # --- 1. Main company page ---
-            _, main_page_raw = await self._scrape_main_page(
-                crawler, company_slug
+            subpage_results = await asyncio.gather(
+                self._scrape_main_page(crawler, company_slug),
+                self._scrape_about_page(crawler, company_slug),
+                self._scrape_posts_page(crawler, company_slug),
+                self._scrape_jobs_page(crawler, company_slug),
+                self._scrape_people_page(crawler, company_slug),
+                return_exceptions=True,
             )
-            raw_records.append(main_page_raw)
 
-            # --- 2. About page ---
-            _, about_raw = await self._scrape_about_page(
-                crawler, company_slug
-            )
-            raw_records.append(about_raw)
-
-            # --- 3. Posts page ---
-            _, posts_raw = await self._scrape_posts_page(
-                crawler, company_slug
-            )
-            raw_records.append(posts_raw)
-
-            # --- 4. Jobs page ---
-            _, jobs_raw = await self._scrape_jobs_page(
-                crawler, company_slug
-            )
-            raw_records.append(jobs_raw)
-
-            # --- 5. People page ---
-            _, people_raw = await self._scrape_people_page(
-                crawler, company_slug
-            )
-            raw_records.append(people_raw)
+            for res in subpage_results:
+                if isinstance(res, tuple) and len(res) == 2:
+                    raw_records.append(res[1])
+                elif isinstance(res, Exception):
+                    logger.warning(f"[Layer 2] Subpage scrape task failed: {res}")
 
         logger.info(
             f"[Layer 2] Completed | company='{company_slug}' "

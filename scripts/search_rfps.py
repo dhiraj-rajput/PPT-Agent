@@ -296,7 +296,8 @@ def profile_single_opportunity(selected_opp: dict, opp_client: SAMOpportunitiesC
     print("🔍 Discovering bidders and proposal details from public logs & search...")
     competitors = extractor.find_competitors_and_bids(
         solicitation_number=rfp_profile["solicitation_number"],
-        use_mock=use_mock_flag
+        use_mock=use_mock_flag,
+        limit=limit_competitors,
     )
 
     # Try to trace the winner from the competitors list if SAM.gov has it as Unknown

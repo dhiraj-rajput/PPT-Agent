@@ -20,7 +20,7 @@ from app.sam_gov.document_parser import DocumentParser
 
 logger = setup_logger(__name__)
 
-OPPORTUNITIES_BASE_URL = "https://api.sam.gov/opportunities/v2/search"
+OPPORTUNITIES_BASE_URL = getattr(settings, "SAM_GOV_API_URL", "https://api.sam.gov/opportunities/v2/search")
 
 
 def _generate_minimal_pdf(title: str, text: str) -> bytes:

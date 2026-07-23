@@ -136,6 +136,15 @@ class AppSettings(BaseSettings):
     )
 
     # ------------------------------------------------------------------
+    # SAM.gov & Integrations
+    # ------------------------------------------------------------------
+    SAM_GOV_API_KEY: str = Field(default="", description="SAM.gov API key.")
+    SAM_GOV_API_URL: str = Field(
+        default="https://api.sam.gov/opportunities/v2/search",
+        description="SAM.gov opportunities search API endpoint URL."
+    )
+
+    # ------------------------------------------------------------------
     # MongoDB Collections & Search Settings
     # ------------------------------------------------------------------
     MONGODB_RAW_COLLECTION: str = Field(default="raw_data")
@@ -175,11 +184,11 @@ class AppSettings(BaseSettings):
         description="OpenRouter API Key for fallback generation.",
     )
     OPENROUTER_MODEL: str = Field(
-        default="google/gemma-3-27b-it:free",
+        default="google/gemini-2.5-flash",
         description="Primary OpenRouter model. Falls back through OPENROUTER_MODEL_FALLBACKS.",
     )
     OPENROUTER_MODEL_FALLBACKS: str = Field(
-        default="meta-llama/llama-3.3-70b-instruct:free,mistralai/mistral-7b-instruct:free,openrouter/auto",
+        default="meta-llama/llama-3.3-70b-instruct,mistralai/mistral-large-2411,openrouter/auto",
         description="Comma-separated OpenRouter model fallback chain, tried in order after OPENROUTER_MODEL.",
     )
     OPENROUTER_BASE_URL: str = Field(
@@ -187,13 +196,9 @@ class AppSettings(BaseSettings):
         description="OpenRouter base URL.",
     )
     AI_PROVIDER_ORDER: str = Field(
-        default="auto",
+        default="gemini,openrouter,ollama",
         description=(
-            "Comma-separated provider preference order, e.g. 'gemini,openrouter,ollama'. "
-            "'auto' (default) prefers whichever fast cloud API is configured (Gemini, then "
-            "OpenRouter) over local/Codespaces Ollama — CPU-only Ollama on a Codespace has no "
-            "GPU and is typically 10-30x slower than a hosted API for the same document-generation "
-            "workload. Set to 'ollama,gemini,openrouter' to force local-first instead."
+            "Comma-separated provider preference order (default: 'gemini,openrouter,ollama')."
         ),
     )
 
@@ -230,6 +235,14 @@ class AppSettings(BaseSettings):
     RFP_RESPONSE_MODE_AI: str = Field(default="", description="Per-agent override for RFP response document generation.")
     BIDFORGE_MODE: str = Field(default="", description="Per-agent override for the BidForge-style pipeline.")
 
+    BIDFORGE_STRICT_AI: bool = Field(
+        default=True,
+        description=(
+            "When true, run_with_fallback() re-raises AI failures instead of silently "
+            "degrading to the vague rule-based path."
+        ),
+    )
+
     # ------------------------------------------------------------------
     # JWT Authentication, Mailer, Zoom & Google Settings (Consolidated)
     # ------------------------------------------------------------------
@@ -260,7 +273,10 @@ class AppSettings(BaseSettings):
                 return int(v_clean)
             except ValueError:
                 pass
-        return int(v)
+        try:
+            return int(v)
+        except (ValueError, TypeError):
+            return 7
     OTP_TTL_MINUTES: int = Field(default=10, description="OTP lifetime in minutes.")
     OTP_LENGTH: int = Field(default=6, description="Length of generated OTP.")
     DEBUG_OTP: bool = Field(default=False, description="Enable printing OTPs to console for development.")
@@ -311,14 +327,6 @@ class AppSettings(BaseSettings):
     OCR_MIN_CHARS_PER_PAGE: int = Field(
         default=40,
         description="A page with fewer extracted characters than this is treated as scanned/image-only and sent to OCR.",
-    )
-    OCR_ENGINE: str = Field(
-        default="auto",
-        description=(
-            "OCR engine to use for scanned PDF processing. "
-            "'auto' = try Docling first, then PaddleOCR, then Tesseract. "
-            "'docling' = force Docling. 'paddleocr' = force PaddleOCR. 'tesseract' = force Tesseract."
-        ),
     )
     OCR_DPI: int = Field(
         default=300,

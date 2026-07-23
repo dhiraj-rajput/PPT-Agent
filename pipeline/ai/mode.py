@@ -31,6 +31,28 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
+def strict_ai_enabled() -> bool:
+    """When true, run_with_fallback() re-raises AI failures instead of
+    silently degrading to the rule-based path.
+
+    The rule-based paths (keyword substring matching, boilerplate templates)
+    exist as an emergency "produce *something*" safety net, not as an
+    acceptable everyday output path. Silently falling into them is exactly
+    what produced short, generic, RFP-unrelated proposals while *looking*
+    like the pipeline ran fine (fast, no visible error, generated_via just
+    quietly said "rule_based" in a JSON field nobody was checking).
+
+    Enable during development / debugging with BIDFORGE_STRICT_AI=true so a
+    misconfigured provider (missing API key, bad model name, timeout) raises
+    immediately instead of being masked. Leave off in production only once
+    you've confirmed AI calls are reliably succeeding, since a hard failure
+    there means no document at all rather than a degraded one.
+    """
+    from config.settings import settings
+    raw = str(getattr(settings, "BIDFORGE_STRICT_AI", "") or "").strip().lower()
+    return raw in ("1", "true", "yes", "on")
+
+
 class AIMode(str, Enum):
     AI = "ai"
     RULE_BASED = "rule_based"
@@ -92,20 +114,31 @@ def run_with_fallback(
         logger.info(f"[{agent_name}] AI_MODE=rule_based — using rule-based path.")
         return rule_fn(), "rule_based"
 
+    strict = strict_ai_enabled()
+
     try:
         result = ai_fn()
         return result, "ai"
-    except RateLimitError as exc:
-        logger.warning(
-            f"[{agent_name}] AI rate-limited (429) — falling back to rule-based path. {exc}"
+    except (RateLimitError, AIUnavailableError, Exception) as exc:
+        kind = (
+            "rate-limited (429)" if isinstance(exc, RateLimitError)
+            else "unavailable" if isinstance(exc, AIUnavailableError)
+            else "raised an unexpected error"
         )
-    except AIUnavailableError as exc:
-        logger.warning(
-            f"[{agent_name}] AI unavailable — falling back to rule-based path. {exc}"
-        )
-    except Exception as exc:  # noqa: BLE001 - agents must never hard-fail because AI failed
-        logger.warning(
-            f"[{agent_name}] AI path raised an unexpected error — falling back to rule-based path. {exc}"
+        if strict:
+            logger.error(
+                f"[{agent_name}] AI {kind} — BIDFORGE_STRICT_AI is on, re-raising instead "
+                f"of falling back to the rule-based path. {exc}",
+                exc_info=True,
+            )
+            raise
+        # ERROR (not warning) + traceback: this fallback silently produced
+        # generic, RFP-unrelated output before while only ever logging a
+        # warning nobody scanned for. Make it loud by default.
+        logger.error(
+            f"[{agent_name}] AI {kind} — falling back to the rule-based path. "
+            f"Output from this stage will be generic/templated, not RFP-specific. {exc}",
+            exc_info=True,
         )
 
     return rule_fn(), "rule_based"

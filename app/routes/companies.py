@@ -54,36 +54,7 @@ DEFAULT_OWN_COMPANY = {
     "last_updated": datetime.now(timezone.utc).isoformat()
 }
 
-@router.get("/own-profile")
-def get_own_company_profile(current_user: dict = Depends(get_current_user)):
-    """Retrieve own company profile for ProposalBuilder inventory."""
-    try:
-        col = get_collection("own_company_profile")
-        profile = col.find_one({}, {"_id": 0})
-        if not profile:
-            # Seed default profile if empty
-            col.insert_one(dict(DEFAULT_OWN_COMPANY))
-            return DEFAULT_OWN_COMPANY
-        return profile
-    except Exception as e:
-        logger.error(f"Error fetching own company profile: {e}")
-        return DEFAULT_OWN_COMPANY
 
-@router.post("/own-profile")
-def update_own_company_profile(
-    body: dict,
-    current_user: dict = Depends(get_current_user)
-):
-    """Create or update own company profile inventory."""
-    try:
-        col = get_collection("own_company_profile")
-        body["last_updated"] = datetime.now(timezone.utc).isoformat()
-        if "_id" in body:
-            del body["_id"]
-        col.update_one({}, {"$set": body}, upsert=True)
-        return updated or body
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to update company profile: {str(e)}")
 
 
 def import_sam_entities_csv():
@@ -298,15 +269,15 @@ async def get_companies(
         if custom_description:
             desc_to_match = custom_description.strip()
         elif match_company_description:
-            own_col = get_collection("own_company_profile")
-            profile = own_col.find_one({}, {"_id": 0}) or DEFAULT_OWN_COMPANY
+            own_col = get_async_collection("own_company_profile")
+            profile = (await own_col.find_one({}, {"_id": 0})) or DEFAULT_OWN_COMPANY
             desc_to_match = profile.get("description", "")
 
         if desc_to_match:
             keywords = extract_keywords(desc_to_match)
             if keywords:
                 # 1. Match keywords on naics_codes collection first to find related numeric codes
-                naics_coll = get_collection("naics_codes")
+                naics_coll = get_async_collection("naics_codes")
                 naics_kw_conditions = []
                 for kw in keywords:
                     naics_kw_conditions.append({"title": {"$regex": kw, "$options": "i"}})
@@ -315,7 +286,7 @@ async def get_companies(
                 matched_naics_codes = []
                 if naics_kw_conditions:
                     naics_cursor = naics_coll.find({"$or": naics_kw_conditions}, {"code": 1})
-                    matched_naics_codes = [doc["code"] for doc in naics_cursor if "code" in doc]
+                    matched_naics_codes = [doc["code"] async for doc in naics_cursor if "code" in doc]
 
                 desc_conditions = []
                 # 2. Filter companies whose primary_naics or secondary_naics matches those NAICS codes

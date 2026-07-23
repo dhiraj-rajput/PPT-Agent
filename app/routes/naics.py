@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, Query, UploadFile, File, Form
+from fastapi import APIRouter, Depends, Query, UploadFile, File, Form, HTTPException
 from typing import Optional, List
 from pydantic import BaseModel
 import json
 import csv
+import io
 import os
-from utils.db_client import get_collection
+from utils.db_client import get_collection, get_async_collection
 from app.core.auth import get_current_user
 from pymongo import TEXT
 
@@ -196,13 +197,11 @@ async def import_naics_file(
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
 ):
-    coll = get_collection("naics_codes")
+    coll = get_async_collection("naics_codes")
     contents = await file.read()
     filename = file.filename or ""
     
     imported_count = 0
-    from fastapi import HTTPException
-    import io
     
     try:
         # Check if JSON
@@ -216,7 +215,7 @@ async def import_naics_file(
                 title = str(item.get("title") or item.get("Title") or "").strip()
                 desc = str(item.get("description") or item.get("Description") or "").strip()
                 if code and title:
-                    coll.update_one(
+                    await coll.update_one(
                         {"code": code},
                         {"$set": {"code": code, "title": title, "description": desc}},
                         upsert=True
@@ -232,7 +231,7 @@ async def import_naics_file(
                 title = str(row.get("Title") or row.get("title") or "").strip()
                 desc = str(row.get("Description") or row.get("description") or "").strip()
                 if code and title:
-                    coll.update_one(
+                    await coll.update_one(
                         {"code": code},
                         {"$set": {"code": code, "title": title, "description": desc}},
                         upsert=True

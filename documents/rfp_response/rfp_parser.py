@@ -57,17 +57,29 @@ class RFPParser:
             logger.warning("No text extracted from RFP documents. Returning empty structure.")
             return self._empty_parse_structure()
 
-        sample_text = combined_text[:30000]
+        # Was capped at 30,000 chars, silently truncating anything past ~6-8
+        # pages of an RFP before it ever reached the model. Gemini 2.5 Flash /
+        # most current models comfortably handle 100k+ chars of input, and a
+        # truncated RFP is the single biggest cause of "vague, unrelated to
+        # the RFP" output downstream -- every later stage inherits this text.
+        sample_text = combined_text[:120000]
+        if len(combined_text) > len(sample_text):
+            logger.warning(
+                f"[RFPParser] RFP text ({len(combined_text)} chars) exceeds the "
+                f"{len(sample_text)}-char cap and was truncated. Consider chunking "
+                f"for very large solicitations."
+            )
 
         messages = [
             {"role": "system", "content": RFP_PARSER_PROMPT},
             {"role": "user", "content": f"Solicitation Number: {self.solicitation_number}\n\nRFP Document Text:\n{sample_text}"}
         ]
 
-        try:
+        from pipeline.ai.mode import run_with_fallback
+
+        def ai_fn() -> Dict[str, Any]:
             client = get_ai_client()
             ai_res = client.chat_json(messages)
-            # Normalize response using schema defaults if missing
             return {
                 "solicitation_number": self.solicitation_number,
                 "parsed_content": ai_res.get("parsed_content", ""),
@@ -78,9 +90,14 @@ class RFPParser:
                 "summary": ai_res.get("summary", ""),
                 "raw_text": sample_text
             }
-        except Exception as e:
-            logger.error(f"[RFPParser] AI parsing failed: {e}. Returning fallback structure.")
+
+        def rule_fn() -> Dict[str, Any]:
+            logger.warning(f"[RFPParser] Using rule fallback for RFP parsing.")
             return self._rule_fallback(combined_text)
+
+        result, path_used = run_with_fallback("rfp_parser", ai_fn, rule_fn)
+        result["generated_via"] = path_used
+        return result
 
     def _empty_parse_structure(self) -> Dict[str, Any]:
         return {

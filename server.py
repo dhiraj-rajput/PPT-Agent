@@ -221,6 +221,16 @@ async def health():
         "dependencies": {
             "mongodb": db_status
         },
+        "ai_status": {
+            "strict_mode": settings.BIDFORGE_STRICT_AI,
+            "ai_mode": settings.AI_MODE,
+            "provider_order": settings.AI_PROVIDER_ORDER,
+            "configured_providers": {
+                "gemini": bool(settings.GEMINI_API_KEY),
+                "openrouter": bool(settings.OPENROUTER_API_KEY),
+                "ollama": bool(settings.OLLAMA_HOST or settings.OLLAMA_API_KEY),
+            }
+        }
     }
 
 

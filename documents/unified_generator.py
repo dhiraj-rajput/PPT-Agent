@@ -124,7 +124,16 @@ class ProposalGenerator:
         return self.ai_client.chat_text(messages)
 
     def _load_company_profile(self) -> Dict[str, Any]:
-        """Loads Orbit Avanya's profile data from private/orbit_avanya_detailed_profiles.json."""
+        """Loads company profile data dynamically from MongoDB 'own_company_profile' or private files."""
+        try:
+            from utils.db_client import get_collection
+            col = get_collection("own_company_profile")
+            profile = col.find_one({}, {"_id": 0})
+            if profile:
+                return profile
+        except Exception as e:
+            logger.debug(f"Could not load own_company_profile from MongoDB: {e}")
+
         profile_path = self.project_root / "private" / "orbit_avanya_detailed_profiles.json"
         if profile_path.exists():
             try:

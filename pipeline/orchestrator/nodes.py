@@ -270,13 +270,14 @@ def run_linkedin_agent(state: AgentState) -> dict:
         or state.get("company_name")
         or state["user_input"]
     )
-    logger.info(f"[run_linkedin_agent] Scraping LinkedIn for: '{linkedin_input}'")
+    force = bool(state.get("force", False))
+    logger.info(f"[run_linkedin_agent] Scraping LinkedIn for: '{linkedin_input}' (force={force})")
 
     try:
         from pipeline.linkedin.scraper import scrape_company
 
         def _linkedin_thread_worker():
-            return asyncio.run(scrape_company(linkedin_input))
+            return asyncio.run(scrape_company(linkedin_input, force_rescrape=force))
 
         try:
             loop = asyncio.get_running_loop()
@@ -335,6 +336,17 @@ def merge_results(state: AgentState) -> dict:
     linkedin_identity = linkedin.get("identity") or {}
     linkedin_bi = linkedin.get("bi_profile") or {}
     linkedin_desc = linkedin.get("description") or {}
+
+    # Pre-fetch RFP POCs once if solicitation_number is present
+    rfp_pocs = []
+    sol_num = state.get("solicitation_number")
+    if sol_num:
+        try:
+            rfp_doc = get_collection("rfps").find_one({"solicitation_number": sol_num})
+            if rfp_doc:
+                rfp_pocs = rfp_doc.get("pocs", []) or []
+        except Exception:
+            pass
 
     # Build a unified profile — LinkedIn authoritative, website fills gaps
     profile = {
@@ -400,54 +412,23 @@ def merge_results(state: AgentState) -> dict:
         ] or website.get("leadership", []),
 
         # Contact & Social (Multi-Source Contact Resolution)
-        "emails": (lambda: [
-            # Extract emails and phone numbers from all sources
-            e for e in (lambda: [
-                # Build list of raw text to scan
-                txt for txt in [
-                    linkedin_desc.get("about_text"),
-                    website.get("description"),
-                ] + [
-                    page.get("text") for page in website.get("pages", []) if page.get("text")
-                ] + [
-                    r.get("snippet") for r in (state.get("external_news") or []) if r.get("snippet")
-                ] if txt
-            ])()
-        ])() and (lambda: [
-            # Scan combined text and merge with direct sources
-            emails for emails in (lambda: [
-                # Direct website emails + SAM.gov POC emails + regex extracted
-                list(dict.fromkeys(
-                    [e.lower().strip() for e in website.get("emails", []) if e] +
-                    [poc.get("email", "").lower().strip() for poc in (lambda: [
-                        rfp.get("pocs", []) for rfp in [
-                            get_collection("rfps").find_one({"solicitation_number": state.get("solicitation_number")})
-                            if state.get("solicitation_number") else None
-                        ] if rfp
-                    ])() or [] if poc.get("email")] +
-                    [e.lower().strip() for e in re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', "\n".join([
-                        linkedin_desc.get("about_text") or "",
-                        website.get("description") or "",
-                    ] + [r.get("snippet") or "" for r in (state.get("external_news") or [])])) if e]
-                ))
-            ])()
-        ])() or [],
+        "emails": list(dict.fromkeys(
+            [e.lower().strip() for e in website.get("emails", []) if e] +
+            [poc.get("email", "").lower().strip() for poc in rfp_pocs if poc.get("email")] +
+            [e.lower().strip() for e in re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', "\n".join([
+                linkedin_desc.get("about_text") or "",
+                website.get("description") or "",
+            ] + [r.get("snippet") or "" for r in (state.get("external_news") or [])])) if e]
+        )),
 
-        "phone_numbers": (lambda: [
-            list(dict.fromkeys(
-                [p.strip() for p in website.get("phone_numbers", []) if p] +
-                [poc.get("phone", "").strip() for poc in (lambda: [
-                    rfp.get("pocs", []) for rfp in [
-                        get_collection("rfps").find_one({"solicitation_number": state.get("solicitation_number")})
-                        if state.get("solicitation_number") else None
-                    ] if rfp
-                ])() or [] if poc.get("phone")] +
-                [p.strip() for p in re.findall(r'\+?\d{1,4}[-.\s]?\(?\d{1,3}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}', "\n".join([
-                    linkedin_desc.get("about_text") or "",
-                    website.get("description") or "",
-                ] + [r.get("snippet") or "" for r in (state.get("external_news") or [])])) if len(re.sub(r'\D', '', p)) >= 10]
-            ))
-        ])() or [],
+        "phone_numbers": list(dict.fromkeys(
+            [p.strip() for p in website.get("phone_numbers", []) if p] +
+            [poc.get("phone", "").strip() for poc in rfp_pocs if poc.get("phone")] +
+            [p.strip() for p in re.findall(r'\+?\d{1,4}[-.\s]?\(?\d{1,3}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}', "\n".join([
+                linkedin_desc.get("about_text") or "",
+                website.get("description") or "",
+            ] + [r.get("snippet") or "" for r in (state.get("external_news") or [])])) if len(re.sub(r'\D', '', p)) >= 10]
+        )),
 
         "social_links": website.get("social_links", []),
         "locations": (
@@ -627,7 +608,20 @@ def discover_external_news(state: AgentState) -> dict:
             ]
             return await asyncio.gather(*tasks)
 
-        results_lists = asyncio.run(fetch_all_searches())
+        def _search_thread_worker():
+            return asyncio.run(fetch_all_searches())
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                results_lists = pool.submit(_search_thread_worker).result()
+        else:
+            results_lists = _search_thread_worker()
 
         # Merge and deduplicate by URL
         seen_urls = set()

@@ -1009,6 +1009,17 @@ class RFPResponseGenerator:
 
         profile: Dict[str, Any] = {}
 
+        # First, try fetching user's saved company profile from MongoDB
+        try:
+            from utils.db_client import get_collection
+            col = get_collection("own_company_profile")
+            db_profile = col.find_one({}, {"_id": 0})
+            if db_profile:
+                profile.update(db_profile)
+                logger.info("[RFPResponseGen] Loaded company profile from MongoDB own_company_profile collection.")
+        except Exception as exc:
+            logger.debug(f"[RFPResponseGen] MongoDB own_company_profile fetch note: {exc}")
+
         try:
             from app.core.company_catalog import load_services_catalog
             catalog = load_services_catalog()

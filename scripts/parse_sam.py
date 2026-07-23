@@ -4,7 +4,7 @@ import hashlib
 import os
 
 csv_path = "private/sam_entities.csv"
-output_path = "frontend/src/data/companies.json"
+output_path = "Frontend/orbitavanya/src/data/companies.json"
 
 companies = []
 
@@ -127,22 +127,22 @@ with open(csv_path, mode='r', encoding='utf-8-sig') as f:
 print(f"Total companies parsed: {len(companies)}")
 
 # Ensure target directories exist
-os.makedirs("frontend/public", exist_ok=True)
-os.makedirs("frontend/src/data", exist_ok=True)
+os.makedirs("Frontend/orbitavanya/public", exist_ok=True)
+os.makedirs("Frontend/orbitavanya/src/data", exist_ok=True)
 
 # Write full dataset to public/companies.json compactly (no indent)
-with open("frontend/public/companies.json", 'w', encoding='utf-8') as out_f:
+with open("Frontend/orbitavanya/public/companies.json", 'w', encoding='utf-8') as out_f:
     json.dump(companies, out_f, separators=(',', ':'))
 
 # Write first 500 companies to src/data/companies.js for initial/static load
 subset = companies[:500]
-with open("frontend/src/data/companies.js", 'w', encoding='utf-8') as out_js:
+with open("Frontend/orbitavanya/src/data/companies.js", 'w', encoding='utf-8') as out_js:
     out_js.write("export const companies = ")
     json.dump(subset, out_js, indent=2)
     out_js.write(";\n")
 
 # Remove the temporary large JSON file from src/data if it exists
-large_json = "frontend/src/data/companies.json"
+large_json = "Frontend/orbitavanya/src/data/companies.json"
 if os.path.exists(large_json):
     os.remove(large_json)
 

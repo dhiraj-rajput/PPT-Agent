@@ -10,9 +10,9 @@ import './index.css'
 const originalFetch = window.fetch;
 window.fetch = async function (url, options = {}) {
   const token = localStorage.getItem('orbitavanya_token');
-  // Check if target is backend API
   const strUrl = String(url);
-  if (token && (strUrl.startsWith('http://localhost:5050') || strUrl.startsWith('/api/'))) {
+  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5050';
+  if (token && (strUrl.startsWith(apiBase) || strUrl.startsWith('http://localhost:5050') || strUrl.startsWith('/api/'))) {
     options.headers = options.headers || {};
     if (options.headers instanceof Headers) {
       if (!options.headers.has('Authorization')) {
@@ -38,7 +38,7 @@ window.fetch = async function (url, options = {}) {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider>
         <NotificationProvider>
           <App />

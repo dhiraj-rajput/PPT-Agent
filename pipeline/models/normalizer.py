@@ -104,6 +104,25 @@ def _is_nav_garbage(text: str) -> bool:
     return False
 
 
+_LINKEDIN_GARBAGE_PATTERNS_LIST = [
+    re.compile(p, re.IGNORECASE) for p in [
+        r"sign in welcome back email or phone password show forgot password\??",
+        r"sign in or by clicking continue to join or sign in, you agree to linkedin.*",
+        r"new to linkedin\? join now.*",
+        r"see all employees locations primary.*get directions",
+        r"linkedin member\s*linkedin member\s*linkedin member\s*linkedin member\s*linkedin member",
+        r"view \d+ employees at .*",
+        r"report this post",
+        r"followers \d+d",
+        r"we were honoured to welcome.*",
+        r"together, we continue to.*",
+        r"we appreciate the interest shown by.*",
+        r"looking forward to fostering.*",
+        r"nasiru abdullahi",
+    ]
+]
+
+
 def clean_linkedin_garbage(text: str) -> str:
     """Strip common LinkedIn login wall, cookies consent, and scraper noise."""
     if not text:
@@ -131,24 +150,9 @@ def clean_linkedin_garbage(text: str) -> str:
         
     cleaned = "\n".join(cleaned_lines)
 
-    # 2. Regex search-and-replace for inline noise blocks
-    patterns = [
-        r"(?i)sign in welcome back email or phone password show forgot password\??",
-        r"(?i)sign in or by clicking continue to join or sign in, you agree to linkedin.*",
-        r"(?i)new to linkedin\? join now.*",
-        r"(?i)see all employees locations primary.*get directions",
-        r"(?i)linkedin member\s*linkedin member\s*linkedin member\s*linkedin member\s*linkedin member",
-        r"(?i)view \d+ employees at .*",
-        r"(?i)report this post",
-        r"(?i)followers \d+d",
-        r"(?i)we were honoured to welcome.*",
-        r"(?i)together, we continue to.*",
-        r"(?i)we appreciate the interest shown by.*",
-        r"(?i)looking forward to fostering.*",
-        r"(?i)nasiru abdullahi",
-    ]
-    for p in patterns:
-        cleaned = re.sub(p, "", cleaned)
+    # 2. Pre-compiled regex search-and-replace for inline noise blocks
+    for pat in _LINKEDIN_GARBAGE_PATTERNS_LIST:
+        cleaned = pat.sub("", cleaned)
 
     # Replace multiple spaces/newlines
     cleaned = re.sub(r"\s+", " ", cleaned).strip()

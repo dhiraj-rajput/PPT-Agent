@@ -46,11 +46,11 @@ def restore_database():
             coll_name = json_file.stem
             coll = db[coll_name]
 
-            # Clear existing collection data before restoring
-            coll.delete_many({})
-
             with open(json_file, "r", encoding="utf-8") as f:
                 data = json_util.loads(f.read())
+
+            # Clear existing collection data only after JSON is parsed successfully
+            coll.delete_many({})
 
             if data:
                 coll.insert_many(data)

@@ -219,17 +219,16 @@ class OCRManager:
             all_text = []
 
             if suffix == ".pdf":
-                doc = fitz.open(str(file_path))
-                for page in doc:
-                    mat = fitz.Matrix(self.dpi / 72, self.dpi / 72)
-                    pix = page.get_pixmap(matrix=mat, colorspace=fitz.csGRAY)
-                    img = Image.frombytes("L", (pix.width, pix.height), pix.samples)
-                    # Preprocessing: enhance contrast, sharpen
-                    img = ImageEnhance.Contrast(img).enhance(1.5)
-                    img = img.filter(ImageFilter.SHARPEN)
-                    text = pytesseract.image_to_string(img, config="--psm 3 --oem 3")
-                    all_text.append(text)
-                doc.close()
+                with fitz.open(str(file_path)) as doc:
+                    for page in doc:
+                        mat = fitz.Matrix(self.dpi / 72, self.dpi / 72)
+                        pix = page.get_pixmap(matrix=mat, colorspace=fitz.csGRAY)
+                        img = Image.frombytes("L", (pix.width, pix.height), pix.samples)
+                        # Preprocessing: enhance contrast, sharpen
+                        img = ImageEnhance.Contrast(img).enhance(1.5)
+                        img = img.filter(ImageFilter.SHARPEN)
+                        text = pytesseract.image_to_string(img, config="--psm 3 --oem 3")
+                        all_text.append(text)
             else:
                 # Image file
                 img = Image.open(str(file_path)).convert("L")
@@ -252,12 +251,11 @@ class OCRManager:
         result = {"text": "", "engine": "pymupdf", "pages": 0, "success": False}
         try:
             import fitz
-            doc = fitz.open(str(file_path))
-            all_text = []
-            for page in doc:
-                text = page.get_text("text")
-                all_text.append(text or "")
-            doc.close()
+            with fitz.open(str(file_path)) as doc:
+                all_text = []
+                for page in doc:
+                    text = page.get_text("text")
+                    all_text.append(text or "")
             full_text = "\f".join(all_text)
             result["text"] = full_text
             result["pages"] = len(all_text)

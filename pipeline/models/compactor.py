@@ -507,7 +507,6 @@ class BusinessIntelligenceCompactor:
 
         # 9. RFP Weaknesses
         rfp_weaknesses = []
-        emp_count_str = normalized.get("employee_count", "")
         if emp_count_str:
             digits = re.findall(r'\d+', emp_count_str.replace(',', ''))
             if digits:

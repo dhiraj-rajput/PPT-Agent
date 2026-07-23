@@ -166,8 +166,13 @@ def _get_app():
     return _app
 
 
-def run_pipeline(user_input: str, solicitation_number: Optional[str] = None,
-                 rfp_response_mode: Optional[str] = None) -> dict:
+def run_pipeline(
+    user_input: str,
+    solicitation_number: Optional[str] = None,
+    rfp_response_mode: Optional[str] = None,
+    force: bool = False,
+    **kwargs: Any,
+) -> dict:
     """
     Run the full agent pipeline for any user input.
 
@@ -176,6 +181,7 @@ def run_pipeline(user_input: str, solicitation_number: Optional[str] = None,
         solicitation_number: Optional target solicitation number to compile teaming proposal for.
         rfp_response_mode: Optional RFP response mode ("prime" or "subcontract") to generate
                            a full DOCX-styled RFP response PDF after the pipeline completes.
+        force: Force re-scrape even if data is already cached.
 
     Returns:
         The final AgentState dict with combined_profile, linkedin_data,
@@ -192,6 +198,7 @@ def run_pipeline(user_input: str, solicitation_number: Optional[str] = None,
     initial_state: AgentState = {
         "user_input": user_input,
         "input_type": "",
+        "force": force,
         "company_name": None,
         "website_url": None,
         "linkedin_url": None,

@@ -1,24 +1,44 @@
 """
 documents/bidforge/document_generator.py
 -----------------------------------------
-Stage 4 of the BidForge pipeline: builds a client-ready DOCX response.
+Stage 4 of the BidForge pipeline: builds a client-ready proposal.
 
-The upload flow accepts an optional Word template. We treat that template as a
-read-only brand source (logo, colors, fonts), then generate a clean proposal
-document from structured pipeline data. This avoids the old markdown-to-PDF path
-that ignored uploaded templates and produced weak layout control.
+REWRITE NOTE (matches original Node.js BidForge's document-generator.ts):
+Earlier versions of this file assembled the document from a fixed, hardcoded
+Python section skeleton (Executive Summary / Requirements / Scope / Pricing /
+Competitive / Timeline / Terms), each populated with short tables and mostly
+boilerplate connector text. That produced short (~15-20 page), generic output
+because most of the document text was NOT derived from the RFP at all, and
+a "no rows -> section vanishes" filter silently dropped sections whenever an
+upstream stage returned thin data.
+
+This version restores the original approach: hand ONE LLM call the full
+parsed RFP + explore output + pricing strategy, and let it freely author the
+entire proposal as Markdown (FINAL_DOCUMENT_PROMPT, ported verbatim from
+BidForge). There is no section cap, no row cap, and no "drop empty section"
+logic -- the model decides how much each part of the RFP deserves, which is
+what produces long, RFP-specific, professional output instead of a generic
+skeleton.
+
+The resulting Markdown is rendered through documents/markdown_renderer.py
+(WeasyPrint primary, DOCX/proposal_generator fallback), which already knows
+how to pull brand colors/logo from an uploaded .docx template.
 """
 
 from __future__ import annotations
 
 import json
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 from utils.helpers import setup_logger
 
 logger = setup_logger(__name__)
+
+# Minimum acceptable length for the generated markdown. Anything shorter than
+# this almost certainly means the model returned a stub/error instead of a
+# real proposal, and we should fail loudly rather than ship it.
+MIN_MARKDOWN_LENGTH = 15000
 
 
 def generate_final_document(
@@ -30,374 +50,151 @@ def generate_final_document(
     template_path: Optional[str] = None,
     wizard_config: Optional[str | Dict[str, Any]] = None,
 ) -> str:
-    """Generate the final editable proposal document for the BidForge workflow."""
+    """Generate the final proposal document for the BidForge workflow."""
     out_dir = Path(__file__).resolve().parent.parent.parent / "output" / "rfp_respond"
     out_dir.mkdir(parents=True, exist_ok=True)
-    target_docx_path = str(out_dir / f"{output_name}.docx")
+    target_pdf_path = str(out_dir / f"{output_name}.pdf")
 
     brand_config = _load_brand_config(template_path, out_dir)
-    proposal_meta = _build_proposal_meta(parsed_rfp, brand_config)
-    sections = _build_document_sections(parsed_rfp, inventory, competitor_intel, strategy)
-    sections = _apply_wizard_config(sections, wizard_config)
+    company_name = brand_config.get("company_name", "OrbitAvanya Tech LLP")
 
-    cfg = {
-        "brand": brand_config,
-        "proposal": proposal_meta,
-        "toc": {"heading": "Proposal Contents"},
-        "sections": sections,
-    }
-
-    from scripts import proposal_generator as pg
-
-    docx_path = pg.generate(cfg, target_docx_path)
-    logger.info(f"[BidForge:DocGen] Generated final DOCX document: {docx_path}")
-    return docx_path
-
-
-def _load_brand_config(template_path: Optional[str], out_dir: Path) -> Dict[str, Any]:
-    if template_path:
-        try:
-            from documents.bidforge.template_profile import extract_template_brand
-
-            return extract_template_brand(template_path, output_dir=str(out_dir))
-        except Exception as exc:
-            logger.warning(f"[BidForge:DocGen] Template brand extraction failed: {exc}")
-
-    from documents.brand_config import get_brand_config
-
-    return get_brand_config()
-
-
-def _build_proposal_meta(parsed_rfp: Dict[str, Any], brand: Dict[str, Any]) -> Dict[str, Any]:
-    from documents.brand_config import DEFAULT_CONFIDENTIALITY_TEXT
-
-    metadata = parsed_rfp.get("metadata", {}) or {}
-    buyer = _first_present(
-        metadata.get("buyer_name"),
-        metadata.get("issuing_agency"),
-        "Prospective Client",
-    )
-    solicitation = _first_present(
-        parsed_rfp.get("solicitation_number"),
-        metadata.get("solicitation_number"),
-        "BIDFORGE",
-    )
-    title = _first_present(
-        metadata.get("project_title"),
-        parsed_rfp.get("source_filename"),
-        "RFP Response Proposal",
+    markdown_content = _generate_markdown(
+        parsed_rfp, inventory, competitor_intel, strategy, company_name, wizard_config
     )
 
-    return {
-        "title": f"Response to {title}",
-        "subtitle": "Technical, Commercial, and Compliance Proposal",
-        "prepared_for": buyer,
-        "prepared_by": brand.get("company_name", "OrbitAvanya Tech LLP"),
-        "engagement_ref": solicitation,
-        "proposal_date": datetime.now().strftime("%B %d, %Y"),
-        "validity": "90 days from proposal date unless otherwise stated in the solicitation",
-        "confidentiality_text": DEFAULT_CONFIDENTIALITY_TEXT,
-    }
+    if not markdown_content or len(markdown_content.strip()) < MIN_MARKDOWN_LENGTH:
+        raise ValueError(
+            f"[BidForge:DocGen] Generated proposal markdown was too short "
+            f"({len(markdown_content.strip()) if markdown_content else 0} chars, "
+            f"minimum {MIN_MARKDOWN_LENGTH}). Refusing to ship a stub document -- "
+            f"check the AI provider logs for the real failure instead of silently "
+            f"falling back."
+        )
+
+    from documents.markdown_renderer import render_markdown_to_pdf
+
+    final_path = render_markdown_to_pdf(
+        markdown_content, target_pdf_path, template_path=template_path, brand_override=brand_config
+    )
+    logger.info(f"[BidForge:DocGen] Generated final document: {final_path} "
+                f"({len(markdown_content)} chars of markdown)")
+    return final_path
 
 
-def _build_document_sections(
+def _generate_markdown(
     parsed_rfp: Dict[str, Any],
     inventory: Dict[str, Any],
     competitor_intel: Dict[str, Any],
     strategy: Dict[str, Any],
-) -> list[Dict[str, Any]]:
-    metadata = parsed_rfp.get("metadata", {}) or {}
-    requirements = parsed_rfp.get("requirements", []) or []
-    compliance = parsed_rfp.get("compliance_requirements", []) or []
-    inventory_items = inventory.get("items", []) or []
-    strategy_items = strategy.get("items", []) or []
-    strategic_notes = strategy.get("strategic_notes") or ""
-
-    buyer = _first_present(metadata.get("buyer_name"), metadata.get("issuing_agency"), "the buyer")
-    summary = parsed_rfp.get("summary") or parsed_rfp.get("parsed_content") or "The uploaded RFP was reviewed and converted into this response."
-
-    sections: list[Dict[str, Any]] = [
-        {
-            "title": "Executive Summary",
-            "page_break_before": False,
-            "blocks": [
-                {
-                    "type": "paragraph",
-                    "text": (
-                        f"We are pleased to submit this response for {buyer}. {summary} "
-                        "Our response is structured around the exact requirements extracted from the uploaded RFP, "
-                        "the offerings available in our company inventory, and the pricing strategy selected during analysis."
-                    ),
-                },
-                {
-                    "type": "paragraph",
-                    "text": (
-                        "The proposal emphasizes a practical delivery approach, clear scope ownership, transparent pricing assumptions, "
-                        "and compliance commitments so the evaluation team can quickly understand what is included and where any open items require clarification."
-                    ),
-                },
-            ],
-        },
-        {
-            "title": "Understanding of Requirements",
-            "page_break_before": True,
-            "blocks": _requirements_blocks(requirements, parsed_rfp.get("missing_fields", []) or []),
-        },
-        {
-            "title": "Scope of Work",
-            "page_break_before": True,
-            "blocks": _scope_blocks(inventory_items, requirements),
-        },
-        {
-            "title": "Pricing Strategy",
-            "page_break_before": True,
-            "blocks": _pricing_blocks(strategy_items),
-        },
-        {
-            "title": "Competitive Positioning",
-            "page_break_before": True,
-            "blocks": _competitor_blocks(competitor_intel, strategic_notes),
-        },
-        {
-            "title": "Implementation Timeline",
-            "page_break_before": True,
-            "blocks": [
-                {
-                    "type": "table",
-                    "headers": ["Phase", "Duration", "Focus"],
-                    "rows": [
-                        ["1. Kickoff and Clarification", "Week 1", "Confirm final scope, stakeholders, compliance obligations, and acceptance criteria."],
-                        ["2. Delivery Planning", "Weeks 1-2", "Finalize work breakdown, staffing, schedule, risk register, and communication cadence."],
-                        ["3. Execution", "Primary contract period", "Deliver the products or services mapped in the scope section with regular status reporting."],
-                        ["4. Acceptance and Closeout", "Final delivery window", "Support review, corrections, knowledge transfer, and formal closeout documentation."],
-                    ],
-                    "col_widths": [1.7, 1.4, 4.4],
-                }
-            ],
-        },
-        {
-            "title": "Terms, Compliance, and Next Steps",
-            "page_break_before": True,
-            "blocks": _terms_blocks(compliance),
-        },
-    ]
-
-    return [section for section in sections if section.get("blocks")]
-
-
-def _requirements_blocks(requirements: list[Any], missing_fields: list[Any]) -> list[Dict[str, Any]]:
-    blocks: list[Dict[str, Any]] = []
-    rows = []
-    for req in requirements[:20]:
-        if isinstance(req, dict):
-            rows.append([
-                str(req.get("name") or "Requirement"),
-                str(req.get("description") or req.get("status") or ""),
-                str(req.get("quantity") or "Not specified"),
-                str(req.get("timeline") or "Not specified"),
-            ])
-        else:
-            rows.append([str(req), "", "Not specified", "Not specified"])
-
-    if rows:
-        blocks.append({
-            "type": "table",
-            "headers": ["Requirement", "Description", "Quantity", "Timeline"],
-            "rows": rows,
-            "col_widths": [1.7, 3.4, 1.1, 1.3],
-        })
-    else:
-        blocks.append({"type": "paragraph", "text": "No individual line-item requirements were extracted from the uploaded RFP. The response is based on the available summary and source document text."})
-
-    if missing_fields:
-        blocks.append({"type": "subheading", "text": "Clarifications Required"})
-        blocks.append({"type": "bullets", "items": [str(item) for item in missing_fields[:12]]})
-
-    return blocks
-
-
-def _scope_blocks(inventory_items: list[Any], requirements: list[Any]) -> list[Dict[str, Any]]:
-    blocks: list[Dict[str, Any]] = [
-        {
-            "type": "paragraph",
-            "text": (
-                "The scope below maps the extracted customer requirements to our available inventory and delivery capabilities. "
-                "Items marked partial or unavailable should be reviewed before final submission so the commercial response stays accurate."
-            ),
-        }
-    ]
-
-    rows = []
-    for item in inventory_items[:20]:
-        rows.append([
-            str(item.get("name") or "Scope Item"),
-            str(item.get("present") or "PARTIAL"),
-            str(item.get("availability") or "Not listed"),
-            str(item.get("notes") or ""),
-        ])
-
-    if rows:
-        blocks.append({
-            "type": "table",
-            "headers": ["Scope Item", "Fit", "Availability", "Notes"],
-            "rows": rows,
-            "col_widths": [2.0, 0.9, 1.4, 3.2],
-        })
-    elif requirements:
-        blocks.append({"type": "bullets", "items": [str(r.get("name", r)) if isinstance(r, dict) else str(r) for r in requirements[:12]]})
-
-    return blocks
-
-
-def _pricing_blocks(strategy_items: list[Any]) -> list[Dict[str, Any]]:
-    rows = []
-    for item in strategy_items:
-        options = item.get("options") or []
-        rec_idx = item.get("recommended_option_index", 0)
-        try:
-            recommended = options[int(rec_idx)]
-        except Exception:
-            recommended = options[0] if options else item.get("current_price", "To be discussed")
-
-        rows.append([
-            str(item.get("name") or "Item"),
-            str(item.get("current_price") or "Not listed"),
-            str(item.get("avg_competitor_price") or "Not listed"),
-            str(recommended or "To be discussed"),
-        ])
-
-    blocks: list[Dict[str, Any]] = [
-        {
-            "type": "paragraph",
-            "text": "Pricing is based on the available inventory records and market-intelligence snippets. Where source data is missing, the proposal preserves that uncertainty instead of inventing figures.",
-        }
-    ]
-    if rows:
-        blocks.append({
-            "type": "table",
-            "headers": ["Item", "Our Listed Price", "Market Reference", "Recommended Proposal Position"],
-            "rows": rows,
-            "col_widths": [1.7, 1.4, 1.4, 3.0],
-        })
-    else:
-        blocks.append({"type": "paragraph", "text": "No reliable pricing items were extracted. Final pricing should be confirmed before submission."})
-    return blocks
-
-
-def _competitor_blocks(competitor_intel: Dict[str, Any], strategic_notes: str) -> list[Dict[str, Any]]:
-    blocks: list[Dict[str, Any]] = []
-    if strategic_notes:
-        blocks.append({"type": "paragraph", "text": strategic_notes})
-
-    rows = []
-    for item in competitor_intel.get("items", []) or []:
-        competitors = item.get("competitors") or []
-        rows.append([
-            str(item.get("item_name") or "Item"),
-            "; ".join(str(c.get("name", "Source")) for c in competitors[:3]) or "No named competitor found",
-            str(item.get("avg_price") or "Not listed"),
-            str(item.get("market_summary") or "Use best-value positioning and avoid unsupported competitor claims."),
-        ])
-
-    if rows:
-        blocks.append({
-            "type": "table",
-            "headers": ["Item", "Market Sources", "Observed Price", "Positioning Note"],
-            "rows": rows,
-            "col_widths": [1.6, 2.0, 1.2, 2.7],
-        })
-    else:
-        blocks.append({"type": "paragraph", "text": "No competitor pricing could be confirmed from available sources. The response should focus on fit, delivery confidence, and transparent assumptions."})
-    return blocks
-
-
-def _terms_blocks(compliance: list[Any]) -> list[Dict[str, Any]]:
-    items = [
-        "Final pricing is subject to validation against the buyer's final statement of work, quantities, and contractual terms.",
-        "Any items marked as not specified or to be discussed require buyer clarification before contract award or execution.",
-        "Project governance will include kickoff alignment, regular status reporting, risk tracking, and formal acceptance checkpoints.",
-        "Warranty, support, and service-level commitments will be finalized in accordance with the solicitation and negotiated agreement.",
-    ]
-    if compliance:
-        items.extend(f"Compliance requirement to address: {c}" for c in compliance[:10])
-
-    return [
-        {"type": "bullets", "items": items},
-        {"type": "subheading", "text": "Next Steps"},
-        {"type": "numbered", "items": [
-            "Review this generated response against the solicitation instructions and attachment checklist.",
-            "Confirm any open pricing, compliance, or delivery assumptions with the proposal owner.",
-            "Finalize attachments, signatures, representations, and submission packaging required by the buyer.",
-        ]},
-    ]
-
-
-def _apply_wizard_config(
-    sections: list[Dict[str, Any]],
+    company_name: str,
     wizard_config: Optional[str | Dict[str, Any]],
-) -> list[Dict[str, Any]]:
-    """Apply pre-generation wizard outline choices to the generated document.
+) -> str:
+    from pipeline.ai.client import get_ai_client
+    from documents.prompts import FINAL_DOCUMENT_PROMPT
 
-    The wizard can rename/include known sections and add custom sections. Unknown
-    custom sections are appended as normal proposal sections so user-entered
-    outline guidance is not silently dropped.
-    """
+    buyer_name = _first_present(
+        (parsed_rfp.get("metadata", {}) or {}).get("buyer_name"),
+        (parsed_rfp.get("metadata", {}) or {}).get("issuing_agency"),
+        "Prospective Client",
+    )
+
+    # SECTION 1 -- full parsed RFP requirements, not just the short summary.
+    section1 = (
+        f"COMPANY NAME (use this as the responding/proposing entity throughout): {company_name}\n"
+        f"BUYER / CUSTOMER: {buyer_name}\n\n"
+        f"Parsed content:\n{parsed_rfp.get('parsed_content', '') or parsed_rfp.get('summary', '')}\n\n"
+        f"Structured requirements:\n{json.dumps(parsed_rfp.get('requirements', []), indent=2)}\n\n"
+        f"Compliance requirements:\n{json.dumps(parsed_rfp.get('compliance_requirements', []), indent=2)}\n\n"
+        f"Missing/flagged fields:\n{json.dumps(parsed_rfp.get('missing_fields', []), indent=2)}\n\n"
+        f"Raw source text (for anything not captured above):\n{(parsed_rfp.get('raw_text', '') or '')[:20000]}"
+    )
+
+    # SECTION 2 -- inventory + competitor data, as full structured data (not
+    # capped, not flattened into a table row).
+    section2 = (
+        f"INVENTORY ANALYSIS (what we can deliver, generated via '{inventory.get('generated_via', 'unknown')}'):\n"
+        f"{json.dumps(inventory.get('items', []), indent=2)}\n\n"
+        f"COMPETITOR / MARKET PRICING (generated via '{competitor_intel.get('generated_via', 'unknown')}'):\n"
+        f"{json.dumps(competitor_intel.get('items', []), indent=2)}"
+    )
+
+    # SECTION 3 -- full pricing strategy including every option + rationale +
+    # the thorough per-item "data" field the summariser produces.
+    section3 = (
+        f"{json.dumps(strategy.get('items', []), indent=2)}\n\n"
+        f"Overall strategic notes:\n{strategy.get('strategic_notes', '')}"
+    )
+
+    wizard_instructions = _wizard_instructions(wizard_config)
+
+    user_message = f"""\
+=======================================================
+SECTION 1: PARSED RFP REQUIREMENTS
+=======================================================
+
+{section1}
+
+=======================================================
+SECTION 2: EXPLORE OUTPUT (Inventory + Competitor Data)
+=======================================================
+
+{section2}
+
+=======================================================
+SECTION 3: SUMMARISE OUTPUT (Strategic Pricing Decisions)
+=======================================================
+
+{section3}
+
+=======================================================
+INSTRUCTIONS
+=======================================================
+Generate the full RFP response document on behalf of "{company_name}".
+Use the company name "{company_name}" throughout the document as the responding/proposing entity.
+Use the recommended pricing option for each item unless the data clearly indicates otherwise.
+{wizard_instructions}
+======================================================="""
+
+    messages = [
+        {"role": "system", "content": FINAL_DOCUMENT_PROMPT},
+        {"role": "user", "content": user_message},
+    ]
+
+    # Deliberately NOT routed through run_with_fallback()/rule_fn: there is no
+    # sane rule-based substitute for "write a 40-page proposal", so a failure
+    # here should raise and be visible, not silently degrade to boilerplate.
+    return get_ai_client().chat_text(messages, json_mode=False)
+
+
+def _wizard_instructions(wizard_config: Optional[str | Dict[str, Any]]) -> str:
+    """Turns the pre-generation wizard's section choices into plain-language
+    guidance appended to the prompt, instead of a hard post-generation filter
+    that could silently delete sections the model already wrote."""
     config = _decode_wizard_config(wizard_config)
-    wizard_sections = config.get("sections") if isinstance(config, dict) else None
-    if not isinstance(wizard_sections, list):
-        return sections
+    sections = config.get("sections") if isinstance(config, dict) else None
+    if not isinstance(sections, list) or not sections:
+        return ""
 
-    key_to_title = {
-        "executive_summary": "Executive Summary",
-        "requirements": "Understanding of Requirements",
-        "technical_approach": "Scope of Work",
-        "scope_of_work": "Scope of Work",
-        "pricing": "Pricing Strategy",
-        "pricing_table": "Pricing Strategy",
-        "competitive_positioning": "Competitive Positioning",
-        "implementation": "Implementation Timeline",
-        "timeline": "Implementation Timeline",
-        "terms": "Terms, Compliance, and Next Steps",
-        "compliance": "Terms, Compliance, and Next Steps",
-        "next_steps": "Terms, Compliance, and Next Steps",
-    }
-    by_title = {section.get("title"): section for section in sections}
-    used_titles: set[str] = set()
-    ordered: list[Dict[str, Any]] = []
-
-    for wizard_section in wizard_sections:
-        if not isinstance(wizard_section, dict) or wizard_section.get("included") is False:
-            continue
-
-        key = str(wizard_section.get("key") or "").strip().lower()
-        desired_title = str(wizard_section.get("title") or "").strip()
-        base_title = key_to_title.get(key)
-
-        if base_title and base_title in by_title:
-            section = dict(by_title[base_title])
-            if desired_title:
-                section["title"] = _strip_leading_number(desired_title)
-            used_titles.add(base_title)
-            ordered.append(section)
-            continue
-
-        blocks = _wizard_section_blocks(wizard_section)
-        if blocks:
-            ordered.append({
-                "title": _strip_leading_number(desired_title or key.replace("_", " ").title() or "Additional Proposal Section"),
-                "page_break_before": True,
-                "blocks": blocks,
-            })
-
+    lines = ["Additionally, honor this section outline requested by the user:"]
     for section in sections:
-        if section.get("title") not in used_titles:
-            ordered.append(section)
-
-    first = True
-    for section in ordered:
-        section["page_break_before"] = not first
-        first = False
-    return ordered
+        if not isinstance(section, dict) or section.get("included") is False:
+            continue
+        title = str(section.get("title") or section.get("key") or "").strip()
+        if not title:
+            continue
+        description = str(section.get("description") or "").strip()
+        key_points = section.get("key_points") or []
+        if isinstance(key_points, str):
+            key_points = [line.strip() for line in key_points.splitlines() if line.strip()]
+        line = f"- Include a section for \"{title}\"."
+        if description:
+            line += f" Focus: {description}"
+        lines.append(line)
+        for kp in key_points:
+            lines.append(f"    * {kp}")
+    if len(lines) == 1:
+        return ""
+    return "\n".join(lines)
 
 
 def _decode_wizard_config(wizard_config: Optional[str | Dict[str, Any]]) -> Dict[str, Any]:
@@ -413,26 +210,18 @@ def _decode_wizard_config(wizard_config: Optional[str | Dict[str, Any]]) -> Dict
         return {}
 
 
-def _wizard_section_blocks(wizard_section: Dict[str, Any]) -> list[Dict[str, Any]]:
-    blocks: list[Dict[str, Any]] = []
-    description = str(wizard_section.get("description") or "").strip()
-    if description:
-        blocks.append({"type": "paragraph", "text": description})
+def _load_brand_config(template_path: Optional[str], out_dir: Path) -> Dict[str, Any]:
+    if template_path:
+        try:
+            from documents.bidforge.template_profile import extract_template_brand
 
-    key_points = wizard_section.get("key_points") or []
-    if isinstance(key_points, str):
-        key_points = [line.strip() for line in key_points.splitlines() if line.strip()]
-    if isinstance(key_points, list):
-        items = [str(item).strip() for item in key_points if str(item).strip()]
-        if items:
-            blocks.append({"type": "bullets", "items": items})
-    return blocks
+            return extract_template_brand(template_path, output_dir=str(out_dir))
+        except Exception as exc:
+            logger.warning(f"[BidForge:DocGen] Template brand extraction failed: {exc}")
 
+    from documents.brand_config import get_brand_config
 
-def _strip_leading_number(title: str) -> str:
-    import re
-
-    return re.sub(r"^\s*\d+(?:\.\d+)?[.)]?\s+", "", title).strip()
+    return get_brand_config()
 
 
 def _first_present(*values: Any) -> str:

@@ -33,6 +33,12 @@ async function _request(method, path, body, opts = {}) {
   });
 
   if (!res.ok) {
+    if (res.status === 401 && path !== '/api/auth/login') {
+      localStorage.removeItem(TOKEN_KEY);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+      }
+    }
     let errorMsg = `Request failed (${res.status})`;
     try {
       const data = await res.json();
@@ -89,6 +95,12 @@ export const api = {
   },
   async verifyOtp(email, otp, purpose) {
     return post('/api/auth/verify-otp', { email, otp, purpose });
+  },
+  async resendOtp(email) {
+    return post('/api/auth/forgot-password', { email });
+  },
+  async verifyResetOtp(email, otp) {
+    return this.verifyOtp(email, otp, 'reset-password');
   },
   async verifyRegistration(email, otp) {
     return this.verifyOtp(email, otp, 'register');

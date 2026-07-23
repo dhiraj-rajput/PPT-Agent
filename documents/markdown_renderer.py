@@ -190,7 +190,7 @@ def _parse_markdown_into_sections(markdown_content: str) -> tuple[str, List[Dict
     lines = markdown_content.splitlines()
     doc_title = "RFP Response Proposal"
     sections: List[Dict[str, Any]] = []
-    current_section: Optional[Dict[str, Any]] = None
+    current_section: Dict[str, Any] = {"title": "Executive Summary", "page_break_before": False, "blocks": []}
     table_buffer: List[str] = []
 
     def flush_table():
@@ -202,9 +202,9 @@ def _parse_markdown_into_sections(markdown_content: str) -> tuple[str, List[Dict
         headers = []
         rows = []
         for row_idx, row_line in enumerate(table_buffer):
-            # Strip outer pipes and split
+            # Strip outer pipes and split respecting escaped pipes
             cleaned = row_line.strip().strip('|')
-            cells = [c.strip() for c in cleaned.split('|')]
+            cells = [c.replace('\\|', '|').strip() for c in re.split(r'(?<!\\)\|', cleaned)]
             
             # Skip delimiter line (e.g. |---|---|)
             if all(re.match(r"^:?-+:?$", cell) for cell in cells):
@@ -236,11 +236,11 @@ def _parse_markdown_into_sections(markdown_content: str) -> tuple[str, List[Dict
         if line.startswith("# "):
             doc_title = line[2:].strip()
         elif line.startswith("## "):
-            if current_section:
+            if current_section and (current_section["blocks"] or current_section["title"] != "Executive Summary"):
                 sections.append(current_section)
             current_section = {
                 "title": line[3:].strip(),
-                "page_break_before": len(sections) == 0,
+                "page_break_before": len(sections) > 0,
                 "blocks": []
             }
         elif current_section:
@@ -265,7 +265,7 @@ def _parse_markdown_into_sections(markdown_content: str) -> tuple[str, List[Dict
 
     if table_buffer:
         flush_table()
-    if current_section:
+    if current_section and (current_section["blocks"] or current_section["title"] != "Executive Summary"):
         sections.append(current_section)
 
     return doc_title, sections

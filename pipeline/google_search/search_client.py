@@ -122,7 +122,7 @@ class CompanyDiscovery:
         stop_words = {
             "inc", "llc", "ltd", "corp", "co", "and", "the", "for", "solutions",
             "systems", "services", "group", "company", "corporation", "association",
-            "foundation", "community", "development", "international", "agency", "services"
+            "foundation", "community", "development", "international", "agency"
         }
         distinctive_tokens = [w for w in words if w not in stop_words and len(w) > 2]
 

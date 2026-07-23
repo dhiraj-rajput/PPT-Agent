@@ -41,9 +41,10 @@ ollama>=0.4.0
 # DOCX parsing (for WK T360 template extraction)
 python-docx>=1.1.0
 
-# PDF extraction (for RFP parsing)
+# PDF extraction & HTML-to-PDF rendering (for RFP parsing & proposal generation)
 pypdf>=4.0.0
 PyMuPDF>=1.24.0
+weasyprint>=60.0
 
 # OCR fallback for scanned/image-only RFP pages
 # (requires Tesseract binary: https://github.com/tesseract-ocr/tesseract)

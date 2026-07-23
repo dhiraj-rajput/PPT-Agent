@@ -114,19 +114,27 @@ def _requested_items(parsed_rfp: Dict[str, Any]) -> List[str]:
     comps = parsed_rfp.get("identified_components", {}) or {}
     items = list(comps.get("technical", [])) + list(comps.get("layout", []))
     if not items:
-        # fall back to technical_requirements capabilities
-        for r in parsed_rfp.get("technical_requirements", []) or []:
-            cap = r.get("capability") if isinstance(r, dict) else None
-            if cap:
-                items.append(cap)
+        # fall back to requirements / technical_requirements
+        reqs = parsed_rfp.get("requirements") or parsed_rfp.get("technical_requirements") or []
+        for r in reqs:
+            if isinstance(r, dict):
+                cap = r.get("capability") or r.get("name") or r.get("title") or r.get("description")
+                if cap:
+                    items.append(str(cap))
+            elif isinstance(r, str) and r.strip():
+                items.append(r.strip())
     return items[:20]
 
 
 def _analyze_inventory_ai(parsed_rfp: Dict[str, Any], our_catalog: List[Dict[str, Any]]) -> Dict[str, Any]:
     from pipeline.ai.client import get_ai_client
 
-    requirements_text = (parsed_rfp.get("raw_text", "") or "")[:8000] or parsed_rfp.get("summary", "")
-    catalog_text = json.dumps(our_catalog, indent=2)[:6000]
+    # Was capped at 8k/6k chars -- for anything but a trivial RFP this cut
+    # off most of the requirements and most of the catalog before the model
+    # ever saw them, which is why matches came back thin/generic.
+    requirements_text = (parsed_rfp.get("raw_text", "") or parsed_rfp.get("parsed_content", ""))[:60000] \
+        or parsed_rfp.get("summary", "")
+    catalog_text = json.dumps(our_catalog, indent=2)[:40000]
 
     messages = [
         {

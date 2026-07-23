@@ -167,8 +167,6 @@ class RulesStructurer:
         followers_match = re.search(r"([\d,]+)\s+followers", raw_text)
         if followers_match:
             followers_count = int(followers_match.group(1).replace(",", ""))
-
-        if followers_match:
             followers_idx = raw_text.find("followers") + len("followers")
             next_markers = ["See jobs", "Follow", "View all", "About us", "Overview"]
             min_idx = len(raw_text)
@@ -336,9 +334,9 @@ class RulesStructurer:
                     posts.append(CompanyPost(
                         post_text=post_content,
                         posted_date="Recent",
-                        reactions_count=100,
-                        comments_count=10,
-                        reshares_count=5,
+                        reactions_count=None,
+                        comments_count=None,
+                        reshares_count=None,
                         post_type="text",
                     ))
         return posts

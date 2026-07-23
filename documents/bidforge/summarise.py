@@ -25,8 +25,9 @@ def summarise_pricing_strategy(
     ai_client = get_ai_client()
 
     user_content = (
-        f"1. PARSED RFP REQUIREMENTS:\n{json.dumps(parsed_rfp.get('requirements', []), indent=2)}\n"
-        f"Summary: {parsed_rfp.get('summary', '')}\n\n"
+        f"1. PARSED RFP REQUIREMENTS:\n"
+        f"Full parsed content:\n{parsed_rfp.get('parsed_content', '') or parsed_rfp.get('summary', '')}\n\n"
+        f"Structured requirements:\n{json.dumps(parsed_rfp.get('requirements', []), indent=2)}\n\n"
         f"2. INVENTORY ANALYSIS:\n{json.dumps(inventory.get('items', []), indent=2)}\n\n"
         f"3. COMPETITOR PRICING:\n{json.dumps(competitor_intel.get('items', []), indent=2)}"
     )
@@ -36,14 +37,21 @@ def summarise_pricing_strategy(
         {"role": "user", "content": user_content}
     ]
 
-    try:
+    from pipeline.ai.mode import run_with_fallback
+
+    def ai_fn() -> Dict[str, Any]:
         res = ai_client.chat_json(messages)
         if not res.get("items"):
             raise ValueError("AI summarise returned empty items array")
         return res
-    except Exception as e:
-        logger.warning(f"[BidForge:Summarise] AI synthesis failed: {e}. Using rule fallback.")
+
+    def rule_fn() -> Dict[str, Any]:
+        logger.warning(f"[BidForge:Summarise] Using rule fallback for pricing strategy synthesis.")
         return _summarise_fallback(inventory, competitor_intel)
+
+    result, path_used = run_with_fallback("bidforge_summarise", ai_fn, rule_fn)
+    result["generated_via"] = path_used
+    return result
 
 
 def _summarise_fallback(inventory: Dict[str, Any], competitor_intel: Dict[str, Any]) -> Dict[str, Any]:

@@ -702,10 +702,13 @@ def convert_to_pdf(docx_path: str, outdir: Optional[str] = None) -> str:
         return docx_path
 
     logger.info(f"Attempting LibreOffice conversion using: {soffice}")
-    subprocess.run(
-        [soffice, "--headless", "--convert-to", "pdf", "--outdir", outdir, docx_abs],
-        check=True, capture_output=True,
-    )
+    try:
+        subprocess.run(
+            [soffice, "--headless", "--convert-to", "pdf", "--outdir", outdir, docx_abs],
+            check=True, capture_output=True, timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("LibreOffice PDF conversion timed out after 60 seconds.")
     # LibreOffice saves it under the same stem with .pdf extension in outdir
     generated_pdf = Path(outdir) / (Path(docx_path).stem + ".pdf")
     if generated_pdf.exists():

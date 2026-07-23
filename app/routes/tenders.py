@@ -43,7 +43,7 @@ def _sanitize_path_component(value: str) -> str:
 
 router = APIRouter(prefix="/tenders", tags=["tenders"])
 
-SAM_OPPORTUNITIES_BASE = "https://api.sam.gov/opportunities/v2/search"
+SAM_OPPORTUNITIES_BASE = getattr(settings, "SAM_GOV_API_URL", "https://api.sam.gov/opportunities/v2/search")
 
 
 def _utc_now_iso() -> str:

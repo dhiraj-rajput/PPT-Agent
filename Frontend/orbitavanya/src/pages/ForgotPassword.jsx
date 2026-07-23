@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { checkPasswordRules } from '../lib/passwordStrength.jsx';
 
 const STRENGTH_BAR_COLORS = {
-  'Very weak': 'bg-tomato-500',
+  'Very Weak': 'bg-tomato-500',
   Weak: 'bg-orange-400',
   Fair: 'bg-yellow-400',
   Strong: 'bg-green-500',

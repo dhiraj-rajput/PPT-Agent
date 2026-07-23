@@ -36,20 +36,19 @@ def detect_available_font(preferred_fonts: Optional[List[str]] = None) -> str:
     Falls back through FONT_FALLBACK_CHAIN if none are available.
     """
     global _detected_font
-    if _detected_font is not None:
+    if _detected_font is not None and not preferred_fonts:
         return _detected_font
 
     fonts_to_try = list(preferred_fonts or []) + FONT_FALLBACK_CHAIN
 
     try:
-        # python-docx doesn't expose font enumeration, but we can check
-        # via matplotlib (if installed) or just return the first in the chain
         try:
             import matplotlib.font_manager as fm  # type: ignore
             available = {f.name for f in fm.fontManager.ttflist}
             for font in fonts_to_try:
                 if font in available:
-                    _detected_font = font
+                    if not preferred_fonts:
+                        _detected_font = font
                     return font
         except ImportError:
             pass
@@ -58,30 +57,25 @@ def detect_available_font(preferred_fonts: Optional[List[str]] = None) -> str:
         import subprocess
         import sys
         if sys.platform == "win32":
-            # Windows: check if font name appears in registry or system fonts
             import os
             fonts_dir = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts"
             for font in fonts_to_try:
-                # Check for common font file patterns
                 font_lower = font.lower().replace(" ", "")
                 for f in fonts_dir.glob("*.ttf"):
                     if font_lower in f.stem.lower():
-                        _detected_font = font
+                        if not preferred_fonts:
+                            _detected_font = font
                         return font
-        elif sys.platform == "darwin":
-            # macOS
-            result = subprocess.run(["fc-list"], capture_output=True, text=True, timeout=5)
-            for font in fonts_to_try:
-                if font.lower() in result.stdout.lower():
-                    _detected_font = font
-                    return font
-        else:
-            # Linux
-            result = subprocess.run(["fc-list"], capture_output=True, text=True, timeout=5)
-            for font in fonts_to_try:
-                if font.lower() in result.stdout.lower():
-                    _detected_font = font
-                    return font
+        elif sys.platform in ("darwin", "linux"):
+            try:
+                result = subprocess.run(["fc-list"], capture_output=True, text=True, timeout=5)
+                for font in fonts_to_try:
+                    if font.lower() in result.stdout.lower():
+                        if not preferred_fonts:
+                            _detected_font = font
+                        return font
+            except (FileNotFoundError, OSError):
+                pass
     except Exception as e:
         logger.debug(f"Font detection error (non-critical): {e}")
 
@@ -137,10 +131,29 @@ DEFAULT_CONFIDENTIALITY_TEXT: str = (
 def get_brand_config(overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """
     Returns a fresh copy of DEFAULT_BRAND with optional key overrides applied.
+    Queries MongoDB 'own_company_profile' collection to dynamically fetch user-configured branding.
     Validates asset paths exist; logs warnings for missing assets.
     Auto-detects available system fonts.
     """
     cfg = dict(DEFAULT_BRAND)
+    
+    # Try fetching saved company profile from MongoDB
+    try:
+        from utils.db_client import get_collection
+        col = get_collection("own_company_profile")
+        db_profile = col.find_one({}, {"_id": 0})
+        if db_profile:
+            if db_profile.get("name"):
+                cfg["company_name"] = db_profile["name"]
+            if db_profile.get("phone"):
+                cfg["phone"] = db_profile["phone"]
+            if db_profile.get("email"):
+                cfg["email"] = db_profile["email"]
+            if db_profile.get("city") and db_profile.get("state"):
+                cfg["address_line2"] = f"{db_profile['city']}, {db_profile['state']}"
+    except Exception as e:
+        logger.debug(f"Could not load own_company_profile from MongoDB: {e}")
+
     if overrides:
         cfg.update(overrides)
 

@@ -187,10 +187,13 @@ class BIExtractor:
         
         # Helper to score sentences by keywords
         def find_top_sentences(keywords: list[str], max_count: int = 3, threshold: int = 1) -> list[str]:
+            if not keywords:
+                return []
+            compiled_kws = [re.compile(r'\b' + re.escape(kw) + r'\b', re.IGNORECASE) for kw in keywords]
             scored = []
             seen = set()
             for s in sentences:
-                score = sum(1 for kw in keywords if re.search(r'\b' + re.escape(kw) + r'\b', s.lower()))
+                score = sum(1 for pat in compiled_kws if pat.search(s))
                 if score >= threshold:
                     lower_s = s.lower()
                     # Deduplicate semantically simple lines
@@ -249,18 +252,9 @@ class BIExtractor:
             if kw.lower() in combined_text.lower():
                 competitors.append(CompetitorMention(competitor_name=full_name, relationship_type=rel, source="Mentioned in raw LinkedIn text"))
         
-        # If no competitors mentioned, guess based on industry
+        # If no competitors mentioned in raw text, return empty list
         if not competitors:
-            if "it" in industry.lower() or "consult" in industry.lower() or "service" in industry.lower():
-                competitors = [
-                    CompetitorMention(competitor_name="Tata Consultancy Services (TCS)", relationship_type="Direct Competitor", source="Industry classification mapping"),
-                    CompetitorMention(competitor_name="Accenture", relationship_type="Direct Competitor", source="Industry classification mapping"),
-                    CompetitorMention(competitor_name="Infosys Limited", relationship_type="Direct Competitor", source="Industry classification mapping")
-                ]
-            else:
-                competitors = [
-                    CompetitorMention(competitor_name="Industry Peers", relationship_type="Direct Competitor", source="General competition")
-                ]
+            competitors = []
 
         # 6. Strategic Initiatives
         init_kws = ["initiative", "strategy", "pivot", "investing in", "expanding", "expansion", "partnership", "collaboration", "acquiring", "launching", "commit", "focusing on"]

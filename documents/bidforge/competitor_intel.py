@@ -3,13 +3,11 @@ bidforge/competitor_intel.py
 -----------------------------
 Stage 2b of the BidForge pipeline: competitor / market pricing intelligence.
 
-The original BidForge required manually-uploaded competitor pricing files.
-Instead, we reuse PPT-Agent's existing google_search agent (google_search/search_client.py
+Reuses PPT-Agent's existing google_search agent (google_search/search_client.py
 ExternalSearchClient) to pull live market/competitor pricing signals for each
-requested item, then have the AI synthesize them the same way BidForge's
-COMPETITOR_PRICING_PROMPT does. Governed by the master AI_MODE toggle
-(BIDFORGE_MODE override), with a rule-based fallback that just surfaces the
-raw search snippets without AI synthesis.
+requested item via parallel asyncio.gather, then synthesizes them.
+Governed by the master AI_MODE toggle (BIDFORGE_MODE override), with a rule-based
+fallback that just surfaces the raw search snippets without AI synthesis.
 """
 
 from __future__ import annotations
@@ -28,7 +26,7 @@ def gather_competitor_intel(parsed_rfp: Dict[str, Any], inventory: Dict[str, Any
     """
     from pipeline.ai.mode import run_with_fallback
 
-    item_names = [it.get("name") for it in inventory.get("items", []) if it.get("name")][:8]
+    item_names = [it.get("name") for it in inventory.get("items", []) if it.get("name")][:20]
     if not item_names:
         item_names = ["core scope of work"]
 
@@ -63,8 +61,7 @@ def gather_competitor_intel(parsed_rfp: Dict[str, Any], inventory: Dict[str, Any
 
 async def _search_market_pricing(item_names: List[str]) -> Dict[str, List[Dict[str, str]]]:
     """Uses the existing external search client to look up live market/competitor
-    pricing signals for each requested item — the Python equivalent of BidForge's
-    get_market_price tool."""
+    pricing signals for each requested item concurrently via asyncio.gather."""
     results: Dict[str, List[Dict[str, str]]] = {}
     try:
         from config.settings import settings
@@ -74,18 +71,23 @@ async def _search_market_pricing(item_names: List[str]) -> Dict[str, List[Dict[s
         logger.warning(f"[BidForge:Competitor] Could not initialize search client: {exc}")
         return results
 
-    for item in item_names:
+    async def _search_single_item(item: str) -> tuple[str, List[Dict[str, str]]]:
         try:
             found = await client.search_company_sources(
                 company_name="",
                 official_url="",
                 max_results=5,
-                custom_query=f"{item} pricing competitors market rate 2026",
+                custom_query=f"{item} pricing competitors market rate",
             )
-            results[item] = [{"title": r.title, "url": r.url, "snippet": r.snippet} for r in found]
+            return item, [{"title": r.title, "url": r.url, "snippet": r.snippet} for r in found]
         except Exception as exc:
             logger.warning(f"[BidForge:Competitor] Market search failed for '{item}': {exc}")
-            results[item] = []
+            return item, []
+
+    searches = [_search_single_item(item) for item in item_names]
+    search_results = await asyncio.gather(*searches)
+    for item, item_res in search_results:
+        results[item] = item_res
     return results
 
 

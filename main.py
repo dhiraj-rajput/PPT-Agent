@@ -23,10 +23,13 @@ import json
 import sys
 
 # Reconfigure stdout/stderr to use UTF-8 to avoid encoding errors on Windows console
-if hasattr(sys.stdout, 'reconfigure'):
-    getattr(sys.stdout, 'reconfigure')(encoding='utf-8')
-if hasattr(sys.stderr, 'reconfigure'):
-    getattr(sys.stderr, 'reconfigure')(encoding='utf-8')
+try:
+    if hasattr(sys.stdout, 'reconfigure'):
+        getattr(sys.stdout, 'reconfigure')(encoding='utf-8')
+    if hasattr(sys.stderr, 'reconfigure'):
+        getattr(sys.stderr, 'reconfigure')(encoding='utf-8')
+except Exception:
+    pass
 
 from utils.helpers import setup_logger
 from utils.db_client import ensure_all_indexes, close_connection
@@ -186,8 +189,8 @@ def main():
     # --- Run pipeline ---
     try:
         from pipeline.orchestrator import run_pipeline
-        logger.info(f"Running pipeline for input: '{args.input}'")
-        result = run_pipeline(args.input)
+        logger.info(f"Running pipeline for input: '{args.input}' (force={args.force})")
+        result = run_pipeline(args.input, force=args.force)
     except Exception as e:
         logger.error(f"Pipeline failed with critical error: {e}", exc_info=True)
         print(f"\n❌ Pipeline failed: {e}")

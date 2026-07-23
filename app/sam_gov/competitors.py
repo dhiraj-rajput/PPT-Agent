@@ -81,7 +81,8 @@ class CompetitorExtractor:
     def find_competitors_and_bids(
         self,
         solicitation_number: str,
-        use_mock: bool = False
+        use_mock: bool = False,
+        limit: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """
         Discover bidders and bid responses for a solicitation using web search + rule-based parsing.
