@@ -90,7 +90,11 @@ class OllamaAIClient:
     DEFAULT_FALLBACKS = ["gemma4:e4b", "gemma3:4b", "gemma4:31b-cloud", "llama3.1:8b"]
 
     def __init__(self) -> None:
-        from config.settings import settings as _settings
+        import importlib
+        try:
+            from backend.config.settings import settings as _settings
+        except ImportError:
+            _settings = importlib.import_module("config.settings").settings
         self._settings = _settings
 
         self.model: str = getattr(_settings, "OLLAMA_MODEL", "gemma4:e4b") or "gemma4:e4b"

@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 from pathlib import Path
 import uuid
 
@@ -482,7 +482,7 @@ async def _send_newsletter_background(
             return 0
 
     results = await asyncio.gather(*[send_single_newsletter(sub) for sub in subscribers])
-    sent_count = sum(results)
+    sent_count = sum(int(r or 0) for r in results)
 
     await editions_col.update_one(
         {"_id": e_id},
@@ -618,7 +618,8 @@ async def update_edition(
             updates["status"] = "draft"
     elif getattr(body, "scheduledAt", None):
         try:
-            scheduled_dt = datetime.fromisoformat(body.scheduledAt.replace("Z", "+00:00"))
+            sch_str = str(body.scheduledAt)
+            scheduled_dt = datetime.fromisoformat(sch_str.replace("Z", "+00:00"))
             if scheduled_dt.tzinfo is None:
                 scheduled_dt = scheduled_dt.replace(tzinfo=timezone.utc)
         except Exception:

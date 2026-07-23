@@ -104,7 +104,11 @@ def fill_template(template_path: str, sections: Dict[str, Any], output_path: str
         "sections": sections_list,
     }
 
-    from scripts import proposal_generator as pg
+    import importlib
+    try:
+        from backend.scripts import proposal_generator as pg
+    except ImportError:
+        pg = importlib.import_module("scripts.proposal_generator")
     pg.generate(cfg, output_path)
 
     logger.info(

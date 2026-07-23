@@ -14,7 +14,7 @@ import random
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, List
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from pydantic import BaseModel
@@ -898,7 +898,7 @@ async def get_company_detail(
 ):
     """Retrieve full details of a specific company by its UEI, slug, or ID identifier."""
     col = get_async_collection("companies")
-    query_conditions = [{"uei": uei}, {"company_slug": uei}, {"id": uei}, {"name": uei}]
+    query_conditions: list[dict[str, Any]] = [{"uei": uei}, {"company_slug": uei}, {"id": uei}, {"name": uei}]
     if ObjectId.is_valid(uei):
         query_conditions.append({"_id": ObjectId(uei)})
         

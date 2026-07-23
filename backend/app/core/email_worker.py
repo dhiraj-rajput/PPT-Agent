@@ -6,6 +6,12 @@ from datetime import datetime, timezone, timedelta
 from bson import ObjectId
 from config.settings import settings
 from utils.db_client import get_collection, get_async_collection
+from app.core.tracking_helpers import (
+    rewrite_links_for_tracking,
+    new_tracking_id,
+    unsubscribe_url,
+    open_pixel_tag,
+)
 
 logger = logging.getLogger("email_worker")
 

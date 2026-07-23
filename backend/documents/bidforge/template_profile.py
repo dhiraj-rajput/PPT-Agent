@@ -36,7 +36,11 @@ def extract_template_brand(template_path: str, output_dir: Optional[str] = None)
     document never ends up with missing/blank branding even if the
     uploaded template is plain or unusually structured.
     """
-    from documents.brand_config import get_brand_config
+    import importlib
+    try:
+        from backend.documents.brand_config import get_brand_config
+    except ImportError:
+        get_brand_config = importlib.import_module("documents.brand_config").get_brand_config
 
     brand = get_brand_config()
 

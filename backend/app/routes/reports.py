@@ -10,6 +10,7 @@ import asyncio
 import json
 from pathlib import Path
 from datetime import datetime
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel

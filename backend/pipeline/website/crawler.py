@@ -484,14 +484,15 @@ def crawl_website(
                         continue
 
                     results = await crawler.arun_many(batch, config=run_cfg)
+                    res_raw: Any = results
                     res_items = []
-                    if hasattr(results, "__aiter__"):
-                        async for res in results:
+                    if hasattr(res_raw, "__aiter__"):
+                        async for res in res_raw:
                             res_items.append(res)
-                    elif hasattr(results, "__iter__"):
-                        res_items = list(results)
+                    elif hasattr(res_raw, "__iter__"):
+                        res_items = list(res_raw)
                     else:
-                        res_items = [results]
+                        res_items = [res_raw]
 
                     for res in res_items:
                         url = getattr(res, "url", "")

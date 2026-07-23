@@ -1,5 +1,5 @@
 from datetime import datetime, timezone, timedelta
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 import asyncio
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -11,6 +11,14 @@ from utils.db_client import get_async_collection
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+
+
+def _to_int(val: Any) -> int:
+    return int(val) if isinstance(val, (int, float, str)) else 0
+
+
+def _to_list(val: Any) -> list:
+    return list(val) if isinstance(val, (list, tuple, set)) else []
 
 
 def _calculate_rates(stats: dict) -> dict:
@@ -65,26 +73,26 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
         leads_col.count_documents({"status": {"$in": ["sent", "opened", "clicked", "replied"]}, "createdAt": {"$gte": seven_days_ago}}),
     )
 
-    prospects_count = int(res[0])
-    contacted_count = int(res[1])
-    proposals_count = int(res[2])
-    meetings_count = int(res[3])
-    negotiation_count = int(res[4])
-    won_count = int(res[5])
-    campaigns = list(res[6])
-    high = int(res[7])
-    medium = int(res[8])
-    low = int(res[9])
-    closing_soon = list(res[10])
-    recent_companies = list(res[11])
-    recent_tenders = list(res[12])
-    recent_companies_count = int(res[13])
-    active_tenders_count = int(res[14])
-    recent_tenders_count = int(res[15])
-    recent_emails = int(res[16])
-    current_meetings = int(res[17])
-    prev_meetings = int(res[18])
-    recent_contacted = int(res[19])
+    prospects_count = _to_int(res[0])
+    contacted_count = _to_int(res[1])
+    proposals_count = _to_int(res[2])
+    meetings_count = _to_int(res[3])
+    negotiation_count = _to_int(res[4])
+    won_count = _to_int(res[5])
+    campaigns = _to_list(res[6])
+    high = _to_int(res[7])
+    medium = _to_int(res[8])
+    low = _to_int(res[9])
+    closing_soon = _to_list(res[10])
+    recent_companies = _to_list(res[11])
+    recent_tenders = _to_list(res[12])
+    recent_companies_count = _to_int(res[13])
+    active_tenders_count = _to_int(res[14])
+    recent_tenders_count = _to_int(res[15])
+    recent_emails = _to_int(res[16])
+    current_meetings = _to_int(res[17])
+    prev_meetings = _to_int(res[18])
+    recent_contacted = _to_int(res[19])
 
     pipeline_stages = [
         {"key": "leads", "label": "Prospects", "count": prospects_count, "icon": "Search", "color": "sky"},

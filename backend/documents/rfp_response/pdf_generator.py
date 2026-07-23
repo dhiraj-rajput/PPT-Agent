@@ -304,7 +304,11 @@ class PDFGenerator:
             json.dump(cfg, fh, indent=2, ensure_ascii=False)
 
         # Generate docx
-        from scripts import proposal_generator
+        import importlib
+        try:
+            from backend.scripts import proposal_generator
+        except ImportError:
+            proposal_generator = importlib.import_module("scripts.proposal_generator")
         output_base = self.project_root / "output" / "pdf" / f"{solicitation_number}_pitch_proposal"
         docx_path = str(output_base) + ".docx"
         proposal_generator.generate(cfg, docx_path)
@@ -474,7 +478,11 @@ class PDFGenerator:
             json.dump(cfg, fh, indent=2, ensure_ascii=False)
 
         # Generate docx
-        from scripts import proposal_generator
+        import importlib
+        try:
+            from backend.scripts import proposal_generator
+        except ImportError:
+            proposal_generator = importlib.import_module("scripts.proposal_generator")
         output_base = self.project_root / "output" / "pdf" / f"{solicitation_number}_product_match_report"
         docx_path = str(output_base) + ".docx"
         proposal_generator.generate(cfg, docx_path)

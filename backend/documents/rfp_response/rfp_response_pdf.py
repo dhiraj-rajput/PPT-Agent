@@ -363,7 +363,11 @@ def generate_rfp_response_pdf(
     logger.info(f"[RFPResponsePDF] Configuration saved to: {config_path}")
     
     # 3. Generate docx document via proposal_generator
-    from scripts import proposal_generator
+    import importlib
+    try:
+        from backend.scripts import proposal_generator
+    except ImportError:
+        proposal_generator = importlib.import_module("scripts.proposal_generator")
     import shutil
     import subprocess
     

@@ -12,7 +12,12 @@ import logging
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
-logger = setup_logger(__name__) if 'setup_logger' in globals() else logging.getLogger(__name__)
+try:
+    from utils.helpers import setup_logger
+except ImportError:
+    from backend.utils.helpers import setup_logger
+
+logger = setup_logger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # Check WeasyPrint support
@@ -160,19 +165,24 @@ def render_markdown_to_pdf(
         if brand_override:
             brand_cfg = brand_override
         else:
-            from documents.brand_config import get_brand_config
+            import importlib
+            try:
+                from backend.documents.brand_config import get_brand_config
+            except ImportError:
+                get_brand_config = importlib.import_module("documents.brand_config").get_brand_config
             brand_cfg = get_brand_config()
 
     if _WEASYPRINT_AVAILABLE:
         try:
-            import markdown
+            import importlib
+            markdown = importlib.import_module("markdown")
             html_body = markdown.markdown(
                 markdown_content,
                 extensions=['tables', 'fenced_code', 'nl2br', 'sane_lists']
             )
 
-            # Apply custom brand color to CSS if extracted
-            accent_hex = f"#{brand_cfg.get('accent_color', '2B6CB0')}" if not brand_cfg.get('accent_color', '').startswith('#') else brand_cfg.get('accent_color')
+            accent_val = str(brand_cfg.get('accent_color') or '2B6CB0').strip()
+            accent_hex = accent_val if accent_val.startswith('#') else f"#{accent_val}"
             custom_css = _BASE_CSS.replace('#2B6CB0', accent_hex).replace('#3182CE', accent_hex)
 
             full_html = f"<!DOCTYPE html><html><head><meta charset='utf-8'><style>{custom_css}</style></head><body>{html_body}</body></html>"
@@ -278,7 +288,11 @@ def _fallback_markdown_to_pdf(
     brand_cfg: Dict[str, Any]
 ) -> str:
     """Converts Markdown to DOCX via proposal_generator and then to PDF."""
-    from scripts import proposal_generator as pg
+    import importlib
+    try:
+        from backend.scripts import proposal_generator as pg
+    except ImportError:
+        pg = importlib.import_module("scripts.proposal_generator")
 
     out_pdf = Path(output_pdf_path)
     docx_path = out_pdf.with_suffix(".docx")

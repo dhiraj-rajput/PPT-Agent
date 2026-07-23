@@ -992,9 +992,10 @@ class RFPResponseGenerator:
         ]
         return get_ai_client().chat_json(messages)
 
+    def _load_our_profile(self) -> Dict[str, Any]:
         """Load OrbitAvanya's own company profile, prioritizing any dynamically selected bidding profile."""
         if self._our_profile is not None:
-            return self._our_profile
+            return self._our_profile or {}
 
         # Load dynamically selected bidding profile if present
         active_bidding_path = self.project_root / "private" / "active_bidding_company.json"
@@ -1003,7 +1004,7 @@ class RFPResponseGenerator:
                 with open(active_bidding_path, encoding="utf-8") as f:
                     self._our_profile = json.load(f)
                     logger.info("[RFPResponseGen] Loaded active bidding company profile from active_bidding_company.json")
-                    return self._our_profile
+                    return self._our_profile or {}
             except Exception as exc:
                 logger.warning(f"[RFPResponseGen] Could not load active bidding profile: {exc}")
 

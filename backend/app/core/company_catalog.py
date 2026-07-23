@@ -64,9 +64,10 @@ def _parse_excel_workbook(path: Path) -> Optional[Dict[str, Any]]:
 
         if "Services" in wb.sheetnames:
             ws = wb["Services"]
-            for row in list(ws.iter_rows(min_row=2, values_only=True)):
-                if not row or not any(row):
+            for row_raw in list(ws.iter_rows(min_row=2, values_only=True)):
+                if not row_raw or not any(row_raw):
                     continue
+                row = list(row_raw)
                 naics = str(row[1]).strip() if len(row) > 1 and row[1] else "541511"
                 category = str(row[2]).strip() if len(row) > 2 and row[2] else "General"
                 service_name = str(row[3]).strip() if len(row) > 3 and row[3] else ""
@@ -85,9 +86,10 @@ def _parse_excel_workbook(path: Path) -> Optional[Dict[str, Any]]:
 
         if "Premium Enterprise Add-ons" in wb.sheetnames:
             ws_add = wb["Premium Enterprise Add-ons"]
-            for row in list(ws_add.iter_rows(min_row=2, values_only=True)):
-                if not row or not any(row):
+            for row_raw in list(ws_add.iter_rows(min_row=2, values_only=True)):
+                if not row_raw or not any(row_raw):
                     continue
+                row = list(row_raw)
                 name = str(row[0]).strip() if len(row) > 0 and row[0] else ""
                 price = str(row[1]).strip() if len(row) > 1 and row[1] else "Custom Pricing"
                 if name and name.lower() not in ("service", "add-on", "support plan"):
