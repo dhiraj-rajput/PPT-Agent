@@ -951,6 +951,7 @@ export default function ProposalBuilder() {
       {/* Pre-Generation Wizard Modal */}
       {activeWizardItem && (
         <PreGenerationWizard
+          tenderId={activeWizardItem.noticeId || activeWizardItem.notice_id}
           solicitationNumber={activeWizardItem.solicitation || activeWizardItem.title}
           proposalType={activeWizardItem.mode || 'prime'}
           onCancel={() => setActiveWizardItem(null)}

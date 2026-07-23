@@ -154,10 +154,19 @@ class OllamaAIClient:
         model: Optional[str] = None,
         max_retries: int = 3,
         json_mode: bool = False,
+        max_tokens: int = 8192,
     ) -> str:
         """
         Send a chat completion request, trying the primary model then
         falling back through `self.fallback_models` and finally to Gemini API.
+
+        max_tokens controls the output-length cap sent to whichever provider
+        ends up servicing the request (num_predict / maxOutputTokens /
+        max_tokens depending on provider). Defaults to 8192, the same value
+        every caller used before this was configurable. Callers generating
+        long-form content (e.g. a single proposal section) should pass a
+        value sized to what they actually asked for, instead of silently
+        inheriting a cap tuned for short structured-JSON calls.
 
         Raises:
             RateLimitError:      every model attempted returned a 429.
@@ -205,7 +214,7 @@ class OllamaAIClient:
             if candidate_model == "gemini-fallback":
                 for attempt in range(max_retries):
                     try:
-                        return self._call_gemini(messages, json_mode=json_mode)
+                        return self._call_gemini(messages, json_mode=json_mode, max_tokens=max_tokens)
                     except Exception as exc:
                         last_error = exc
                         if isinstance(exc, RateLimitError) or _looks_like_rate_limit(exc):
@@ -228,7 +237,7 @@ class OllamaAIClient:
             if candidate_model == "openrouter-fallback":
                 for attempt in range(max_retries):
                     try:
-                        return self._call_openrouter(messages, json_mode=json_mode)
+                        return self._call_openrouter(messages, json_mode=json_mode, max_tokens=max_tokens)
                     except Exception as exc:
                         last_error = exc
                         if isinstance(exc, RateLimitError) or _looks_like_rate_limit(exc):
@@ -251,7 +260,7 @@ class OllamaAIClient:
             # Ollama Path
             for attempt in range(max_retries):
                 try:
-                    return self._call_ollama(messages, model=candidate_model, json_mode=json_mode)
+                    return self._call_ollama(messages, model=candidate_model, json_mode=json_mode, max_tokens=max_tokens)
                 except Exception as exc:
                     last_error = exc
                     if _looks_like_rate_limit(exc):
@@ -293,7 +302,7 @@ class OllamaAIClient:
     # Internals
     # ------------------------------------------------------------------
 
-    def _call_ollama(self, messages: List[Dict[str, str]], model: str, json_mode: bool) -> str:
+    def _call_ollama(self, messages: List[Dict[str, str]], model: str, json_mode: bool, max_tokens: int = 8192) -> str:
         model = self._normalize_model_for_host(model)
         client_kwargs: Dict[str, Any] = {"timeout": self.timeout}
         if self.host:
@@ -308,7 +317,7 @@ class OllamaAIClient:
             "messages": messages,
             "options": {
                 "temperature": self.temperature,
-                "num_predict": 8192
+                "num_predict": max_tokens
             },
         }
         if json_mode:
@@ -331,7 +340,7 @@ class OllamaAIClient:
             raise ValueError(f"Ollama ({model}) returned an empty response.")
         return str(content)
 
-    def _call_gemini(self, messages: List[Dict[str, str]], json_mode: bool) -> str:
+    def _call_gemini(self, messages: List[Dict[str, str]], json_mode: bool, max_tokens: int = 8192) -> str:
         import httpx
         api_key = getattr(self._settings, "GEMINI_API_KEY", "")
         if not api_key:
@@ -378,7 +387,7 @@ class OllamaAIClient:
 
             generation_config: Dict[str, Any] = {
                 "temperature": self.temperature,
-                "maxOutputTokens": 8192
+                "maxOutputTokens": max_tokens
             }
             if json_mode:
                 generation_config["responseMimeType"] = "application/json"
@@ -412,7 +421,7 @@ class OllamaAIClient:
             raise RateLimitError(f"All Gemini models rate-limited. Last error: {last_error}")
         raise last_error or ValueError("All Gemini fallback models failed.")
 
-    def _call_openrouter(self, messages: List[Dict[str, str]], json_mode: bool) -> str:
+    def _call_openrouter(self, messages: List[Dict[str, str]], json_mode: bool, max_tokens: int = 8192) -> str:
         import httpx
         api_key = getattr(self._settings, "OPENROUTER_API_KEY", "")
         base_url = getattr(self._settings, "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
@@ -446,7 +455,7 @@ class OllamaAIClient:
                 "model": model,
                 "messages": messages,
                 "temperature": self.temperature,
-                "max_tokens": 8192,
+                "max_tokens": max_tokens,
             }
             if json_mode:
                 payload["response_format"] = {"type": "json_object"}

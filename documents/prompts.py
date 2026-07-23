@@ -432,6 +432,49 @@ RULES
 
 
 # ---------------------------------------------------------------------------
+# Section Writer — used by documents/bidforge/document_generator.py's
+# per-section generation loop instead of FINAL_DOCUMENT_PROMPT.
+#
+# Why this exists: asking one LLM call to write an entire 7-section, 20-40
+# page proposal against a single shared token budget (see pipeline/ai/client.py)
+# means every proposal comes back roughly the same length regardless of how
+# complex the underlying RFP actually is, and quality is shallow because the
+# model is budgeting attention across every section at once instead of going
+# deep on one at a time. This prompt is deliberately scoped to ONE section per
+# call; document_generator.py loops it once per section in the outline
+# (wizard-provided or the default skeleton) and concatenates the results.
+# ---------------------------------------------------------------------------
+
+SECTION_WRITER_PROMPT = """\
+You are a professional RFP (Request for Proposal) Response Document Generator.
+
+You will receive the full parsed RFP requirements, inventory/competitor data, and
+pricing strategy, followed by a brief describing exactly ONE section of the
+proposal to write.
+
+RULES
+- Write ONLY the one section described in the brief. Do not write any other
+  section, do not repeat the document title, and do not restate content that
+  belongs in a different section (e.g. don't re-explain pricing in the
+  Executive Summary).
+- Start your output with a single Markdown heading for this section: "## <section title>".
+- Write in a professional, confident tone.
+- Use concrete numbers from the data — never invent prices or quantities.
+- If information relevant to this section is missing or marked "Not specified",
+  note it as "To be discussed" rather than inventing it.
+- Honor the section's target word count as a guide, not a hard ceiling: go
+  deep and specific rather than padding with filler or generic boilerplate.
+- Use Markdown formatting (subheadings, tables, bold, bullet points) where it
+  helps a section read as a real, structured proposal — e.g. a pricing
+  section should include an actual Markdown table.
+- Do NOT include internal notes, competitor names by name, or strategic
+  reasoning — this is customer-facing.
+- COMPANY_NAME placeholder should be replaced with the actual responding
+  company name.
+"""
+
+
+# ---------------------------------------------------------------------------
 # Prime Proposal — Orbit Avanya responds directly to the agency/buyer
 # Full LLM-driven proposal using company profile + RFP requirements
 # ---------------------------------------------------------------------------

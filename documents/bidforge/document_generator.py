@@ -90,7 +90,7 @@ def _generate_markdown(
     wizard_config: Optional[str | Dict[str, Any]],
 ) -> str:
     from pipeline.ai.client import get_ai_client
-    from documents.prompts import FINAL_DOCUMENT_PROMPT
+    from documents.prompts import SECTION_WRITER_PROMPT
 
     buyer_name = _first_present(
         (parsed_rfp.get("metadata", {}) or {}).get("buyer_name"),
@@ -98,72 +98,150 @@ def _generate_markdown(
         "Prospective Client",
     )
 
-    # SECTION 1 -- full parsed RFP requirements, not just the short summary.
+    config = _decode_wizard_config(wizard_config)
+    sections = config.get("sections") if isinstance(config, dict) else None
+    
+    # If no sections are configured in the wizard config, fallback to default standard outline
+    if not isinstance(sections, list) or not sections:
+        sections = [
+            {
+                "key": "executive_summary",
+                "title": "1. Executive Summary",
+                "word_budget": 600,
+                "included": True,
+                "key_points": [
+                    "Understanding of Agency mission & critical objectives",
+                    "Summary of proposed solution & key discriminators",
+                    "Commitment to schedule & compliance"
+                ]
+            },
+            {
+                "key": "scope_of_work",
+                "title": "2. Scope of Work",
+                "word_budget": 1200,
+                "included": True,
+                "key_points": [
+                    "Detailed description of proposed services",
+                    "Specific delivery methods & methodology",
+                    "Quality assurance & compliance"
+                ]
+            },
+            {
+                "key": "pricing_table",
+                "title": "3. Pricing Proposal & Deliverables",
+                "word_budget": 500,
+                "included": True,
+                "key_points": [
+                    "Breakdown of pricing by service/product item",
+                    "Volume discounts or bundle incentives"
+                ]
+            },
+            {
+                "key": "implementation_timeline",
+                "title": "4. Implementation & Schedule",
+                "word_budget": 500,
+                "included": True,
+                "key_points": [
+                    "Milestones and delivery dates",
+                    "Resource allocation plan"
+                ]
+            },
+            {
+                "key": "terms_conditions",
+                "title": "5. Terms and Conditions",
+                "word_budget": 400,
+                "included": True,
+                "key_points": [
+                    "Payment schedule & SLA parameters",
+                    "Proposal validity period"
+                ]
+            }
+        ]
+
+    # SECTION 1 -- full parsed RFP requirements
     section1 = (
-        f"COMPANY NAME (use this as the responding/proposing entity throughout): {company_name}\n"
+        f"COMPANY NAME (responding entity): {company_name}\n"
         f"BUYER / CUSTOMER: {buyer_name}\n\n"
         f"Parsed content:\n{parsed_rfp.get('parsed_content', '') or parsed_rfp.get('summary', '')}\n\n"
         f"Structured requirements:\n{json.dumps(parsed_rfp.get('requirements', []), indent=2)}\n\n"
         f"Compliance requirements:\n{json.dumps(parsed_rfp.get('compliance_requirements', []), indent=2)}\n\n"
         f"Missing/flagged fields:\n{json.dumps(parsed_rfp.get('missing_fields', []), indent=2)}\n\n"
-        f"Raw source text (for anything not captured above):\n{(parsed_rfp.get('raw_text', '') or '')[:20000]}"
+        f"Raw source text (part):\n{(parsed_rfp.get('raw_text', '') or '')[:25000]}"
     )
 
-    # SECTION 2 -- inventory + competitor data, as full structured data (not
-    # capped, not flattened into a table row).
+    # SECTION 2 -- inventory + competitor data
     section2 = (
-        f"INVENTORY ANALYSIS (what we can deliver, generated via '{inventory.get('generated_via', 'unknown')}'):\n"
+        f"INVENTORY ANALYSIS (our products/services available for delivery):\n"
         f"{json.dumps(inventory.get('items', []), indent=2)}\n\n"
-        f"COMPETITOR / MARKET PRICING (generated via '{competitor_intel.get('generated_via', 'unknown')}'):\n"
+        f"COMPETITOR / MARKET PRICING:\n"
         f"{json.dumps(competitor_intel.get('items', []), indent=2)}"
     )
 
-    # SECTION 3 -- full pricing strategy including every option + rationale +
-    # the thorough per-item "data" field the summariser produces.
+    # SECTION 3 -- strategy
     section3 = (
         f"{json.dumps(strategy.get('items', []), indent=2)}\n\n"
         f"Overall strategic notes:\n{strategy.get('strategic_notes', '')}"
     )
 
-    wizard_instructions = _wizard_instructions(wizard_config)
-
-    user_message = f"""\
+    # Prepare common background for all calls
+    common_context = f"""=======================================================
+RFP CONTEXT & INPUTS
 =======================================================
-SECTION 1: PARSED RFP REQUIREMENTS
-=======================================================
-
+SECTION 1: PARSED RFP REQUIREMENTS:
 {section1}
 
-=======================================================
-SECTION 2: EXPLORE OUTPUT (Inventory + Competitor Data)
-=======================================================
-
+SECTION 2: EXPLORE OUTPUT (Inventory & Competitor Data):
 {section2}
 
-=======================================================
-SECTION 3: SUMMARISE OUTPUT (Strategic Pricing Decisions)
-=======================================================
-
+SECTION 3: SUMMARISE OUTPUT (Strategic Pricing Decisions):
 {section3}
+"""
 
+    markdown_parts = []
+    
+    # Document title
+    title_line = f"# {company_name} — Response to {buyer_name}"
+    markdown_parts.append(title_line)
+
+    for section in sections:
+        if not isinstance(section, dict) or section.get("included") is False:
+            continue
+        title = str(section.get("title") or section.get("key") or "").strip()
+        if not title:
+            continue
+        
+        description = str(section.get("description") or "").strip()
+        key_points = section.get("key_points") or []
+        if isinstance(key_points, str):
+            key_points = [line.strip() for line in key_points.splitlines() if line.strip()]
+
+        brief = f"SECTION BRIEF to generate:\n- Section Title: {title}\n"
+        if description:
+            brief += f"- Focus: {description}\n"
+        if key_points:
+            brief += "- Key Points to address:\n"
+            for kp in key_points:
+                brief += f"    * {kp}\n"
+        brief += f"- Target Length: {section.get('word_budget', 500)} words."
+
+        user_message = f"""{common_context}
 =======================================================
-INSTRUCTIONS
+INSTRUCTIONS FOR THIS CALL
 =======================================================
-Generate the full RFP response document on behalf of "{company_name}".
-Use the company name "{company_name}" throughout the document as the responding/proposing entity.
-Use the recommended pricing option for each item unless the data clearly indicates otherwise.
-{wizard_instructions}
-======================================================="""
+{brief}
+"""
 
-    messages = [
-        {"role": "system", "content": FINAL_DOCUMENT_PROMPT},
-        {"role": "user", "content": user_message},
-    ]
+        messages = [
+            {"role": "system", "content": SECTION_WRITER_PROMPT},
+            {"role": "user", "content": user_message},
+        ]
 
-    # Deliberately NOT routed through run_with_fallback()/rule_fn: there is no
-    # sane rule-based substitute for "write a 40-page proposal", so a failure
-    # here should raise and be visible, not silently degrade to boilerplate.
-    return get_ai_client().chat_text(messages, json_mode=False)
+        logger.info(f"[BidForge:DocGen] Generating section: {title}...")
+        section_content = get_ai_client().chat_text(messages, json_mode=False)
+        if section_content:
+            markdown_parts.append(section_content.strip())
+
+    return "\n\n".join(markdown_parts)
 
 
 def _wizard_instructions(wizard_config: Optional[str | Dict[str, Any]]) -> str:

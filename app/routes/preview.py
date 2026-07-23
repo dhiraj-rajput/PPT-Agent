@@ -55,6 +55,7 @@ class CustomAnswersPayload(BaseModel):
 @router.get("/questions")
 async def get_wizard_questions(
     tender_id: Optional[str] = None,
+    solicitation_number: Optional[str] = None,
     proposal_type: str = "Prime RFP Response",
     current_user: dict = Depends(get_current_user),
 ):
@@ -65,7 +66,7 @@ async def get_wizard_questions(
         if tender:
             tender_info = tender
 
-    title = tender_info.get("title", "Government Contracting Opportunity")
+    title = tender_info.get("title") or solicitation_number or "Government Contracting Opportunity"
     naics = tender_info.get("naicsCode", "General")
     
     company_col = get_async_collection("own_company_profile")
@@ -248,5 +249,5 @@ Output MUST be a JSON object with a 'sections' array. Each section must have:
         "proposal_type": payload.proposal_type,
         "total_estimated_pages": estimated_pages,
         "total_estimated_words": total_words,
-        "sections": default_sections
+        "sections": sections
     }

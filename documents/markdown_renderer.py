@@ -65,6 +65,7 @@ h2 {
     margin-bottom: 12px;
     border-bottom: 1px solid #E2E8F0;
     padding-bottom: 4px;
+    page-break-before: always;
     page-break-after: avoid;
 }
 

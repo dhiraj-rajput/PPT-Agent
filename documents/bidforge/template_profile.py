@@ -46,12 +46,12 @@ def extract_template_brand(template_path: str, output_dir: Optional[str] = None)
         logger.warning(f"[TemplateProfile] Could not open template '{template_path}' for brand extraction: {exc}")
         return brand
 
-    logo_path = _extract_first_image(doc, template_path, output_dir)
+    logo_path, cover_path = _extract_logo_and_cover(doc, template_path, output_dir)
     if logo_path:
         brand["logo_path"] = logo_path
-        # We don't know which embedded image (if there were several) was
-        # meant as a distinct cover graphic vs. a header logo, so reuse the
-        # same one for both rather than guessing wrong.
+    if cover_path:
+        brand["cover_graphic_path"] = cover_path
+    elif logo_path:
         brand["cover_graphic_path"] = logo_path
 
     accent = _extract_accent_color(doc)
@@ -68,6 +68,7 @@ def extract_template_brand(template_path: str, output_dir: Optional[str] = None)
     logger.info(
         f"[TemplateProfile] Extracted brand from '{Path(template_path).name}': "
         f"logo={'yes' if logo_path else 'no (using default)'}, "
+        f"cover_graphic={'yes' if cover_path else ('same as logo' if logo_path else 'no (using default)')}, "
         f"accent={brand.get('accent_color')}, heading_font={brand.get('heading_font')}, "
         f"body_font={brand.get('body_font')}"
     )
@@ -117,67 +118,79 @@ def _largest_image(image_parts: list):
     return best_part or (image_parts[0] if image_parts else None)
 
 
-def _extract_first_image(doc, template_path: str, output_dir: Optional[str]) -> Optional[str]:
-    """Finds the template's logo and writes it out as a standalone file
-    proposal_generator.py can use as logo_path.
+def _extract_logo_and_cover(
+    doc, template_path: str, output_dir: Optional[str]
+):
+    """Finds the template's running-page logo and its (possibly distinct)
+    cover-page graphic, and writes each out as a standalone file
+    proposal_generator.py can use as logo_path / cover_graphic_path.
+    Returns (logo_path, cover_path), either of which may be None.
 
-    Priority order matters here: a cover-page logo is almost always stored
-    in the FIRST PAGE header (`section.first_page_header`) when the template
-    has "different first page" enabled — which proposal_generator.py itself
-    relies on for the cover — followed by the regular running header. Only
-    if neither has an image do we fall back to the footer, and only after
-    that to the document body. Mixing header and footer images into one
-    bag and grabbing whichever happened to come first in relationship-ID
-    order (the previous behavior) could just as easily surface a small
-    footer graphic (social icon, watermark, divider) as the real logo,
-    which is why the footer logo could end up looking wrong/mismatched.
+    Earlier versions assumed a cover-page logo always lives in the first-page
+    header, and stopped looking as soon as ANY header image was found. That
+    assumption doesn't hold for every template: it's just as common for a
+    template's real cover-page artwork to be placed directly in the document
+    BODY (as its own picture on page 1), while the first-page header/footer
+    only carry a small recurring letterhead banner. Stopping at the header
+    tier in that case grabs the small banner for the cover page too, and the
+    real cover art is never even considered — which is exactly the
+    header/footer-vs-cover mismatch this function now avoids.
+
+    Instead we score two candidate pools independently:
+      - LOGO candidates: images found in any header or footer (first-page or
+        running). This is deliberately narrow, since a logo is meant to
+        repeat on every page.
+      - COVER candidates: the LOGO candidates plus every image embedded in
+        the document body. The body is included because that's where a
+        template's largest, most deliberate piece of cover artwork usually
+        lives; the header/footer banner stays in the pool too in case the
+        template genuinely doesn't have a separate body graphic.
+
+    For each pool we pick the largest-by-pixel-area image (skipping
+    spacer/bullet/divider-sized graphics), so the two paths only diverge when
+    a template actually has a distinct, larger cover graphic outside the
+    header/footer.
     """
     try:
-        candidate_tiers: list = []
+        logo_candidates: list = []
         for section in doc.sections:
-            tier: list = []
-            for header_like in (
+            for header_or_footer in (
                 getattr(section, "first_page_header", None),
                 section.header,
+                getattr(section, "first_page_footer", None),
+                section.footer,
             ):
-                part = getattr(header_like, "part", None)
-                tier.extend(_images_in_part(part))
-            if tier:
-                candidate_tiers.append(tier)
+                part = getattr(header_or_footer, "part", None)
+                logo_candidates.extend(_images_in_part(part))
 
-        if not candidate_tiers:
-            for section in doc.sections:
-                tier = []
-                for footer_like in (
-                    getattr(section, "first_page_footer", None),
-                    section.footer,
-                ):
-                    part = getattr(footer_like, "part", None)
-                    tier.extend(_images_in_part(part))
-                if tier:
-                    candidate_tiers.append(tier)
+        cover_candidates = list(logo_candidates) + _images_in_part(doc.part)
 
-        if not candidate_tiers:
-            body_images = _images_in_part(doc.part)
-            if body_images:
-                candidate_tiers.append(body_images)
+        logo_image = _largest_image(logo_candidates)
+        cover_image = _largest_image(cover_candidates)
 
-        if not candidate_tiers:
-            return None
-
-        image_part = _largest_image(candidate_tiers[0])
-        if image_part is None:
-            return None
-
-        ext = (image_part.partname.ext or "png").lstrip(".")
         out_dir = Path(output_dir) if output_dir else Path(template_path).resolve().parent
         out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = out_dir / f"{Path(template_path).stem}_extracted_logo.{ext}"
-        out_path.write_bytes(image_part.blob)
-        return str(out_path)
+        stem = Path(template_path).stem
+
+        logo_path = _write_image_part(logo_image, out_dir, f"{stem}_extracted_logo")
+        if cover_image is logo_image:
+            cover_path = logo_path
+        else:
+            cover_path = _write_image_part(cover_image, out_dir, f"{stem}_extracted_cover")
+
+        return logo_path, cover_path
     except Exception as exc:
-        logger.warning(f"[TemplateProfile] Logo extraction failed: {exc}")
+        logger.warning(f"[TemplateProfile] Logo/cover extraction failed: {exc}")
+        return None, None
+
+
+def _write_image_part(image_part, out_dir: Path, filename_stem: str) -> Optional[str]:
+    if image_part is None:
         return None
+    ext = (image_part.partname.ext or "png").lstrip(".")
+    out_path = out_dir / f"{filename_stem}.{ext}"
+    out_path.write_bytes(image_part.blob)
+    return str(out_path)
 
 
 def _extract_accent_color(doc) -> Optional[str]:

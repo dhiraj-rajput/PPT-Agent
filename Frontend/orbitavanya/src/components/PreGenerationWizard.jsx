@@ -33,6 +33,7 @@ export default function PreGenerationWizard({ tenderId, solicitationNumber, prop
     setLoading(true);
     const params = { proposal_type: proposalType };
     if (tenderId) params.tender_id = tenderId;
+    if (solicitationNumber) params.solicitation_number = solicitationNumber;
 
     api.getPreviewQuestions(params)
       .then((data) => {
@@ -53,7 +54,7 @@ export default function PreGenerationWizard({ tenderId, solicitationNumber, prop
         setError('Could not load customization questions.');
         setLoading(false);
       });
-  }, [tenderId, proposalType]);
+  }, [tenderId, solicitationNumber, proposalType]);
 
   const handleOptionToggle = (questionId, optionId, isMultiSelect = false) => {
     setAnswers((prev) => {
