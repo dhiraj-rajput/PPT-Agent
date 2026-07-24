@@ -196,31 +196,44 @@ def render_markdown_to_pdf(
     return _fallback_markdown_to_pdf(markdown_content, str(output_pdf), brand_cfg)
 
 
+_HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
+_THEMATIC_BREAK_RE = re.compile(r"^(-{3,}|\*{3,}|_{3,})$")
+_BULLET_RE = re.compile(r"^([-\*+])\s+(.*)$")
+_NUMBERED_RE = re.compile(r"^\d+[.)]\s+(.*)$")
+_BLOCKQUOTE_RE = re.compile(r"^>\s?(.*)$")
+
+
 def _parse_markdown_into_sections(markdown_content: str) -> tuple[str, List[Dict[str, Any]]]:
-    """Robust Markdown parser for converting arbitrary Markdown into proposal_generator sections."""
+    """Robust Markdown parser for converting arbitrary Markdown into proposal_generator
+    sections/blocks. Handles heading levels 1-6, thematic breaks (---), and blockquotes
+    (> ...) as their own block types instead of leaking the raw markdown characters into
+    the rendered document, and leaves inline formatting (**bold**, *italic*, `code`)
+    untouched so it can be rendered consistently downstream by proposal_generator's
+    shared inline-formatting tokenizer -- the same one used for bullets and tables."""
     lines = markdown_content.splitlines()
     doc_title = "RFP Response Proposal"
     sections: List[Dict[str, Any]] = []
     current_section: Dict[str, Any] = {"title": "Executive Summary", "page_break_before": False, "blocks": []}
     table_buffer: List[str] = []
+    quote_buffer: List[str] = []
 
     def flush_table():
         nonlocal table_buffer
         if not table_buffer or not current_section:
             table_buffer = []
             return
-        
+
         headers = []
         rows = []
-        for row_idx, row_line in enumerate(table_buffer):
+        for row_line in table_buffer:
             # Strip outer pipes and split respecting escaped pipes
             cleaned = row_line.strip().strip('|')
             cells = [c.replace('\\|', '|').strip() for c in re.split(r'(?<!\\)\|', cleaned)]
-            
+
             # Skip delimiter line (e.g. |---|---|)
             if all(re.match(r"^:?-+:?$", cell) for cell in cells):
                 continue
-                
+
             if not headers:
                 headers = cells
             else:
@@ -234,48 +247,93 @@ def _parse_markdown_into_sections(markdown_content: str) -> tuple[str, List[Dict
             })
         table_buffer = []
 
+    def flush_quote():
+        nonlocal quote_buffer
+        if quote_buffer and current_section:
+            current_section["blocks"].append({
+                "type": "quote",
+                "text": " ".join(line.strip() for line in quote_buffer if line.strip())
+            })
+        quote_buffer = []
+
     for line in lines:
         stripped = line.strip()
 
         # Table row check
-        if stripped.startswith("|") and stripped.endswith("|"):
+        if stripped.startswith("|") and stripped.endswith("|") and "|" in stripped[1:-1]:
+            flush_quote()
             table_buffer.append(stripped)
             continue
         elif table_buffer:
             flush_table()
 
-        if line.startswith("# "):
-            doc_title = line[2:].strip()
-        elif line.startswith("## "):
-            if current_section and (current_section["blocks"] or current_section["title"] != "Executive Summary"):
-                sections.append(current_section)
-            current_section = {
-                "title": line[3:].strip(),
-                "page_break_before": len(sections) > 0,
-                "blocks": []
-            }
-        elif current_section:
+        # Blockquote lines accumulate until a non-quote line breaks the run
+        bq_match = _BLOCKQUOTE_RE.match(stripped) if stripped else None
+        if bq_match:
+            quote_buffer.append(bq_match.group(1))
+            continue
+        elif quote_buffer:
+            flush_quote()
+
+        heading_match = _HEADING_RE.match(line) or (_HEADING_RE.match(stripped) if stripped else None)
+
+        if heading_match:
+            level = len(heading_match.group(1))
+            text = heading_match.group(2).strip()
+            if level == 1:
+                doc_title = text
+            elif level == 2:
+                if current_section and (current_section["blocks"] or current_section["title"] != "Executive Summary"):
+                    sections.append(current_section)
+                current_section = {
+                    "title": text,
+                    "page_break_before": len(sections) > 0,
+                    "blocks": []
+                }
+            else:
+                # Levels 3-6 all become subheadings within the current section,
+                # sized by level instead of falling through to plain-text
+                # paragraphs (which used to leak raw "####" into the document).
+                if current_section is None:
+                    current_section = {"title": text, "page_break_before": False, "blocks": []}
+                current_section["blocks"].append({
+                    "type": "subheading",
+                    "text": text,
+                    "level": level,
+                })
+            continue
+
+        if _THEMATIC_BREAK_RE.match(stripped):
+            if current_section:
+                current_section["blocks"].append({"type": "divider"})
+            continue
+
+        if current_section:
             if not stripped:
                 continue
 
-            if stripped.startswith("### "):
-                current_section["blocks"].append({
-                    "type": "subheading",
-                    "text": stripped[4:].strip()
-                })
-            elif stripped.startswith("- ") or stripped.startswith("* ") or re.match(r"^\d+\.\s", stripped):
-                bullet_text = re.sub(r"^([-\*]|\d+\.)\s+", "", stripped)
+            bullet_match = _BULLET_RE.match(stripped)
+            numbered_match = _NUMBERED_RE.match(stripped)
+            if bullet_match:
+                bullet_text = bullet_match.group(2)
                 if not current_section["blocks"] or current_section["blocks"][-1]["type"] != "bullets":
                     current_section["blocks"].append({"type": "bullets", "items": []})
                 current_section["blocks"][-1]["items"].append(bullet_text)
+            elif numbered_match:
+                item_text = numbered_match.group(1)
+                if not current_section["blocks"] or current_section["blocks"][-1]["type"] != "numbered":
+                    current_section["blocks"].append({"type": "numbered", "items": []})
+                current_section["blocks"][-1]["items"].append(item_text)
             else:
-                # Strip markdown bold / italic formatting for plain text blocks
-                clean_text = re.sub(r"\*\*(.*?)\*\*", r"\1", stripped)
-                clean_text = re.sub(r"\*(.*?)\*", r"\1", clean_text)
-                current_section["blocks"].append({"type": "paragraph", "text": clean_text})
+                # Inline Markdown (**bold**, *italic*, `code`) is left as-is;
+                # proposal_generator's shared formatter renders it consistently
+                # with bullets/tables/subheadings instead of stripping it here.
+                current_section["blocks"].append({"type": "paragraph", "text": stripped})
 
     if table_buffer:
         flush_table()
+    if quote_buffer:
+        flush_quote()
     if current_section and (current_section["blocks"] or current_section["title"] != "Executive Summary"):
         sections.append(current_section)
 

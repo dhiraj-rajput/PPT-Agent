@@ -131,12 +131,29 @@ DEFAULT_CONFIDENTIALITY_TEXT: str = (
 def get_brand_config(overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """
     Returns a fresh copy of DEFAULT_BRAND with optional key overrides applied.
-    Queries MongoDB 'own_company_profile' collection to dynamically fetch user-configured branding.
+    Resolution order (lowest to highest priority):
+      1. Hardcoded DEFAULT_BRAND
+      2. An org-wide default .docx template uploaded via Proposal Builder /
+         RFP Auto-Respond / RFP upload (Settings > Proposal Template)
+      3. 'own_company_profile' in MongoDB (explicit manual overrides)
+      4. `overrides` passed in by the caller
     Validates asset paths exist; logs warnings for missing assets.
     Auto-detects available system fonts.
     """
     cfg = dict(DEFAULT_BRAND)
-    
+
+    # If an org-wide default template has been uploaded, use its extracted
+    # branding/contact info instead of the hardcoded OrbitAvanya defaults.
+    try:
+        from documents.default_template import get_default_template_path
+        default_template_path = get_default_template_path()
+        if default_template_path:
+            from documents.template_analyzer import analyze_template
+            profile = analyze_template(default_template_path)
+            cfg.update(profile.to_brand_config_dict())
+    except Exception as e:
+        logger.debug(f"Could not load org-wide default template branding: {e}")
+
     # Try fetching saved company profile from MongoDB
     try:
         from utils.db_client import get_collection

@@ -4,6 +4,7 @@ import { Plus, Sparkles, FileDown, LayoutTemplate, Loader2, Database, AlertCircl
 import { PageHeader, Card } from '../components/ui/Common.jsx';
 import { api } from '../lib/api.jsx';
 import PreGenerationWizard from '../components/PreGenerationWizard.jsx';
+import DefaultTemplateUploader from '../components/DefaultTemplateUploader.jsx';
 import { useNotifications } from '../context/NotificationContext.jsx';
 export default function ProposalBuilder() {
   const { createAlert } = useNotifications();
@@ -448,6 +449,8 @@ export default function ProposalBuilder() {
           Showing offline templates. Start the backend server to build draft proposals.
         </div>
       )}
+
+      <DefaultTemplateUploader />
 
       <div className="flex flex-col gap-8">
         {/* SECTION 1: Our Company Profile & Inventory */}

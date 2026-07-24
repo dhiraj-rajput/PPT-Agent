@@ -887,7 +887,7 @@ export default function CompanyDetail() {
                   value={emailForm.body}
                   onChange={(e) => setEmailForm({ ...emailForm, body: e.target.value })}
                   placeholder="Type your email content here..."
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white font-mono text-xs"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white font-mono"
                 />
               </div>
 

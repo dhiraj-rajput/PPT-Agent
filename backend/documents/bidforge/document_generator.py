@@ -54,12 +54,16 @@ def generate_final_document(
     out_dir = Path(__file__).resolve().parent.parent.parent / "output" / "rfp_respond"
     out_dir.mkdir(parents=True, exist_ok=True)
     target_pdf_path = str(out_dir / f"{output_name}.pdf")
+    target_docx_path = str(out_dir / f"{output_name}.docx")
 
     brand_config = _load_brand_config(template_path, out_dir)
     company_name = brand_config.get("company_name", "OrbitAvanya Tech LLP")
+    company_profile_summary = _company_profile_summary(template_path, brand_config)
 
     markdown_content = _generate_markdown(
-        parsed_rfp, inventory, competitor_intel, strategy, company_name, wizard_config
+        parsed_rfp, inventory, competitor_intel, strategy, company_name, wizard_config,
+        company_profile_summary=company_profile_summary,
+        preserving_first_page=bool(template_path),
     )
 
     if not markdown_content or len(markdown_content.strip()) < MIN_MARKDOWN_LENGTH:
@@ -71,6 +75,36 @@ def generate_final_document(
             f"falling back."
         )
 
+    # When a template was uploaded, preserve its actual first/cover page
+    # (registration details, contact info, etc.) verbatim -- only patching
+    # stale dates -- and append the generated body after it, instead of
+    # discarding the template and building a brand-new cover page.
+    if template_path and Path(template_path).exists():
+        try:
+            from documents.markdown_renderer import _parse_markdown_into_sections
+            from documents.bidforge.first_page_preserver import build_document_with_preserved_first_page
+
+            _, sections = _parse_markdown_into_sections(markdown_content)
+            docx_path = build_document_with_preserved_first_page(
+                template_path, sections, brand_config, target_docx_path
+            )
+            import importlib
+            try:
+                from backend.scripts import proposal_generator as pg
+            except ImportError:
+                pg = importlib.import_module("scripts.proposal_generator")
+            final_path = pg.convert_to_pdf(docx_path, str(out_dir)) or docx_path
+            logger.info(
+                f"[BidForge:DocGen] Generated final document preserving template first page: {final_path} "
+                f"({len(markdown_content)} chars of markdown)"
+            )
+            return final_path
+        except Exception as exc:
+            logger.warning(
+                f"[BidForge:DocGen] First-page-preserving render failed ({exc}); "
+                f"falling back to brand-only template rendering."
+            )
+
     from documents.markdown_renderer import render_markdown_to_pdf
 
     final_path = render_markdown_to_pdf(
@@ -81,6 +115,21 @@ def generate_final_document(
     return final_path
 
 
+def _company_profile_summary(template_path: Optional[str], brand_config: Dict[str, Any]) -> str:
+    """Best-effort plain-language company profile (website, email, phone,
+    leadership) extracted from the uploaded template, for use as AI context
+    so generated content references real details instead of inventing them."""
+    if not template_path:
+        return ""
+    try:
+        from documents.template_analyzer import analyze_template
+        profile = analyze_template(template_path)
+        return profile.to_company_profile_summary()
+    except Exception as exc:
+        logger.debug(f"[BidForge:DocGen] Could not build company profile summary: {exc}")
+        return ""
+
+
 def _generate_markdown(
     parsed_rfp: Dict[str, Any],
     inventory: Dict[str, Any],
@@ -88,6 +137,8 @@ def _generate_markdown(
     strategy: Dict[str, Any],
     company_name: str,
     wizard_config: Optional[str | Dict[str, Any]],
+    company_profile_summary: str = "",
+    preserving_first_page: bool = False,
 ) -> str:
     from pipeline.ai.client import get_ai_client
     from documents.prompts import SECTION_WRITER_PROMPT
@@ -183,6 +234,25 @@ def _generate_markdown(
         f"Overall strategic notes:\n{strategy.get('strategic_notes', '')}"
     )
 
+    company_profile_block = ""
+    if company_profile_summary:
+        company_profile_block = f"""
+COMPANY PROFILE (extracted from the uploaded .docx template -- use these
+real details whenever you reference contact info, website, or leadership;
+never invent different ones):
+{company_profile_summary}
+"""
+
+    cover_page_note = ""
+    if preserving_first_page:
+        cover_page_note = """
+NOTE ON THE COVER / REGISTRATION PAGE: The uploaded template's own first
+page (cover page, registration details, company info) will be kept exactly
+as-is and placed before whatever you write here -- do NOT write a title
+page, a "Prepared for / Prepared by" block, or restate registration/company
+details. Start directly with the first section's substantive content.
+"""
+
     # Prepare common background for all calls
     common_context = f"""=======================================================
 RFP CONTEXT & INPUTS
@@ -195,7 +265,7 @@ SECTION 2: EXPLORE OUTPUT (Inventory & Competitor Data):
 
 SECTION 3: SUMMARISE OUTPUT (Strategic Pricing Decisions):
 {section3}
-"""
+{company_profile_block}{cover_page_note}"""
 
     markdown_parts = []
     

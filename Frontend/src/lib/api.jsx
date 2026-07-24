@@ -394,6 +394,44 @@ export const api = {
     if (!res.ok) throw new Error('Download failed');
     return res.blob();
   },
+  async viewRfpRespondBlob(filename) {
+    const token = localStorage.getItem(TOKEN_KEY);
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const res = await fetch(`${BASE_URL}/api/rfp-respond/view/${filename}`, { headers });
+    if (!res.ok) throw new Error('Failed to fetch preview');
+    return res.blob();
+  },
+  async viewUploadedSourceBlob(taskId, filename) {
+    const token = localStorage.getItem(TOKEN_KEY);
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const res = await fetch(`${BASE_URL}/api/rfp-respond/view-upload/${taskId}/${filename}`, { headers });
+    if (!res.ok) throw new Error('Failed to fetch preview');
+    return res.blob();
+  },
+
+  // ---------- Default Proposal Template (shared across Proposal Builder / RFP pages) ----------
+  async getDefaultTemplate() {
+    return get('/api/templates/default');
+  },
+  async uploadDefaultTemplate(templateFile) {
+    const formData = new FormData();
+    formData.append('template_file', templateFile);
+    return _upload('/api/templates/default', formData);
+  },
+  async deleteDefaultTemplate() {
+    const token = localStorage.getItem(TOKEN_KEY);
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const res = await fetch(`${BASE_URL}/api/templates/default`, { method: 'DELETE', headers });
+    if (!res.ok) throw new Error('Failed to remove default template');
+    return res.json();
+  },
+  async viewDefaultTemplateBlob() {
+    const token = localStorage.getItem(TOKEN_KEY);
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const res = await fetch(`${BASE_URL}/api/templates/default/view`, { headers });
+    if (!res.ok) throw new Error('Failed to fetch template preview');
+    return res.blob();
+  },
 
   // ---------- Email Campaigns ----------
   async listCampaigns() {

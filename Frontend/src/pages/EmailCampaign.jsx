@@ -825,7 +825,7 @@ export default function EmailCampaign() {
               )}
 
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400 font-bold">Campaign Name *</label>
+                <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400 font-bold">Campaign Name *</label>
                 <input
                   required
                   value={form.name}
@@ -837,7 +837,7 @@ export default function EmailCampaign() {
 
               {/* Recipient Mode Selection */}
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400 font-bold">Recipient Mode</label>
+                <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400 font-bold">Recipient Mode</label>
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
@@ -1009,7 +1009,7 @@ export default function EmailCampaign() {
 
               {/* Attachment Mode Selection */}
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400 font-bold">Campaign PDF Attachment (Optional)</label>
+                <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400 font-bold">Campaign PDF Attachment (Optional)</label>
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
@@ -1083,7 +1083,7 @@ export default function EmailCampaign() {
               )}
 
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400 font-bold">Subject Line *</label>
+                <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400 font-bold">Subject Line *</label>
                 <input
                   required
                   value={form.subject}
@@ -1095,7 +1095,7 @@ export default function EmailCampaign() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400 font-bold">Campaign Timezone</label>
+                  <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400 font-bold">Campaign Timezone</label>
                   <select
                     value={form.timezone || 'America/Chicago'}
                     onChange={(e) => setForm({ ...form, timezone: e.target.value })}
@@ -1107,7 +1107,7 @@ export default function EmailCampaign() {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400 font-bold">Daily Send Limit</label>
+                  <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400 font-bold">Daily Send Limit</label>
                   <input
                     type="number"
                     min="1"
@@ -1120,7 +1120,7 @@ export default function EmailCampaign() {
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400 font-bold">
+                <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400 font-bold">
                   Schedule Exact Send Time (Optional)
                 </label>
                 <div className="flex items-center gap-2">
@@ -1187,7 +1187,7 @@ export default function EmailCampaign() {
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400 font-bold font-bold">Email HTML Body</label>
+                <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400 font-bold">Email HTML Body</label>
                 <textarea
                   value={form.body}
                   onChange={(e) => setForm({ ...form, body: e.target.value })}

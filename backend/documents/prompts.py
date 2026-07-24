@@ -424,6 +424,15 @@ RULES
 - If any information is missing or marked "Not specified", note it as "To be discussed"
 - Make the proposal extremely thorough, detailed, and comprehensive. Expand on each section (Executive Summary, Scope of Work, Competitive Positioning, Implementation Timeline, T&Cs) with detailed paragraphs, elaborate context, specific industry best practices, and thorough descriptions of each item to ensure the proposal is a substantive, high-quality, professional document exceeding 2500 words (at least 15,000 characters). Do not write stubs, short summaries, or generic placeholders.
 - Use Markdown formatting: headers, tables, bold, bullet points
+- Markdown formatting rules (the renderer maps these directly to Word styles):
+    * Use "## " for each numbered top-level section above, "### " / "#### "
+      for subsections. Always include the matching number of "#" characters
+      plus a following space -- never write a heading level without one.
+    * Always close bold/italic markers on the same line ("**bold**"); never
+      leave a stray unmatched "*" or "_".
+    * Use "---" on its own line only for an intentional visual divider.
+- If a COMPANY PROFILE block (website, email, phone, leadership) is provided
+  in the context, use those exact details — never invent alternates.
 - The document should be ready to convert to PDF
 - Do NOT include internal notes, competitor names, or strategic reasoning — this is customer-facing
 - COMPANY_NAME placeholder should be replaced with the actual responding company name
@@ -467,10 +476,26 @@ RULES
 - Use Markdown formatting (subheadings, tables, bold, bullet points) where it
   helps a section read as a real, structured proposal — e.g. a pricing
   section should include an actual Markdown table.
+- Markdown formatting rules (the renderer maps these directly to Word styles,
+  so precise syntax matters):
+    * Use "### " for a subsection heading within this section, "#### " for a
+      sub-subsection if needed. Never write a heading level without the
+      matching number of "#" characters and a following space.
+    * Always close bold/italic markers on the same line: "**bold**", not
+      "**bold" left open. Never leave a stray single "*" or "_".
+    * Use "---" on its own line only for an intentional visual divider
+      between distinct sub-parts — don't overuse it.
+    * Use "> " for a genuine callout/quote, not for regular body text.
 - Do NOT include internal notes, competitor names by name, or strategic
   reasoning — this is customer-facing.
 - COMPANY_NAME placeholder should be replaced with the actual responding
   company name.
+- If a COMPANY PROFILE block (website, email, phone, leadership) is provided
+  in the context, use those exact details wherever this section references
+  contact info or leadership — never invent alternates.
+- If a NOTE ON THE COVER / REGISTRATION PAGE is provided in the context, do
+  not recreate a title page or restate registration/company details in this
+  section — that page already exists and will be placed ahead of your output.
 """
 
 

@@ -58,10 +58,21 @@ class BrandProfile:
     address_line1: str = ""
     address_line2: str = ""
     phone: str = ""
+    email: str = ""
+
+    # Leadership names/titles found in the template, e.g. [{"name": "...", "title": "..."}]
+    leadership: List[Dict[str, str]] = field(default_factory=list)
 
     # Header/footer text patterns
     header_text: str = ""
     footer_text: str = ""
+
+    # Raw text of the template's first page (everything before the first
+    # explicit page/section break, or the whole document if none is found).
+    # Used both for first-page preservation and as AI context so the model
+    # knows what's already on the cover/registration page and doesn't
+    # re-invent or contradict it.
+    first_page_text: str = ""
 
     # Source: 'template' | 'default'
     source: str = "default"
@@ -106,8 +117,31 @@ class BrandProfile:
             "address_line1": self.address_line1,
             "address_line2": self.address_line2,
             "phone": self.phone,
+            "email": self.email,
             "website": self.website,
+            "leadership": self.leadership,
+            "first_page_text": self.first_page_text,
         }
+
+    def to_company_profile_summary(self) -> str:
+        """Plain-language summary of everything we could extract from the
+        template, meant to be dropped straight into an AI prompt as context
+        so the model knows the company's real contact details / leadership
+        instead of inventing or contradicting them."""
+        lines = [f"Company name: {self.company_name}" if self.company_name else ""]
+        if self.website:
+            lines.append(f"Website: {self.website}")
+        if self.email:
+            lines.append(f"Email: {self.email}")
+        if self.phone:
+            lines.append(f"Phone: {self.phone}")
+        if self.address_line1 or self.address_line2:
+            lines.append(f"Address: {', '.join(x for x in [self.address_line1, self.address_line2] if x)}")
+        if self.leadership:
+            names = "; ".join(f"{p.get('name', '')} ({p.get('title', '')})" for p in self.leadership if p.get("name"))
+            if names:
+                lines.append(f"Leadership: {names}")
+        return "\n".join(l for l in lines if l)
 
 
 class TemplateAnalyzer:
@@ -147,6 +181,9 @@ class TemplateAnalyzer:
             self._extract_margins(doc, profile)
             self._extract_logo(doc, profile)
             self._extract_header_footer(doc, profile)
+            self._extract_contact_details(doc, profile)
+            self._extract_leadership(doc, profile)
+            self._extract_first_page_text(doc, profile)
 
             logger.info(
                 f"[TemplateAnalyzer] Extracted brand from '{self.template_path.name}': "
@@ -269,6 +306,110 @@ class TemplateAnalyzer:
                         profile.website = text.strip()
         except Exception as e:
             logger.debug(f"Header/footer extraction error: {e}")
+
+
+    _EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
+    _PHONE_RE = re.compile(r"(\+?\d[\d\-\.\(\) ]{7,}\d)")
+    _WEBSITE_RE = re.compile(r"(?:https?://)?(?:www\.)?[A-Za-z0-9\-]+\.[A-Za-z]{2,}(?:/\S*)?")
+    _LEADERSHIP_TITLE_RE = re.compile(
+        r"\b(Chief Executive Officer|CEO|Chief Operating Officer|COO|Chief Technology Officer|CTO|"
+        r"Chief Financial Officer|CFO|President|Founder|Co-Founder|Managing Director|Director|"
+        r"Vice President|VP|Owner|Principal|Partner)\b",
+        re.IGNORECASE,
+    )
+
+    def _all_text_paragraphs(self, doc) -> List[str]:
+        """Collect paragraph text from the body plus every header/footer,
+        since contact/leadership details commonly live in either place."""
+        texts = [p.text for p in doc.paragraphs if p.text and p.text.strip()]
+        for section in doc.sections:
+            for part in (section.header, section.footer, section.first_page_header, section.first_page_footer):
+                if part is None:
+                    continue
+                texts.extend(p.text for p in part.paragraphs if p.text and p.text.strip())
+        return texts
+
+    def _extract_contact_details(self, doc, profile: BrandProfile):
+        """Extract email/phone/website from anywhere in the template (body,
+        headers, footers) using regexes, so the AI has real contact details
+        to reference instead of inventing them."""
+        try:
+            all_text = "\n".join(self._all_text_paragraphs(doc))
+
+            email_match = self._EMAIL_RE.search(all_text)
+            if email_match:
+                profile.email = email_match.group(0)
+
+            if not profile.website:
+                for candidate in self._WEBSITE_RE.finditer(all_text):
+                    val = candidate.group(0)
+                    # Skip false positives that are actually the email domain
+                    if profile.email and val in profile.email:
+                        continue
+                    if "www." in val.lower() or val.lower().endswith((".com", ".org", ".net", ".io", ".co")):
+                        profile.website = val
+                        break
+
+            if not profile.phone:
+                phone_match = self._PHONE_RE.search(all_text)
+                if phone_match:
+                    candidate = phone_match.group(1).strip()
+                    # Guard against matching things like ZIP+4 or plain long numbers
+                    digit_count = sum(c.isdigit() for c in candidate)
+                    if 7 <= digit_count <= 15:
+                        profile.phone = candidate
+        except Exception as e:
+            logger.debug(f"Contact detail extraction error: {e}")
+
+    def _extract_leadership(self, doc, profile: BrandProfile):
+        """Heuristically find 'Name — Title' / 'Title: Name' patterns that
+        reference common leadership titles (CEO, President, Founder, ...)."""
+        try:
+            leadership: List[Dict[str, str]] = []
+            seen = set()
+            for text in self._all_text_paragraphs(doc):
+                title_match = self._LEADERSHIP_TITLE_RE.search(text)
+                if not title_match:
+                    continue
+                title = title_match.group(0)
+
+                # "Name — Title" / "Name, Title" / "Title: Name" / "Name (Title)"
+                name = ""
+                for sep in ("—", "-", ",", "(", ":"):
+                    if sep not in text:
+                        continue
+                    left, _, right = text.partition(sep)
+                    for candidate_raw in (left, right):
+                        candidate = candidate_raw.strip(" ()").strip()
+                        # Skip whichever side contains the matched title text itself
+                        if title.lower() in candidate.lower():
+                            continue
+                        words = candidate.split()
+                        # A plausible person name: 2-4 capitalized words, no digits
+                        if 1 < len(words) <= 4 and all(w[:1].isupper() for w in words if w) and not any(c.isdigit() for c in candidate):
+                            name = candidate
+                            break
+                    if name:
+                        break
+
+                if name and (name, title) not in seen:
+                    seen.add((name, title))
+                    leadership.append({"name": name, "title": title})
+
+            profile.leadership = leadership[:5]
+        except Exception as e:
+            logger.debug(f"Leadership extraction error: {e}")
+
+    def _extract_first_page_text(self, doc, profile: BrandProfile):
+        """Capture the raw text of everything before the first explicit page
+        break (or the whole document if no page break is found), so it can be
+        both preserved verbatim and summarized as AI context."""
+        try:
+            from documents.bidforge.first_page_preserver import iter_first_page_paragraph_texts
+            texts = list(iter_first_page_paragraph_texts(doc))
+            profile.first_page_text = "\n".join(t for t in texts if t.strip())
+        except Exception as e:
+            logger.debug(f"First-page text extraction error: {e}")
 
 
 def analyze_template(template_path: str | Path) -> BrandProfile:

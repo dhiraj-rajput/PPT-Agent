@@ -53,6 +53,7 @@ from app.routes.integrations import router as integrations_router
 
 # ---- RFP Auto-Respond ----
 from app.routes.rfp_respond import router as rfp_respond_router
+from app.routes.templates import router as templates_router
 
 # ---- Preview / Pre-generation wizard ----
 from app.routes.preview import router as preview_router
@@ -175,6 +176,7 @@ app.include_router(reports_router, prefix="/api")
 app.include_router(proposals_router, prefix="/api")
 app.include_router(tenders_router, prefix="/api")
 app.include_router(rfp_respond_router, prefix="/api")
+app.include_router(templates_router, prefix="/api")
 app.include_router(preview_router, prefix="/api")
 
 # Campaign & Outreach module routers

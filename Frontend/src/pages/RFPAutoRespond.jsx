@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { Upload, FileText, Loader2, CheckCircle, AlertCircle, Download, X, Zap, FileCheck } from 'lucide-react';
+import { Upload, FileText, Loader2, CheckCircle, AlertCircle, Download, X, Zap, FileCheck, Eye } from 'lucide-react';
 import { api } from '../lib/api.jsx';
 import PreGenerationWizard from '../components/PreGenerationWizard.jsx';
+import DocPreviewModal from '../components/DocPreviewModal.jsx';
+import DefaultTemplateUploader from '../components/DefaultTemplateUploader.jsx';
 import { useNotifications } from '../context/NotificationContext.jsx';
 /**
  * RFPAutoRespond.jsx
@@ -31,6 +33,8 @@ export default function RFPAutoRespond() {
   const pollRef = useRef(null);
 
   const [aiStatus, setAiStatus] = useState(null);
+  const [previewFile, setPreviewFile] = useState(null); // local File being previewed pre-upload
+  const [previewingResult, setPreviewingResult] = useState(false); // generated output preview
 
   // -------------------------------------------------------------------------
   // Polling & Health Status
@@ -280,6 +284,8 @@ export default function RFPAutoRespond() {
         >
           <h2 className="text-sm font-bold text-navy-900 dark:text-white">Upload Documents</h2>
 
+          <DefaultTemplateUploader compact />
+
           {/* RFP File */}
           <div>
             <label className="mb-1.5 block text-xs font-semibold text-slate-500 dark:text-slate-400">
@@ -298,13 +304,25 @@ export default function RFPAutoRespond() {
                         <FileText size={16} className="text-brand-600 shrink-0" />
                         <span className="text-xs font-semibold text-navy-900 dark:text-white truncate max-w-[250px]">{file.name}</span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setRfpFiles(prev => prev.filter((_, i) => i !== idx))}
-                        className="rounded-full p-0.5 text-slate-400 hover:text-rose-500"
-                      >
-                        <X size={14} />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        {(file.name.toLowerCase().endsWith('.pdf') || file.name.toLowerCase().endsWith('.docx')) && (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewFile(file)}
+                            title="View without downloading"
+                            className="rounded-full p-1 text-slate-400 hover:text-brand-600"
+                          >
+                            <Eye size={14} />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setRfpFiles(prev => prev.filter((_, i) => i !== idx))}
+                          className="rounded-full p-0.5 text-slate-400 hover:text-rose-500"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
                     </div>
                   ))}
                   <button
@@ -354,6 +372,13 @@ export default function RFPAutoRespond() {
                   <span className="text-sm text-navy-900 dark:text-white font-medium">{templateFile.name}</span>
                   <button
                     type="button"
+                    onClick={(e) => { e.stopPropagation(); setPreviewFile(templateFile); }}
+                    className="rounded-full p-0.5 text-slate-400 hover:text-brand-600"
+                  >
+                    <Eye size={14} />
+                  </button>
+                  <button
+                    type="button"
                     onClick={(e) => { e.stopPropagation(); setTemplateFile(null); }}
                     className="ml-auto rounded-full p-0.5 text-slate-400 hover:text-rose-500"
                   >
@@ -374,7 +399,7 @@ export default function RFPAutoRespond() {
               onChange={(e) => setTemplateFile(e.target.files?.[0] || null)}
             />
             <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
-              Leave empty to use the default OrbitAvanya-branded proposal template.
+              Leave empty to use your saved default template above (or the OrbitAvanya-branded template if none is set).
             </p>
           </div>
 
@@ -457,13 +482,22 @@ export default function RFPAutoRespond() {
                 <CheckCircle size={16} className="shrink-0" />
                 Your proposal has been generated and is ready to download.
               </div>
-              <button
-                onClick={handleDownload}
-                className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3 text-sm font-bold text-white shadow-soft hover:bg-emerald-600 transition-colors"
-              >
-                <Download size={16} />
-                Download Proposal ({taskState.filename})
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleDownload}
+                  className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3 text-sm font-bold text-white shadow-soft hover:bg-emerald-600 transition-colors"
+                >
+                  <Download size={16} />
+                  Download ({taskState.filename})
+                </button>
+                <button
+                  onClick={() => setPreviewingResult(true)}
+                  className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-navy-700 px-4 py-3 text-sm font-bold text-navy-900 dark:text-white hover:bg-slate-50 dark:hover:bg-navy-800 transition-colors"
+                >
+                  <Eye size={16} />
+                  View
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -475,6 +509,26 @@ export default function RFPAutoRespond() {
           solicitationNumber={wizardModal.solicitation}
           onCancel={() => setWizardModal(null)}
           onConfirmGenerate={handleWizardConfirm}
+        />
+      )}
+
+      {previewFile && (
+        <DocPreviewModal
+          title={previewFile.name}
+          subtitle="Uploaded RFP document (previewed locally, not yet sent to the server)"
+          filename={previewFile.name}
+          blob={previewFile}
+          onClose={() => setPreviewFile(null)}
+        />
+      )}
+
+      {previewingResult && taskState?.filename && (
+        <DocPreviewModal
+          title={taskState.filename}
+          subtitle="Generated proposal"
+          filename={taskState.filename}
+          fetchBlob={() => api.viewRfpRespondBlob(taskState.filename)}
+          onClose={() => setPreviewingResult(false)}
         />
       )}
     </div>

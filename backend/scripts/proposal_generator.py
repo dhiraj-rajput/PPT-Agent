@@ -360,26 +360,79 @@ def add_section_title(doc, cfg, text):
 
 import re
 
+# Single shared tokenizer for inline Markdown formatting (bold / italic / code).
+# Used everywhere text reaches the page -- paragraphs, bullets, numbered lists,
+# subheadings, and table cells -- so formatting behaves identically no matter
+# which block type carried the text. Order matters: bold (**) is checked before
+# single-asterisk italic so "**x**" is never mis-split into italic runs.
+_INLINE_MD_PATTERN = re.compile(
+    r"(\*\*.+?\*\*|\*[^\*\n]+\*|_[^_\n]+_|`[^`\n]+`)"
+)
+
+
 def _add_formatted_runs(paragraph, cfg, text, size: float = 11, color=None, default_bold=False):
-    # Split by markdown bold tags **...**
-    parts = re.split(r"(\*\*.*?\*\*)", str(text))
+    """Render `text` into `paragraph`, converting inline Markdown (**bold**,
+    *italic*/_italic_, `code`) into real DOCX run formatting instead of
+    leaking literal asterisks/underscores/backticks or silently dropping them."""
+    text = str(text)
+    parts = _INLINE_MD_PATTERN.split(text)
     for part in parts:
-        if part.startswith("**") and part.endswith("**"):
+        if not part:
+            continue
+        if part.startswith("**") and part.endswith("**") and len(part) >= 4:
             run = paragraph.add_run(part[2:-2])
             _font(run, cfg, size=size, bold=True, color=color)
+        elif part.startswith("`") and part.endswith("`") and len(part) >= 2:
+            run = paragraph.add_run(part[1:-1])
+            _font(run, cfg, name="Consolas", size=max(size - 0.5, 8), bold=default_bold, color=color)
+        elif (
+            (part.startswith("*") and part.endswith("*") and len(part) >= 2)
+            or (part.startswith("_") and part.endswith("_") and len(part) >= 2)
+        ):
+            run = paragraph.add_run(part[1:-1])
+            _font(run, cfg, size=size, bold=default_bold, italic=True, color=color)
         else:
-            if part:
-                run = paragraph.add_run(part)
-                _font(run, cfg, size=size, bold=default_bold, color=color)
+            run = paragraph.add_run(part)
+            _font(run, cfg, size=size, bold=default_bold, color=color)
 
-def add_subheading(doc, cfg, text):
+
+_SUBHEADING_SIZE_BY_LEVEL = {3: 12.5, 4: 11.5, 5: 11, 6: 10.5}
+
+
+def add_subheading(doc, cfg, text, level: int = 3):
+    """Render a Markdown ### / #### / ##### / ###### heading as a bold
+    subheading, sized by level so deeper headings don't all look identical."""
     p = doc.add_paragraph()
     p.paragraph_format.space_before = Pt(10)
     p.paragraph_format.space_after = Pt(4)
     p.paragraph_format.keep_with_next = True
-    clean_text = text.replace("**", "")
-    _font(p.add_run(clean_text), cfg, name=cfg["brand"]["heading_font"], size=12.5,
-          bold=True)
+    size = _SUBHEADING_SIZE_BY_LEVEL.get(level, 12.5)
+    _add_formatted_runs(p, cfg, text, size=size, default_bold=True)
+    for run in p.runs:
+        run.font.name = cfg["brand"]["heading_font"]
+    return p
+
+
+def add_divider(doc, cfg):
+    """Render a Markdown thematic break (---, ***, ___) as a thin horizontal
+    rule instead of leaking the literal dash characters into the document."""
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(6)
+    p.paragraph_format.space_after = Pt(10)
+    _set_paragraph_bottom_border(p, _muted(cfg), size=4)
+    return p
+
+
+def add_quote_block(doc, cfg, text):
+    """Render a Markdown blockquote (> ...) as an indented, italicized block."""
+    p = doc.add_paragraph()
+    p.paragraph_format.left_indent = Inches(0.35)
+    p.paragraph_format.space_before = Pt(6)
+    p.paragraph_format.space_after = Pt(10)
+    _set_paragraph_bottom_border(p, _accent(cfg), size=4)
+    _add_formatted_runs(p, cfg, text, size=10.5, color=_muted(cfg))
+    for run in p.runs:
+        run.font.italic = True
     return p
 
 
@@ -454,13 +507,15 @@ def add_signature_block(doc, cfg, name, title, company, salutation="Respectfully
 
 _BLOCK_HANDLERS = {
     "paragraph": lambda doc, cfg, b: add_body_paragraph(doc, cfg, b["text"], b.get("justify", True)),
-    "subheading": lambda doc, cfg, b: add_subheading(doc, cfg, b["text"]),
+    "subheading": lambda doc, cfg, b: add_subheading(doc, cfg, b["text"], b.get("level", 3)),
     "bullets": lambda doc, cfg, b: add_bullets(doc, cfg, b["items"]),
     "numbered": lambda doc, cfg, b: add_numbered(doc, cfg, b["items"]),
     "table": lambda doc, cfg, b: add_table_block(doc, cfg, b["headers"], b["rows"], b.get("col_widths")),
     "signature": lambda doc, cfg, b: add_signature_block(
         doc, cfg, b["name"], b["title"], b["company"], b.get("salutation", "Respectfully,")),
     "spacer": lambda doc, cfg, b: doc.add_paragraph(),
+    "divider": lambda doc, cfg, b: add_divider(doc, cfg),
+    "quote": lambda doc, cfg, b: add_quote_block(doc, cfg, b["text"]),
 }
 
 
@@ -470,10 +525,16 @@ def add_section(doc, cfg, section, index=None):
     
     title = section["title"]
     if index is not None:
-        # Check if the title already starts with a number like "1." or "1.0"
+        # Check if the title already starts with a number like "1.", "1.0", or "1.0 "
         import re
-        if not re.match(r'^\d+(\.\d+)?\s', title):
+        if not re.match(r'^\d+(\.\d+)*\.?\s', title):
             title = f"{index}.0 {title}"
+        else:
+            # Already numbered (e.g. AI wrote "1. Executive Summary") -- strip
+            # that leading number instead of stacking a second one on top of it,
+            # then apply our own consistent "N.0 Title" scheme.
+            stripped_title = re.sub(r'^\d+(\.\d+)*\.?\s+', '', title).strip()
+            title = f"{index}.0 {stripped_title}"
             
     add_section_title(doc, cfg, title)
     for block in section.get("blocks", []):

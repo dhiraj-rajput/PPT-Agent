@@ -179,6 +179,15 @@ async def upload_rfp(
                 f.write(file_content)
 
         await asyncio.to_thread(write_tmpl_file, template_dest, content)
+    else:
+        # No one-off template attached to this request -- fall back to the
+        # org-wide default template (if one has been uploaded via the
+        # Proposal Template settings) instead of the hardcoded brand defaults.
+        from documents.default_template import get_default_template_path
+
+        default_path = get_default_template_path()
+        if default_path:
+            template_dest = Path(default_path)
 
     output_name = f"rfp_respond_{task_id}"
     user_id = str(current_user["_id"])
@@ -231,3 +240,58 @@ async def download_result(filename: str, current_user: dict = Depends(get_curren
         )
         return FileResponse(path, media_type=media_type, filename=safe_filename)
     raise HTTPException(404, "File not found")
+
+
+@router.get("/view/{filename}")
+async def view_result(filename: str, current_user: dict = Depends(get_current_user)):
+    """Serve a generated RFP response file inline, so it can be previewed in
+    the browser (PDF renders natively; .docx is fetched by the frontend and
+    rendered client-side) without forcing a download."""
+    safe_filename = Path(filename).name
+
+    col = get_async_collection("task_statuses")
+    task = await col.find_one({"filename": safe_filename})
+    if task:
+        user_id = str(current_user["_id"])
+        if task.get("userId") and str(task.get("userId")) != user_id:
+            raise HTTPException(403, "Access denied: You do not own this file.")
+
+    path = OUTPUT_DIR / safe_filename
+    if not path.exists():
+        raise HTTPException(404, "File not found")
+
+    suffix = path.suffix.lower()
+    media_type = (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        if suffix == ".docx"
+        else "application/pdf" if suffix == ".pdf" else "application/octet-stream"
+    )
+    # Omitting `filename=` avoids the "attachment" Content-Disposition header,
+    # so browsers render it inline instead of triggering a download.
+    return FileResponse(path, media_type=media_type)
+
+
+@router.get("/view-upload/{task_id}/{filename}")
+async def view_uploaded_source(task_id: str, filename: str, current_user: dict = Depends(get_current_user)):
+    """Serve an uploaded source RFP/template file (PDF or .docx) inline, so
+    it can be previewed before generation without downloading it."""
+    task = await get_task_status_async(task_id)
+    if not task:
+        raise HTTPException(404, "Unknown task_id")
+    user_id = str(current_user["_id"])
+    if task.get("userId") and str(task.get("userId")) != user_id:
+        raise HTTPException(403, "Access denied: You do not own this task.")
+
+    safe_filename = Path(filename).name
+    task_dir = UPLOAD_DIR / task_id
+    path = task_dir / safe_filename
+    if not path.exists():
+        raise HTTPException(404, "File not found")
+
+    suffix = path.suffix.lower()
+    media_type = (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        if suffix == ".docx"
+        else "application/pdf" if suffix == ".pdf" else "application/octet-stream"
+    )
+    return FileResponse(path, media_type=media_type)
