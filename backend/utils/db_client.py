@@ -62,11 +62,13 @@ def get_database() -> Database:
         "maxPoolSize": 20,
         "minPoolSize": 2,
     }
-    try:
-        import certifi
-        client_kwargs["tlsCAFile"] = certifi.where()
-    except Exception:
-        pass
+    is_tls = settings.MONGO_URI.startswith("mongodb+srv://") or "tls=true" in settings.MONGO_URI.lower() or "ssl=true" in settings.MONGO_URI.lower()
+    if is_tls:
+        try:
+            import certifi
+            client_kwargs["tlsCAFile"] = certifi.where()
+        except Exception:
+            pass
 
     _mongo_client = MongoClient(
         settings.MONGO_URI,
@@ -132,11 +134,12 @@ def init_motor_client() -> AsyncIOMotorClient:
         "maxPoolSize": 50,
         "minPoolSize": 5,
     }
-    try:
-        import certifi
-        motor_kwargs["tlsCAFile"] = certifi.where()
-    except Exception:
-        pass
+    if is_tls:
+        try:
+            import certifi
+            motor_kwargs["tlsCAFile"] = certifi.where()
+        except Exception:
+            pass
 
     _motor_client = AsyncIOMotorClient(
         settings.MONGO_URI,
