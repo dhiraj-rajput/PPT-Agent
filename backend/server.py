@@ -211,6 +211,17 @@ def get_root_tracker_js():
     return Response(content=TRACKER_JS, media_type="application/javascript")
 
 
+@app.get("/api")
+@app.get("/api/")
+def get_api_root():
+    return {
+        "status": "online",
+        "service": "OrbitAvanya API v2.0",
+        "health": "/api/health",
+        "documentation": "/docs"
+    }
+
+
 @app.get("/api/health")
 async def health():
     """Health check. Uses Motor async ping to avoid blocking the event loop."""
