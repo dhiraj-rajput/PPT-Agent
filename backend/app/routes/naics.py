@@ -5,6 +5,7 @@ import json
 import csv
 import io
 import os
+import re
 from utils.db_client import get_collection, get_async_collection
 from app.core.auth import get_current_user
 from pymongo import TEXT
@@ -97,23 +98,29 @@ def list_naics_codes(
 
     if search:
         search = search.strip()
+        search_or_conditions = []
         # If search matches a numeric NAICS prefix/code
         if search.isdigit():
-            and_conditions.append({"code": {"$regex": f"^{search}"}})
-        else:
-            # Use regex on title/description
-            and_conditions.append({
-                "$or": [
-                    {"title": {"$regex": search, "$options": "i"}},
-                    {"description": {"$regex": search, "$options": "i"}}
-                ]
-            })
+            search_or_conditions.append({"code": {"$regex": f"^{search}"}})
+        # Direct substring match on title/description
+        escaped_search = re.escape(search)
+        search_or_conditions.append({"title": {"$regex": escaped_search, "$options": "i"}})
+        search_or_conditions.append({"description": {"$regex": escaped_search, "$options": "i"}})
+        # Keyword-expanded match, so free-text/description-style phrases (e.g.
+        # "cloud security consulting") also match without needing a second
+        # dedicated "capabilities" search box.
+        for kw in extract_keywords(search):
+            search_or_conditions.append({"title": {"$regex": kw, "$options": "i"}})
+            search_or_conditions.append({"description": {"$regex": kw, "$options": "i"}})
+        and_conditions.append({"$or": search_or_conditions})
 
-    # Check description filter
+    # "Match My Company Description" fallback: only used when no free-text
+    # search was typed above (typing takes priority, same one search box
+    # drives both key-field and description matching).
     desc_to_match = ""
-    if custom_description:
+    if not search and custom_description:
         desc_to_match = custom_description.strip()
-    elif match_company_description:
+    elif not search and match_company_description:
         own_col = get_collection("own_company_profile")
         profile = own_col.find_one({}, {"_id": 0})
         # Fallback to default description if own company profile does not exist

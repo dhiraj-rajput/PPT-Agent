@@ -18,7 +18,6 @@ export default function Companies() {
 
   // Description filters states
   const [matchCompanyDescription, setMatchCompanyDescription] = useState(false);
-  const [customDescription, setCustomDescription] = useState('');
   const [ownCompanyProfile, setOwnCompanyProfile] = useState(null);
   // Which entity (parent company or a subsidiary) to pull the description from
   const [matchEntityId, setMatchEntityId] = useState('parent');
@@ -106,8 +105,7 @@ export default function Companies() {
     if (researchedFilter !== 'All') {
       params.researched = researchedFilter === 'Researched' ? 'true' : 'false';
     }
-    if (matchCompanyDescription) params.match_company_description = 'true';
-    if (customDescription) params.custom_description = customDescription;
+    if (matchCompanyDescription && !query) params.match_company_description = 'true';
 
     api.getCompanies(params)
       .then((data) => {
@@ -126,12 +124,12 @@ export default function Companies() {
 
   useEffect(() => {
     fetchCompanies();
-  }, [currentPage, query, sizeFilter, naicsFilter, researchedFilter, matchCompanyDescription, customDescription]);
+  }, [currentPage, query, sizeFilter, naicsFilter, researchedFilter, matchCompanyDescription]);
 
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [query, sizeFilter, naicsFilter, researchedFilter, matchCompanyDescription, customDescription]);
+  }, [query, sizeFilter, naicsFilter, researchedFilter, matchCompanyDescription]);
 
   const pageCount = Math.ceil(totalCompanies / itemsPerPage);
 
@@ -219,15 +217,28 @@ export default function Companies() {
       {/* Filters Bar */}
       <Card className="!p-4 space-y-3">
         <div className="flex flex-wrap items-center gap-3">
-          {/* Search Bar */}
-          <div className="flex flex-1 min-w-[240px] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 dark:border-navy-700 dark:bg-navy-800">
+          {/* Unified Search Bar — matches company key fields (name, UEI, contact, email)
+              AND description/NAICS keywords from a single input, no field selector needed */}
+          <div className="flex flex-1 min-w-[280px] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 dark:border-navy-700 dark:bg-navy-800">
             <Search size={16} className="text-slate-400 dark:text-slate-500" />
             <input
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by Legal Name, UEI, or contact..."
+              onChange={(e) => {
+                setQuery(e.target.value);
+                if (matchCompanyDescription) setMatchCompanyDescription(false);
+              }}
+              placeholder="Search by name, UEI, contact, or description keywords (e.g. cloud security)..."
               className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-white"
             />
+            {query && (
+              <button
+                onClick={() => { setQuery(''); setMatchCompanyDescription(false); }}
+                className="rounded-full p-0.5 text-slate-400 hover:text-rose-500"
+                title="Clear search"
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
 
           {/* Size Filter */}
@@ -265,31 +276,19 @@ export default function Companies() {
           </select>
         </div>
 
-        {/* Description Keyword Search Row */}
+        {/* Match My Company Description — auto-fills the search bar above with
+            your own company's description so results match it (no separate field) */}
         <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-100 dark:border-navy-800">
-          <div className="flex flex-1 min-w-[280px] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 dark:border-navy-700 dark:bg-navy-800">
-            <FileText size={16} className="text-slate-400 dark:text-slate-500" />
-            <input
-              value={customDescription}
-              onChange={(e) => {
-                setCustomDescription(e.target.value);
-                if (matchCompanyDescription) setMatchCompanyDescription(false);
-              }}
-              placeholder="Search by description keywords (e.g. cloud security, systems implementation)..."
-              className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-white"
-            />
-          </div>
-
           {/* Entity selector: choose whether to match against the parent/main company or a subsidiary */}
           {entityOptions.length > 1 && (
             <select
               value={matchEntityId}
               onChange={(e) => {
                 setMatchEntityId(e.target.value);
-                // If matching is currently active, refresh the description to the newly selected entity
+                // If matching is currently active, refresh the search text to the newly selected entity
                 if (matchCompanyDescription) {
                   const ent = entityOptions.find((opt) => opt.id === e.target.value);
-                  setCustomDescription(ent?.description || '');
+                  setQuery(ent?.description || '');
                 }
               }}
               className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-600 outline-none focus:border-brand-500 dark:border-navy-700 dark:bg-navy-800 dark:text-slate-300 cursor-pointer"
@@ -316,11 +315,7 @@ export default function Companies() {
               }
               const nextVal = !matchCompanyDescription;
               setMatchCompanyDescription(nextVal);
-              if (nextVal) {
-                setCustomDescription(entity.description);
-              } else {
-                setCustomDescription('');
-              }
+              setQuery(nextVal ? entity.description : '');
             }}
             className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold border transition-all ${
               matchCompanyDescription

@@ -234,31 +234,37 @@ async def get_companies(
         col = get_async_collection("companies")
         filter_query = {}
 
-        if query:
+        # ------------------------------------------------------------------
+        # Unified search: one `query` value is matched against BOTH the
+        # company's key fields (name / UEI / contact / email) AND its
+        # description/NAICS-derived keywords, combined with OR so a single
+        # search box finds a match on either -- no separate description
+        # search field or "which field" selector required.
+        #
+        # `match_company_description=true` (with no free-typed `query`) still
+        # works as before: it pulls the signed-in company's own profile
+        # description and searches with those keywords instead.
+        # ------------------------------------------------------------------
+        search_conditions: List[Dict[str, Any]] = []
+
+        if query and query.strip():
             q = re.escape(query.strip())
-            filter_query["$or"] = [
+            search_conditions.extend([
                 {"name": {"$regex": q, "$options": "i"}},
                 {"uei": {"$regex": q, "$options": "i"}},
                 {"contact": {"$regex": q, "$options": "i"}},
-                {"email": {"$regex": q, "$options": "i"}}
-            ]
+                {"email": {"$regex": q, "$options": "i"}},
+            ])
 
         if size and size != "All":
             filter_query["size"] = size
 
         if naics and naics != "All":
             naics_escaped = re.escape(naics.strip())
-            naics_condition = {"$or": [
+            filter_query["$and"] = filter_query.get("$and", []) + [{"$or": [
                 {"primary_naics": {"$regex": naics_escaped, "$options": "i"}},
                 {"primary_naics_desc": {"$regex": naics_escaped, "$options": "i"}}
-            ]}
-            if "$or" in filter_query:
-                filter_query["$and"] = [
-                    {"$or": filter_query.pop("$or")},
-                    naics_condition,
-                ]
-            else:
-                filter_query.update(naics_condition)
+            ]}]
 
         profiles_col = get_async_collection("company_profiles")
         tasks_col = get_async_collection("task_statuses")
@@ -266,9 +272,13 @@ async def get_companies(
         active_task_docs = await tasks_col.find({"type": "company_research"}).to_list(length=1000)
         active_tasks = {t["task_id"].lower(): t["status"] for t in active_task_docs}
 
-        # Check description filter
+        # Description-keyword matching: use the typed query text if present,
+        # otherwise (only when the "Match My Company Description" toggle is
+        # on) fall back to the signed-in company's own profile description.
         desc_to_match = ""
-        if custom_description:
+        if query and query.strip():
+            desc_to_match = query.strip()
+        elif custom_description:
             desc_to_match = custom_description.strip()
         elif match_company_description:
             own_col = get_async_collection("own_company_profile")
@@ -290,29 +300,23 @@ async def get_companies(
                     naics_cursor = naics_coll.find({"$or": naics_kw_conditions}, {"code": 1})
                     matched_naics_codes = [doc["code"] async for doc in naics_cursor if "code" in doc]
 
-                desc_conditions = []
-                # 2. Filter companies whose primary_naics or secondary_naics matches those NAICS codes
+                # 2. Companies whose primary_naics or secondary_naics matches those NAICS codes
                 if matched_naics_codes:
-                    desc_conditions.append({"primary_naics": {"$in": matched_naics_codes}})
+                    search_conditions.append({"primary_naics": {"$in": matched_naics_codes}})
                     naics_regex = "|".join([re.escape(c) for c in matched_naics_codes])
-                    desc_conditions.append({"secondary_naics": {"$regex": naics_regex}})
+                    search_conditions.append({"secondary_naics": {"$regex": naics_regex}})
 
-                # 3. Add keyword matches in company name and primary description (primary_naics_desc)
+                # 3. Keyword matches directly in company name and description
                 for kw in keywords:
-                    desc_conditions.append({"name": {"$regex": kw, "$options": "i"}})
-                    desc_conditions.append({"primary_naics_desc": {"$regex": kw, "$options": "i"}})
+                    search_conditions.append({"name": {"$regex": kw, "$options": "i"}})
+                    search_conditions.append({"primary_naics_desc": {"$regex": kw, "$options": "i"}})
 
-                if desc_conditions:
-                    desc_condition = {"$or": desc_conditions}
-                    if "$or" in filter_query:
-                        filter_query["$and"] = [
-                            {"$or": filter_query.pop("$or")},
-                            desc_condition
-                        ]
-                    elif "$and" in filter_query:
-                        filter_query["$and"].append(desc_condition)
-                    else:
-                        filter_query.update(desc_condition)
+        if search_conditions:
+            search_or = {"$or": search_conditions}
+            if "$and" in filter_query:
+                filter_query["$and"].append(search_or)
+            else:
+                filter_query.update(search_or)
 
         # Look up profiles and active tasks
         profiles_col = get_async_collection("company_profiles")
