@@ -37,6 +37,11 @@ from utils.helpers import setup_logger
 logger = setup_logger(__name__)
 
 
+def _is_tls_uri(uri: str) -> bool:
+    clean_uri = uri.lower()
+    return clean_uri.startswith("mongodb+srv://") or "tls=true" in clean_uri or "ssl=true" in clean_uri
+
+
 # ---------------------------------------------------------------------------
 # Sync singleton (scripts, pipeline, tests)
 # ---------------------------------------------------------------------------
@@ -62,8 +67,7 @@ def get_database() -> Database:
         "maxPoolSize": 20,
         "minPoolSize": 2,
     }
-    is_tls = settings.MONGO_URI.startswith("mongodb+srv://") or "tls=true" in settings.MONGO_URI.lower() or "ssl=true" in settings.MONGO_URI.lower()
-    if is_tls:
+    if _is_tls_uri(settings.MONGO_URI):
         try:
             import certifi
             client_kwargs["tlsCAFile"] = certifi.where()
@@ -134,7 +138,7 @@ def init_motor_client() -> AsyncIOMotorClient:
         "maxPoolSize": 50,
         "minPoolSize": 5,
     }
-    if is_tls:
+    if _is_tls_uri(settings.MONGO_URI):
         try:
             import certifi
             motor_kwargs["tlsCAFile"] = certifi.where()
