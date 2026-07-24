@@ -77,14 +77,15 @@ async def lifespan(app: FastAPI):
     init_motor_client()
     _log.info("Motor async client initialised.")
 
-    # 2. Load SAM entities CSV in a background thread (sync/heavy I/O)
-    from app.routes.companies import import_sam_entities_csv
-    await asyncio.to_thread(import_sam_entities_csv)
-
-    # 3. Ensure all MongoDB indexes (sync, run in thread to avoid blocking event loop)
-    def setup_indexes_sync():
+    # 2. Seed initial datasets & setup MongoDB indexes in a non-blocking background task
+    def setup_bg_data():
         try:
+            from app.routes.companies import import_sam_entities_csv
+            from app.routes.naics import ensure_naics_populated
             from utils.db_client import ensure_all_indexes, get_collection
+            
+            ensure_naics_populated()
+            import_sam_entities_csv()
             ensure_all_indexes()
 
             # Auth & user collections
@@ -111,12 +112,13 @@ async def lifespan(app: FastAPI):
             get_collection("website_events").create_index(
                 [("campaignId", 1), ("timestamp", 1)]
             )
+            _log.info("Background DB setup completed.")
         except Exception as e:
-            logging.getLogger("server").warning(f"MongoDB index setup warning: {e}")
+            _log.warning(f"Background DB setup warning: {e}")
 
-    await asyncio.to_thread(setup_indexes_sync)
+    asyncio.create_task(asyncio.to_thread(setup_bg_data))
 
-    # 4. Start Background Email Worker Loop
+    # 3. Start Background Email Worker Loop
     from app.core.email_worker import start_email_worker_loop
     worker_task = asyncio.create_task(start_email_worker_loop())
     _log.info("Email worker task started.")
@@ -211,6 +213,7 @@ def get_root_tracker_js():
     return Response(content=TRACKER_JS, media_type="application/javascript")
 
 
+@app.get("/")
 @app.get("/api")
 @app.get("/api/")
 def get_api_root():
@@ -222,6 +225,7 @@ def get_api_root():
     }
 
 
+@app.get("/health")
 @app.get("/api/health")
 async def health():
     """Health check. Uses Motor async ping to avoid blocking the event loop."""

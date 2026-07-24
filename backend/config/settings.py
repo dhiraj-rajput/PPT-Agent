@@ -287,6 +287,19 @@ class AppSettings(BaseSettings):
     SMTP_USER: str = Field(default="", description="SMTP account username/email.")
     SMTP_PASS: str = Field(default="", description="SMTP account password.")
     SMTP_FROM: str = Field(default="", description="Sender email address for outgoing mail.")
+
+    @field_validator("SMTP_FROM", mode="before")
+    @classmethod
+    def parse_smtp_from(cls, v: Any) -> str:
+        if isinstance(v, str):
+            v_clean = v.strip().strip('"').strip("'")
+            if "<" in v_clean and ">" in v_clean:
+                import re
+                match = re.search(r"<([^>]+)>", v_clean)
+                if match:
+                    return match.group(1).strip()
+            return v_clean
+        return str(v) if v else ""
     IMAP_HOST: str = Field(
         default="",
         description=(

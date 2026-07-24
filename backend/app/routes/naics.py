@@ -47,8 +47,8 @@ def ensure_naics_populated():
     except Exception as e:
         print(f"[NAICS] Error populating NAICS collection: {e}")
 
-# Call populate function on module load
-ensure_naics_populated()
+# Note: ensure_naics_populated is called asynchronously during server lifespan startup or on-demand
+# ensure_naics_populated()
 
 import re
 

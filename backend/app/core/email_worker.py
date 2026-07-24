@@ -556,7 +556,7 @@ async def start_email_worker_loop():
                 asyncio.create_task(asyncio.to_thread(check_incoming_replies))
 
             # Dispatch any newsletter editions whose scheduled time has arrived
-            await check_scheduled_newsletters()
+            asyncio.create_task(asyncio.to_thread(check_scheduled_newsletters))
 
             # Query for active running campaigns
             running_campaigns = await campaigns_col.find({"status": "running"}).to_list(length=100)

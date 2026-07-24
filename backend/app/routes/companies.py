@@ -66,7 +66,9 @@ def import_sam_entities_csv():
         if col.count_documents({}) > 0:
             return
         
-        csv_path = Path("documents/sam_entities.csv")
+        csv_path = Path("private/sam_entities.csv")
+        if not csv_path.exists():
+            csv_path = Path("documents/sam_entities.csv")
         if not csv_path.exists():
             return
             

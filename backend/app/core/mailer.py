@@ -50,6 +50,7 @@ async def _send(to_email: str, subject: str, html: str) -> None:
             password=settings.SMTP_PASS,
             use_tls=(settings.SMTP_PORT == 465),
             start_tls=(settings.SMTP_PORT == 587),
+            timeout=10.0,
         )
         logger.info(f"[Mailer] Sent '{subject}' to {to_email}")
     except Exception as exc:

@@ -111,19 +111,18 @@ _motor_database: Optional[AsyncIOMotorDatabase] = None
 def get_motor_client() -> AsyncIOMotorClient:
     """
     Returns the Motor async client singleton.
-    Call init_motor_client() once at FastAPI startup.
+    Lazy-initialises if not already initialised.
     """
+    global _motor_client
     if _motor_client is None:
-        raise RuntimeError(
-            "Motor client not initialised. Call init_motor_client() inside the FastAPI lifespan."
-        )
+        init_motor_client()
     return _motor_client
 
 
 def init_motor_client() -> AsyncIOMotorClient:
     """
     Create the async Motor client singleton.
-    Must be called once in the FastAPI lifespan startup handler.
+    Must be called once in the FastAPI lifespan startup handler or lazy-initialised.
     Returns the client so the caller can store it for shutdown.
     """
     global _motor_client, _motor_database
@@ -165,9 +164,10 @@ def close_motor_client() -> None:
 
 
 def get_async_db() -> AsyncIOMotorDatabase:
-    """Returns the Motor async database. Requires init_motor_client() to have been called."""
+    """Returns the Motor async database. Lazy-initialises if not already initialised."""
+    global _motor_database
     if _motor_database is None:
-        raise RuntimeError("Motor client not initialised. Call init_motor_client() in lifespan.")
+        init_motor_client()
     return _motor_database
 
 
