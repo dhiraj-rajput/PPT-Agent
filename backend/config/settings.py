@@ -19,7 +19,7 @@ Usage:
 
 from typing import Any, Union
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, AliasChoices
 
 
 class AppSettings(BaseSettings):
@@ -29,7 +29,7 @@ class AppSettings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", "backend/.env", "../backend/.env"),
         env_file_encoding="utf-8",
         case_sensitive=True,
         extra="ignore",
@@ -40,6 +40,7 @@ class AppSettings(BaseSettings):
     # ------------------------------------------------------------------
     MONGO_URI: str = Field(
         default="mongodb://localhost:27017/",
+        validation_alias=AliasChoices("MONGO_URI", "MONGODB_URI"),
         description=(
             "MongoDB connection string.\n"
             "  Local:  mongodb://localhost:27017/\n"
@@ -47,7 +48,8 @@ class AppSettings(BaseSettings):
         ),
     )
     MONGO_DB_NAME: str = Field(
-        default="ppt_agent_db",
+        default="winbidai",
+        validation_alias=AliasChoices("MONGO_DB_NAME", "MONGODB_DB_NAME"),
         description="Name of the MongoDB database to use.",
     )
 

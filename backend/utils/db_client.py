@@ -55,13 +55,22 @@ def get_database() -> Database:
     redacted_uri = re.sub(r"://[^@]*@", "://***:***@", settings.MONGO_URI)
     logger.info(f"[sync] Connecting to MongoDB at: {redacted_uri}")
 
+    client_kwargs: dict[str, Any] = {
+        "serverSelectionTimeoutMS": 5000,
+        "connectTimeoutMS": 5000,
+        "socketTimeoutMS": 10000,
+        "maxPoolSize": 20,
+        "minPoolSize": 2,
+    }
+    try:
+        import certifi
+        client_kwargs["tlsCAFile"] = certifi.where()
+    except Exception:
+        pass
+
     _mongo_client = MongoClient(
         settings.MONGO_URI,
-        serverSelectionTimeoutMS=5000,
-        connectTimeoutMS=5000,
-        socketTimeoutMS=10000,
-        maxPoolSize=20,
-        minPoolSize=2,
+        **client_kwargs
     )
     _mongo_client.admin.command("ping")
     logger.info(f"[sync] MongoDB connected. DB: '{settings.MONGO_DB_NAME}'")
@@ -116,13 +125,22 @@ def init_motor_client() -> AsyncIOMotorClient:
     redacted_uri = re.sub(r"://[^@]*@", "://***:***@", settings.MONGO_URI)
     logger.info(f"[motor] Connecting to MongoDB at: {redacted_uri}")
 
+    motor_kwargs: dict[str, Any] = {
+        "serverSelectionTimeoutMS": 5000,
+        "connectTimeoutMS": 5000,
+        "socketTimeoutMS": 30000,
+        "maxPoolSize": 50,
+        "minPoolSize": 5,
+    }
+    try:
+        import certifi
+        motor_kwargs["tlsCAFile"] = certifi.where()
+    except Exception:
+        pass
+
     _motor_client = AsyncIOMotorClient(
         settings.MONGO_URI,
-        serverSelectionTimeoutMS=5000,
-        connectTimeoutMS=5000,
-        socketTimeoutMS=30000,
-        maxPoolSize=50,
-        minPoolSize=5,
+        **motor_kwargs
     )
     _motor_database = _motor_client[settings.MONGO_DB_NAME]
     logger.info(f"[motor] Motor async client ready. DB: '{settings.MONGO_DB_NAME}'")
