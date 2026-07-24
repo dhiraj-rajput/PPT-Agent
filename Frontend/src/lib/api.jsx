@@ -17,6 +17,18 @@ const TOKEN_KEY = 'orbitavanya_token';
 // Core fetch wrapper
 // ---------------------------------------------------------------------------
 
+function _buildUrl(path) {
+  const cleanBase = BASE_URL.replace(/\/+$/, '');
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  if (cleanBase.endsWith('/api') && cleanPath.startsWith('/api/')) {
+    return `${cleanBase}${cleanPath.slice(4)}`;
+  }
+  if (cleanBase.endsWith('/api') && cleanPath === '/api') {
+    return cleanBase;
+  }
+  return `${cleanBase}${cleanPath}`;
+}
+
 async function _request(method, path, body, opts = {}) {
   const token = localStorage.getItem(TOKEN_KEY);
   const headers = {
@@ -25,7 +37,7 @@ async function _request(method, path, body, opts = {}) {
     ...opts.headers,
   };
 
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const res = await fetch(_buildUrl(path), {
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,

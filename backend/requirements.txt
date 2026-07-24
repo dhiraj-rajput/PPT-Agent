@@ -55,6 +55,7 @@ Pillow>=10.0.0
 uvicorn
 fastapi
 python-multipart>=0.0.9
+a2wsgi>=1.10.0
 
 # Authentication & security (JWT + bcrypt — replaces Node.js auth server)
 python-jose[cryptography]>=3.3.0

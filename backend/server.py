@@ -25,9 +25,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# NOTE: OAUTHLIB_RELAX_TOKEN_SCOPE removed — it allows scope weakening in production.
-# If you need it for specific Google OAuth flows during development only, set it in .env.
-
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -156,9 +153,19 @@ app = FastAPI(
 )
 
 # Enable CORS for frontend connectivity
+allowed_cors_origins = list(settings.CORS_ORIGINS)
+if settings.CLIENT_URL:
+    client_origin = settings.CLIENT_URL.rstrip("/")
+    if client_origin not in allowed_cors_origins:
+        allowed_cors_origins.append(client_origin)
+if settings.API_BASE_URL:
+    api_origin = settings.API_BASE_URL.rstrip("/")
+    if api_origin not in allowed_cors_origins:
+        allowed_cors_origins.append(api_origin)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=allowed_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -17,7 +17,7 @@ Usage:
     ...
 """
 
-from typing import Any
+from typing import Any, Union
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field, field_validator
 
@@ -307,7 +307,7 @@ class AppSettings(BaseSettings):
     )
     PORT: int = Field(default=5050, description="Port to run the API server on.")
     ENV: str = Field(default="dev", description="Environment mode: dev | prod.")
-    CORS_ORIGINS: list[str] = Field(
+    CORS_ORIGINS: Union[list[str], str] = Field(
         default=[
             "http://localhost:5173",
             "http://127.0.0.1:5173",
@@ -316,6 +316,30 @@ class AppSettings(BaseSettings):
         ],
         description="Allowed CORS origins for Frontend connectivity."
     )
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v: Any) -> list[str]:
+        if isinstance(v, str):
+            v_clean = v.strip()
+            if not v_clean:
+                return ["*"]
+            if v_clean.startswith("[") and v_clean.endswith("]"):
+                import json
+                try:
+                    return json.loads(v_clean)
+                except Exception:
+                    pass
+            return [origin.strip() for origin in v_clean.split(",") if origin.strip()]
+        if isinstance(v, list):
+            return [str(origin).strip() for origin in v if str(origin).strip()]
+        return [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+        ]
+
 
     # ------------------------------------------------------------------
     # OCR (for scanned / image-only RFP PDFs that pypdf/PyMuPDF can't read)
