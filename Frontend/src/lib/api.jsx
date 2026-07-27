@@ -54,7 +54,14 @@ async function _request(method, path, body, opts = {}) {
     let errorMsg = `Request failed (${res.status})`;
     try {
       const data = await res.json();
-      errorMsg = data.detail || data.error || data.message || errorMsg;
+      let rawDetail = data.detail || data.error || data.message;
+      if (Array.isArray(rawDetail)) {
+        errorMsg = rawDetail.map(err => (typeof err === 'object' ? err?.msg || err?.message || JSON.stringify(err) : String(err))).join(', ');
+      } else if (typeof rawDetail === 'object' && rawDetail !== null) {
+        errorMsg = rawDetail?.msg || rawDetail?.message || JSON.stringify(rawDetail);
+      } else if (rawDetail) {
+        errorMsg = String(rawDetail);
+      }
     } catch {}
     throw new Error(errorMsg);
   }

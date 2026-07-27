@@ -4,7 +4,7 @@ import { PageHeader, Card, StatusBadge } from '../components/ui/Common.jsx';
 import { api } from '../lib/api.jsx';
 import { useNotifications } from '../context/NotificationContext.jsx';
 
-const ROLES = ['Administrator', 'Proposal Writer', 'Contract Specialist', 'Business Development', 'Team Member'];
+const ROLES = ['Admin', 'Team Member', 'Proposal Writer', 'Contract Specialist', 'Business Development', 'Viewer'];
 
 export default function UsersRoles() {
   const { createAlert } = useNotifications();
@@ -57,7 +57,8 @@ export default function UsersRoles() {
       }, 1600);
       notify('Teammate invited', `${user.name || user.email} was invited as ${user.role}.`, '/settings/users');
     } catch (err) {
-      setInviteError(err.message || 'Could not invite user.');
+      const msg = typeof err?.message === 'string' ? err.message : String(err || 'Could not invite user.');
+      setInviteError(msg);
     } finally {
       setInviting(false);
     }
@@ -73,7 +74,8 @@ export default function UsersRoles() {
       notify('Role updated', `${target?.name || target?.email || 'A teammate'} is now ${role}.`, '/settings/users');
     } catch (err) {
       setUsers(prev);
-      setLoadError(err.message || 'Could not update role.');
+      const msg = typeof err?.message === 'string' ? err.message : String(err || 'Could not update role.');
+      setLoadError(msg);
     }
   }
 

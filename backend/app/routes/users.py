@@ -34,6 +34,10 @@ router = APIRouter(prefix="/users", tags=["users"])
 class ValidRoles(str, Enum):
     OWNER = "Owner"
     ADMIN = "Admin"
+    ADMINISTRATOR = "Administrator"
+    PROPOSAL_WRITER = "Proposal Writer"
+    CONTRACT_SPECIALIST = "Contract Specialist"
+    BUSINESS_DEVELOPMENT = "Business Development"
     TEAM_MEMBER = "Team Member"
     VIEWER = "Viewer"
 
@@ -94,7 +98,8 @@ async def invite_user(
     temp_password = secrets.token_urlsafe(9)
     pw_hash = await asyncio.to_thread(_hash_pw_sync, temp_password)
     invitee_name = (body.name or "").strip() or normalized.split("@")[0]
-    assigned_role = body.role.value if isinstance(body.role, ValidRoles) else "Team Member"
+    raw_role = body.role.value if isinstance(body.role, ValidRoles) else str(body.role or "Team Member")
+    assigned_role = "Admin" if raw_role.lower() in ("admin", "administrator") else raw_role
 
     result = await users_col.insert_one({
         "name": invitee_name,
@@ -143,7 +148,8 @@ async def update_role(
         raise HTTPException(400, "Invalid user ID.")
 
     users_col = get_async_collection("users")
-    assigned_role = body.role.value if isinstance(body.role, ValidRoles) else str(body.role)
+    raw_role = body.role.value if isinstance(body.role, ValidRoles) else str(body.role)
+    assigned_role = "Admin" if raw_role.lower() in ("admin", "administrator") else raw_role
     
     await users_col.update_one(
         {"_id": oid},
