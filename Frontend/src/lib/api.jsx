@@ -68,6 +68,18 @@ async function _request(method, path, body, opts = {}) {
 
   // 204 No Content
   if (res.status === 204) return null;
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    const text = await res.text();
+    if (text.trim().startsWith('<!') || text.includes('<html')) {
+      throw new Error('Backend server is starting up or offline. Please run the Uvicorn start command in cPanel terminal.');
+    }
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error(`Server returned unexpected response: ${text.slice(0, 100)}`);
+    }
+  }
   return res.json();
 }
 
