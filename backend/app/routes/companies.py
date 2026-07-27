@@ -734,21 +734,27 @@ def run_company_research_sync(company_input: str, force_rescrape: bool = False):
                     m = re.search(r"slug='([^']+)'", line)
                     if m:
                         resolved_slug = m.group(1)
-                
-        if p.returncode == 0:
+        
+        p.wait()
+        
+        search_slug = resolved_slug or re.sub(r"[^a-z0-9]+", "-", task_key.lower()).strip("-")
+        try:
+            profiles_col = get_collection("company_profiles")
+            prof = profiles_col.find_one({
+                "$or": [
+                    {"company_slug": search_slug},
+                    {"company_name_slug": search_slug},
+                    {"company_name": {"$regex": f"^{re.escape(task_key)}$", "$options": "i"}},
+                ]
+            })
+        except Exception:
+            prof = None
+
+        if prof or p.returncode == 0:
             if not resolved_slug:
-                resolved_slug = re.sub(r"[^a-z0-9]+", "-", task_key.lower()).strip("-")
+                resolved_slug = search_slug
             update_research_task(task_key, 100, "completed", "Research completed successfully!", resolved_slug=resolved_slug)
             try:
-                profiles_col = get_collection("company_profiles")
-                search_slug = resolved_slug or re.sub(r"[^a-z0-9]+", "-", task_key.lower()).strip("-")
-                prof = profiles_col.find_one({
-                    "$or": [
-                        {"company_slug": search_slug},
-                        {"company_name_slug": search_slug},
-                        {"company_name": {"$regex": f"^{re.escape(task_key)}$", "$options": "i"}},
-                    ]
-                })
                 if prof:
                     comp_col = get_collection("companies")
                     upd = {
@@ -773,7 +779,7 @@ def run_company_research_sync(company_input: str, force_rescrape: bool = False):
             except Exception as sync_err:
                 print(f"Error syncing researched profile to companies DB: {sync_err}")
         else:
-            update_research_task(task_key, 80, "failed", f"Pipeline failed with exit code {p.returncode}")
+            update_research_task(task_key, 0, "failed", f"Research pipeline exited with code {p.returncode}. Please check server logs.")
     except Exception as e:
         update_research_task(task_key, 0, "failed", f"Pipeline failed: {str(e)}")
 

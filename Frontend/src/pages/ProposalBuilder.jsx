@@ -204,7 +204,8 @@ export default function ProposalBuilder() {
     // Guards against React 18 StrictMode's dev-only mount->cleanup->mount: without
     // this, cleanup calls ws.close() while the socket is still mid-handshake, which
     // is exactly what Chrome reports as "WebSocket is closed before the connection
-    // is established." Not a backend/auth problem — just needs a safe teardown.    let cancelled = false;
+    // is established." Not a backend/auth problem — just needs a safe teardown.
+    let cancelled = false;
     let failedAttempts = 0;
     let pollingInterval = null;
 
