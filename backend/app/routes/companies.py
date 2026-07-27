@@ -524,25 +524,90 @@ async def import_companies(payload: dict, current_user: dict = Depends(get_curre
             raw_str = (raw_data or "").strip()
             reader = csv.DictReader(raw_str.splitlines())
             for row in reader:
-                uei = (row.get("UEI") or row.get("uei", "")).strip()
-                if uei and not await col.find_one({"uei": uei}):
-                    is_small = (row.get("Is_Small_Business") or row.get("is_small_business", "")).strip().upper() in ("Y", "YES", "TRUE")
+                uei = (
+                    row.get("UEI")
+                    or row.get("uei")
+                    or row.get("Unique_Entity_ID")
+                    or row.get("SAM_UEI")
+                    or row.get("Unique Entity ID")
+                    or ""
+                ).strip().upper()
+
+                if not uei:
+                    continue  # Require valid SAM UEI — do not auto-generate dummy UEIs
+
+                if not await col.find_one({"uei": uei}):
+                    name = (row.get("Legal_Business_Name") or row.get("DBA_Name") or row.get("name") or "").strip()
+                    if not name:
+                        continue
+
+                    city = (row.get("Phys_City") or row.get("city") or "").strip().title()
+                    state = (row.get("Phys_State_Province") or row.get("state") or "").strip().upper()
+                    country = (row.get("Phys_Country") or row.get("country") or "").strip().upper()
+                    
+                    if city and state:
+                        location = f"{city}, {state}"
+                    elif city:
+                        location = f"{city}, {country}" if country else city
+                    else:
+                        location = state or country or "USA"
+
+                    is_small = (row.get("Is_Small_Business") or row.get("is_small_business") or "").strip().upper() in ("Y", "YES", "TRUE")
                     size = "Small" if is_small else "Large"
+                    
+                    primary_naics = (row.get("Primary_NAICS_Code") or row.get("primary_naics") or "").strip()
+                    primary_naics_desc = (row.get("Primary_NAICS_Description") or row.get("primary_naics_desc") or "").strip()
+                    
+                    contact = (row.get("Gov_Contact_Name") or row.get("EBiz_Contact_Name") or row.get("contact") or "N/A").strip()
+                    email = (row.get("Gov_Contact_Email") or row.get("EBiz_Contact_Email") or row.get("email") or "info@company.com").strip()
+
+                    match_score = compute_company_match_score(
+                        primary_naics=primary_naics,
+                        industry_desc=primary_naics_desc or "Other",
+                        company_name=name,
+                    )
+
+                    phys_addr1 = (row.get("Phys_Address_1") or row.get("address") or "").strip()
+                    phys_zip = (row.get("Phys_Zip") or row.get("zip") or "").strip()
+                    full_address = ", ".join(filter(None, [phys_addr1, city, state, phys_zip, country])) or location
+
+                    dba_name = (row.get("DBA_Name") or "").strip()
+                    cage_code = (row.get("CAGE_Code") or row.get("cage_code") or "").strip()
+                    reg_date = (row.get("Registration_Date") or row.get("registration_date") or "").strip()
+                    exp_date = (row.get("Expiration_Date") or row.get("expiration_date") or "").strip()
+                    entity_structure = (row.get("Entity_Structure") or row.get("entity_structure") or "").strip()
+                    phone = (row.get("Gov_Contact_Phone") or row.get("EBiz_Contact_Phone") or row.get("phone") or "").strip()
+
                     doc = {
                         "uei": uei,
-                        "name": row.get("Legal_Business_Name") or row.get("name") or "Unnamed Company",
-                        "status": row.get("Registration_Status") or row.get("status") or "Active",
-                        "primary_naics": row.get("Primary_NAICS_Code") or row.get("primary_naics") or "",
-                        "primary_naics_desc": row.get("Primary_NAICS_Description") or row.get("primary_naics_desc") or "",
+                        "name": name,
+                        "dba_name": dba_name,
+                        "cage_code": cage_code,
+                        "status": (row.get("Registration_Status") or row.get("status") or "Active").strip().title(),
+                        "registration_date": reg_date,
+                        "expiration_date": exp_date,
+                        "primary_naics": primary_naics,
+                        "primary_naics_desc": primary_naics_desc,
+                        "city": city,
+                        "state": state,
+                        "country": country,
+                        "zip": phys_zip,
+                        "location": location,
+                        "address": full_address,
+                        "entity_structure": entity_structure,
                         "size": size,
-                        "matchScore": int(row.get("matchScore") or compute_company_match_score(
-                            primary_naics=row.get("Primary_NAICS_Code") or row.get("primary_naics") or "",
-                            industry_desc=row.get("Primary_NAICS_Description") or row.get("industry") or "Other",
-                            company_name=row.get("Legal_Business_Name") or row.get("name") or "Unnamed Company"
-                        )),
-                        "industry": row.get("Primary_NAICS_Description") or row.get("industry") or "Other",
-                        "contact": row.get("Gov_Contact_Name") or row.get("contact") or "N/A",
-                        "email": row.get("Gov_Contact_Email") or row.get("email") or "info@company.com"
+                        "is_small_business": "Y" if is_small else "N",
+                        "is_minority_owned": (row.get("Is_Minority_Owned") or "").strip().upper() or "N",
+                        "is_women_owned": (row.get("Is_Women_Owned") or "").strip().upper() or "N",
+                        "is_veteran_owned": (row.get("Is_Veteran_Owned") or "").strip().upper() or "N",
+                        "matchScore": match_score,
+                        "industry": primary_naics_desc or entity_structure or "Other",
+                        "contact": contact,
+                        "email": email,
+                        "phone": phone,
+                        "ebiz_contact": (row.get("EBiz_Contact_Name") or "").strip(),
+                        "ebiz_email": (row.get("EBiz_Contact_Email") or "").strip(),
+                        "ebiz_phone": (row.get("EBiz_Contact_Phone") or "").strip(),
                     }
                     await col.insert_one(doc)
                     imported_count += 1

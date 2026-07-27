@@ -37,8 +37,12 @@ _GOOGLE_REDIRECT_URI = settings.GOOGLE_REDIRECT_URI
 # ---------------------------------------------------------------------------
 
 async def _get_google_auth_url_async(user_id: str) -> str:
-    if not _GOOGLE_CLIENT_ID:
-        raise HTTPException(505, "Google OAuth is not configured (GOOGLE_CLIENT_ID missing).")
+    client_id = getattr(settings, "GOOGLE_CLIENT_ID", "") or ""
+    if not client_id or "sem90bnjfcss" in client_id or "your_" in client_id or len(client_id) < 15:
+        raise HTTPException(
+            status_code=400,
+            detail="Google OAuth is not configured. Please set a valid GOOGLE_CLIENT_ID from Google Cloud Console in backend/.env file."
+        )
     from google_auth_oauthlib.flow import Flow  # type: ignore
     flow = Flow.from_client_config(
         {

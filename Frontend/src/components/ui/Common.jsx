@@ -102,3 +102,27 @@ export function ProgressBar({ progress, message, status }) {
     </div>
   );
 }
+
+export function renderSafeText(val, fallback = '—') {
+  if (val === null || val === undefined) return fallback;
+  if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean') {
+    return String(val) || fallback;
+  }
+  if (typeof val === 'object') {
+    if (Array.isArray(val)) {
+      return val.map(item => typeof item === 'object' ? renderSafeText(item, '') : String(item)).filter(Boolean).join(', ') || fallback;
+    }
+    const parts = [
+      val.streetAddress || val.address || val.street,
+      val.city,
+      val.state || val.province || val.region,
+      val.zip || val.zipCode || val.postalCode,
+      val.country
+    ].filter(Boolean);
+    if (parts.length > 0) return parts.join(', ');
+    const vals = Object.values(val).filter(v => v && typeof v !== 'object');
+    if (vals.length > 0) return vals.join(', ');
+    return fallback;
+  }
+  return String(val) || fallback;
+}

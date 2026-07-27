@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Plus, SlidersHorizontal, Eye, FileText, X, Upload, Check, Loader2, AlertOctagon, Calendar } from 'lucide-react';
-import { PageHeader, Card, MatchBadge, StatusBadge } from '../components/ui/Common.jsx';
+import { PageHeader, Card, MatchBadge, StatusBadge, renderSafeText } from '../components/ui/Common.jsx';
 import { api } from '../lib/api.jsx';
 import { useNotifications } from '../context/NotificationContext.jsx';
 
@@ -381,7 +381,7 @@ export default function Companies() {
                     </td>
                     {/* Location Column */}
                     <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400 text-xs">
-                      {c.location || (c.city && c.state ? `${c.city}, ${c.state}` : c.city || c.state || '—')}
+                      {renderSafeText(c.location || (c.city && c.state ? `${renderSafeText(c.city)}, ${renderSafeText(c.state)}` : c.city || c.state || '—'))}
                     </td>
                     {/* Size Column */}
                     <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">

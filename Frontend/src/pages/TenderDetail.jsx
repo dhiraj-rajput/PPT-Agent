@@ -6,7 +6,7 @@ import {
   Trophy, Clock, AlertOctagon, Mail, Phone, MapPin, Handshake,
   ShieldCheck, BookTemplate, ChevronDown, ChevronUp, FileText, FileDown
 } from 'lucide-react';
-import { Card, MatchBadge, StatusBadge } from '../components/ui/Common.jsx';
+import { Card, MatchBadge, StatusBadge, renderSafeText } from '../components/ui/Common.jsx';
 import { tenders as staticTenders, daysUntilClosing } from '../data/tenders.jsx';
 import { companies as staticCompanies } from '../data/companies.jsx';
 import { api } from '../lib/api.jsx';
@@ -411,7 +411,7 @@ export default function TenderDetail() {
                 <div key={comp.uei} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
                   <div className="min-w-0">
                     <p className="font-bold text-xs text-navy-900 dark:text-slate-200 truncate">{comp.name}</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">{comp.industry} · {comp.city}, {comp.state}</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">{renderSafeText(comp.industry)} · {renderSafeText(comp.city)}, {renderSafeText(comp.state)}</p>
                   </div>
                   <span className="rounded-full bg-slate-100 dark:bg-navy-900 px-2.5 py-0.5 text-[10px] font-semibold text-slate-500 dark:text-slate-400 font-mono">
                     Score: {comp.match}%

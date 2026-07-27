@@ -5,7 +5,7 @@ import {
   FileText, Calendar, Loader2, Check, Download, AlertTriangle,
   Eye, X, ShieldAlert, Cpu, RefreshCw, ExternalLink
 } from 'lucide-react';
-import { Card, MatchBadge, StatusBadge, ProgressBar } from '../components/ui/Common.jsx';
+import { Card, MatchBadge, StatusBadge, ProgressBar, renderSafeText } from '../components/ui/Common.jsx';
 import { tenders } from '../data/tenders.jsx';
 import { api } from '../lib/api.jsx';
 import { useNotifications } from '../context/NotificationContext.jsx';
@@ -403,9 +403,9 @@ export default function CompanyDetail() {
           <div>
             <h1 className="text-2xl font-extrabold text-navy-900 dark:text-white leading-tight">{company.name}</h1>
             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-slate-500 dark:text-slate-400">
-              <span className="font-semibold text-slate-600 dark:text-slate-300">{company.industry}</span>
+              <span className="font-semibold text-slate-600 dark:text-slate-300">{renderSafeText(company.industry)}</span>
               <span>·</span>
-              <span>{company.location}</span>
+              <span>{renderSafeText(company.location)}</span>
               <span>·</span>
               <StatusBadge status={company.status} />
               <span>·</span>
@@ -693,7 +693,7 @@ export default function CompanyDetail() {
               )}
               <div>
                 <p className="text-xs text-slate-400 mb-0.5 flex items-center gap-1"><MapPin size={11} /> Address</p>
-                <p className="font-semibold text-navy-900 dark:text-slate-200 text-xs leading-relaxed">{company.address || company.location}</p>
+                <p className="font-semibold text-navy-900 dark:text-slate-200 text-xs leading-relaxed">{renderSafeText(company.address || company.location)}</p>
               </div>
             </div>
           </Card>
