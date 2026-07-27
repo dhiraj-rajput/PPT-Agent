@@ -232,17 +232,17 @@ def unsubscribe(campaignId: str, leadId: str, t: str):
         raise HTTPException(status_code=400, detail="Invalid or expired unsubscribe link.")
 
     try:
-        camp_oid = ObjectId(campaignId)
-        lead_oid = ObjectId(leadId)
+        parent_oid = ObjectId(campaignId)
+        target_oid = ObjectId(leadId)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid parameters.")
 
     leads_col = get_collection("leads")
-    lead = leads_col.find_one({"_id": lead_oid})
+    lead = leads_col.find_one({"_id": target_oid})
 
     if lead:
         leads_col.update_one(
-            {"_id": lead_oid},
+            {"_id": target_oid},
             {"$set": {
                 "status": "unsubscribed",
                 "unsubscribedAt": datetime.now(timezone.utc),
@@ -251,7 +251,7 @@ def unsubscribe(campaignId: str, leadId: str, t: str):
         )
 
         get_collection("campaigns").update_one(
-            {"_id": camp_oid},
+            {"_id": parent_oid},
             {"$inc": {"stats.totalUnsubscribed": 1}}
         )
 
@@ -261,7 +261,7 @@ def unsubscribe(campaignId: str, leadId: str, t: str):
                 "$setOnInsert": {
                     "email": lead["email"],
                     "reason": "unsubscribed",
-                    "campaignId": camp_oid,
+                    "campaignId": parent_oid,
                     "createdAt": datetime.now(timezone.utc),
                 }
             },
@@ -271,10 +271,51 @@ def unsubscribe(campaignId: str, leadId: str, t: str):
         get_collection("audit_logs").insert_one({
             "action": "lead.unsubscribe",
             "entityType": "Lead",
-            "entityId": lead_oid,
+            "entityId": target_oid,
             "details": {"campaignId": campaignId, "email": lead["email"]},
             "createdAt": datetime.now(timezone.utc),
         })
+    else:
+        # Not a campaign lead — this unsubscribe link may belong to a newsletter
+        # subscriber instead (newsletters reuse this same tracking endpoint).
+        subs_col = get_collection("newsletter_subscribers")
+        subscriber = subs_col.find_one({"_id": target_oid, "newsletterId": parent_oid})
+
+        if subscriber:
+            subs_col.update_one(
+                {"_id": target_oid},
+                {"$set": {
+                    "status": "unsubscribed",
+                    "unsubscribedAt": datetime.now(timezone.utc),
+                    "updatedAt": datetime.now(timezone.utc)
+                }}
+            )
+
+            get_collection("newsletters").update_one(
+                {"_id": parent_oid},
+                {"$inc": {"stats.totalUnsubscribed": 1}}
+            )
+
+            get_collection("suppressions").update_one(
+                {"email": subscriber["email"]},
+                {
+                    "$setOnInsert": {
+                        "email": subscriber["email"],
+                        "reason": "unsubscribed",
+                        "newsletterId": parent_oid,
+                        "createdAt": datetime.now(timezone.utc),
+                    }
+                },
+                upsert=True
+            )
+
+            get_collection("audit_logs").insert_one({
+                "action": "subscriber.unsubscribe",
+                "entityType": "NewsletterSubscriber",
+                "entityId": target_oid,
+                "details": {"newsletterId": campaignId, "email": subscriber["email"]},
+                "createdAt": datetime.now(timezone.utc),
+            })
 
     return """
     <html>

@@ -564,7 +564,8 @@ export default function EmailCampaign() {
         <div className="flex items-center justify-between p-5 pb-0">
           <h3 className="text-sm font-bold text-navy-900 dark:text-white">Campaigns</h3>
         </div>
-        <table className="mt-3 w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="mt-3 w-full min-w-[900px] text-sm">
           <thead>
             <tr className="border-b border-slate-100 dark:border-navy-800 text-left text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">
               <th className="px-5 py-3 font-semibold w-8"></th>
@@ -687,7 +688,8 @@ export default function EmailCampaign() {
                         ) : leads.length === 0 ? (
                           <div className="px-4 py-6 text-center text-xs text-slate-400">No companies added yet. Use the building icon above to select companies.</div>
                         ) : (
-                          <table className="w-full text-xs">
+                          <div className="overflow-x-auto">
+                          <table className="w-full min-w-[700px] text-xs">
                             <thead>
                               <tr className="text-left text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-navy-700">
                                 <th className="px-4 py-2 font-semibold">Company</th>
@@ -748,6 +750,7 @@ export default function EmailCampaign() {
                               ))}
                             </tbody>
                           </table>
+                          </div>
                         )}
                       </div>
                     </td>
@@ -758,6 +761,7 @@ export default function EmailCampaign() {
             })}
           </tbody>
         </table>
+        </div>
       </Card>
 
       <Card className="mt-5 !p-0">

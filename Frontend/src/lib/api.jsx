@@ -282,7 +282,7 @@ export const api = {
   async addCompany(companyData) {
     return post('/api/companies', companyData);
   },
-  async importCompanies(format, data) {
+  async importCompanies({ format, data }) {
     return post('/api/companies/import', { format, data });
   },
   async getCRMPipeline() {
