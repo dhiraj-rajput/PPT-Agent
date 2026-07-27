@@ -79,6 +79,13 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
+@router.get("/active-tasks")
+async def get_active_proposal_tasks(current_user: dict = Depends(get_current_user)):
+    """HTTP polling fallback for environments where WebSockets are not enabled (e.g. shared hosting)."""
+    user_id = str(current_user.get("_id") or current_user.get("id") or "")
+    return await get_user_proposal_tasks_dict_async(user_id)
+
+
 from utils.helpers import get_python_executable
 
 def run_proposal_generation_sync(mode: str, solicitation: Optional[str] = None, winner: Optional[str] = None, loop=None):

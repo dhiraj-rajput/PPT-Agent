@@ -1,7 +1,16 @@
-# cPanel Apache rewrite rules for React Single Page Application (SPA)
+# cPanel Apache rewrite rules for SPA & API / WebSocket Reverse Proxy
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
+
+  # 1. Reverse Proxy WebSockets to local Uvicorn daemon on port 5050
+  RewriteCond %{HTTP:Upgrade} =websocket [NC]
+  RewriteRule ^api/(.*)$ ws://127.0.0.1:5050/api/$1 [P,L]
+
+  # 2. Reverse Proxy HTTP API requests to local Uvicorn daemon on port 5050
+  RewriteRule ^api/(.*)$ http://127.0.0.1:5050/api/$1 [P,L]
+
+  # 3. SPA Fallback: serve index.html for frontend routes
   RewriteRule ^index\.html$ - [L]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d

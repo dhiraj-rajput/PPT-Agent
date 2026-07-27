@@ -204,18 +204,53 @@ export default function ProposalBuilder() {
     // Guards against React 18 StrictMode's dev-only mount->cleanup->mount: without
     // this, cleanup calls ws.close() while the socket is still mid-handshake, which
     // is exactly what Chrome reports as "WebSocket is closed before the connection
-    // is established." Not a backend/auth problem — just needs a safe teardown.
-    let cancelled = false;
+    // is established." Not a backend/auth problem — just needs a safe teardown.    let cancelled = false;
+    let failedAttempts = 0;
+    let pollingInterval = null;
+
+    const startHttpPolling = () => {
+      if (pollingInterval || cancelled) return;
+      const poll = async () => {
+        if (cancelled) return;
+        try {
+          const tasks = await api.get('/api/proposals/active-tasks');
+          if (tasks && typeof tasks === 'object') {
+            let anyStatusChanged = false;
+            Object.keys(tasks).forEach(k => {
+              const prevStatus = activeTasksRef.current[k]?.status;
+              const currentStatus = tasks[k]?.status;
+              if (prevStatus === 'processing' && currentStatus !== 'processing') {
+                anyStatusChanged = true;
+              }
+            });
+            setActiveTasks(tasks);
+            if (anyStatusChanged) fetchData();
+          }
+        } catch {}
+      };
+      poll();
+      pollingInterval = setInterval(poll, 4000);
+    };
 
     function connect() {
       if (cancelled) return;
+      if (failedAttempts >= 2) {
+        startHttpPolling();
+        return;
+      }
+
       const token = localStorage.getItem('orbitavanya_token');
       const wsUrl = api.getWebSocketUrl(`/api/proposals/ws${token ? `?token=${encodeURIComponent(token)}` : ''}`);
-      ws = new WebSocket(wsUrl);
+      try {
+        ws = new WebSocket(wsUrl);
+      } catch {
+        failedAttempts++;
+        startHttpPolling();
+        return;
+      }
 
       ws.onopen = () => {
-        // Cleanup already ran before the handshake finished (StrictMode dev double-invoke) —
-        // close the now-orphaned socket cleanly instead of leaving it connected.
+        failedAttempts = 0;
         if (cancelled) {
           ws.close();
         }
@@ -224,8 +259,6 @@ export default function ProposalBuilder() {
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          
-          // Check if any active task finished (status changed from processing to something else)
           let anyStatusChanged = false;
           Object.keys(data).forEach(k => {
             const prevStatus = activeTasksRef.current[k]?.status;
@@ -234,43 +267,40 @@ export default function ProposalBuilder() {
               anyStatusChanged = true;
             }
           });
-
-          // Update tasks state
           setActiveTasks(data || {});
-
-          if (anyStatusChanged) {
-            // Refetch completed proposals and draft requests from DB
-            fetchData();
-          }
+          if (anyStatusChanged) fetchData();
         } catch (err) {
           console.error("WebSocket message parsing error:", err);
         }
       };
 
       ws.onclose = () => {
-        // Retry connection in 5 seconds if disconnected
-        if (!cancelled) {
-          reconnectTimeout = setTimeout(connect, 5000);
+        failedAttempts++;
+        if (failedAttempts >= 2) {
+          startHttpPolling();
+        } else if (!cancelled) {
+          reconnectTimeout = setTimeout(connect, 3000);
         }
       };
 
-      ws.onerror = () => {};
+      ws.onerror = () => {
+        failedAttempts++;
+      };
     }
 
     connect();
 
     return () => {
       cancelled = true;
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (pollingInterval) clearInterval(pollingInterval);
       if (ws) {
         ws.onclose = null;
-        if (ws.readyState === WebSocket.CONNECTING) {
-          // Don't abort mid-handshake (that's what produces the noisy warning) —
-          // ws.onopen above will close it as soon as the handshake finishes.
-        } else {
+        ws.onerror = null;
+        if (ws.readyState !== WebSocket.CONNECTING) {
           ws.close();
         }
       }
-      if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };
   }, [fetchData]);
 
