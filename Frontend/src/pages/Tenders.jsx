@@ -5,7 +5,7 @@ import {
   RefreshCw, AlertCircle, Loader2, Database, CheckCircle2,
   ChevronLeft, ChevronRight, X, Filter, Trophy, Clock, AlertOctagon, SlidersHorizontal, Eye, FileText, Check, HelpCircle
 } from 'lucide-react';
-import { PageHeader, Card, MatchBadge, StatusBadge } from '../components/ui/Common.jsx';
+import { PageHeader, Card, MatchBadge, StatusBadge, renderSafeText } from '../components/ui/Common.jsx';
 import { tenders as staticTenders, daysUntilClosing } from '../data/tenders.jsx';
 import { api } from '../lib/api.jsx';
 
@@ -375,10 +375,10 @@ export default function Tenders() {
                     </p>
 
                     <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-slate-500 dark:text-slate-400">
-                      <span className="flex items-center gap-1"><Building2 size={12} />{t.agency}</span>
-                      <span className="flex items-center gap-1"><DollarSign size={12} />{t.value}</span>
+                      <span className="flex items-center gap-1"><Building2 size={12} />{renderSafeText(t.agency)}</span>
+                      <span className="flex items-center gap-1"><DollarSign size={12} />{renderSafeText(t.value || t.award_amount)}</span>
                       {t.place_of_performance && (
-                        <span className="flex items-center gap-1"><MapPin size={12} />{t.place_of_performance}</span>
+                        <span className="flex items-center gap-1"><MapPin size={12} />{renderSafeText(t.place_of_performance)}</span>
                       )}
                     </div>
 

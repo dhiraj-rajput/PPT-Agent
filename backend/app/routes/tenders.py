@@ -58,6 +58,31 @@ def _compute_match_score(notice_id: str, naics_code: str = "", title: str = "", 
         return 0
 
 
+def _format_place_of_performance(pop: Any) -> str:
+    if not pop:
+        return ""
+    if isinstance(pop, str):
+        return pop
+    if isinstance(pop, dict):
+        city = pop.get("city")
+        city_str = (city.get("name") or city.get("code")) if isinstance(city, dict) else str(city or "")
+        state = pop.get("state")
+        state_str = (state.get("code") or state.get("name")) if isinstance(state, dict) else str(state or "")
+        country = pop.get("country")
+        country_str = (country.get("name") or country.get("code")) if isinstance(country, dict) else str(country or "")
+        zip_val = pop.get("zip")
+        zip_str = (zip_val.get("code") or zip_val.get("name")) if isinstance(zip_val, dict) else str(zip_val or "")
+        
+        street = pop.get("streetAddress") or pop.get("address") or ""
+        parts = [p for p in [street, city_str, state_str, zip_str, country_str] if p]
+        if parts:
+            return ", ".join(parts)
+        vals = [str(v) for v in pop.values() if v and not isinstance(v, (dict, list))]
+        if vals:
+            return ", ".join(vals)
+    return ""
+
+
 def _compute_lifecycle(
     closing_date_str: str,
     active_flag: str,
@@ -247,7 +272,7 @@ def _map_opportunity(opp: dict) -> dict:
         "poc_name": poc_name,
         "poc_email": poc_email,
         "poc_phone": poc_phone,
-        "place_of_performance": opp.get("placeOfPerformance") or {},
+        "place_of_performance": _format_place_of_performance(opp.get("placeOfPerformance")),
         "updatedAt": _utc_now_iso(),
     }
 
