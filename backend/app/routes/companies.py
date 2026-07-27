@@ -523,6 +523,13 @@ async def import_companies(payload: dict, current_user: dict = Depends(get_curre
         try:
             raw_str = (raw_data or "").strip()
             reader = csv.DictReader(raw_str.splitlines())
+
+            # Pass 1: parse every row in memory (no DB calls yet) and dedupe
+            # by UEI within the file itself (first occurrence wins — matches
+            # the previous row-by-row behavior, where a later duplicate row
+            # would find the earlier one already inserted and get skipped).
+            parsed_rows = []
+            seen_ueis_in_file = set()
             for row in reader:
                 uei = (
                     row.get("UEI")
@@ -533,18 +540,34 @@ async def import_companies(payload: dict, current_user: dict = Depends(get_curre
                     or ""
                 ).strip().upper()
 
-                if not uei:
+                if not uei or uei in seen_ueis_in_file:
                     continue  # Require valid SAM UEI — do not auto-generate dummy UEIs
 
-                if not await col.find_one({"uei": uei}):
-                    name = (row.get("Legal_Business_Name") or row.get("DBA_Name") or row.get("name") or "").strip()
-                    if not name:
+                name = (row.get("Legal_Business_Name") or row.get("DBA_Name") or row.get("name") or "").strip()
+                if not name:
+                    continue
+
+                seen_ueis_in_file.add(uei)
+                parsed_rows.append((uei, name, row))
+
+            if parsed_rows:
+                # Pass 2: one bulk query to find which UEIs already exist,
+                # instead of one find_one() per row.
+                all_ueis = [uei for uei, _, _ in parsed_rows]
+                existing_cursor = col.find(
+                    {"uei": {"$in": all_ueis}}, {"uei": 1, "_id": 0}
+                )
+                existing_ueis = {doc["uei"] async for doc in existing_cursor}
+
+                docs_to_insert = []
+                for uei, name, row in parsed_rows:
+                    if uei in existing_ueis:
                         continue
 
                     city = (row.get("Phys_City") or row.get("city") or "").strip().title()
                     state = (row.get("Phys_State_Province") or row.get("state") or "").strip().upper()
                     country = (row.get("Phys_Country") or row.get("country") or "").strip().upper()
-                    
+
                     if city and state:
                         location = f"{city}, {state}"
                     elif city:
@@ -554,10 +577,10 @@ async def import_companies(payload: dict, current_user: dict = Depends(get_curre
 
                     is_small = (row.get("Is_Small_Business") or row.get("is_small_business") or "").strip().upper() in ("Y", "YES", "TRUE")
                     size = "Small" if is_small else "Large"
-                    
+
                     primary_naics = (row.get("Primary_NAICS_Code") or row.get("primary_naics") or "").strip()
                     primary_naics_desc = (row.get("Primary_NAICS_Description") or row.get("primary_naics_desc") or "").strip()
-                    
+
                     contact = (row.get("Gov_Contact_Name") or row.get("EBiz_Contact_Name") or row.get("contact") or "N/A").strip()
                     email = (row.get("Gov_Contact_Email") or row.get("EBiz_Contact_Email") or row.get("email") or "info@company.com").strip()
 
@@ -578,7 +601,7 @@ async def import_companies(payload: dict, current_user: dict = Depends(get_curre
                     entity_structure = (row.get("Entity_Structure") or row.get("entity_structure") or "").strip()
                     phone = (row.get("Gov_Contact_Phone") or row.get("EBiz_Contact_Phone") or row.get("phone") or "").strip()
 
-                    doc = {
+                    docs_to_insert.append({
                         "uei": uei,
                         "name": name,
                         "dba_name": dba_name,
@@ -608,9 +631,19 @@ async def import_companies(payload: dict, current_user: dict = Depends(get_curre
                         "ebiz_contact": (row.get("EBiz_Contact_Name") or "").strip(),
                         "ebiz_email": (row.get("EBiz_Contact_Email") or "").strip(),
                         "ebiz_phone": (row.get("EBiz_Contact_Phone") or "").strip(),
-                    }
-                    await col.insert_one(doc)
-                    imported_count += 1
+                    })
+
+                # Pass 3: insert in chunks instead of one insert_one() per row.
+                chunk_size = 2000
+                for i in range(0, len(docs_to_insert), chunk_size):
+                    chunk = docs_to_insert[i:i + chunk_size]
+                    try:
+                        await col.insert_many(chunk, ordered=False)
+                        imported_count += len(chunk)
+                    except Exception as e:
+                        logger.error(f"Bulk insert chunk failed: {e}")
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid CSV format: {str(e)}")
 
