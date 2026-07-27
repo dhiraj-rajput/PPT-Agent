@@ -52,32 +52,27 @@ export default function Dashboard() {
 
   // Re-fetches live data from the database and refreshes everything on the
   // dashboard in place, without showing the full-page loading state.
-  const handleSyncAll = () => {
+  const handleSyncAll = async () => {
     if (syncing) return;
     setSyncing(true);
     setError('');
 
-    Promise.all([
-      api.syncTenders(),
-      api.getReports(),
-      api.getAllDraftRequests(),
-      api.getCompanies(),
-      api.getCRMPipeline()
-    ])
-      .then(() => {
-        return api.getDashboardData();
-      })
-      .then((res) => {
-        setData(res);
-        setLastSynced(new Date());
-        createAlert('Data Synced', 'Data synced successfully across SAM.gov, Tenders, Reports, and CRM!', '/dashboard');
-      })
-      .catch((err) => {
-        setError(err.message || 'Failed to sync dashboard data.');
-      })
-      .finally(() => {
-        setSyncing(false);
-      });
+    try {
+      await api.syncTenders();
+      await api.getReports();
+      await api.getAllDraftRequests();
+      await api.getCompanies();
+      await api.getCRMPipeline();
+
+      const res = await api.getDashboardData();
+      setData(res);
+      setLastSynced(new Date());
+      createAlert('Data Synced', 'Data synced successfully across SAM.gov, Tenders, Reports, and CRM!', '/dashboard');
+    } catch (err) {
+      setError(err.message || 'Failed to sync dashboard data.');
+    } finally {
+      setSyncing(false);
+    }
   };
 
   useEffect(() => {

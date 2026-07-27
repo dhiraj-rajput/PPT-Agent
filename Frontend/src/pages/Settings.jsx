@@ -85,7 +85,7 @@ function AvatarCard() {
     preview ||
     (user?.avatarUrl
       ? api.getAvatarUrl(user.avatarUrl)
-      : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name || email || 'User')}`);
+      : api.getInitialsAvatar(name || email || 'User'));
 
   function handlePickPhoto() {
     setError('');

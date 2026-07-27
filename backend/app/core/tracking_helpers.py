@@ -7,6 +7,10 @@ from typing import Dict, List, Tuple
 from config.settings import settings
 
 API_BASE_URL = settings.API_BASE_URL
+if API_BASE_URL.endswith("/api"):
+    API_BASE_URL = API_BASE_URL[:-4]
+if API_BASE_URL.endswith("/"):
+    API_BASE_URL = API_BASE_URL[:-1]
 
 # 1x1 transparent PNG image served by the open-tracking route
 TRANSPARENT_PNG = base64.b64decode(

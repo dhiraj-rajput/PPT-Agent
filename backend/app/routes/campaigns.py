@@ -19,6 +19,9 @@ from utils.db_client import get_async_collection, get_collection
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"])
 
+from pathlib import Path
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+
 
 class CampaignCreateBody(BaseModel):
     name: str
@@ -252,17 +255,23 @@ async def upload_campaign_attachment(
 
 
 @router.get("/view-file")
-def view_campaign_file(path: str):
+def view_campaign_file(path: str, current_user: dict = Depends(get_current_user)):
     import os
     from fastapi.responses import FileResponse
 
     allowed_bases = [
-        os.path.realpath("private/uploads"),
-        os.path.realpath("private/reports"),
+        os.path.realpath(str(PROJECT_ROOT / "private" / "uploads")),
+        os.path.realpath(str(PROJECT_ROOT / "private" / "reports")),
+        os.path.realpath(str(PROJECT_ROOT / "output" / "pdf")),
+        os.path.realpath(str(PROJECT_ROOT / "output" / "rfp_respond")),
     ]
 
+    # Handle if path is relative
     clean_path = path.replace("\\", "/").lstrip("/")
-    resolved = os.path.realpath(clean_path)
+    if not os.path.isabs(clean_path):
+        resolved = os.path.realpath(str(PROJECT_ROOT / clean_path))
+    else:
+        resolved = os.path.realpath(clean_path)
 
     if not any(
         resolved == base or resolved.startswith(base + os.sep)

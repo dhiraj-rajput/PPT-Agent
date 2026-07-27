@@ -77,7 +77,7 @@ const del = (path, opts) => _request('DELETE', path, undefined, opts);
 async function _upload(path, formData) {
   const token = localStorage.getItem(TOKEN_KEY);
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const res = await fetch(_buildUrl(path), {
     method: 'POST',
     headers,
     body: formData,
@@ -311,14 +311,14 @@ export const api = {
 
   // Serve/stream a specific tender document  
   getTenderDocumentUrl: (noticeId, filename) =>
-    `${BASE_URL}/api/tenders/${encodeURIComponent(noticeId)}/documents/${encodeURIComponent(filename)}`,
+    _buildUrl(`/api/tenders/${encodeURIComponent(noticeId)}/documents/${encodeURIComponent(filename)}`),
 
   // Download a tender document as blob
   downloadTenderDocument: async (noticeId, filename) => {
     const token = localStorage.getItem('orbitavanya_token');
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
     const res = await fetch(
-      `${BASE_URL}/api/tenders/${encodeURIComponent(noticeId)}/documents/${encodeURIComponent(filename)}`,
+      _buildUrl(`/api/tenders/${encodeURIComponent(noticeId)}/documents/${encodeURIComponent(filename)}`),
       { headers }
     );
     if (!res.ok) throw new Error(`Download failed (${res.status})`);
@@ -339,7 +339,7 @@ export const api = {
     return get(`/api/proposals/status/${taskId}`);
   },
   async downloadProposal(filename) {
-    return `${BASE_URL}/api/proposals/download/${filename}`;
+    return _buildUrl(`/api/proposals/download/${filename}`);
   },
   async getRecentProposals(companyName) {
     return get(`/api/proposals/recent?company_name=${encodeURIComponent(companyName)}`);
@@ -367,14 +367,14 @@ export const api = {
   async downloadReport(filename) {
     const token = localStorage.getItem(TOKEN_KEY);
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    const res = await fetch(`${BASE_URL}/api/reports/download/${filename}`, { headers });
+    const res = await fetch(_buildUrl(`/api/reports/download/${filename}`), { headers });
     if (!res.ok) throw new Error('Download failed');
     return res.blob();
   },
   async viewReportBlob(filename) {
     const token = localStorage.getItem(TOKEN_KEY);
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    const res = await fetch(`${BASE_URL}/api/reports/view/${filename}`, { headers });
+    const res = await fetch(_buildUrl(`/api/reports/view/${filename}`), { headers });
     if (!res.ok) throw new Error('Failed to fetch preview');
     return res.blob();
   },
@@ -397,26 +397,26 @@ export const api = {
     return get(`/api/rfp-respond/status/${taskId}`);
   },
   getRfpRespondDownloadUrl(filename) {
-    return `${BASE_URL}/api/rfp-respond/download/${filename}`;
+    return _buildUrl(`/api/rfp-respond/download/${filename}`);
   },
   async downloadRfpRespond(filename) {
     const token = localStorage.getItem(TOKEN_KEY);
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    const res = await fetch(`${BASE_URL}/api/rfp-respond/download/${filename}`, { headers });
+    const res = await fetch(_buildUrl(`/api/rfp-respond/download/${filename}`), { headers });
     if (!res.ok) throw new Error('Download failed');
     return res.blob();
   },
   async viewRfpRespondBlob(filename) {
     const token = localStorage.getItem(TOKEN_KEY);
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    const res = await fetch(`${BASE_URL}/api/rfp-respond/view/${filename}`, { headers });
+    const res = await fetch(_buildUrl(`/api/rfp-respond/view/${filename}`), { headers });
     if (!res.ok) throw new Error('Failed to fetch preview');
     return res.blob();
   },
   async viewUploadedSourceBlob(taskId, filename) {
     const token = localStorage.getItem(TOKEN_KEY);
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    const res = await fetch(`${BASE_URL}/api/rfp-respond/view-upload/${taskId}/${filename}`, { headers });
+    const res = await fetch(_buildUrl(`/api/rfp-respond/view-upload/${taskId}/${filename}`), { headers });
     if (!res.ok) throw new Error('Failed to fetch preview');
     return res.blob();
   },
@@ -433,14 +433,14 @@ export const api = {
   async deleteDefaultTemplate() {
     const token = localStorage.getItem(TOKEN_KEY);
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    const res = await fetch(`${BASE_URL}/api/templates/default`, { method: 'DELETE', headers });
+    const res = await fetch(_buildUrl('/api/templates/default'), { method: 'DELETE', headers });
     if (!res.ok) throw new Error('Failed to remove default template');
     return res.json();
   },
   async viewDefaultTemplateBlob() {
     const token = localStorage.getItem(TOKEN_KEY);
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    const res = await fetch(`${BASE_URL}/api/templates/default/view`, { headers });
+    const res = await fetch(_buildUrl('/api/templates/default/view'), { headers });
     if (!res.ok) throw new Error('Failed to fetch template preview');
     return res.blob();
   },
@@ -613,7 +613,7 @@ export const api = {
   },
   getAvatarUrl(filename) {
     if (!filename) return '';
-    return `${BASE_URL}/api/auth/avatar/${filename}`;
+    return _buildUrl(`/api/auth/avatar/${filename}`);
   },
 
   // Settings page — change password via OTP flow (same as change-password route)
@@ -626,8 +626,8 @@ export const api = {
     const result = await post('/api/auth/verify-otp', { email: user.email, otp, purpose: 'reset-password' });
     return { changeToken: result.actionToken };
   },
-  async confirmChangePassword(actionToken, newPassword, confirmPassword) {
-    return post('/api/auth/reset-password', { actionToken, newPassword, confirmPassword });
+  async forceChangePassword(newPassword, confirmPassword) {
+    return post('/api/auth/force-change-password', { newPassword, confirmPassword });
   },
   async getDashboardData() {
     return get('/api/analytics/dashboard');
@@ -641,8 +641,32 @@ export const api = {
   async sendCompanyEmail(body) {
     return post('/api/companies/send-email', body);
   },
+  getInitialsAvatar(name) {
+    const cleanName = (name || 'User').trim();
+    const initials = cleanName.split(/\s+/).map(n => n[0]).slice(0, 2).join('').toUpperCase();
+    const colors = [
+      '#3b82f6',
+      '#10b981',
+      '#f59e0b',
+      '#ef4444',
+      '#8b5cf6',
+      '#ec4899',
+      '#06b6d4',
+    ];
+    let hash = 0;
+    for (let i = 0; i < cleanName.length; i++) {
+      hash = cleanName.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const color = colors[Math.abs(hash) % colors.length];
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%"><rect width="100" height="100" fill="${encodeURIComponent(color)}"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="40" font-weight="bold" fill="%23ffffff" dy=".3em">${initials}</text></svg>`;
+    return `data:image/svg+xml;utf8,${svg}`;
+  },
   getBaseUrl() {
-    return BASE_URL;
+    let cleanBase = BASE_URL.replace(/\/+$/, '');
+    if (cleanBase.endsWith('/api')) {
+      cleanBase = cleanBase.slice(0, -4);
+    }
+    return cleanBase;
   },
 };
 

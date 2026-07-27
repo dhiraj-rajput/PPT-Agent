@@ -20,11 +20,16 @@ from app.core.auth import get_current_user
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
+import time
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+LAST_SYNC_TIME = 0.0
+SYNC_COOLDOWN = 60.0
+
 
 def sync_reports_with_mongo():
     """Scan output/pdf folder, parse metadata using config files, and sync with MongoDB (sync thread worker)."""
-    pdf_dir = Path("output/pdf")
-    proposals_dir = Path("output/proposals")
+    pdf_dir = PROJECT_ROOT / "output" / "pdf"
+    proposals_dir = PROJECT_ROOT / "output" / "proposals"
     reports_col = get_collection("reports")
     
     if not pdf_dir.exists():
@@ -165,8 +170,12 @@ def sync_reports_with_mongo():
 @router.get("")
 async def get_reports(current_user: dict = Depends(get_current_user)):
     """Retrieve all reports synced with MongoDB sorted by date descending."""
+    global LAST_SYNC_TIME
     try:
-        await asyncio.to_thread(sync_reports_with_mongo)
+        now = time.time()
+        if now - LAST_SYNC_TIME > SYNC_COOLDOWN:
+            await asyncio.to_thread(sync_reports_with_mongo)
+            LAST_SYNC_TIME = now
         reports_col = get_async_collection("reports")
         reports = await reports_col.find({}, {"_id": 0}).sort("mtime", -1).to_list(length=1000)
         return reports

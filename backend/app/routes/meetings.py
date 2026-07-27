@@ -18,7 +18,7 @@ from typing import List, Optional
 
 from bson import ObjectId
 from bson.errors import InvalidId
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 
 from app.core.auth import get_current_user
@@ -167,6 +167,7 @@ async def list_meetings(current_user: dict = Depends(get_current_user)):
 @router.post("", status_code=201)
 async def create_meeting(
     body: CreateMeetingBody,
+    background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
 ):
     if not body.title or not body.date or not body.time:
@@ -241,7 +242,7 @@ async def create_meeting(
                 resolved[i]["inviteSent"] = not isinstance(r, Exception)
             await meetings_col.update_one({"_id": result.inserted_id}, {"$set": {"attendees": resolved}})
 
-        asyncio.create_task(send_invites())
+        background_tasks.add_task(send_invites)
 
     # In-app notifications for all attendee users
     attendee_user_ids = [str(a["userId"]) for a in resolved if a.get("userId")]
@@ -263,6 +264,7 @@ async def create_meeting(
 @router.post("/{meeting_id}/cancel")
 async def cancel_meeting(
     meeting_id: str,
+    background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
 ):
     try:
@@ -307,7 +309,7 @@ async def cancel_meeting(
                 ],
                 return_exceptions=True,
             )
-        asyncio.create_task(send_cancellations())
+        background_tasks.add_task(send_cancellations)
 
     # In-app notifications
     attendee_user_ids = [str(a["userId"]) for a in attendees if a.get("userId")]

@@ -119,7 +119,7 @@ export default function UsersRoles() {
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-3">
                       <img
-                        src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.seed || u.email)}`}
+                        src={api.getInitialsAvatar(u.name || u.email || 'User')}
                         className="h-9 w-9 rounded-full"
                         alt={u.name}
                       />

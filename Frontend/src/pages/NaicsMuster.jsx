@@ -727,7 +727,11 @@ export default function NaicsMuster() {
                   </button>
                   <button
                     type="submit"
-                    disabled={modalLoading || !selectedFile}
+                    disabled={
+                      modalLoading || 
+                      (naicsImportMode === 'file' && !selectedFile) || 
+                      (naicsImportMode === 'document' && (!naicsDocEditor.code || !naicsDocEditor.title))
+                    }
                     className="flex items-center justify-center gap-2 rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-bold text-white shadow-soft transition-all hover:bg-brand-600 hover:shadow-none disabled:opacity-50"
                   >
                     {modalLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Import Data'}

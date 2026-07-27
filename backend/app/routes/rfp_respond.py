@@ -58,11 +58,14 @@ def _run_pipeline_sync(
 ) -> None:
     """Run bidforge_cli.py as a subprocess and update progress in MongoDB."""
 
+    from utils.helpers import get_python_executable
+    python_bin = get_python_executable()
+
     def update(progress: int, message: str, status: str = "processing", filename: Optional[str] = None):
         update_task_status(task_id, "rfp_respond", progress, status, message, filename)
 
     cmd = [
-        sys.executable,
+        python_bin,
         str(PROJECT_ROOT / "scripts" / "bidforge_cli.py"),
         "--rfp", rfp_paths,
         "--output", output_name,

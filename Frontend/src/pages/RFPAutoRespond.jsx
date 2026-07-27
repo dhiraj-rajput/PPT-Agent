@@ -62,9 +62,11 @@ export default function RFPAutoRespond() {
 
   useEffect(() => {
     if (!taskId) return;
+    let consecutiveErrors = 0;
     pollRef.current = setInterval(async () => {
       try {
         const state = await api.getRfpRespondStatus(taskId);
+        consecutiveErrors = 0;
         setTaskState(state);
         if (state.status === 'completed' || state.status === 'failed') {
           clearInterval(pollRef.current);
@@ -74,8 +76,13 @@ export default function RFPAutoRespond() {
             notify('RFP response failed', state.message || 'The auto-respond pipeline failed to complete.', '/rfp-auto-respond');
           }
         }
-      } catch {
-        clearInterval(pollRef.current);
+      } catch (err) {
+        consecutiveErrors += 1;
+        console.warn(`RFP Polling error (attempt ${consecutiveErrors}):`, err);
+        if (consecutiveErrors >= 5) {
+          clearInterval(pollRef.current);
+          setError('Lost connection to server. RFP polling stopped.');
+        }
       }
     }, POLL_INTERVAL_MS);
     return () => clearInterval(pollRef.current);
@@ -467,7 +474,7 @@ export default function RFPAutoRespond() {
           )}
 
           {isFailed && (
-            <div className="flex items-start gap-2 rounded-lg bg-rose-50 dark:bg-rose-900/20 px-3.5 py-2.5 text-sm text-rose-700 dark:text-rose-400">
+            <div className="flex items-start gap-2 rounded-lg bg-rose-50 dark:bg-rose-950/40 px-3.5 py-2.5 text-sm text-rose-700 dark:text-rose-400 border border-rose-200">
               <AlertCircle size={16} className="mt-0.5 shrink-0" />
               <div>
                 <p className="font-semibold">Pipeline failed</p>
@@ -478,7 +485,7 @@ export default function RFPAutoRespond() {
 
           {isCompleted && taskState.filename && (
             <div className="space-y-3">
-              <div className="flex items-center gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 px-3.5 py-2.5 text-sm text-emerald-700 dark:text-emerald-400">
+              <div className="flex items-center gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 px-3.5 py-2.5 text-sm text-emerald-700 dark:text-emerald-400 border border-emerald-200">
                 <CheckCircle size={16} className="shrink-0" />
                 Your proposal has been generated and is ready to download.
               </div>

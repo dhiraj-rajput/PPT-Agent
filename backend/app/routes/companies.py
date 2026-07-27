@@ -29,9 +29,12 @@ from utils.db_client import (
     get_task_status_db,
 )
 from config.settings import settings
+from app.core.match_engine import compute_company_match_score
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/companies", tags=["companies"])
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 DEFAULT_OWN_COMPANY = {
     "name": "OrbitAvanya Tech LLP",
@@ -45,7 +48,7 @@ DEFAULT_OWN_COMPANY = {
     "country": "USA",
     "contact": "Prasanna Dhamal",
     "contact_role": "Managing Director",
-    "email": "prasannadhamal982005@gmail.com",
+    "email": settings.SMTP_FROM or settings.SMTP_USER or "info@winbid.avanyaedge.com",
     "phone": "+1-214-555-0199",
     "size": "Small",
     "status": "Active",
@@ -66,9 +69,9 @@ def import_sam_entities_csv():
         if col.count_documents({}) > 0:
             return
         
-        csv_path = Path("private/sam_entities.csv")
+        csv_path = PROJECT_ROOT / "private" / "sam_entities.csv"
         if not csv_path.exists():
-            csv_path = Path("documents/sam_entities.csv")
+            csv_path = PROJECT_ROOT / "documents" / "sam_entities.csv"
         if not csv_path.exists():
             return
             
@@ -87,7 +90,11 @@ def import_sam_entities_csv():
                         "primary_naics": row.get("Primary_NAICS_Code") or row.get("primary_naics") or "",
                         "primary_naics_desc": row.get("Primary_NAICS_Description") or row.get("primary_naics_desc") or "",
                         "size": "Small" if is_small else "Large",
-                        "matchScore": random.randint(75, 98),
+                        "matchScore": compute_company_match_score(
+                            primary_naics=row.get("Primary_NAICS_Code") or row.get("primary_naics") or "",
+                            industry_desc=row.get("Primary_NAICS_Description") or "Other",
+                            company_name=row.get("Legal_Business_Name") or row.get("name") or "Unnamed Company"
+                        ),
                         "industry": row.get("Primary_NAICS_Description") or "Other",
                         "contact": row.get("Gov_Contact_Name") or "N/A",
                         "email": row.get("Gov_Contact_Email") or "info@company.com"
@@ -115,7 +122,7 @@ def get_attachments(current_user: dict = Depends(get_current_user)):
     """List all available proposal and RFP PDF files that can be attached to emails."""
     attachments = []
     
-    pdf_dir = Path("output/pdf")
+    pdf_dir = PROJECT_ROOT / "output" / "pdf"
     if pdf_dir.exists():
         for f in pdf_dir.glob("*.pdf"):
             attachments.append({
@@ -124,7 +131,7 @@ def get_attachments(current_user: dict = Depends(get_current_user)):
                 "label": f"Proposal: {f.name}"
             })
             
-    rfp_respond_dir = Path("output/rfp_respond")
+    rfp_respond_dir = PROJECT_ROOT / "output" / "rfp_respond"
     if rfp_respond_dir.exists():
         for f in rfp_respond_dir.glob("*"):
             if f.is_file() and not f.name.startswith("."):
@@ -134,7 +141,7 @@ def get_attachments(current_user: dict = Depends(get_current_user)):
                     "label": f"RFP Respond: {f.name}"
                 })
                 
-    uploads_dir = Path("private/rfp_respond_uploads")
+    uploads_dir = PROJECT_ROOT / "private" / "rfp_respond_uploads"
     if uploads_dir.exists():
         for p in uploads_dir.rglob("*"):
             if p.is_file() and not p.name.startswith("."):
@@ -157,9 +164,9 @@ async def send_company_email(body: SendCompanyEmailBody, current_user: dict = De
     
     def locate_and_add_file(filename: str):
         dirs = [
-            Path("output/pdf"),
-            Path("output/rfp_respond"),
-            Path("private/rfp_respond_uploads")
+            PROJECT_ROOT / "output" / "pdf",
+            PROJECT_ROOT / "output" / "rfp_respond",
+            PROJECT_ROOT / "private" / "rfp_respond_uploads"
         ]
         for d in dirs:
             if d.exists():
@@ -466,7 +473,11 @@ async def add_company(
         raise HTTPException(status_code=400, detail="Company with this UEI already exists")
 
     doc = company_data.model_dump()
-    doc["matchScore"] = doc.get("matchScore") or random.randint(70, 98)
+    doc["matchScore"] = doc.get("matchScore") or compute_company_match_score(
+        primary_naics=doc.get("primary_naics") or "",
+        industry_desc=doc.get("industry") or doc.get("primary_naics_desc") or "Other",
+        company_name=doc.get("name") or ""
+    )
     doc["industry"] = doc.get("industry") or doc.get("primary_naics_desc") or "Other"
     doc["contact"] = doc.get("contact") or "N/A"
 
@@ -494,7 +505,11 @@ async def import_companies(payload: dict, current_user: dict = Depends(get_curre
                 uei = validated_item.uei.strip()
                 if uei and not await col.find_one({"uei": uei}):
                     doc = validated_item.model_dump()
-                    doc["matchScore"] = doc.get("matchScore") or random.randint(70, 98)
+                    doc["matchScore"] = doc.get("matchScore") or compute_company_match_score(
+                        primary_naics=doc.get("primary_naics") or "",
+                        industry_desc=doc.get("industry") or doc.get("primary_naics_desc") or "Other",
+                        company_name=doc.get("name") or ""
+                    )
                     doc["industry"] = doc.get("industry") or doc.get("primary_naics_desc") or "Other"
                     doc["contact"] = doc.get("contact") or "N/A"
                     await col.insert_one(doc)
@@ -520,7 +535,11 @@ async def import_companies(payload: dict, current_user: dict = Depends(get_curre
                         "primary_naics": row.get("Primary_NAICS_Code") or row.get("primary_naics") or "",
                         "primary_naics_desc": row.get("Primary_NAICS_Description") or row.get("primary_naics_desc") or "",
                         "size": size,
-                        "matchScore": int(row.get("matchScore") or 82),
+                        "matchScore": int(row.get("matchScore") or compute_company_match_score(
+                            primary_naics=row.get("Primary_NAICS_Code") or row.get("primary_naics") or "",
+                            industry_desc=row.get("Primary_NAICS_Description") or row.get("industry") or "Other",
+                            company_name=row.get("Legal_Business_Name") or row.get("name") or "Unnamed Company"
+                        )),
                         "industry": row.get("Primary_NAICS_Description") or row.get("industry") or "Other",
                         "contact": row.get("Gov_Contact_Name") or row.get("contact") or "N/A",
                         "email": row.get("Gov_Contact_Email") or row.get("email") or "info@company.com"
@@ -554,13 +573,15 @@ def run_company_research_sync(company_input: str, force_rescrape: bool = False):
     import subprocess
     import sys
     import re
+    from utils.helpers import get_python_executable
     
     task_key = company_input.strip()
     update_research_task(task_key, 10, "processing", "Starting company research...")
     
+    python_bin = get_python_executable()
     cmd = [
-        sys.executable,
-        "main.py",
+        python_bin,
+        str(PROJECT_ROOT / "main.py"),
         company_input
     ]
     if force_rescrape:
@@ -572,7 +593,7 @@ def run_company_research_sync(company_input: str, force_rescrape: bool = False):
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            cwd=str(Path(__file__).resolve().parent.parent.parent),
+            cwd=str(PROJECT_ROOT),
             text=True,
             encoding="utf-8",
             errors="ignore"

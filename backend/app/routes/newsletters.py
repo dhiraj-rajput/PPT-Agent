@@ -445,41 +445,41 @@ async def _send_newsletter_background(
             success = False
             err = str(mail_err)
 
-            await sends_col.insert_one({
+        await sends_col.insert_one({
+            "editionId": e_id,
+            "newsletterId": n_oid,
+            "subscriberId": sub["_id"],
+            "email": recipient_email,
+            "trackingId": tracking_id,
+            "status": "sent" if success else "failed",
+            "error": err if not success else "",
+            "sentAt": datetime.now(timezone.utc),
+        })
+
+        if success:
+            event_docs = [{
+                "trackingId": tracking_id,
                 "editionId": e_id,
                 "newsletterId": n_oid,
                 "subscriberId": sub["_id"],
-                "email": recipient_email,
-                "trackingId": tracking_id,
-                "status": "sent" if success else "failed",
-                "error": err if not success else "",
-                "sentAt": datetime.now(timezone.utc),
-            })
-
-            if success:
-                event_docs = [{
-                    "trackingId": tracking_id,
+                "type": "open",
+                "timestamp": None,
+                "createdAt": datetime.now(timezone.utc),
+            }]
+            for link in click_links:
+                event_docs.append({
+                    "trackingId": link["trackingId"],
                     "editionId": e_id,
                     "newsletterId": n_oid,
                     "subscriberId": sub["_id"],
-                    "type": "open",
+                    "destinationUrl": link["destinationUrl"],
+                    "type": "click",
                     "timestamp": None,
                     "createdAt": datetime.now(timezone.utc),
-                }]
-                for link in click_links:
-                    event_docs.append({
-                        "trackingId": link["trackingId"],
-                        "editionId": e_id,
-                        "newsletterId": n_oid,
-                        "subscriberId": sub["_id"],
-                        "destinationUrl": link["destinationUrl"],
-                        "type": "click",
-                        "timestamp": None,
-                        "createdAt": datetime.now(timezone.utc),
-                    })
-                await events_col.insert_many(event_docs, ordered=False)
-                return 1
-            return 0
+                })
+            await events_col.insert_many(event_docs, ordered=False)
+            return 1
+        return 0
 
     results = await asyncio.gather(*[send_single_newsletter(sub) for sub in subscribers])
     sent_count = sum(int(r or 0) for r in results)

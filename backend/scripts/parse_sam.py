@@ -129,24 +129,22 @@ with open(csv_path, mode='r', encoding='utf-8-sig') as f:
 print(f"Total companies parsed: {len(companies)}")
 
 # Ensure target directories exist
-os.makedirs("Frontend/orbitavanya/public", exist_ok=True)
-os.makedirs("Frontend/orbitavanya/src/data", exist_ok=True)
+os.makedirs("Frontend/src/data", exist_ok=True)
 
-# Write full dataset to public/companies.json compactly (no indent)
-with open("Frontend/orbitavanya/public/companies.json", 'w', encoding='utf-8') as out_f:
-    json.dump(companies, out_f, separators=(',', ':'))
-
-# Write first 500 companies to src/data/companies.js for initial/static load
+# Write first 500 companies to src/data/companies.jsx for initial/static load
 subset = companies[:500]
-with open("Frontend/orbitavanya/src/data/companies.js", 'w', encoding='utf-8') as out_js:
-    out_js.write("export const companies = ")
-    json.dump(subset, out_js, indent=2)
-    out_js.write(";\n")
+with open("Frontend/src/data/companies.jsx", 'w', encoding='utf-8') as out_jsx:
+    out_jsx.write("export const companies = ")
+    json.dump(subset, out_jsx, indent=2)
+    out_jsx.write(";\n")
 
-# Remove the temporary large JSON file from src/data if it exists
-large_json = "Frontend/orbitavanya/src/data/companies.json"
-if os.path.exists(large_json):
-    os.remove(large_json)
+# Remove any old file from previous name if exists
+for old_file in ["Frontend/orbitavanya/src/data/companies.js", "Frontend/orbitavanya/public/companies.json"]:
+    if os.path.exists(old_file):
+        try:
+            os.remove(old_file)
+        except Exception:
+            pass
 
 print("Finished writing data files.")
 

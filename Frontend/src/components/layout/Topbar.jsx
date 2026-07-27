@@ -384,7 +384,7 @@ export default function Topbar({ onMenuClick }) {
               src={
                 user?.avatarUrl
                   ? api.getAvatarUrl(user.avatarUrl)
-                  : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user?.name || user?.email || 'User')}`
+                  : api.getInitialsAvatar(user?.name || user?.email || 'User')
               }
               alt={user?.name || 'User'}
               className="h-9 w-9 rounded-full border border-slate-200 bg-slate-100 object-cover dark:border-navy-700 dark:bg-navy-800"

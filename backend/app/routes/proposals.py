@@ -79,6 +79,8 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
+from utils.helpers import get_python_executable
+
 def run_proposal_generation_sync(mode: str, solicitation: Optional[str] = None, winner: Optional[str] = None, loop=None):
     """
     Synchronous runner executing pipeline subprocesses based on mode.
@@ -89,13 +91,15 @@ def run_proposal_generation_sync(mode: str, solicitation: Optional[str] = None, 
     safe_sol = "".join(c if c.isalnum() else "_" for c in sol_num).upper()
     safe_win = "".join(c if c.isalnum() else "_" for c in win_name).lower()
 
+    python_bin = get_python_executable()
+
     if mode == "prime" or mode == "reference":
         task_key = f"prime-{sol_num}"
         target_filename = f"{sol_num}_prime_proposal.pdf"
         profile_cmd = None
         doc_cmd = [
-            sys.executable,
-            "scripts/respond_to_rfp.py",
+            python_bin,
+            str(PROJECT_ROOT / "scripts" / "respond_to_rfp.py"),
             "--mode", "prime",
             "--solicitation", sol_num
         ]
@@ -103,13 +107,13 @@ def run_proposal_generation_sync(mode: str, solicitation: Optional[str] = None, 
         task_key = f"subcontract-{sol_num}-{win_name}"
         target_filename = f"{sol_num}_subcontract_proposal.pdf"
         profile_cmd = [
-            sys.executable,
-            "main.py",
+            python_bin,
+            str(PROJECT_ROOT / "main.py"),
             win_name
         ]
         doc_cmd = [
-            sys.executable,
-            "scripts/respond_to_rfp.py",
+            python_bin,
+            str(PROJECT_ROOT / "scripts" / "respond_to_rfp.py"),
             "--mode", "subcontract",
             "--solicitation", sol_num,
             "--winner", win_name
@@ -118,13 +122,13 @@ def run_proposal_generation_sync(mode: str, solicitation: Optional[str] = None, 
         task_key = f"partnership-{win_name}"
         target_filename = f"{safe_win}_partnership_proposal.pdf"
         profile_cmd = [
-            sys.executable,
-            "main.py",
+            python_bin,
+            str(PROJECT_ROOT / "main.py"),
             win_name
         ]
         doc_cmd = [
-            sys.executable,
-            "scripts/respond_to_rfp.py",
+            python_bin,
+            str(PROJECT_ROOT / "scripts" / "respond_to_rfp.py"),
             "--mode", "partnership",
             "--winner", win_name
         ]

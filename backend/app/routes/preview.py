@@ -4,6 +4,7 @@ app/routes/preview.py
 Pre-generation Preview Wizard API endpoints using Motor async client.
 """
 
+import asyncio
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -117,7 +118,7 @@ Output MUST be a JSON object with a 'questions' array. Each question must have:
 - 'recommended_option_id': string
 - 'options': array of objects with 'id', 'label', 'description'
 """
-        res = client.chat_json([{"role": "user", "content": prompt}])
+        res = await asyncio.to_thread(client.chat_json, [{"role": "user", "content": prompt}])
         questions = res.get("questions", default_questions)
     except Exception as e:
         questions = default_questions
@@ -237,7 +238,7 @@ Output MUST be a JSON object with a 'sections' array. Each section must have:
 - 'included': true
 - 'key_points': array of 2-3 short strings describing what this section will cover.
 """
-        res = client.chat_json([{"role": "user", "content": prompt}])
+        res = await asyncio.to_thread(client.chat_json, [{"role": "user", "content": prompt}])
         sections = res.get("sections", default_sections)
     except Exception as e:
         sections = default_sections

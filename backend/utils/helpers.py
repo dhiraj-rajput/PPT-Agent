@@ -28,10 +28,58 @@ from tenacity import (
     before_sleep_log,
 )
 
+import uuid
 from config.settings import settings
-import threading
 
-SUBPROCESS_SEMAPHORE = threading.Semaphore(3)
+class MongoSemaphore:
+    def __init__(self, name="subprocess_limit", max_leases=3):
+        self.name = name
+        self.max_leases = max_leases
+        self.lease_id = None
+
+    def __enter__(self):
+        from utils.db_client import get_collection
+        coll = get_collection("active_leases")
+        stale_threshold = time.time() - 600
+        try:
+            coll.delete_many({"name": self.name, "timestamp": {"$lt": stale_threshold}})
+        except Exception:
+            pass
+
+        self.lease_id = str(uuid.uuid4())
+        while True:
+            try:
+                count = coll.count_documents({"name": self.name})
+                if count < self.max_leases:
+                    coll.insert_one({
+                        "name": self.name,
+                        "lease_id": self.lease_id,
+                        "timestamp": time.time()
+                    })
+                    break
+            except Exception:
+                pass
+            time.sleep(2.0)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.lease_id:
+            try:
+                from utils.db_client import get_collection
+                coll = get_collection("active_leases")
+                coll.delete_one({"lease_id": self.lease_id})
+            except Exception:
+                pass
+
+SUBPROCESS_SEMAPHORE = MongoSemaphore("subprocess_limit", 3)
+
+def get_python_executable() -> str:
+    """
+    Returns the configured python interpreter path, or sys.executable as a fallback.
+    """
+    import sys
+    from config.settings import settings
+    return settings.PYTHON_PATH or sys.executable
 
 
 # ---------------------------------------------------------------------------

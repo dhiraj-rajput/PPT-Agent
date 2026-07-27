@@ -128,6 +128,8 @@ export default function TenderDetail() {
     let isMounted = true;
     let ws = null;
     let reconnectTimeout = null;
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT_ATTEMPTS = 3;
 
     function connect() {
       if (!isMounted) return;
@@ -135,11 +137,27 @@ export default function TenderDetail() {
       const wsUrl = api.getWebSocketUrl(`/api/proposals/ws${token ? `?token=${encodeURIComponent(token)}` : ''}`);
       try {
         ws = new WebSocket(wsUrl);
+        ws.onopen = () => {
+          reconnectAttempts = 0;
+        };
         ws.onmessage = () => {
           if (isMounted) fetchDraftRequests();
         };
         ws.onclose = () => {
-          if (isMounted) reconnectTimeout = setTimeout(connect, 5000);
+          if (isMounted) {
+            reconnectAttempts++;
+            if (reconnectAttempts <= MAX_RECONNECT_ATTEMPTS) {
+              reconnectTimeout = setTimeout(connect, 5000);
+            } else {
+              console.warn("WebSocket reconnect limit reached. Falling back to slow HTTP polling.");
+              reconnectTimeout = setTimeout(function poll() {
+                if (isMounted) {
+                  fetchDraftRequests();
+                  reconnectTimeout = setTimeout(poll, 30000);
+                }
+              }, 30000);
+            }
+          }
         };
         ws.onerror = () => {};
       } catch (e) {}

@@ -3,17 +3,20 @@ import { useNavigate } from 'react-router-dom';
 import { Sparkles, Lock, Eye, EyeOff, Check, X, ShieldAlert } from 'lucide-react';
 import { api } from '../lib/api.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
-import { checkPasswordRules } from '../lib/passwordStrength.jsx';
+import { checkPasswordRules, strengthLabel } from '../lib/passwordStrength.jsx';
 
 const STRENGTH_BAR_COLORS = {
+  'Very Weak': 'bg-tomato-500',
   'Very weak': 'bg-tomato-500',
   Weak: 'bg-orange-400',
   Fair: 'bg-yellow-400',
+  Good: 'bg-blue-400',
   Strong: 'bg-green-500',
 };
 
 function PasswordStrengthMeter({ password }) {
-  const { checks, score, label } = checkPasswordRules(password);
+  const { checks, score } = checkPasswordRules(password);
+  const label = strengthLabel(score);
   const rules = [
     { key: 'length', label: 'At least 8 characters' },
     { key: 'upper', label: 'One uppercase letter' },

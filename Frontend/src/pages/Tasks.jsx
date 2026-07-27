@@ -129,7 +129,7 @@ export default function Tasks() {
               <div className="flex items-center gap-2">
                 {t.assignee && (
                   <img
-                    src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(t.assignee.seed || t.assignee.email)}`}
+                    src={api.getInitialsAvatar(t.assignee.name || t.assignee.email || 'User')}
                     className="h-6 w-6 rounded-full"
                     alt={t.assignee.name}
                     title={t.assignee.name}

@@ -100,6 +100,10 @@ class AppSettings(BaseSettings):
         default=30000,
         description="Playwright page load timeout in milliseconds.",
     )
+    PYTHON_PATH: str = Field(
+        default="",
+        description="Path to the virtual environment python interpreter. Falls back to sys.executable if empty.",
+    )
 
     # ------------------------------------------------------------------
     # SAM.gov
@@ -342,12 +346,37 @@ class AppSettings(BaseSettings):
             if v_clean.startswith("[") and v_clean.endswith("]"):
                 import json
                 try:
-                    return json.loads(v_clean)
+                    loaded = json.loads(v_clean)
+                    if isinstance(loaded, list):
+                        v = loaded
                 except Exception:
                     pass
-            return [origin.strip() for origin in v_clean.split(",") if origin.strip()]
+            if isinstance(v, str):
+                origins = []
+                for origin in v_clean.split(","):
+                    o = origin.strip()
+                    if not o:
+                        continue
+                    from urllib.parse import urlparse
+                    parsed = urlparse(o)
+                    if parsed.scheme and parsed.netloc:
+                        origins.append(f"{parsed.scheme}://{parsed.netloc}")
+                    else:
+                        origins.append(o)
+                return origins
         if isinstance(v, list):
-            return [str(origin).strip() for origin in v if str(origin).strip()]
+            origins = []
+            for origin in v:
+                o = str(origin).strip()
+                if not o:
+                    continue
+                from urllib.parse import urlparse
+                parsed = urlparse(o)
+                if parsed.scheme and parsed.netloc:
+                    origins.append(f"{parsed.scheme}://{parsed.netloc}")
+                else:
+                    origins.append(o)
+            return origins
         return [
             "http://localhost:5173",
             "http://127.0.0.1:5173",
