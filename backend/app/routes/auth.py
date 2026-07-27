@@ -321,9 +321,6 @@ async def verify_otp(body: VerifyOtpBody, response: Response):
         return {"token": token, "user": _to_public_user(updated_user)}
 
     if body.purpose == "login":
-        if user.get("mustChangePassword"):
-            action_token = create_action_token(user_id, "force-change-password")
-            return {"mustChangePassword": True, "actionToken": action_token}
         token = create_access_token(user_id)
         response.set_cookie(
             key="orbitavanya_token",
@@ -333,13 +330,50 @@ async def verify_otp(body: VerifyOtpBody, response: Response):
             samesite="lax",
             max_age=7 * 24 * 60 * 60,
         )
-        return {"token": token, "user": _to_public_user(user)}
+        return {
+            "token": token,
+            "user": _to_public_user(user),
+            "mustChangePassword": bool(user.get("mustChangePassword")),
+        }
 
     if body.purpose in ("reset-password", "change-password"):
         action_token = create_action_token(user_id, body.purpose)
         return {"actionToken": action_token}
 
     raise HTTPException(400, "Unknown OTP purpose.")
+
+
+class ForceChangePasswordBody(BaseModel):
+    newPassword: str
+    confirmPassword: str
+
+
+@router.post("/force-change-password")
+async def force_change_password(
+    body: ForceChangePasswordBody,
+    current_user: dict = Depends(get_current_user),
+):
+    if not body.newPassword or not body.confirmPassword:
+        raise HTTPException(400, "New password and confirm password are required.")
+    if body.newPassword != body.confirmPassword:
+        raise HTTPException(400, "Passwords do not match.")
+    if not _is_strong_password(body.newPassword):
+        raise HTTPException(
+            400,
+            "Password is too weak. Use at least 8 characters with uppercase, lowercase, a number, and a special character.",
+        )
+    pw_hash = await asyncio.to_thread(_hash_password, body.newPassword)
+    users_col = get_async_collection("users")
+    await users_col.update_one(
+        {"_id": current_user["_id"]},
+        {"$set": {
+            "passwordHash": pw_hash,
+            "mustChangePassword": False,
+            "updatedAt": datetime.now(tz=timezone.utc),
+        }},
+    )
+    updated = await users_col.find_one({"_id": current_user["_id"]})
+    return {"message": "Password updated successfully.", "user": _to_public_user(updated)}
 
 
 @router.post("/forgot-password")

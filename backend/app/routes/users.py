@@ -159,3 +159,71 @@ async def update_role(
     if not user:
         raise HTTPException(404, "User not found.")
     return {"user": _to_public_user(user)}
+
+
+@router.delete("/{user_id}")
+async def delete_user(
+    user_id: str,
+    current_user: dict = Depends(require_admin),
+):
+    try:
+        oid = ObjectId(user_id)
+    except (InvalidId, Exception):
+        raise HTTPException(400, "Invalid user ID.")
+
+    if str(current_user["_id"]) == str(user_id):
+        raise HTTPException(400, "You cannot delete your own account.")
+
+    users_col = get_async_collection("users")
+    user = await users_col.find_one({"_id": oid})
+    if not user:
+        raise HTTPException(404, "User not found.")
+
+    await users_col.delete_one({"_id": oid})
+    return {"ok": True, "message": f"User {user.get('email')} has been deleted."}
+
+
+@router.post("/{user_id}/resend-invite")
+async def resend_invite(
+    user_id: str,
+    current_user: dict = Depends(require_admin),
+):
+    try:
+        oid = ObjectId(user_id)
+    except (InvalidId, Exception):
+        raise HTTPException(400, "Invalid user ID.")
+
+    users_col = get_async_collection("users")
+    user = await users_col.find_one({"_id": oid})
+    if not user:
+        raise HTTPException(404, "User not found.")
+
+    temp_password = secrets.token_urlsafe(9)
+    pw_hash = await asyncio.to_thread(_hash_pw_sync, temp_password)
+
+    await users_col.update_one(
+        {"_id": oid},
+        {"$set": {
+            "passwordHash": pw_hash,
+            "mustChangePassword": True,
+            "updatedAt": datetime.now(tz=timezone.utc),
+        }}
+    )
+
+    warning = None
+    try:
+        await send_invite_email(
+            to_email=user["email"],
+            invitee_name=user.get("name", user["email"].split("@")[0]),
+            role=user.get("role", "Team Member"),
+            inviter_name=current_user.get("name"),
+            temp_password=temp_password,
+        )
+    except Exception:
+        warning = "Temp password updated, but the invite email could not be sent. Check SMTP settings."
+
+    updated = await users_col.find_one({"_id": oid})
+    response: dict[str, Any] = {"ok": True, "user": _to_public_user(updated), "tempPassword": temp_password}
+    if warning:
+        response["warning"] = warning
+    return response

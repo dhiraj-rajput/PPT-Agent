@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, MoreHorizontal, X, Loader2 } from 'lucide-react';
+import { Plus, MoreHorizontal, X, Loader2, Trash2, RefreshCw } from 'lucide-react';
 import { PageHeader, Card, StatusBadge } from '../components/ui/Common.jsx';
 import { api } from '../lib/api.jsx';
 import { useNotifications } from '../context/NotificationContext.jsx';
@@ -27,7 +27,7 @@ export default function UsersRoles() {
       const { users } = await api.listUsers();
       setUsers(users);
     } catch (err) {
-      setLoadError(err.message || 'Could not load users.');
+      setLoadError(typeof err?.message === 'string' ? err.message : String(err || 'Could not load users.'));
     } finally {
       setLoading(false);
     }
@@ -75,6 +75,34 @@ export default function UsersRoles() {
     } catch (err) {
       setUsers(prev);
       const msg = typeof err?.message === 'string' ? err.message : String(err || 'Could not update role.');
+      setLoadError(msg);
+    }
+  }
+
+  async function handleDeleteUser(user) {
+    setMenuOpenId(null);
+    if (!window.confirm(`Are you sure you want to remove user "${user.name || user.email}"?`)) return;
+    const prev = users;
+    setUsers((p) => p.filter((u) => u.id !== user.id));
+    try {
+      await api.deleteUser(user.id);
+      notify('User removed', `${user.name || user.email} was removed from the team.`, '/settings/users');
+    } catch (err) {
+      setUsers(prev);
+      const msg = typeof err?.message === 'string' ? err.message : String(err || 'Could not delete user.');
+      setLoadError(msg);
+    }
+  }
+
+  async function handleResendInvite(user) {
+    setMenuOpenId(null);
+    try {
+      const res = await api.resendUserInvite(user.id);
+      const msg = res.warning || `New temporary password generated for ${user.email}.`;
+      alert(`${msg}\n\nTemp Password: ${res.tempPassword || '(Sent via email)'}`);
+      notify('Invite Resent', `New temporary password sent to ${user.email}.`, '/settings/users');
+    } catch (err) {
+      const msg = typeof err?.message === 'string' ? err.message : String(err || 'Could not resend invite.');
       setLoadError(msg);
     }
   }
@@ -143,19 +171,32 @@ export default function UsersRoles() {
                       <MoreHorizontal size={15} />
                     </button>
                     {menuOpenId === u.id && (
-                      <div className="absolute right-5 z-10 mt-1 w-48 rounded-xl border border-slate-100 dark:border-navy-800 bg-white dark:bg-navy-900 p-1.5 text-left shadow-card">
+                      <div className="absolute right-5 z-10 mt-1 w-52 rounded-xl border border-slate-100 dark:border-navy-800 bg-white dark:bg-navy-900 p-1.5 text-left shadow-card">
                         <p className="px-2.5 py-1.5 text-[11px] font-semibold uppercase text-slate-400 dark:text-slate-500">Change role</p>
                         {ROLES.map((r) => (
                           <button
                             key={r}
                             onClick={() => changeRole(u.id, r)}
-                            className={`block w-full rounded-lg px-2.5 py-1.5 text-left text-xs font-medium hover:bg-slate-50 ${
-                              r === u.role ? 'text-brand-600' : 'text-navy-900'
+                            className={`block w-full rounded-lg px-2.5 py-1.5 text-left text-xs font-medium hover:bg-slate-50 dark:hover:bg-navy-800 ${
+                              r === u.role ? 'text-brand-600 font-bold' : 'text-navy-900 dark:text-slate-200'
                             }`}
                           >
                             {r}
                           </button>
                         ))}
+                        <div className="my-1.5 border-t border-slate-100 dark:border-navy-800" />
+                        <button
+                          onClick={() => handleResendInvite(u)}
+                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                        >
+                          <RefreshCw size={13} /> Reset Temp Password
+                        </button>
+                        <button
+                          onClick={() => handleDeleteUser(u)}
+                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                        >
+                          <Trash2 size={13} /> Delete User
+                        </button>
                       </div>
                     )}
                   </td>

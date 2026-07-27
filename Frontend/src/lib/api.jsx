@@ -153,6 +153,12 @@ export const api = {
   async updateUserRole(userId, role) {
     return patch(`/api/users/${userId}/role`, { role });
   },
+  async deleteUser(userId) {
+    return _request('DELETE', `/api/users/${userId}`);
+  },
+  async resendUserInvite(userId) {
+    return post(`/api/users/${userId}/resend-invite`, {});
+  },
 
   // ---------- Tasks ----------
   async getTasks() {
