@@ -295,6 +295,9 @@ export const api = {
     return get('/api/companies/research/status');
   },
   async getProfileDetail(slug) {
+    if (!slug || String(slug).trim() === '' || String(slug).toLowerCase() === 'none' || String(slug).toLowerCase() === 'undefined' || String(slug).toLowerCase() === 'null') {
+      return null;
+    }
     return get(`/api/companies/profiles/detail/${slug}`);
   },
   async searchProfile(q) {

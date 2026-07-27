@@ -500,16 +500,19 @@ async def import_companies(payload: dict, current_user: dict = Depends(get_curre
                 try:
                     validated_item = CompanyCreateBody(**item)
                 except Exception as ve:
-                    raise HTTPException(status_code=400, detail=f"Validation failed for company: {ve}")
+                    continue
                     
-                uei = validated_item.uei.strip()
+                uei = validated_item.uei.strip().upper()
                 if uei and not await col.find_one({"uei": uei}):
                     doc = validated_item.model_dump()
-                    doc["matchScore"] = doc.get("matchScore") or compute_company_match_score(
-                        primary_naics=doc.get("primary_naics") or "",
-                        industry_desc=doc.get("industry") or doc.get("primary_naics_desc") or "Other",
-                        company_name=doc.get("name") or ""
-                    )
+                    try:
+                        doc["matchScore"] = doc.get("matchScore") or compute_company_match_score(
+                            primary_naics=doc.get("primary_naics") or "",
+                            industry_desc=doc.get("industry") or doc.get("primary_naics_desc") or "Other",
+                            company_name=doc.get("name") or ""
+                        )
+                    except Exception:
+                        doc["matchScore"] = 75
                     doc["industry"] = doc.get("industry") or doc.get("primary_naics_desc") or "Other"
                     doc["contact"] = doc.get("contact") or "N/A"
                     await col.insert_one(doc)
@@ -521,16 +524,17 @@ async def import_companies(payload: dict, current_user: dict = Depends(get_curre
 
     elif format_type == "csv":
         try:
-            raw_str = (raw_data or "").strip()
+            raw_str = (raw_data or "").replace("\x00", "").strip()
+            if not raw_str:
+                return {"status": "success", "count": 0}
+
             reader = csv.DictReader(raw_str.splitlines())
 
-            # Pass 1: parse every row in memory (no DB calls yet) and dedupe
-            # by UEI within the file itself (first occurrence wins — matches
-            # the previous row-by-row behavior, where a later duplicate row
-            # would find the earlier one already inserted and get skipped).
             parsed_rows = []
             seen_ueis_in_file = set()
             for row in reader:
+                if not isinstance(row, dict):
+                    continue
                 uei = (
                     row.get("UEI")
                     or row.get("uei")
@@ -538,10 +542,13 @@ async def import_companies(payload: dict, current_user: dict = Depends(get_curre
                     or row.get("SAM_UEI")
                     or row.get("Unique Entity ID")
                     or ""
-                ).strip().upper()
+                )
+                if not isinstance(uei, str):
+                    uei = str(uei or "")
+                uei = uei.strip().upper()
 
                 if not uei or uei in seen_ueis_in_file:
-                    continue  # Require valid SAM UEI — do not auto-generate dummy UEIs
+                    continue
 
                 name = (row.get("Legal_Business_Name") or row.get("DBA_Name") or row.get("name") or "").strip()
                 if not name:
@@ -551,13 +558,15 @@ async def import_companies(payload: dict, current_user: dict = Depends(get_curre
                 parsed_rows.append((uei, name, row))
 
             if parsed_rows:
-                # Pass 2: one bulk query to find which UEIs already exist,
-                # instead of one find_one() per row.
                 all_ueis = [uei for uei, _, _ in parsed_rows]
-                existing_cursor = col.find(
-                    {"uei": {"$in": all_ueis}}, {"uei": 1, "_id": 0}
-                )
-                existing_ueis = {doc["uei"] async for doc in existing_cursor}
+                existing_ueis = set()
+                try:
+                    existing_cursor = col.find(
+                        {"uei": {"$in": all_ueis}}, {"uei": 1, "_id": 0}
+                    )
+                    existing_ueis = {doc["uei"] async for doc in existing_cursor if "uei" in doc}
+                except Exception as e:
+                    logger.warning(f"Error querying existing UEIs: {e}")
 
                 docs_to_insert = []
                 for uei, name, row in parsed_rows:
@@ -584,11 +593,14 @@ async def import_companies(payload: dict, current_user: dict = Depends(get_curre
                     contact = (row.get("Gov_Contact_Name") or row.get("EBiz_Contact_Name") or row.get("contact") or "N/A").strip()
                     email = (row.get("Gov_Contact_Email") or row.get("EBiz_Contact_Email") or row.get("email") or "info@company.com").strip()
 
-                    match_score = compute_company_match_score(
-                        primary_naics=primary_naics,
-                        industry_desc=primary_naics_desc or "Other",
-                        company_name=name,
-                    )
+                    try:
+                        match_score = compute_company_match_score(
+                            primary_naics=primary_naics,
+                            industry_desc=primary_naics_desc or "Other",
+                            company_name=name,
+                        )
+                    except Exception:
+                        match_score = 75
 
                     phys_addr1 = (row.get("Phys_Address_1") or row.get("address") or "").strip()
                     phys_zip = (row.get("Phys_Zip") or row.get("zip") or "").strip()
@@ -633,18 +645,20 @@ async def import_companies(payload: dict, current_user: dict = Depends(get_curre
                         "ebiz_phone": (row.get("EBiz_Contact_Phone") or "").strip(),
                     })
 
-                # Pass 3: insert in chunks instead of one insert_one() per row.
-                chunk_size = 2000
+                chunk_size = 1000
                 for i in range(0, len(docs_to_insert), chunk_size):
                     chunk = docs_to_insert[i:i + chunk_size]
                     try:
-                        await col.insert_many(chunk, ordered=False)
-                        imported_count += len(chunk)
+                        res = await col.insert_many(chunk, ordered=False)
+                        imported_count += len(res.inserted_ids)
                     except Exception as e:
-                        logger.error(f"Bulk insert chunk failed: {e}")
+                        inserted_ids = getattr(e, "details", {}).get("nInserted", 0)
+                        imported_count += inserted_ids
+                        logger.error(f"Bulk insert chunk warning: {e}")
         except HTTPException:
             raise
         except Exception as e:
+            logger.error(f"CSV import failed: {e}")
             raise HTTPException(status_code=400, detail=f"Invalid CSV format: {str(e)}")
 
     return {"status": "success", "count": imported_count}
@@ -721,8 +735,9 @@ def run_company_research_sync(company_input: str, force_rescrape: bool = False):
                     if m:
                         resolved_slug = m.group(1)
                 
-        p.wait()
         if p.returncode == 0:
+            if not resolved_slug:
+                resolved_slug = re.sub(r"[^a-z0-9]+", "-", task_key.lower()).strip("-")
             update_research_task(task_key, 100, "completed", "Research completed successfully!", resolved_slug=resolved_slug)
             try:
                 profiles_col = get_collection("company_profiles")
