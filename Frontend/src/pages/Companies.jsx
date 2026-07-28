@@ -181,13 +181,21 @@ export default function Companies() {
       } else {
         if (!selectedFile) throw new Error("Please select a file to upload");
         const format = selectedFile.name.toLowerCase().endsWith('.json') ? 'json' : 'csv';
-        const text = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = e => resolve(e.target.result);
-          reader.onerror = e => reject(new Error("Failed to read file"));
-          reader.readAsText(selectedFile);
-        });
-        await api.importCompanies({ data: text, format });
+        if (format === 'csv') {
+          // Pass the raw File object — api.jsx detects this and uses the
+          // streaming multipart /import/file endpoint instead of a JSON body,
+          // preventing 500 errors on large CSV files.
+          await api.importCompanies({ data: selectedFile, format: 'csv' });
+        } else {
+          // JSON: read as text (JSON files are typically small)
+          const text = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = e => resolve(e.target.result);
+            reader.onerror = () => reject(new Error("Failed to read file"));
+            reader.readAsText(selectedFile);
+          });
+          await api.importCompanies({ data: text, format });
+        }
       }
       setIsSubmitting(false);
       setShowAddModal(false);

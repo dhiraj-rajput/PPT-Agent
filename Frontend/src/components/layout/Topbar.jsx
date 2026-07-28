@@ -237,7 +237,7 @@ export default function Topbar({ onMenuClick }) {
   };
 
   return (
-    <header className="sticky top-0 z-20 flex h-[72px] items-center justify-between gap-4 border-b border-slate-200 bg-white/90 px-6 backdrop-blur dark:border-navy-800 dark:bg-navy-900/90 dark:text-white">
+    <header className="flex h-[72px] items-center justify-between gap-4 border-b border-slate-200 bg-white/90 px-6 backdrop-blur dark:border-navy-800 dark:bg-navy-900/90 dark:text-white">
       <div className="flex items-center gap-3">
         <button
           onClick={onMenuClick}

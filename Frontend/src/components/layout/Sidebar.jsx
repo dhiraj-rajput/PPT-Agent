@@ -2,8 +2,10 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Building2, FileStack, BrainCircuit, FileEdit, Mail,
   Kanban, Calendar, CheckSquare, BarChart3, FileBarChart, Users,
-  Plug, Settings, ChevronLeft, Sparkles, Zap, Hash
+  Plug, Settings, ChevronLeft, Sparkles, Zap, Hash, ScrollText
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { useErrorLogs } from '../../context/ErrorLogContext.jsx';
 
 const topNav = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -28,12 +30,6 @@ const opsNav = [
   { to: '/tasks', label: 'Tasks', icon: CheckSquare },
 ];
 
-const settingsNav = [
-  { to: '/settings/users', label: 'Users & Roles', icon: Users },
-  { to: '/settings/integrations', label: 'Integrations', icon: Plug },
-  { to: '/settings', label: 'Settings', icon: Settings, end: true },
-];
-
 function NavSection({ title, items, collapsed }) {
   return (
     <div className="mt-6">
@@ -41,7 +37,7 @@ function NavSection({ title, items, collapsed }) {
         <p className="px-4 mb-2 text-[11px] font-bold tracking-wider text-navy-700/60 uppercase">{title}</p>
       )}
       <nav className="flex flex-col gap-1 px-2">
-        {items.map(({ to, label, icon: Icon, end }) => (
+        {items.map(({ to, label, icon: Icon, end, badge }) => (
           <NavLink
             key={to}
             to={to}
@@ -55,8 +51,18 @@ function NavSection({ title, items, collapsed }) {
             }
             title={collapsed ? label : undefined}
           >
-            <Icon size={18} strokeWidth={2} className="shrink-0" />
-            {!collapsed && <span className="truncate">{label}</span>}
+            <span className="relative shrink-0">
+              <Icon size={18} strokeWidth={2} />
+              {collapsed && !!badge && (
+                <span className="absolute -right-1.5 -top-1.5 h-2 w-2 rounded-full bg-rose-500" />
+              )}
+            </span>
+            {!collapsed && <span className="truncate flex-1">{label}</span>}
+            {!collapsed && !!badge && (
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">
+                {badge > 99 ? '99+' : badge}
+              </span>
+            )}
           </NavLink>
         ))}
       </nav>
@@ -65,6 +71,24 @@ function NavSection({ title, items, collapsed }) {
 }
 
 export default function Sidebar({ collapsed, onToggle }) {
+  const { user } = useAuth();
+  const { admin, summary } = useErrorLogs();
+  const isAdmin = admin || (user?.role || '').toLowerCase() === 'admin' || (user?.role || '').toLowerCase() === 'owner';
+
+  const settingsNav = [
+    { to: '/settings/users', label: 'Users & Roles', icon: Users },
+    { to: '/settings/integrations', label: 'Integrations', icon: Plug },
+    ...(isAdmin
+      ? [{
+          to: '/settings/server-logs',
+          label: 'Server Logs',
+          icon: ScrollText,
+          badge: summary?.unresolved || 0,
+        }]
+      : []),
+    { to: '/settings', label: 'Settings', icon: Settings, end: true },
+  ];
+
   return (
     <aside
       className={`fixed inset-y-0 left-0 z-30 flex flex-col bg-navy-900 transition-all duration-200 ${

@@ -77,8 +77,10 @@ target/
 profile_default/
 ipython_config.py
 
-# Environments
+# Environments & Secrets
 .env
+.env.*
+!.env.example
 .venv
 env/
 venv/

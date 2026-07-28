@@ -1,18 +1,53 @@
-# cPanel Apache rewrite rules for SPA & API / WebSocket Reverse Proxy
-<IfModule mod_rewrite.c>
-  RewriteEngine On
-  RewriteBase /
+RewriteEngine On
 
-  # 1. Reverse Proxy WebSockets to local Uvicorn daemon on port 5050
-  RewriteCond %{HTTP:Upgrade} =websocket [NC]
-  RewriteRule ^api/(.*)$ ws://127.0.0.1:5050/api/$1 [P,L]
+# 1. Force HTTPS redirect
+RewriteCond %{HTTPS} !=on
+RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
 
-  # 2. Reverse Proxy HTTP API requests to local Uvicorn daemon on port 5050
-  RewriteRule ^api/(.*)$ http://127.0.0.1:5050/api/$1 [P,L]
+# =====================================================================
+# CRITICAL: Disable Apache output buffering for SSE (Server-Sent Events)
+# Without these, SSE lines are held in Apache's buffer and not flushed
+# to the browser until the connection closes — killing the live log stream.
+# =====================================================================
+# Disable gzip compression for SSE stream endpoint
+<IfModule mod_deflate.c>
+    SetEnvIfNoCase Request_URI "^/api/system-logs/stream" no-gzip 1
+    SetEnvIfNoCase Request_URI "^/api/system-logs/stream" dont-vary 1
+</IfModule>
 
-  # 3. SPA Fallback: serve index.html for frontend routes
-  RewriteRule ^index\.html$ - [L]
-  RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteRule . /index.html [L]
+# Tell Apache mod_proxy not to buffer the SSE stream
+SetEnv proxy-nokeepalive 0
+SetEnv proxy-sendchunked 1
+
+# 2. Reverse proxy WebSockets (wss://) to Uvicorn daemon on port 5050
+RewriteCond %{HTTP:Upgrade} =websocket [NC]
+RewriteRule ^api/(.*)$ ws://127.0.0.1:5050/api/$1 [P,L]
+
+# 3. Reverse proxy standard HTTP /api calls to Uvicorn daemon on port 5050
+RewriteCond %{REQUEST_URI} ^/api
+RewriteRule ^api/(.*)$ http://127.0.0.1:5050/api/$1 [P,L]
+
+# 4. SPA routing fallback (redirects all sub-routes like /tenders, /companies to index.html)
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.html [L]
+
+# =====================================================================
+# Allow large file uploads (CSV imports up to 100MB)
+# Without this, Apache rejects large POST bodies with 413
+# =====================================================================
+LimitRequestBody 104857600
+
+# =====================================================================
+# SSE anti-buffering headers at Apache level
+# X-Accel-Buffering: no tells Nginx/Apache reverse proxies to flush immediately
+# =====================================================================
+<IfModule mod_headers.c>
+    # Force flush for SSE endpoints
+    <If "%{REQUEST_URI} =~ m|^/api/system-logs/stream|">
+        Header set X-Accel-Buffering "no"
+        Header set Cache-Control "no-cache, no-transform"
+        Header set Content-Encoding "none"
+        Header set Connection "keep-alive"
+    </If>
 </IfModule>

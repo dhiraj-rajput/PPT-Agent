@@ -64,6 +64,9 @@ from app.routes.website_events import router as website_events_router
 from app.routes.naics import router as naics_router
 from app.routes.newsletters import router as newsletters_router
 
+# ---- Admin: Server Logs ----
+from app.routes.system_logs import router as system_logs_router
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -173,6 +176,58 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ---------------------------------------------------------------------------
+# Global error logging — every unhandled exception and every 5xx response is
+# captured in full detail (traceback, request path/method) and persisted to
+# MongoDB via utils.helpers.setup_logger()'s Mongo handler, powering the
+# in-app Server Logs admin page and its live alert banner.
+# ---------------------------------------------------------------------------
+import traceback as _traceback
+from fastapi import Request
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from utils.helpers import setup_logger as _setup_logger
+
+_error_logger = _setup_logger("server.errors")
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """Catches HTTPException(status_code=...) raised anywhere in the app."""
+    if exc.status_code >= 500:
+        _error_logger.error(
+            f"HTTP {exc.status_code} on {request.method} {request.url.path}: {exc.detail}",
+            exc_info=True,
+            extra={"path": str(request.url.path), "method": request.method, "status_code": exc.status_code},
+        )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers=getattr(exc, "headers", None),
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """422s aren't server errors — just pass them through without logging as an error."""
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Catches anything not handled above — genuinely unexpected crashes."""
+    _error_logger.error(
+        f"Unhandled exception on {request.method} {request.url.path}: {exc}",
+        exc_info=True,
+        extra={"path": str(request.url.path), "method": request.method, "status_code": 500},
+    )
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error. Our team has been notified."},
+    )
+
+
 # ---- Register all routers ----
 app.include_router(auth_router, prefix="/api")
 app.include_router(users_router, prefix="/api")
@@ -196,6 +251,9 @@ app.include_router(analytics_router, prefix="/api")
 app.include_router(website_events_router, prefix="/api")
 app.include_router(naics_router, prefix="/api")
 app.include_router(newsletters_router, prefix="/api")
+
+# Admin: Server Logs
+app.include_router(system_logs_router, prefix="/api")
 
 # Serve downloaded tender documents statically (needed for DocumentViewer)
 from pathlib import Path

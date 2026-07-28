@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
 import { NotificationProvider } from './context/NotificationContext.jsx'
+import { ErrorLogProvider } from './context/ErrorLogContext.jsx'
 import './index.css'
 
 // Global fetch interceptor to inject JWT authorization token for secured routes
@@ -41,7 +42,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider>
         <NotificationProvider>
-          <App />
+          <ErrorLogProvider>
+            <App />
+          </ErrorLogProvider>
         </NotificationProvider>
       </AuthProvider>
     </BrowserRouter>

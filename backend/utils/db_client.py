@@ -270,6 +270,13 @@ def ensure_all_indexes() -> None:
     # Company catalog
     _safe_create("company_catalog", [("category", pymongo.ASCENDING)], name="idx_company_catalog_category")
 
+    # Server error logs (admin Server Logs page)
+    _safe_create("error_logs", [("timestamp", pymongo.DESCENDING)], name="idx_error_logs_timestamp")
+    _safe_create("error_logs", [("level", pymongo.ASCENDING), ("timestamp", pymongo.DESCENDING)], name="idx_error_logs_level_timestamp")
+    _safe_create("error_logs", [("resolved", pymongo.ASCENDING), ("timestamp", pymongo.DESCENDING)], name="idx_error_logs_resolved_timestamp")
+    # Auto-expire error logs after 30 days to keep the collection lean.
+    _safe_create("error_logs", [("timestamp", pymongo.ASCENDING)], name="idx_error_logs_ttl", expireAfterSeconds=60 * 60 * 24 * 30)
+
     logger.info("All indexes ensured (25+ collections).")
 
 

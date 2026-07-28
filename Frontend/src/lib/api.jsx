@@ -214,6 +214,36 @@ export const api = {
     return post('/api/notifications', { title, message, link, userId });
   },
 
+  // ---------- Server Logs (admin) ----------
+  async getSystemLogs(params = {}) {
+    const q = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== ''))
+    ).toString();
+    return get(`/api/system-logs${q ? `?${q}` : ''}`);
+  },
+  async getSystemLogsSummary() {
+    return get('/api/system-logs/summary');
+  },
+  async pollSystemLogs(since) {
+    const q = since ? `?since=${encodeURIComponent(since)}` : '';
+    return get(`/api/system-logs/poll${q}`);
+  },
+  async resolveSystemLog(id) {
+    return patch(`/api/system-logs/${id}/resolve`, {});
+  },
+  async unresolveSystemLog(id) {
+    return patch(`/api/system-logs/${id}/unresolve`, {});
+  },
+  async deleteSystemLog(id) {
+    return del(`/api/system-logs/${id}`);
+  },
+  async clearSystemLogs(scope = 'resolved') {
+    return del(`/api/system-logs?scope=${scope}`);
+  },
+  async triggerTestSystemLog() {
+    return post('/api/system-logs/test', {});
+  },
+
   // ---------- Integrations ----------
   async getGoogleStatus() {
     return get('/api/integrations/google/status');
@@ -283,7 +313,20 @@ export const api = {
     return post('/api/companies', companyData);
   },
   async importCompanies({ format, data }) {
+    // If 'data' is a File object (CSV file upload), use the streaming file endpoint
+    // to avoid sending the entire CSV as a JSON string (which causes 500 on large files).
+    if (format === 'csv' && data instanceof File) {
+      const formData = new FormData();
+      formData.append('file', data);
+      return _upload('/api/companies/import/file', formData);
+    }
+    // For JSON arrays or small inline CSV strings, use the JSON body endpoint
     return post('/api/companies/import', { format, data });
+  },
+  async importCompaniesFile(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return _upload('/api/companies/import/file', formData);
   },
   async getCRMPipeline() {
     return get('/api/companies/pipeline');

@@ -12,9 +12,13 @@ Includes:
 """
 
 import logging
+import os
 import random
 import time
 import json
+import traceback
+from concurrent.futures import ThreadPoolExecutor
+from logging.handlers import RotatingFileHandler
 from datetime import datetime, timezone
 from functools import wraps
 from typing import Any, Callable, TypeVar
@@ -86,9 +90,80 @@ def get_python_executable() -> str:
 # Logging Setup
 # ---------------------------------------------------------------------------
 
+# Directory for on-disk logs — visible in cPanel File Manager / SSH regardless
+# of whether Passenger's own stderr capture is exposed on a given hosting plan.
+_LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
+try:
+    os.makedirs(_LOG_DIR, exist_ok=True)
+except Exception:
+    pass
+
+# Small dedicated thread pool so writing a log entry to MongoDB never blocks
+# the request/event loop that triggered it.
+_ERROR_LOG_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="error-log-writer")
+
+
+class MongoErrorLogHandler(logging.Handler):
+    """
+    Logging handler that persists WARNING/ERROR/CRITICAL records to the
+    `error_logs` MongoDB collection so they can be browsed, filtered, and
+    resolved from the in-app Server Logs admin page instead of relying on
+    hosting-panel log viewers.
+
+    The actual insert is dispatched to a background thread so a logging
+    call never adds latency to the request that triggered it, and any
+    failure to reach MongoDB is swallowed (a logging handler must never be
+    the thing that crashes the app).
+    """
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            detail = ""
+            if record.exc_info:
+                detail = "".join(traceback.format_exception(*record.exc_info))
+            elif record.stack_info:
+                detail = str(record.stack_info)
+
+            doc = {
+                "timestamp": datetime.now(timezone.utc),
+                "level": record.levelname,
+                "source": record.name,
+                "message": record.getMessage(),
+                "detail": detail,
+                "path": getattr(record, "path", None),
+                "method": getattr(record, "method", None),
+                "statusCode": getattr(record, "status_code", None),
+                "userEmail": getattr(record, "user_email", None),
+                "ip": getattr(record, "client_ip", None),
+                "module": record.module,
+                "func": record.funcName,
+                "line": record.lineno,
+                "resolved": False,
+            }
+            _ERROR_LOG_EXECUTOR.submit(_write_error_log_doc, doc)
+        except Exception:
+            # A logging handler must never raise.
+            pass
+
+
+def _write_error_log_doc(doc: dict) -> None:
+    """Runs on a background thread — inserts one error-log document into MongoDB."""
+    try:
+        # Imported lazily to avoid a circular import (db_client imports this module).
+        from utils.db_client import get_collection
+        get_collection("error_logs").insert_one(doc)
+    except Exception:
+        # If MongoDB is briefly unreachable, don't lose the process over a log line.
+        pass
+
+
 def setup_logger(logger_name: str) -> logging.Logger:
     """
-    Creates and returns a logger with a clean, readable format.
+    Creates and returns a logger with a clean, readable format that logs to:
+      - the console (stdout/stderr — visible via `tail`/Passenger logs)
+      - a rotating file at backend/logs/app.log (visible in cPanel File Manager)
+      - MongoDB `error_logs` collection for WARNING and above (powers the
+        in-app Server Logs admin page, live alert banner, etc.)
 
     Args:
         logger_name: Typically the module's __name__.
@@ -99,6 +174,7 @@ def setup_logger(logger_name: str) -> logging.Logger:
     Example:
         logger = setup_logger(__name__)
         logger.info("Scraping started", extra={"company_slug": "infosys"})
+        logger.error("Upstream API failed", exc_info=True)
     """
     logger = logging.getLogger(logger_name)
 
@@ -108,16 +184,37 @@ def setup_logger(logger_name: str) -> logging.Logger:
 
     logger.setLevel(logging.DEBUG)
 
-    # Console handler with a human-readable format
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.DEBUG)
-
     log_format = logging.Formatter(
         fmt="[%(asctime)s] %(levelname)-8s %(name)s — %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
+
+    # Console handler with a human-readable format
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.DEBUG)
     console_handler.setFormatter(log_format)
     logger.addHandler(console_handler)
+
+    # Rotating file handler — 5MB x 5 backups, always on disk regardless of
+    # how the hosting panel captures (or fails to capture) process stderr.
+    try:
+        file_handler = RotatingFileHandler(
+            os.path.join(_LOG_DIR, "app.log"),
+            maxBytes=5_000_000,
+            backupCount=5,
+            encoding="utf-8",
+        )
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(log_format)
+        logger.addHandler(file_handler)
+    except Exception:
+        # Read-only filesystem edge case — console logging still works.
+        pass
+
+    # MongoDB handler — structured, queryable, powers the admin Server Logs page.
+    mongo_handler = MongoErrorLogHandler()
+    mongo_handler.setLevel(logging.WARNING)
+    logger.addHandler(mongo_handler)
 
     return logger
 

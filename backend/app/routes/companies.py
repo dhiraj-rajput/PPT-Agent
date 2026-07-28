@@ -7,16 +7,19 @@ Company intelligence, search, filtering, and research management endpoints.
 from __future__ import annotations
 
 import asyncio
+import codecs
 import csv
+import io
 import json
 import logging
+import os
 import random
 import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, UploadFile, File, Form
 from pydantic import BaseModel
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -487,7 +490,7 @@ async def add_company(
 
 @router.post("/import")
 async def import_companies(payload: dict, current_user: dict = Depends(get_current_user)):
-    """Bulk import companies from a raw CSV string or a JSON array using Motor."""
+    """Bulk import companies from a raw JSON array (small payloads only). For CSV use /import/file."""
     format_type = payload.get("format")
     raw_data = payload.get("data")
     col = get_async_collection("companies")
@@ -499,9 +502,9 @@ async def import_companies(payload: dict, current_user: dict = Depends(get_curre
             for item in items:
                 try:
                     validated_item = CompanyCreateBody(**item)
-                except Exception as ve:
+                except Exception:
                     continue
-                    
+
                 uei = validated_item.uei.strip().upper()
                 if uei and not await col.find_one({"uei": uei}):
                     doc = validated_item.model_dump()
@@ -521,140 +524,15 @@ async def import_companies(payload: dict, current_user: dict = Depends(get_curre
             raise
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid JSON format: {str(e)}")
-
     elif format_type == "csv":
+        # For small CSV strings only — large files must use /import/file
         try:
             raw_str = (raw_data or "").replace("\x00", "").strip()
             if not raw_str:
                 return {"status": "success", "count": 0}
-
-            reader = csv.DictReader(raw_str.splitlines())
-
-            parsed_rows = []
-            seen_ueis_in_file = set()
-            for row in reader:
-                if not isinstance(row, dict):
-                    continue
-                uei = (
-                    row.get("UEI")
-                    or row.get("uei")
-                    or row.get("Unique_Entity_ID")
-                    or row.get("SAM_UEI")
-                    or row.get("Unique Entity ID")
-                    or ""
-                )
-                if not isinstance(uei, str):
-                    uei = str(uei or "")
-                uei = uei.strip().upper()
-
-                if not uei or uei in seen_ueis_in_file:
-                    continue
-
-                name = (row.get("Legal_Business_Name") or row.get("DBA_Name") or row.get("name") or "").strip()
-                if not name:
-                    continue
-
-                seen_ueis_in_file.add(uei)
-                parsed_rows.append((uei, name, row))
-
-            if parsed_rows:
-                all_ueis = [uei for uei, _, _ in parsed_rows]
-                existing_ueis = set()
-                try:
-                    existing_cursor = col.find(
-                        {"uei": {"$in": all_ueis}}, {"uei": 1, "_id": 0}
-                    )
-                    existing_ueis = {doc["uei"] async for doc in existing_cursor if "uei" in doc}
-                except Exception as e:
-                    logger.warning(f"Error querying existing UEIs: {e}")
-
-                docs_to_insert = []
-                for uei, name, row in parsed_rows:
-                    if uei in existing_ueis:
-                        continue
-
-                    city = (row.get("Phys_City") or row.get("city") or "").strip().title()
-                    state = (row.get("Phys_State_Province") or row.get("state") or "").strip().upper()
-                    country = (row.get("Phys_Country") or row.get("country") or "").strip().upper()
-
-                    if city and state:
-                        location = f"{city}, {state}"
-                    elif city:
-                        location = f"{city}, {country}" if country else city
-                    else:
-                        location = state or country or "USA"
-
-                    is_small = (row.get("Is_Small_Business") or row.get("is_small_business") or "").strip().upper() in ("Y", "YES", "TRUE")
-                    size = "Small" if is_small else "Large"
-
-                    primary_naics = (row.get("Primary_NAICS_Code") or row.get("primary_naics") or "").strip()
-                    primary_naics_desc = (row.get("Primary_NAICS_Description") or row.get("primary_naics_desc") or "").strip()
-
-                    contact = (row.get("Gov_Contact_Name") or row.get("EBiz_Contact_Name") or row.get("contact") or "N/A").strip()
-                    email = (row.get("Gov_Contact_Email") or row.get("EBiz_Contact_Email") or row.get("email") or "info@company.com").strip()
-
-                    try:
-                        match_score = compute_company_match_score(
-                            primary_naics=primary_naics,
-                            industry_desc=primary_naics_desc or "Other",
-                            company_name=name,
-                        )
-                    except Exception:
-                        match_score = 75
-
-                    phys_addr1 = (row.get("Phys_Address_1") or row.get("address") or "").strip()
-                    phys_zip = (row.get("Phys_Zip") or row.get("zip") or "").strip()
-                    full_address = ", ".join(filter(None, [phys_addr1, city, state, phys_zip, country])) or location
-
-                    dba_name = (row.get("DBA_Name") or "").strip()
-                    cage_code = (row.get("CAGE_Code") or row.get("cage_code") or "").strip()
-                    reg_date = (row.get("Registration_Date") or row.get("registration_date") or "").strip()
-                    exp_date = (row.get("Expiration_Date") or row.get("expiration_date") or "").strip()
-                    entity_structure = (row.get("Entity_Structure") or row.get("entity_structure") or "").strip()
-                    phone = (row.get("Gov_Contact_Phone") or row.get("EBiz_Contact_Phone") or row.get("phone") or "").strip()
-
-                    docs_to_insert.append({
-                        "uei": uei,
-                        "name": name,
-                        "dba_name": dba_name,
-                        "cage_code": cage_code,
-                        "status": (row.get("Registration_Status") or row.get("status") or "Active").strip().title(),
-                        "registration_date": reg_date,
-                        "expiration_date": exp_date,
-                        "primary_naics": primary_naics,
-                        "primary_naics_desc": primary_naics_desc,
-                        "city": city,
-                        "state": state,
-                        "country": country,
-                        "zip": phys_zip,
-                        "location": location,
-                        "address": full_address,
-                        "entity_structure": entity_structure,
-                        "size": size,
-                        "is_small_business": "Y" if is_small else "N",
-                        "is_minority_owned": (row.get("Is_Minority_Owned") or "").strip().upper() or "N",
-                        "is_women_owned": (row.get("Is_Women_Owned") or "").strip().upper() or "N",
-                        "is_veteran_owned": (row.get("Is_Veteran_Owned") or "").strip().upper() or "N",
-                        "matchScore": match_score,
-                        "industry": primary_naics_desc or entity_structure or "Other",
-                        "contact": contact,
-                        "email": email,
-                        "phone": phone,
-                        "ebiz_contact": (row.get("EBiz_Contact_Name") or "").strip(),
-                        "ebiz_email": (row.get("EBiz_Contact_Email") or "").strip(),
-                        "ebiz_phone": (row.get("EBiz_Contact_Phone") or "").strip(),
-                    })
-
-                chunk_size = 1000
-                for i in range(0, len(docs_to_insert), chunk_size):
-                    chunk = docs_to_insert[i:i + chunk_size]
-                    try:
-                        res = await col.insert_many(chunk, ordered=False)
-                        imported_count += len(res.inserted_ids)
-                    except Exception as e:
-                        inserted_ids = getattr(e, "details", {}).get("nInserted", 0)
-                        imported_count += inserted_ids
-                        logger.error(f"Bulk insert chunk warning: {e}")
+            imported_count = await _process_csv_stream(
+                io.StringIO(raw_str), col
+            )
         except HTTPException:
             raise
         except Exception as e:
@@ -662,6 +540,160 @@ async def import_companies(payload: dict, current_user: dict = Depends(get_curre
             raise HTTPException(status_code=400, detail=f"Invalid CSV format: {str(e)}")
 
     return {"status": "success", "count": imported_count}
+
+
+@router.post("/import/file")
+async def import_companies_file(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Stream-import companies from a CSV file upload (handles files of any size).
+    Uses multipart/form-data so the CSV is never loaded entirely into memory.
+    """
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Please upload a .csv file.")
+
+    col = get_async_collection("companies")
+    try:
+        # Stream-decode: wrap the SpooledTemporaryFile in a UTF-8 text reader
+        # so csv.DictReader reads line-by-line without loading the whole file.
+        text_stream = codecs.iterdecode(file.file, "utf-8", errors="replace")
+        imported_count = await _process_csv_stream(text_stream, col)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"CSV file import failed: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=f"CSV processing failed: {str(e)}")
+    finally:
+        await file.close()
+
+    return {"status": "success", "count": imported_count}
+
+
+async def _process_csv_stream(text_stream, col) -> int:
+    """
+    Core CSV processing logic: reads rows from any text iterable,
+    batch-inserts new companies into MongoDB in chunks of 500.
+    Returns the number of documents actually inserted.
+    """
+    reader = csv.DictReader(text_stream)
+    imported_count = 0
+    seen_ueis_in_file: set[str] = set()
+    docs_to_insert: list[dict] = []
+    CHUNK = 500
+
+    async def _flush_chunk(chunk: list) -> int:
+        if not chunk:
+            return 0
+        # Deduplicate against DB in one round-trip
+        all_ueis = [d["uei"] for d in chunk]
+        existing_ueis: set[str] = set()
+        try:
+            cursor = col.find({"uei": {"$in": all_ueis}}, {"uei": 1, "_id": 0})
+            existing_ueis = {doc["uei"] async for doc in cursor if "uei" in doc}
+        except Exception as e:
+            logger.warning(f"Error querying existing UEIs: {e}")
+
+        new_docs = [d for d in chunk if d["uei"] not in existing_ueis]
+        if not new_docs:
+            return 0
+        try:
+            res = await col.insert_many(new_docs, ordered=False)
+            return len(res.inserted_ids)
+        except Exception as e:
+            inserted = getattr(e, "details", {}).get("nInserted", 0)
+            logger.warning(f"Bulk insert warning (some may be duplicates): {e}")
+            return inserted
+
+    for row in reader:
+        if not isinstance(row, dict):
+            continue
+        uei = (
+            row.get("UEI") or row.get("uei") or
+            row.get("Unique_Entity_ID") or row.get("SAM_UEI") or
+            row.get("Unique Entity ID") or ""
+        )
+        if not isinstance(uei, str):
+            uei = str(uei or "")
+        uei = uei.strip().upper()
+        if not uei or uei in seen_ueis_in_file:
+            continue
+
+        name = (
+            row.get("Legal_Business_Name") or row.get("DBA_Name") or
+            row.get("name") or ""
+        ).strip()
+        if not name:
+            continue
+
+        seen_ueis_in_file.add(uei)
+
+        city = (row.get("Phys_City") or row.get("city") or "").strip().title()
+        state = (row.get("Phys_State_Province") or row.get("state") or "").strip().upper()
+        country = (row.get("Phys_Country") or row.get("country") or "").strip().upper()
+        location = f"{city}, {state}" if city and state else (city or state or country or "USA")
+
+        is_small = (row.get("Is_Small_Business") or row.get("is_small_business") or "").strip().upper() in ("Y", "YES", "TRUE")
+        primary_naics = (row.get("Primary_NAICS_Code") or row.get("primary_naics") or "").strip()
+        primary_naics_desc = (row.get("Primary_NAICS_Description") or row.get("primary_naics_desc") or "").strip()
+        contact = (row.get("Gov_Contact_Name") or row.get("EBiz_Contact_Name") or row.get("contact") or "N/A").strip()
+        email_val = (row.get("Gov_Contact_Email") or row.get("EBiz_Contact_Email") or row.get("email") or "info@company.com").strip()
+        phone = (row.get("Gov_Contact_Phone") or row.get("EBiz_Contact_Phone") or row.get("phone") or "").strip()
+        phys_addr1 = (row.get("Phys_Address_1") or row.get("address") or "").strip()
+        phys_zip = (row.get("Phys_Zip") or row.get("zip") or "").strip()
+        full_address = ", ".join(filter(None, [phys_addr1, city, state, phys_zip, country])) or location
+        dba_name = (row.get("DBA_Name") or "").strip()
+        cage_code = (row.get("CAGE_Code") or row.get("cage_code") or "").strip()
+
+        try:
+            match_score = compute_company_match_score(
+                primary_naics=primary_naics,
+                industry_desc=primary_naics_desc or "Other",
+                company_name=name,
+            )
+        except Exception:
+            match_score = 75
+
+        docs_to_insert.append({
+            "uei": uei,
+            "name": name,
+            "dba_name": dba_name,
+            "cage_code": cage_code,
+            "status": (row.get("Registration_Status") or row.get("status") or "Active").strip().title(),
+            "registration_date": (row.get("Registration_Date") or row.get("registration_date") or "").strip(),
+            "expiration_date": (row.get("Expiration_Date") or row.get("expiration_date") or "").strip(),
+            "primary_naics": primary_naics,
+            "primary_naics_desc": primary_naics_desc,
+            "city": city, "state": state, "country": country, "zip": phys_zip,
+            "location": location, "address": full_address,
+            "entity_structure": (row.get("Entity_Structure") or row.get("entity_structure") or "").strip(),
+            "size": "Small" if is_small else "Large",
+            "is_small_business": "Y" if is_small else "N",
+            "is_minority_owned": (row.get("Is_Minority_Owned") or "").strip().upper() or "N",
+            "is_women_owned": (row.get("Is_Women_Owned") or "").strip().upper() or "N",
+            "is_veteran_owned": (row.get("Is_Veteran_Owned") or "").strip().upper() or "N",
+            "matchScore": match_score,
+            "industry": primary_naics_desc or "Other",
+            "contact": contact,
+            "email": email_val,
+            "phone": phone,
+            "ebiz_contact": (row.get("EBiz_Contact_Name") or "").strip(),
+            "ebiz_email": (row.get("EBiz_Contact_Email") or "").strip(),
+            "ebiz_phone": (row.get("EBiz_Contact_Phone") or "").strip(),
+        })
+
+        # Flush in chunks to keep memory bounded
+        if len(docs_to_insert) >= CHUNK:
+            imported_count += await _flush_chunk(docs_to_insert)
+            docs_to_insert = []
+
+    # Flush remaining
+    if docs_to_insert:
+        imported_count += await _flush_chunk(docs_to_insert)
+
+    return imported_count
+
 
 
 def update_research_task(task_key: str, progress: int, status: str, message: str, started_at: Optional[str] = None, resolved_slug: Optional[str] = None):
@@ -701,6 +733,13 @@ def run_company_research_sync(company_input: str, force_rescrape: bool = False):
         
     try:
         update_research_task(task_key, 10, "processing", "Starting company research...")
+
+        # Pass all current environment variables to the child process so
+        # settings like OPENROUTER_API_KEY, AI_MODE, MONGO_URI are inherited.
+        # This is the main reason AI falls back to rule-based on cPanel:
+        # the child process loses the parent's env if env= is not forwarded.
+        child_env = os.environ.copy()
+
         p = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
@@ -708,7 +747,8 @@ def run_company_research_sync(company_input: str, force_rescrape: bool = False):
             cwd=str(PROJECT_ROOT),
             text=True,
             encoding="utf-8",
-            errors="ignore"
+            errors="ignore",
+            env=child_env,
         )
         
         resolved_slug = None
