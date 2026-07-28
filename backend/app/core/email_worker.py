@@ -479,19 +479,18 @@ def check_incoming_replies():
 
 async def check_scheduled_newsletters():
     """Dispatch newsletter editions whose exact scheduled send time has arrived."""
-    editions_col = get_collection("editions")
+    editions_col = get_async_collection("editions")
     now = datetime.now(timezone.utc)
 
-    due = list(editions_col.find({
+    due = await editions_col.find({
         "status": "scheduled",
         "scheduledAt": {"$lte": now},
-    }).limit(10))
+    }).limit(10).to_list(length=10)
 
     if not due:
         return
 
     # Import lazily to avoid a circular import at module load time
-    # (app.routes.newsletters imports nothing from this module).
     from app.routes.newsletters import _send_newsletter_background
 
     base_url = (settings.API_BASE_URL or "http://localhost:5050").rstrip("/") + "/"
@@ -500,7 +499,7 @@ async def check_scheduled_newsletters():
         e_id = edition["_id"]
         # Flip to "sending" immediately so a second poll of the same edition
         # (e.g. if dispatch takes a while) doesn't re-queue it.
-        claimed = editions_col.find_one_and_update(
+        claimed = await editions_col.find_one_and_update(
             {"_id": e_id, "status": "scheduled"},
             {"$set": {"status": "sending", "sentAt": now}},
         )
@@ -519,7 +518,8 @@ async def check_scheduled_newsletters():
             logger.info(f"[Email Worker] Dispatched scheduled newsletter edition {e_id}.")
         except Exception as e:
             logger.error(f"[Email Worker] Failed to dispatch scheduled edition {e_id}: {e}")
-            editions_col.update_one({"_id": e_id}, {"$set": {"status": "scheduled"}})
+            await editions_col.update_one({"_id": e_id}, {"$set": {"status": "scheduled"}})
+
 
 
 async def start_email_worker_loop():
@@ -553,7 +553,11 @@ async def start_email_worker_loop():
             current_time = time.time()
             if current_time - last_reply_check >= 30:
                 last_reply_check = current_time
-                asyncio.create_task(asyncio.to_thread(check_incoming_replies))
+                try:
+                    asyncio.create_task(asyncio.to_thread(check_incoming_replies))
+                except Exception as e:
+                    logger.warning(f"[Email Worker] Could not spawn thread for reply check: {e}")
+
 
             # Dispatch any newsletter editions whose scheduled time has arrived
             asyncio.create_task(check_scheduled_newsletters())

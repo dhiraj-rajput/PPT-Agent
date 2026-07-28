@@ -13,8 +13,8 @@
 # ============================================================
 
 # ── EDIT THESE ──────────────────────────────────────────────
-APP_DIR="/home/USERNAME/PPT-Agent/backend"
-VENV_PYTHON="/home/USERNAME/virtualenv/PPT-Agent/backend/3.11/bin/python3.11"
+APP_DIR="/home/gmfdmmzn/winbid.avanyaedge.com/backend"
+VENV_PYTHON="/home/gmfdmmzn/virtualenv/winbid.avanyaedge.com/backend/3.13/bin/python"
 PORT=5050
 LOG_FILE="$APP_DIR/logs/uvicorn.log"
 # ─────────────────────────────────────────────────────────────

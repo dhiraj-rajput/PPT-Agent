@@ -119,7 +119,11 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             _log.warning(f"Background DB setup warning: {e}")
 
-    asyncio.create_task(asyncio.to_thread(setup_bg_data))
+    try:
+        asyncio.create_task(asyncio.to_thread(setup_bg_data))
+    except Exception as e:
+        _log.warning(f"Could not spawn background DB setup thread: {e}")
+
 
     # 3. Start Background Email Worker Loop
     from app.core.email_worker import start_email_worker_loop
