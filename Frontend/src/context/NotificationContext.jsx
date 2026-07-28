@@ -95,9 +95,22 @@ export function NotificationProvider({ children }) {
     }
   }
 
+  async function clearAll() {
+    const prevNotifs = notifications;
+    const prevUnread = unreadCount;
+    setNotifications([]);
+    setUnreadCount(0);
+    try {
+      await api.clearAllNotifications();
+    } catch {
+      setNotifications(prevNotifs);
+      setUnreadCount(prevUnread);
+    }
+  }
+
   return (
     <NotificationContext.Provider
-      value={{ notifications, unreadCount, loading, refresh, markRead, markAllRead, createAlert, removeNotification }}
+      value={{ notifications, unreadCount, loading, refresh, markRead, markAllRead, createAlert, removeNotification, clearAll }}
     >
       {children}
     </NotificationContext.Provider>

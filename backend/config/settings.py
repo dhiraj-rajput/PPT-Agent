@@ -88,6 +88,15 @@ class AppSettings(BaseSettings):
         default=True,
         description="Run Playwright browser in headless mode (set False to debug visually).",
     )
+    BROWSERLESS_CDP_URL: str = Field(
+        default="",
+        description=(
+            "Optional wss:// CDP endpoint (e.g. Browserless.io, ScrapingBee, Crawlbase). "
+            "When set, Playwright connects to this remote browser via connect_over_cdp() "
+            "instead of launching a local Chromium binary — needed on hosts like cPanel "
+            "that can't install/run Chrome system libraries."
+        ),
+    )
 
     # ------------------------------------------------------------------
     # Website Crawler
@@ -144,7 +153,6 @@ class AppSettings(BaseSettings):
     # ------------------------------------------------------------------
     # SAM.gov & Integrations
     # ------------------------------------------------------------------
-    SAM_GOV_API_KEY: str = Field(default="", description="SAM.gov API key.")
     SAM_GOV_API_URL: str = Field(
         default="https://api.sam.gov/opportunities/v2/search",
         description="SAM.gov opportunities search API endpoint URL."

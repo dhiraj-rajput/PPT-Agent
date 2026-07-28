@@ -183,6 +183,16 @@ const GENERIC_INTEGRATIONS = [
       { key: 'OPENROUTER_MODEL', label: 'Model Name (e.g. nvidia/nemotron-3-ultra-550b-a55b:free)', type: 'text', optional: true },
     ],
   },
+  {
+    name: 'browserless',
+    icon: Globe,
+    iconWrapClass: 'bg-slate-100 dark:bg-slate-500/10 text-slate-500',
+    title: 'Remote Browser (Browserless CDP)',
+    description: "Remote Chrome for scraping on hosts that can't run local Chrome, e.g. cPanel (Browserless.io, ScrapingBee, Crawlbase). Leave empty to keep scraping with a local browser.",
+    fields: [
+      { key: 'BROWSERLESS_CDP_URL', label: 'CDP WebSocket URL (wss://...&token=...)', type: 'password', optional: true },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------

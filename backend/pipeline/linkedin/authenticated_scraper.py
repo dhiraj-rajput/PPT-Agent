@@ -111,14 +111,34 @@ class AuthenticatedLinkedInScraper:
         combined_auth_data: dict = {}
 
         async with async_playwright() as playwright_instance:
-            browser = await playwright_instance.chromium.launch(
-                headless=settings.BROWSER_HEADLESS,
-                args=[
-                    "--disable-blink-features=AutomationControlled",
-                    "--disable-dev-shm-usage",
-                    "--no-sandbox",
-                ],
-            )
+            cdp_url = (settings.BROWSERLESS_CDP_URL or "").strip()
+            if cdp_url:
+                try:
+                    browser = await playwright_instance.chromium.connect_over_cdp(cdp_url)
+                    logger.info("[Layer 3] Connected to remote CDP browser (BROWSERLESS_CDP_URL).")
+                except Exception as exc:
+                    logger.error(
+                        f"[Layer 3] Failed to connect to remote CDP browser at BROWSERLESS_CDP_URL: {exc}. "
+                        "Check the token/URL — falling back to a local Chromium launch (will fail on "
+                        "hosts without Chrome system libraries, e.g. cPanel)."
+                    )
+                    browser = await playwright_instance.chromium.launch(
+                        headless=settings.BROWSER_HEADLESS,
+                        args=[
+                            "--disable-blink-features=AutomationControlled",
+                            "--disable-dev-shm-usage",
+                            "--no-sandbox",
+                        ],
+                    )
+            else:
+                browser = await playwright_instance.chromium.launch(
+                    headless=settings.BROWSER_HEADLESS,
+                    args=[
+                        "--disable-blink-features=AutomationControlled",
+                        "--disable-dev-shm-usage",
+                        "--no-sandbox",
+                    ],
+                )
 
             # Create a browser context with the LinkedIn session cookie
             browser_context = await self._create_authenticated_browser_context(

@@ -251,10 +251,18 @@ async def _run_layer2_browser_scraper(
         return raw_records, extracted_data
 
     except Exception as layer2_error:
-        logger.error(
-            f"[Orchestrator] Layer 2 failed for '{company_slug}': {layer2_error}",
-            exc_info=True,
-        )
+        err_msg = str(layer2_error)
+        if "cannot open shared object file" in err_msg or "TargetClosedError" in err_msg or "libatk" in err_msg:
+            logger.warning(
+                f"[Orchestrator] Layer 2 browser skipped for '{company_slug}' "
+                f"(headless browser libraries not installed on cPanel host). "
+                f"Layer 1 HTTP scraper + AI pipeline will be used."
+            )
+        else:
+            logger.error(
+                f"[Orchestrator] Layer 2 failed for '{company_slug}': {layer2_error}",
+                exc_info=True,
+            )
         return [], {}
 
 
@@ -282,11 +290,19 @@ async def _run_layer3_authenticated_scraper(
         return raw_records, extracted_data
 
     except Exception as layer3_error:
-        logger.error(
-            f"[Orchestrator] Layer 3 failed for '{company_slug}': {layer3_error}",
-            exc_info=True,
-        )
+        err_msg = str(layer3_error)
+        if "cannot open shared object file" in err_msg or "TargetClosedError" in err_msg or "libatk" in err_msg:
+            logger.warning(
+                f"[Orchestrator] Layer 3 browser skipped for '{company_slug}' "
+                f"(headless browser libraries not installed on cPanel host)."
+            )
+        else:
+            logger.error(
+                f"[Orchestrator] Layer 3 failed for '{company_slug}': {layer3_error}",
+                exc_info=True,
+            )
         return [], {}
+
 
 
 def _collect_all_source_urls(company_slug: str) -> list[str]:

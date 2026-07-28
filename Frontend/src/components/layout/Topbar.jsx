@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Menu, Search, Bell, HelpCircle, Sun, Moon, LogOut, ChevronDown, Calendar, CheckSquare, Info, Plus, Check, X, RefreshCw, FileText, Building2 } from 'lucide-react';
+import { Menu, Search, Bell, HelpCircle, Sun, Moon, LogOut, ChevronDown, Calendar, CheckSquare, Info, Plus, Check, X, RefreshCw, FileText, Building2, Copy, Trash2, CheckCircle2, ExternalLink } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useNotifications } from '../../context/NotificationContext.jsx';
 import { api } from '../../lib/api.jsx';
@@ -19,13 +19,82 @@ const TYPE_COLOR = {
   custom: 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400',
 };
 
+function NotificationRow({ n, onMarkRead, onDelete, onOpen }) {
+  const [copied, setCopied] = useState(false);
+  const Icon = TYPE_ICON[n.type] || Info;
+  const color = TYPE_COLOR[n.type] || 'bg-slate-100 text-slate-700';
+
+  function copyText() {
+    const text = [n.title, n.message].filter(Boolean).join(' — ');
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    }).catch(() => {});
+  }
+
+  return (
+    <div
+      className={`flex items-start gap-3 rounded-xl p-2.5 transition-all ${
+        n.read ? 'opacity-60' : 'bg-slate-50/50 dark:bg-navy-900/40'
+      }`}
+    >
+      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${color}`}>
+        <Icon size={15} />
+      </div>
+      <div className="min-w-0 flex-1 leading-normal">
+        {n.title && (
+          <p className="text-xs font-bold text-navy-900 dark:text-white break-words">{n.title}</p>
+        )}
+        <p className="text-xs font-semibold text-navy-900 dark:text-white break-words">{n.message}</p>
+        <p className="mt-1 text-[10px] text-slate-400">
+          {n.createdAt ? new Date(n.createdAt).toLocaleDateString() : ''}
+        </p>
+        <div className="mt-1.5 flex items-center gap-1">
+          {n.link && (
+            <button
+              onClick={() => onOpen(n)}
+              title="Open"
+              className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] font-semibold text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-navy-800"
+            >
+              <ExternalLink size={11} /> Open
+            </button>
+          )}
+          <button
+            onClick={copyText}
+            title="Copy"
+            className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] font-semibold text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-navy-800"
+          >
+            {copied ? <Check size={11} /> : <Copy size={11} />} {copied ? 'Copied' : 'Copy'}
+          </button>
+          {!n.read && (
+            <button
+              onClick={() => onMarkRead(n.id)}
+              title="Mark as read"
+              className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] font-semibold text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-navy-800"
+            >
+              <CheckCircle2 size={11} /> Mark as read
+            </button>
+          )}
+          <button
+            onClick={() => onDelete(n.id)}
+            title="Delete"
+            className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] font-semibold text-rose-500 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40"
+          >
+            <Trash2 size={11} /> Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function NotificationBell() {
-  const { notifications, unreadCount, markRead, markAllRead } = useNotifications();
+  const { notifications, unreadCount, markRead, markAllRead, removeNotification, clearAll } = useNotifications();
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
 
-  function handleNotificationClick(n) {
+  function handleOpen(n) {
     if (!n.read) markRead(n.id);
     setOpen(false);
     if (n.link) {
@@ -64,46 +133,35 @@ function NotificationBell() {
 
       {open && (
         <div className="absolute right-0 top-full mt-2 w-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-soft dark:border-navy-700 dark:bg-navy-800 z-50">
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-3 flex items-center justify-between gap-2">
             <h4 className="text-sm font-bold text-navy-900 dark:text-white">Notifications</h4>
-            {unreadCount > 0 && (
-              <button onClick={markAllRead} className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline">
-                Mark all as read
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              {unreadCount > 0 && (
+                <button onClick={markAllRead} className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline">
+                  Mark all as read
+                </button>
+              )}
+              {notifications.length > 0 && (
+                <button onClick={clearAll} className="text-xs font-semibold text-rose-500 dark:text-rose-400 hover:underline">
+                  Clear all
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="max-h-64 overflow-y-auto space-y-2.5">
             {notifications.length === 0 ? (
               <div className="py-8 text-center text-xs text-slate-400">No notifications yet.</div>
             ) : (
-              notifications.map((n) => {
-                const Icon = TYPE_ICON[n.type] || Info;
-                const color = TYPE_COLOR[n.type] || 'bg-slate-100 text-slate-700';
-                return (
-                  <div
-                    key={n.id}
-                    onClick={() => handleNotificationClick(n)}
-                    title={n.link ? 'Click to open' : ''}
-                    className={`flex items-start gap-3 rounded-xl p-2.5 transition-all cursor-pointer ${
-                      n.read ? 'opacity-60' : 'bg-slate-50/50 hover:bg-slate-50 dark:bg-navy-900/40 dark:hover:bg-navy-900/60'
-                    }`}
-                  >
-                    <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${color}`}>
-                      <Icon size={15} />
-                    </div>
-                    <div className="min-w-0 flex-1 leading-normal">
-                      {n.title && (
-                        <p className="text-xs font-bold text-navy-900 dark:text-white break-words">{n.title}</p>
-                      )}
-                      <p className="text-xs font-semibold text-navy-900 dark:text-white break-words">{n.message}</p>
-                      <p className="mt-1 text-[10px] text-slate-400">
-                        {n.createdAt ? new Date(n.createdAt).toLocaleDateString() : ''}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })
+              notifications.map((n) => (
+                <NotificationRow
+                  key={n.id}
+                  n={n}
+                  onMarkRead={markRead}
+                  onDelete={removeNotification}
+                  onOpen={handleOpen}
+                />
+              ))
             )}
           </div>
         </div>

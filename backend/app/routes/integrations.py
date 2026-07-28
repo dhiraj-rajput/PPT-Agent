@@ -28,17 +28,43 @@ from config.settings import settings
 router = APIRouter(prefix="/integrations", tags=["integrations"])
 
 _CLIENT_URL = settings.CLIENT_URL
-_GOOGLE_CLIENT_ID = settings.GOOGLE_CLIENT_ID
-_GOOGLE_CLIENT_SECRET = settings.GOOGLE_CLIENT_SECRET
-_GOOGLE_REDIRECT_URI = settings.GOOGLE_REDIRECT_URI
 
 # ---------------------------------------------------------------------------
 # Google OAuth helpers
+#
+# NOTE: Google credentials are read fresh from `settings`/env on every call
+# (via _google_config()) instead of being cached once at import time. The
+# Integrations page lets an admin save new GOOGLE_CLIENT_ID/SECRET values at
+# runtime through POST /env-keys, and those updates need to take effect
+# immediately without a server restart.
 # ---------------------------------------------------------------------------
 
+def _google_config() -> tuple[str, str, str]:
+    """Read the current Google OAuth client id/secret/redirect URI, preferring
+    live env vars (updated by /env-keys) over whatever was loaded at boot."""
+    client_id = os.environ.get("GOOGLE_CLIENT_ID") or getattr(settings, "GOOGLE_CLIENT_ID", "") or ""
+    client_secret = os.environ.get("GOOGLE_CLIENT_SECRET") or getattr(settings, "GOOGLE_CLIENT_SECRET", "") or ""
+    redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI") or getattr(settings, "GOOGLE_REDIRECT_URI", "") or ""
+    return client_id, client_secret, redirect_uri
+
+
+def _is_google_client_id_configured(client_id: str) -> bool:
+    """A real Google OAuth client id always ends in .apps.googleusercontent.com
+    and starts with a numeric project number followed by a hyphen. Reject
+    empty values, obvious placeholders, and malformed ids."""
+    if not client_id or "your_" in client_id.lower():
+        return False
+    if not client_id.endswith(".apps.googleusercontent.com"):
+        return False
+    prefix = client_id.split(".apps.googleusercontent.com")[0]
+    if "-" not in prefix:
+        return False
+    return len(client_id) >= 30
+
+
 async def _get_google_auth_url_async(user_id: str) -> str:
-    client_id = getattr(settings, "GOOGLE_CLIENT_ID", "") or ""
-    if not client_id or "sem90bnjfcss" in client_id or "your_" in client_id or len(client_id) < 15:
+    _GOOGLE_CLIENT_ID, _GOOGLE_CLIENT_SECRET, _GOOGLE_REDIRECT_URI = _google_config()
+    if not _is_google_client_id_configured(_GOOGLE_CLIENT_ID):
         raise HTTPException(
             status_code=400,
             detail="Google OAuth is not configured. Please set a valid GOOGLE_CLIENT_ID from Google Cloud Console in backend/.env file."
@@ -79,8 +105,9 @@ async def _get_google_auth_url_async(user_id: str) -> str:
 
 
 async def _handle_google_callback_async(code: str, state: Optional[str] = None) -> None:
-    if not _GOOGLE_CLIENT_ID:
-        raise HTTPException(505, "Google OAuth is not configured.")
+    _GOOGLE_CLIENT_ID, _GOOGLE_CLIENT_SECRET, _GOOGLE_REDIRECT_URI = _google_config()
+    if not _is_google_client_id_configured(_GOOGLE_CLIENT_ID):
+        raise HTTPException(400, "Google OAuth is not configured.")
         
     user_id_clean = "global"
     code_verifier = None
@@ -315,7 +342,7 @@ _SECRET_KEY_SUFFIXES = ("_API_KEY", "_SECRET", "_PASS", "_KEY", "_TOKEN", "_LI_A
 
 
 def _is_secret_key(key: str) -> bool:
-    return key.endswith(_SECRET_KEY_SUFFIXES) or key == "LINKEDIN_LI_AT"
+    return key.endswith(_SECRET_KEY_SUFFIXES) or key in ("LINKEDIN_LI_AT", "BROWSERLESS_CDP_URL")
 
 
 def obfuscate_key(val: str) -> str:
@@ -345,6 +372,7 @@ TARGET_KEYS = [
     "ZOOM_CLIENT_SECRET",
     "GOOGLE_CLIENT_ID",
     "GOOGLE_CLIENT_SECRET",
+    "BROWSERLESS_CDP_URL",
     "SMTP_HOST",
     "SMTP_PORT",
     "SMTP_USER",

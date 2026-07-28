@@ -21,11 +21,24 @@ from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-_ZOOM_ACCOUNT_ID = settings.ZOOM_ACCOUNT_ID
-_ZOOM_CLIENT_ID = settings.ZOOM_CLIENT_ID
-_ZOOM_CLIENT_SECRET = settings.ZOOM_CLIENT_SECRET
-_GOOGLE_CLIENT_ID = settings.GOOGLE_CLIENT_ID
-_GOOGLE_CLIENT_SECRET = settings.GOOGLE_CLIENT_SECRET
+import os
+
+
+def _zoom_config() -> tuple[str, str, str]:
+    """Read Zoom credentials fresh so a saved change via /env-keys applies without a restart."""
+    return (
+        os.environ.get("ZOOM_ACCOUNT_ID") or getattr(settings, "ZOOM_ACCOUNT_ID", "") or "",
+        os.environ.get("ZOOM_CLIENT_ID") or getattr(settings, "ZOOM_CLIENT_ID", "") or "",
+        os.environ.get("ZOOM_CLIENT_SECRET") or getattr(settings, "ZOOM_CLIENT_SECRET", "") or "",
+    )
+
+
+def _google_config() -> tuple[str, str]:
+    """Read Google credentials fresh so a saved change via /env-keys applies without a restart."""
+    return (
+        os.environ.get("GOOGLE_CLIENT_ID") or getattr(settings, "GOOGLE_CLIENT_ID", "") or "",
+        os.environ.get("GOOGLE_CLIENT_SECRET") or getattr(settings, "GOOGLE_CLIENT_SECRET", "") or "",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -58,12 +71,14 @@ async def _create_zoom_meeting(title: str, date: str, time: str) -> str:
     """
     import httpx
 
+    zoom_account_id, zoom_client_id, zoom_client_secret = _zoom_config()
+
     # Step 1 — get OAuth token
     async with httpx.AsyncClient() as client:
         token_resp = await client.post(
             "https://zoom.us/oauth/token",
-            params={"grant_type": "account_credentials", "account_id": _ZOOM_ACCOUNT_ID},
-            auth=(_ZOOM_CLIENT_ID, _ZOOM_CLIENT_SECRET),
+            params={"grant_type": "account_credentials", "account_id": zoom_account_id},
+            auth=(zoom_client_id, zoom_client_secret),
         )
         token_resp.raise_for_status()
         access_token = token_resp.json()["access_token"]
@@ -101,7 +116,8 @@ async def _create_google_meet(
     Requires GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET + a stored refresh token.
     Uses Motor for DB and asyncio.to_thread for blocking Google API calls.
     """
-    if not _GOOGLE_CLIENT_ID:
+    google_client_id, google_client_secret = _google_config()
+    if not google_client_id:
         raise ValueError("Google OAuth client ID is not configured.")
 
     user_oid_or_str = user_id or "global"
@@ -121,8 +137,8 @@ async def _create_google_meet(
             token=doc.get("accessToken"),
             refresh_token=doc.get("refreshToken"),
             token_uri="https://oauth2.googleapis.com/token",
-            client_id=_GOOGLE_CLIENT_ID,
-            client_secret=_GOOGLE_CLIENT_SECRET,
+            client_id=google_client_id,
+            client_secret=google_client_secret,
         )
 
         service = build("calendar", "v3", credentials=creds)
@@ -200,7 +216,8 @@ async def create_video_room(
     Returns {provider, meeting_link, warning?}.
     Always succeeds — falls back to Jitsi if the requested provider fails.
     """
-    if provider == "zoom" and _ZOOM_ACCOUNT_ID and _ZOOM_CLIENT_ID and _ZOOM_CLIENT_SECRET:
+    zoom_account_id, zoom_client_id, zoom_client_secret = _zoom_config()
+    if provider == "zoom" and zoom_account_id and zoom_client_id and zoom_client_secret:
         try:
             join_url = await _create_zoom_meeting(title, date, time)
             return {"provider": "zoom", "meeting_link": join_url}

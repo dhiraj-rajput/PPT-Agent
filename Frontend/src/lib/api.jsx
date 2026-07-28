@@ -210,6 +210,9 @@ export const api = {
   async deleteNotification(notifId) {
     return del(`/api/notifications/${notifId}`);
   },
+  async clearAllNotifications() {
+    return del('/api/notifications');
+  },
   async createNotification(title, message, link, userId) {
     return post('/api/notifications', { title, message, link, userId });
   },

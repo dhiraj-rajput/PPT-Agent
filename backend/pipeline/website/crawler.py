@@ -23,6 +23,25 @@ from pydantic import BaseModel, ConfigDict, Field
 logger = logging.getLogger(__name__)
 
 
+async def _launch_or_connect_chromium(playwright_instance, *, headless: bool = True) -> Browser:
+    """
+    Launches a local Chromium, or — when BROWSERLESS_CDP_URL is configured —
+    connects to a remote CDP browser (Browserless.io, ScrapingBee, Crawlbase,
+    etc.) instead. Needed on hosts like cPanel that can't run local Chrome
+    system libraries. Falls back to a local launch if the remote connect fails.
+    """
+    from config.settings import settings
+
+    cdp_url = (getattr(settings, "BROWSERLESS_CDP_URL", "") or "").strip()
+    if cdp_url:
+        try:
+            return await playwright_instance.chromium.connect_over_cdp(cdp_url)
+        except Exception as exc:
+            logger.error(f"remote_cdp_connect_failed error={exc} — falling back to local Chromium launch")
+
+    return await playwright_instance.chromium.launch(headless=headless)
+
+
 class ScrapeException(RuntimeError):
     """Raised when a page cannot be fetched safely."""
 
@@ -144,7 +163,7 @@ class PlaywrightFetcher:
 
     async def __aenter__(self) -> "PlaywrightFetcher":
         self._playwright = await async_playwright().start()
-        self._browser = await self._playwright.chromium.launch(headless=True)
+        self._browser = await _launch_or_connect_chromium(self._playwright, headless=True)
         logger.info("playwright_started")
         return self
 
@@ -603,7 +622,15 @@ def _playwright_crawl_website(
 
     with sync_playwright() as p:
         try:
-            browser = p.chromium.launch(headless=getattr(settings, "BROWSER_HEADLESS", True))
+            cdp_url = (getattr(settings, "BROWSERLESS_CDP_URL", "") or "").strip()
+            if cdp_url:
+                try:
+                    browser = p.chromium.connect_over_cdp(cdp_url)
+                except Exception as exc:
+                    logger.error(f"remote_cdp_connect_failed error={exc} — falling back to local Chromium launch")
+                    browser = p.chromium.launch(headless=getattr(settings, "BROWSER_HEADLESS", True))
+            else:
+                browser = p.chromium.launch(headless=getattr(settings, "BROWSER_HEADLESS", True))
             context = browser.new_context(
                 user_agent=DEFAULT_USER_AGENT,
                 viewport={"width": 1280, "height": 800},

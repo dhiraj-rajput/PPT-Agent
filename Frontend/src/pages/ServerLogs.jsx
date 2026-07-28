@@ -218,7 +218,7 @@ function LogRow({ log, expanded, onToggle, onResolve, onUnresolve, onDelete, bus
             </button>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
             {log.resolved ? (
               <button
                 disabled={busy}
@@ -576,24 +576,31 @@ export default function ServerLogs() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [testing, setTesting] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const timerRef = useRef(null);
+  const listScrollRef = useRef(null);
 
-  const load = useCallback(async () => {
+  function buildParams(pageNum) {
+    return {
+      page: pageNum,
+      limit: 20,
+      q: search || undefined,
+      level: level === 'ALL' ? undefined : level,
+      resolved: resolvedFilter === 'all' ? undefined : resolvedFilter === 'resolved',
+    };
+  }
+
+  // Full reset — used when filters/search change. Replaces the whole list.
+  const resetAndLoad = useCallback(async () => {
     setLoading(true);
     setLoadError('');
     try {
-      const params = {
-        page,
-        limit: 20,
-        q: search || undefined,
-        level: level === 'ALL' ? undefined : level,
-        resolved: resolvedFilter === 'all' ? undefined : resolvedFilter === 'resolved',
-      };
       const [logsData, summaryData] = await Promise.all([
-        api.getSystemLogs(params),
+        api.getSystemLogs(buildParams(1)),
         api.getSystemLogsSummary(),
       ]);
       setLogs(logsData.logs || []);
+      setPage(1);
       setPages(logsData.pages || 1);
       setTotal(logsData.total || 0);
       setSummary(summaryData);
@@ -602,28 +609,83 @@ export default function ServerLogs() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, level, resolvedFilter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, level, resolvedFilter]);
+
+  // Lightweight top-up — used by the 15s auto-refresh. Merges the latest
+  // first page into whatever's already loaded instead of collapsing back
+  // to page 1, so scrolling further down the list isn't reset.
+  const refreshTop = useCallback(async () => {
+    try {
+      const [logsData, summaryData] = await Promise.all([
+        api.getSystemLogs(buildParams(1)),
+        api.getSystemLogsSummary(),
+      ]);
+      const fresh = logsData.logs || [];
+      setLogs((prev) => {
+        const freshIds = new Set(fresh.map((l) => l.id));
+        const rest = prev.filter((l) => !freshIds.has(l.id));
+        return [...fresh, ...rest];
+      });
+      setPages(logsData.pages || 1);
+      setTotal(logsData.total || 0);
+      setSummary(summaryData);
+    } catch (err) {
+      setLoadError(err.message || 'Could not refresh server logs.');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, level, resolvedFilter]);
+
+  // Appends the next page — triggered when the list is scrolled near the bottom.
+  const loadMore = useCallback(async () => {
+    setPage((currentPage) => {
+      if (loadingMore || currentPage >= pages) return currentPage;
+      const nextPage = currentPage + 1;
+      setLoadingMore(true);
+      api.getSystemLogs(buildParams(nextPage))
+        .then((logsData) => {
+          const newItems = logsData.logs || [];
+          setLogs((prev) => {
+            const existingIds = new Set(prev.map((l) => l.id));
+            return [...prev, ...newItems.filter((l) => !existingIds.has(l.id))];
+          });
+          setPages(logsData.pages || pages);
+          setTotal(logsData.total || total);
+        })
+        .catch((err) => setLoadError(err.message || 'Could not load more server logs.'))
+        .finally(() => setLoadingMore(false));
+      return nextPage;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadingMore, pages, total, search, level, resolvedFilter]);
+
+  function handleLogsScroll(e) {
+    const el = e.currentTarget;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 200;
+    if (nearBottom) loadMore();
+  }
 
   useEffect(() => {
-    load();
-  }, [load]);
+    resetAndLoad();
+  }, [resetAndLoad]);
 
   useEffect(() => {
     if (!autoRefresh) {
       if (timerRef.current) clearInterval(timerRef.current);
       return;
     }
-    timerRef.current = setInterval(load, 15000);
+    timerRef.current = setInterval(refreshTop, 15000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [autoRefresh, load]);
+  }, [autoRefresh, refreshTop]);
 
   useEffect(() => {
     const t = setTimeout(() => {
-      setPage(1);
       setSearch(searchInput);
     }, 350);
     return () => clearTimeout(t);
   }, [searchInput]);
+
+  const load = resetAndLoad; // kept as the name other handlers below already call
 
   async function handleResolve(id) {
     setBusyId(id);
@@ -760,9 +822,10 @@ export default function ServerLogs() {
         </button>
       </div>
 
-      {activeTab === 'terminal' ? (
+      <div className={activeTab === 'terminal' ? '' : 'hidden'}>
         <LiveTerminal />
-      ) : (
+      </div>
+      <div className={activeTab === 'terminal' ? 'hidden' : ''}>
         <>
           {/* Summary cards */}
           <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
@@ -858,7 +921,11 @@ export default function ServerLogs() {
               </p>
             </Card>
           ) : (
-            <div className="space-y-2">
+            <div
+              ref={listScrollRef}
+              onScroll={handleLogsScroll}
+              className="max-h-[70vh] space-y-2 overflow-y-auto pr-1"
+            >
               {logs.map((log) => (
                 <LogRow
                   key={log.id}
@@ -871,32 +938,21 @@ export default function ServerLogs() {
                   busy={busyId === log.id}
                 />
               ))}
-            </div>
-          )}
 
-          {pages > 1 && (
-            <div className="mt-4 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-              <span>Page {page} of {pages} · {total} total</span>
-              <div className="flex gap-2">
-                <button
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold disabled:opacity-40 dark:border-navy-700"
-                >
-                  Previous
-                </button>
-                <button
-                  disabled={page >= pages}
-                  onClick={() => setPage((p) => Math.min(pages, p + 1))}
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold disabled:opacity-40 dark:border-navy-700"
-                >
-                  Next
-                </button>
-              </div>
+              {loadingMore && (
+                <div className="flex items-center justify-center gap-2 py-4 text-xs text-slate-400">
+                  <Loader2 size={14} className="animate-spin" /> Loading more…
+                </div>
+              )}
+              {!loadingMore && page >= pages && (
+                <p className="py-3 text-center text-[11px] text-slate-400">
+                  {total} total · end of list
+                </p>
+              )}
             </div>
           )}
         </>
-      )}
+      </div>
     </div>
   );
 }

@@ -127,6 +127,13 @@ async def mark_read(
     return {"notification": _to_public_notification(notification)}
 
 
+@router.delete("")
+async def clear_all_notifications(current_user: dict = Depends(get_current_user)):
+    notifs_col = get_async_collection("notifications")
+    result = await notifs_col.delete_many({"user": current_user["_id"]})
+    return {"ok": True, "deleted": result.deleted_count}
+
+
 @router.delete("/{notif_id}")
 async def delete_notification(
     notif_id: str,

@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from '../components/layout/Sidebar.jsx';
 import Topbar from '../components/layout/Topbar.jsx';
-import ErrorAlertBanner from '../components/layout/ErrorAlertBanner.jsx';
 
 export default function DashboardLayout() {
   const [collapsed, setCollapsed] = useState(false);
@@ -15,7 +14,6 @@ export default function DashboardLayout() {
         className={`flex min-h-screen flex-col transition-all duration-200 ${collapsed ? 'lg:pl-[76px]' : 'lg:pl-[260px]'}`}
       >
         <div className="sticky top-0 z-20">
-          <ErrorAlertBanner />
           <Topbar
             onMenuClick={() => setCollapsed((c) => !c)}
           />
