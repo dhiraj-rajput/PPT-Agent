@@ -286,7 +286,40 @@ function LiveTerminal() {
   const retryTimerRef = useRef(null);
   const intentionalRef = useRef(false); // true when user clicks Disconnect
   const bottomRef = useRef(null);
+  const containerRef = useRef(null);
   const [autoScroll, setAutoScroll] = useState(true);
+
+  const [historyPage, setHistoryPage] = useState(1);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [hasMoreHistory, setHasMoreHistory] = useState(true);
+
+  const loadHistoryLogs = useCallback(async () => {
+    if (loadingHistory || !hasMoreHistory) return;
+    setLoadingHistory(true);
+    try {
+      const data = await api.getSystemLogs({ page: historyPage, limit: 50 });
+      if (!data.logs || data.logs.length === 0 || historyPage >= data.pages) {
+        setHasMoreHistory(false);
+      }
+      if (data.logs && data.logs.length > 0) {
+        const histLines = data.logs.map((log) => {
+          const level = log.level || 'INFO';
+          const formatted = `[${fmtTime(log.timestamp)}] ${level}${log.source ? ` [${log.source}]` : ''}: ${log.message}${log.detail ? ` — ${log.detail}` : ''}`;
+          return { text: formatted, level, ts: new Date(log.timestamp).getTime() };
+        });
+        setLines((prev) => {
+          const existing = new Set(prev.map((l) => l.text));
+          const uniqueHist = histLines.filter((l) => !existing.has(l.text));
+          return [...uniqueHist, ...prev];
+        });
+        setHistoryPage((p) => p + 1);
+      }
+    } catch {
+      setHasMoreHistory(false);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, [historyPage, loadingHistory, hasMoreHistory]);
 
   const token = typeof localStorage !== 'undefined' ? localStorage.getItem('orbitavanya_token') : '';
   const MAX_RETRIES = 12;
@@ -531,13 +564,22 @@ function LiveTerminal() {
         </div>
 
         <div
+          ref={containerRef}
           className="h-[500px] overflow-y-auto p-3 font-mono text-[11px] leading-relaxed"
           onScroll={(e) => {
             const el = e.currentTarget;
             const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
             setAutoScroll(atBottom);
+            if (el.scrollTop < 40 && !loadingHistory && hasMoreHistory) {
+              loadHistoryLogs();
+            }
           }}
         >
+          {loadingHistory && (
+            <div className="text-center text-[10px] text-amber-400 py-1 font-mono animate-pulse">
+              ⏳ Loading historic server logs…
+            </div>
+          )}
           {visibleLines.length === 0 ? (
             <p className="text-slate-500 mt-8 text-center">
               {status === 'connecting' || status === 'reconnecting'

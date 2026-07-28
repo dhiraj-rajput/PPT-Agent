@@ -497,14 +497,15 @@ class AuthenticatedLinkedInScraper:
             return about_data, raw_record
 
         except Exception as scrape_error:
-            logger.error(
-                f"[Layer 3] Error scraping about page for '{company_slug}': {scrape_error}",
-                exc_info=True,
+            logger.warning(
+                f"[Layer 3] Skipping about page for '{company_slug}': {scrape_error}"
             )
             return None, RawLinkedInScrapedData(
                 company_slug=company_slug,
                 scrape_layer=SCRAPE_LAYER_AUTHENTICATED,
                 page_url=page_url,
+                raw_html="",
+                raw_text="",
                 scraped_at=get_utc_now(),
                 scrape_success=False,
                 error_message=str(scrape_error),

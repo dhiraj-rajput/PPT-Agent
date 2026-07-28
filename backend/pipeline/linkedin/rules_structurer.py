@@ -72,7 +72,7 @@ class RulesStructurer:
             {"company_slug": company_slug, "scrape_layer": "public"},
             sort=[("scraped_at", -1)]
         )
-        raw_text = raw_doc.get("raw_text") if raw_doc else ""
+        raw_text = (raw_doc.get("raw_text") if raw_doc else "") or ""
         meta_tags = (raw_doc.get("meta_tags") or {}) if raw_doc else {}
 
         structured_identity = self._structure_company_identity_rules(
@@ -135,6 +135,7 @@ class RulesStructurer:
         raw_text: str,
         meta_tags: Optional[dict] = None,
     ) -> CompanyIdentity:
+        raw_text = raw_text or ""
         meta_tags = meta_tags or {}
         company_name = None
         website_url = None

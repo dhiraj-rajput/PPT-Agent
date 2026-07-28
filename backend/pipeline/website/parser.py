@@ -31,9 +31,8 @@ def is_valid_email(email: str) -> bool:
     return True
 
 def ensure_company_contact_fallback(domain: str, contacts: dict):
-    if not contacts.get("emails") and domain and "." in domain:
-        clean_domain = domain.replace("www.", "").replace("http://", "").replace("https://", "").split("/")[0]
-        contacts["emails"] = [f"contact@{clean_domain}", f"info@{clean_domain}"]
+    """Strictly do not generate synthetic emails — only authentic scraped emails are kept."""
+    pass
 
 
 def parse_html_metadata(html_content: str) -> Dict[str, str]:

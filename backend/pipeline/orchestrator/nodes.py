@@ -411,7 +411,7 @@ def merge_results(state: AgentState) -> dict:
             if m.get("full_name")
         ] or website.get("leadership", []),
 
-        # Contact & Social (Multi-Source Contact Resolution)
+        # Contact & Social (Authentic Scraped Contact Resolution)
         "emails": list(dict.fromkeys(
             [e.lower().strip() for e in website.get("emails", []) if e] +
             [poc.get("email", "").lower().strip() for poc in rfp_pocs if poc.get("email")] +
