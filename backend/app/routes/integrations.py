@@ -49,17 +49,12 @@ def _google_config() -> tuple[str, str, str]:
 
 
 def _is_google_client_id_configured(client_id: str) -> bool:
-    """A real Google OAuth client id always ends in .apps.googleusercontent.com
-    and starts with a numeric project number followed by a hyphen. Reject
-    empty values, obvious placeholders, and malformed ids."""
-    if not client_id or "your_" in client_id.lower():
+    """Check if GOOGLE_CLIENT_ID is configured and not an empty placeholder."""
+    if not client_id or "your_" in client_id.lower() or "placeholder" in client_id.lower():
         return False
     if not client_id.endswith(".apps.googleusercontent.com"):
         return False
-    prefix = client_id.split(".apps.googleusercontent.com")[0]
-    if "-" not in prefix:
-        return False
-    return len(client_id) >= 30
+    return len(client_id) >= 20
 
 
 async def _get_google_auth_url_async(user_id: str) -> str:

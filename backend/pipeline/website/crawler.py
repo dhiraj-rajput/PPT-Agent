@@ -455,6 +455,11 @@ def crawl_website(
         )
     )
 
+    cdp_url = (getattr(settings, "BROWSERLESS_CDP_URL", "") or "").strip()
+    if cdp_url:
+        logger.info(f"[crawl_website] BROWSERLESS_CDP_URL detected — using Playwright remote CDP crawler directly for {homepage_url}")
+        return _playwright_crawl_website(homepage_url, limit_pages, limit_timeout)
+
     # ------------------------------------------------------------------ #
     # Primary: crawl4ai                                                    #
     # ------------------------------------------------------------------ #
@@ -568,11 +573,13 @@ def crawl_website(
             logger.error(f"[crawl4ai] Failed to execute crawl thread: {run_err}")
             result = {}
 
-        success_count = sum(1 for p in result.values() if p["status"] == "success")
+        success_count = sum(1 for p in result.values() if p.get("status") == "success")
         logger.info(
             f"[crawl4ai] Crawl complete: {success_count}/{len(result)} pages successful"
         )
-        return result
+        if success_count > 0:
+            return result
+        logger.warning("[crawl4ai] crawl4ai returned 0 successful pages — falling back to Playwright crawler.")
 
     except ImportError:
         logger.warning(

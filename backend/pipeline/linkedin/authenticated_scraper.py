@@ -262,7 +262,21 @@ class AuthenticatedLinkedInScraper:
         page = await browser_context.new_page()
 
         try:
-            await page.goto(page_url, wait_until="domcontentloaded")
+            try:
+                await page.goto(page_url, wait_until="domcontentloaded")
+            except Exception as goto_err:
+                err_str = str(goto_err)
+                if "ERR_HTTP_RESPONSE_CODE_FAILURE" in err_str or "net::ERR_" in err_str:
+                    logger.warning(f"[Layer 3] Page.goto returned non-200 HTTP status for '{page_url}' (page may not exist or returned HTTP error)")
+                    return None, RawLinkedInScrapedData(
+                        company_slug=company_slug,
+                        scrape_layer=SCRAPE_LAYER_AUTHENTICATED,
+                        page_url=page_url,
+                        scraped_at=get_utc_now(),
+                        scrape_success=False,
+                        error_message=err_str,
+                    )
+                raise
             await page.wait_for_timeout(PAGE_LOAD_WAIT_MS)
 
             # Scroll to load dynamic content
