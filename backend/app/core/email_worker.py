@@ -209,11 +209,22 @@ async def send_campaign_email_to_lead(campaign: dict, lead: dict) -> dict:
     msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
 
     sender_name = campaign.get("senderName")
-    sender_email = campaign.get("senderEmail") or settings.SMTP_USER
+    smtp_from = settings.SMTP_FROM or settings.SMTP_USER
+    sender_email = campaign.get("senderEmail") or smtp_from
+
+    # Prevent SMTP 550 Sender Misalignment errors when using cPanel SMTP
+    if settings.SMTP_USER and "@" in settings.SMTP_USER and smtp_from:
+        smtp_domain = settings.SMTP_USER.split("@")[1].lower()
+        if "@" in sender_email:
+            sender_domain = sender_email.split("@")[1].lower()
+            if sender_domain != smtp_domain:
+                logger.info(f"[Email Worker] Aligning sender email from {sender_email} to {smtp_from} to match SMTP server {settings.SMTP_HOST}")
+                sender_email = smtp_from
+
     if sender_name:
         msg["From"] = f'"{sender_name}" <{sender_email}>'
     else:
-        msg["From"] = settings.SMTP_FROM or settings.SMTP_USER
+        msg["From"] = sender_email
 
     msg["To"] = lead["email"]
 
@@ -573,7 +584,11 @@ async def start_email_worker_loop():
                 pending_leads = await leads_col.find({
                     "campaignId": {"$in": campaign_ids},
                     "status": "pending",
-                    "send_after": {"$lte": now}
+                    "$or": [
+                        {"send_after": {"$lte": now}},
+                        {"send_after": None},
+                        {"send_after": {"$exists": False}}
+                    ]
                 }).limit(10).to_list(length=10)
 
                 tasks = []
