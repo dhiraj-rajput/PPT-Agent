@@ -38,7 +38,7 @@ const emptyForm = {
   dailyLimit: 200,
   timezone: 'America/Chicago',
   workingHoursOnly: false,
-  senderEmail: 'prasannadhamal982005@gmail.com',
+  senderEmail: 'pradeep@orbitavanyatech.com',
   senderName: 'OrbitAvanya Outreach',
   scheduleStart: ''
 };
@@ -57,6 +57,17 @@ export default function EmailCampaign() {
   const [form, setForm] = useState(emptyForm);
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState('');
+
+  useEffect(() => {
+    if (api.getEnvKeys) {
+      api.getEnvKeys().then((keys) => {
+        const configuredEmail = keys?.SMTP_FROM || keys?.SMTP_USER || 'pradeep@orbitavanyatech.com';
+        if (configuredEmail) {
+          setForm((prev) => ({ ...prev, senderEmail: configuredEmail }));
+        }
+      }).catch(() => {});
+    }
+  }, []);
 
   const [importingFor, setImportingFor] = useState(null); // campaignId currently importing a CSV
   const [actionError, setActionError] = useState('');

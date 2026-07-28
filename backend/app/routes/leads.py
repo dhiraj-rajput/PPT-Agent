@@ -583,3 +583,15 @@ async def delete_lead(id: str, current_user: dict = Depends(get_current_user)):
 
     await leads_col.delete_one({"_id": oid})
     return {"ok": True}
+
+
+@router.delete("/suppressions/{email:path}")
+async def unsuppress_email(
+    email: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Remove an email address from the suppression list."""
+    suppressions_col = get_async_collection("suppressions")
+    target = email.strip().lower()
+    res = await suppressions_col.delete_one({"email": target})
+    return {"ok": True, "deletedCount": res.deleted_count, "email": target}

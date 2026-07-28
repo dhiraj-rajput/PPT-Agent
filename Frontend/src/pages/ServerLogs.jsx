@@ -350,12 +350,14 @@ function LiveTerminal() {
 
   function connect() {
     intentionalRef.current = false;
+    if (typeof localStorage !== 'undefined') localStorage.setItem('orbit_terminal_connected', 'true');
     setRetryCount(0);
     _openSource(0);
   }
 
   function disconnect() {
     intentionalRef.current = true;
+    if (typeof localStorage !== 'undefined') localStorage.setItem('orbit_terminal_connected', 'false');
     if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
     if (esRef.current) {
       esRef.current.close();
@@ -364,6 +366,13 @@ function LiveTerminal() {
     setConnected(false);
     setStatus('idle');
   }
+
+  // Auto-connect on mount if previously connected by user
+  useEffect(() => {
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('orbit_terminal_connected') === 'true') {
+      connect();
+    }
+  }, []);
 
   // Cleanup on unmount
   useEffect(() => () => {
