@@ -17,6 +17,10 @@ export default function Login() {
     setLoading(true);
     try {
       await api.login(email, password);
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('pending_otp_email', email);
+        localStorage.setItem('pending_otp_purpose', 'login');
+      }
       navigate('/verify-otp', { state: { email, purpose: 'login' } });
     } catch (err) {
       setError(err.message);

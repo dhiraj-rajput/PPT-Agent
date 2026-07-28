@@ -9,8 +9,11 @@ export default function VerifyOtp() {
   const navigate = useNavigate();
   const { completeAuth } = useAuth();
 
-  const email = location.state?.email;
-  const purpose = location.state?.purpose; // 'register' | 'login'
+  const storedEmail = typeof localStorage !== 'undefined' ? localStorage.getItem('pending_otp_email') : '';
+  const storedPurpose = typeof localStorage !== 'undefined' ? localStorage.getItem('pending_otp_purpose') : '';
+
+  const email = location.state?.email || storedEmail;
+  const purpose = location.state?.purpose || storedPurpose || 'login';
 
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
@@ -19,10 +22,10 @@ export default function VerifyOtp() {
   const [resending, setResending] = useState(false);
 
   useEffect(() => {
-    if (!email || !purpose) {
+    if (!email) {
       navigate('/login', { replace: true });
     }
-  }, [email, purpose, navigate]);
+  }, [email, navigate]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -33,6 +36,11 @@ export default function VerifyOtp() {
         purpose === 'register'
           ? await api.verifyRegistration(email, otp)
           : await api.verifyLogin(email, otp);
+
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem('pending_otp_email');
+        localStorage.removeItem('pending_otp_purpose');
+      }
 
       completeAuth(result.token, result.user);
       if (result.user?.mustChangePassword) {
