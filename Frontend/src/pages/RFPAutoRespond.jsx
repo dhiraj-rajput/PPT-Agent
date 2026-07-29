@@ -254,7 +254,7 @@ export default function RFPAutoRespond() {
       </div>
 
       {/* Pipeline steps overview */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { icon: FileText, label: 'Parse RFP', desc: 'Extract requirements & scope' },
           { icon: FileCheck, label: 'Inventory Check', desc: 'Match our offerings' },
@@ -272,8 +272,8 @@ export default function RFPAutoRespond() {
                 <RenderedIcon size={16} className={styles.iconClass} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-navy-900 dark:text-white truncate">{i + 1}. {label}</p>
-                <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate">{desc}</p>
+                <p className="text-xs font-bold text-navy-900 dark:text-white break-words whitespace-normal">{i + 1}. {label}</p>
+                <p className="text-[11px] text-slate-450 dark:text-slate-400 mt-0.5 break-words whitespace-normal">{desc}</p>
                 {styles.statusText && (
                   <p className={`text-[10px] mt-0.5 ${styles.statusClass}`}>{styles.statusText}</p>
                 )}

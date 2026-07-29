@@ -338,7 +338,7 @@ export default function Companies() {
         </div>
       </Card>
 
-      {/* Main Table */}
+      {/* Main Table & Card List */}
       {loading ? (
         <Card className="flex flex-col items-center justify-center py-20 mt-5">
           <Loader2 className="animate-spin text-brand-500" size={32} />
@@ -346,7 +346,40 @@ export default function Companies() {
         </Card>
       ) : (
         <Card className="mt-5 !p-0 overflow-hidden">
-          <div className="overflow-x-auto">
+          {/* Top Pagination Controls */}
+          {pageCount > 1 && (
+            <div className="flex items-center justify-between border-b border-slate-100 p-4 dark:border-navy-800 bg-slate-50/50 dark:bg-navy-950/20">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Showing <span className="font-semibold text-navy-900 dark:text-white">{(currentPage - 1) * itemsPerPage + 1}</span> to{' '}
+                <span className="font-semibold text-navy-900 dark:text-white">
+                  {Math.min(currentPage * itemsPerPage, totalCompanies)}
+                </span>{' '}
+                of <span className="font-semibold text-navy-900 dark:text-white">{totalCompanies.toLocaleString()}</span> companies
+              </p>
+              <div className="flex gap-2 items-center">
+                <button
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage((p) => p - 1)}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-navy-900 hover:bg-slate-50 disabled:opacity-50 dark:border-navy-700 dark:bg-navy-800 dark:text-white dark:hover:bg-navy-750 transition-colors"
+                >
+                  Previous
+                </button>
+                <span className="text-xs font-bold text-slate-600 dark:text-slate-400 px-1">
+                  {currentPage} / {pageCount}
+                </span>
+                <button
+                  disabled={currentPage === pageCount}
+                  onClick={() => setCurrentPage((p) => p + 1)}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-navy-900 hover:bg-slate-50 disabled:opacity-50 dark:border-navy-700 dark:bg-navy-800 dark:text-white dark:hover:bg-navy-750 transition-colors"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Desktop Table View */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 text-left text-[11px] uppercase tracking-wide text-slate-400 dark:border-navy-800 dark:text-slate-400">
@@ -439,7 +472,88 @@ export default function Companies() {
             </table>
           </div>
 
-          {/* Pagination Controls */}
+          {/* Mobile Card List View */}
+          <div className="block md:hidden divide-y divide-slate-100 dark:divide-navy-800">
+            {allCompanies.map((c) => (
+              <div key={c.uei} className="p-4 space-y-3 hover:bg-slate-50/40 dark:hover:bg-navy-800/40 transition-colors">
+                <div className="flex items-start justify-between gap-3">
+                  <Link to={`/companies/${c.uei}`} className="flex gap-2.5 min-w-0">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-xs font-bold text-brand-600 dark:bg-navy-850 dark:text-brand-400 aspect-square">
+                      {(c.name || '??').slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-bold text-navy-900 hover:text-brand-600 dark:text-white dark:hover:text-brand-400 leading-snug text-sm">
+                        {c.name || 'Unnamed Company'}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-0.5 truncate">{c.contact || c.ebiz_contact || 'No contact listed'}</p>
+                    </div>
+                  </Link>
+                  <div className="shrink-0">
+                    <MatchBadge score={c.matchScore ?? c.match_score} />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-[11px] bg-slate-50 dark:bg-navy-950 p-2 rounded-xl border border-slate-100/50 dark:border-navy-800/40">
+                  <div>
+                    <span className="text-slate-400 block">UEI</span>
+                    <span className="font-mono text-slate-700 dark:text-slate-300 font-semibold">{c.uei || '—'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block">CAGE</span>
+                    <span className="font-mono text-slate-700 dark:text-slate-300 font-semibold">{c.cage_code || '—'}</span>
+                  </div>
+                  <div className="col-span-2 pt-1 border-t border-slate-100 dark:border-navy-900/60">
+                    <span className="text-slate-400 block">Primary NAICS Sector</span>
+                    <span className="text-slate-700 dark:text-slate-300 font-semibold truncate block" title={c.primary_naics_desc}>
+                      {c.primary_naics} {c.primary_naics_desc ? `— ${c.primary_naics_desc}` : ''}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1.5">
+                  <span className="text-[11px] text-slate-400">
+                    {renderSafeText(c.location || (c.city && c.state ? `${renderSafeText(c.city)}, ${renderSafeText(c.state)}` : c.city || c.state || '—'))}
+                  </span>
+                  
+                  <div className="flex items-center gap-1.5">
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-semibold whitespace-nowrap ${
+                      c.size === 'Small' 
+                        ? 'bg-sky-50 text-sky-700 dark:bg-sky-950/20 dark:text-sky-400' 
+                        : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/20 dark:text-indigo-400'
+                    }`}>
+                      {c.size || 'Unknown'} Size
+                    </span>
+
+                    {c.is_researched || c.hasResearchedProfile ? (
+                      <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-bold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                        <Check size={10} /> AI Ready
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-semibold text-slate-500 dark:bg-navy-800 dark:text-slate-400">
+                        Pending AI
+                      </span>
+                    )}
+
+                    <div className="flex items-center gap-1">
+                      <StatusBadge status={c.status} />
+                      {c.exclusions === 'Y' && (
+                        <span className="flex items-center gap-0.5 text-[9px] font-bold text-rose-500" title="Excluded">
+                          <AlertOctagon size={10} />
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {allCompanies.length === 0 && (
+              <div className="p-8 text-center text-slate-400 dark:text-slate-500">
+                No companies match your search and filter criteria.
+              </div>
+            )}
+          </div>
+
+          {/* Bottom Pagination Controls */}
           {pageCount > 1 && (
             <div className="flex items-center justify-between border-t border-slate-100 p-4 dark:border-navy-800">
               <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -449,18 +563,27 @@ export default function Companies() {
                 </span>{' '}
                 of <span className="font-semibold text-navy-900 dark:text-white">{totalCompanies.toLocaleString()}</span> companies
               </p>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
                 <button
                   disabled={currentPage === 1}
-                  onClick={() => setCurrentPage((p) => p - 1)}
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-navy-900 hover:bg-slate-50 disabled:opacity-50 dark:border-navy-700 dark:text-white dark:hover:bg-navy-800 transition-colors"
+                  onClick={() => {
+                    setCurrentPage((p) => p - 1);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-navy-900 hover:bg-slate-50 disabled:opacity-50 dark:border-navy-700 dark:text-white dark:hover:bg-navy-750 transition-colors"
                 >
                   Previous
                 </button>
+                <span className="text-xs font-bold text-slate-600 dark:text-slate-400 px-1">
+                  {currentPage} / {pageCount}
+                </span>
                 <button
                   disabled={currentPage === pageCount}
-                  onClick={() => setCurrentPage((p) => p + 1)}
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-navy-900 hover:bg-slate-50 disabled:opacity-50 dark:border-navy-700 dark:text-white dark:hover:bg-navy-800 transition-colors"
+                  onClick={() => {
+                    setCurrentPage((p) => p + 1);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-navy-900 hover:bg-slate-50 disabled:opacity-50 dark:border-navy-700 dark:text-white dark:hover:bg-navy-750 transition-colors"
                 >
                   Next
                 </button>

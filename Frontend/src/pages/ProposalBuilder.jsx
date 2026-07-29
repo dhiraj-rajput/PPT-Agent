@@ -535,7 +535,7 @@ export default function ProposalBuilder() {
           <Card className="!p-0 overflow-hidden">
             {companyProfile ? (
               <div className="p-6">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                   <div>
                     <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1">Company Name</p>
                     <p className="text-sm font-bold text-navy-900 dark:text-white">{companyProfile.name || companyProfile.company_name || 'OrbitAvanya Tech LLP'}</p>
@@ -859,65 +859,114 @@ export default function ProposalBuilder() {
 
           <Card className="!p-0 overflow-hidden">
             {historyItems.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-slate-50 text-xs uppercase text-slate-500 dark:bg-navy-900/50 dark:text-slate-400">
-                    <tr>
-                      <th className="px-6 py-4 font-bold">Proposal Title</th>
-                      <th className="px-6 py-4 font-bold">Solicitation</th>
-                      <th className="px-6 py-4 font-bold">Type</th>
-                      <th className="px-6 py-4 font-bold">Date Completed</th>
-                      <th className="px-6 py-4 font-bold text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-navy-800">
-                    {historyItems.map((p) => {
-                      const badge = getModeBadge(p.mode);
-                      return (
-                        <tr key={p.id} className="hover:bg-slate-50/50 dark:hover:bg-navy-800/50 transition-colors">
-                          <td className="px-6 py-4">
-                            <p className="font-bold text-navy-900 dark:text-white max-w-md truncate" title={p.title}>
-                              {p.title}
-                            </p>
-                            <p className="text-xs text-slate-500 mt-0.5">Entity: {p.company}</p>
-                          </td>
-                          <td className="px-6 py-4 font-mono text-xs text-slate-600 dark:text-slate-400">
-                            {p.solicitation || 'N/A'}
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ${badge.style}`}>
-                              {badge.label}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-xs text-slate-500">
+              <>
+                {/* Desktop view */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-50 text-xs uppercase text-slate-500 dark:bg-navy-900/50 dark:text-slate-400">
+                      <tr>
+                        <th className="px-6 py-4 font-bold">Proposal Title</th>
+                        <th className="px-6 py-4 font-bold">Solicitation</th>
+                        <th className="px-6 py-4 font-bold">Type</th>
+                        <th className="px-6 py-4 font-bold">Date Completed</th>
+                        <th className="px-6 py-4 font-bold text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-navy-800">
+                      {historyItems.map((p) => {
+                        const badge = getModeBadge(p.mode);
+                        return (
+                          <tr key={p.id} className="hover:bg-slate-50/50 dark:hover:bg-navy-800/50 transition-colors">
+                            <td className="px-6 py-4">
+                              <p className="font-bold text-navy-900 dark:text-white max-w-md truncate" title={p.title}>
+                                {p.title}
+                              </p>
+                              <p className="text-xs text-slate-500 mt-0.5">Entity: {p.company}</p>
+                            </td>
+                            <td className="px-6 py-4 font-mono text-xs text-slate-600 dark:text-slate-400">
+                              {p.solicitation || 'N/A'}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ${badge.style}`}>
+                                {badge.label}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-xs text-slate-500">
+                              {p.updated}
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center justify-end gap-2">
+                                {p.filename && (
+                                  <>
+                                    <button
+                                      onClick={() => setPreviewing(p)}
+                                      className="flex items-center gap-1.5 rounded-xl bg-violet-50 hover:bg-violet-100 px-3 py-1.5 text-xs font-bold text-violet-700 dark:bg-violet-950/40 dark:text-violet-400 transition-colors"
+                                    >
+                                      <Eye size={14} /> View
+                                    </button>
+                                    <button
+                                      onClick={(e) => handleDownload(e, p.filename)}
+                                      className="flex items-center gap-1.5 rounded-xl bg-brand-50 hover:bg-brand-100 px-3 py-1.5 text-xs font-bold text-brand-700 dark:bg-brand-950/40 dark:text-brand-400 transition-colors"
+                                    >
+                                      <FileDown size={14} /> Download
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile view */}
+                <div className="block md:hidden divide-y divide-slate-100 dark:divide-navy-800">
+                  {historyItems.map((p) => {
+                    const badge = getModeBadge(p.mode);
+                    return (
+                      <div key={p.id} className="p-4 space-y-3 hover:bg-slate-50/40 dark:hover:bg-navy-800/40 transition-colors">
+                        <div>
+                          <p className="font-bold text-navy-900 dark:text-white text-sm leading-snug">
+                            {p.title}
+                          </p>
+                          <p className="text-xs text-slate-500 mt-0.5">Entity: {p.company}</p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase ${badge.style}`}>
+                            {badge.label}
+                          </span>
+                          <span className="text-[9px] bg-slate-100 text-slate-600 dark:bg-navy-800 dark:text-slate-400 font-mono px-2 py-0.5 rounded-full">
+                            RFP: {p.solicitation || 'N/A'}
+                          </span>
+                          <span className="text-[9px] text-slate-400 ml-auto">
                             {p.updated}
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center justify-end gap-2">
-                              {p.filename && (
-                                <>
-                                  <button
-                                    onClick={() => setPreviewing(p)}
-                                    className="flex items-center gap-1.5 rounded-xl bg-violet-50 hover:bg-violet-100 px-3 py-1.5 text-xs font-bold text-violet-700 dark:bg-violet-950/40 dark:text-violet-400 transition-colors"
-                                  >
-                                    <Eye size={14} /> View
-                                  </button>
-                                  <button
-                                    onClick={(e) => handleDownload(e, p.filename)}
-                                    className="flex items-center gap-1.5 rounded-xl bg-brand-50 hover:bg-brand-100 px-3 py-1.5 text-xs font-bold text-brand-700 dark:bg-brand-950/40 dark:text-brand-400 transition-colors"
-                                  >
-                                    <FileDown size={14} /> Download
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100/60 dark:border-navy-800/40">
+                          {p.filename && (
+                            <>
+                              <button
+                                onClick={() => setPreviewing(p)}
+                                className="flex items-center gap-1 rounded-lg bg-violet-50 hover:bg-violet-100 px-2.5 py-1 text-xs font-bold text-violet-700 dark:bg-violet-950/40 dark:text-violet-400 transition-colors"
+                              >
+                                <Eye size={12} /> View
+                              </button>
+                              <button
+                                onClick={(e) => handleDownload(e, p.filename)}
+                                className="flex items-center gap-1 rounded-lg bg-brand-50 hover:bg-brand-100 px-2.5 py-1 text-xs font-bold text-brand-700 dark:bg-brand-950/40 dark:text-brand-400 transition-colors"
+                              >
+                                <FileDown size={12} /> Download
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
             ) : (
               <div className="flex flex-col items-center justify-center py-12 text-center text-slate-400 dark:text-slate-500">
                 <FileDown size={32} className="mb-3 text-slate-300" />

@@ -386,6 +386,9 @@ export default function CompanyDetail() {
   const isWomenOwned = ['Y', 'YES', 'TRUE'].includes(String(company.is_women_owned || '').trim().toUpperCase());
   const isVeteranOwned = ['Y', 'YES', 'TRUE'].includes(String(company.is_veteran_owned || '').trim().toUpperCase());
   const isSdvoseb = ['Y', 'YES', 'TRUE'].includes(String(company.is_sdvosb || '').trim().toUpperCase());
+  const isMinorityOwned = ['Y', 'YES', 'TRUE'].includes(String(company.is_minority_owned || '').trim().toUpperCase());
+  const isHubzone = ['Y', 'YES', 'TRUE'].includes(String(company.is_hubzone || '').trim().toUpperCase());
+  const is8aProgram = ['Y', 'YES', 'TRUE'].includes(String(company.is_8a_program || '').trim().toUpperCase());
   const hasExclusions = ['Y', 'YES', 'TRUE'].includes(String(company.exclusions || '').trim().toUpperCase());
 
   return (
@@ -464,61 +467,98 @@ export default function CompanyDetail() {
             <h3 className="text-sm font-bold text-navy-900 dark:text-white">SAM Registry Overview</h3>
             <div className="mt-4 grid grid-cols-1 gap-y-4 gap-x-6 text-sm sm:grid-cols-2 lg:grid-cols-3">
               <div>
-                <p className="text-xs text-slate-400 dark:text-slate-500">Unique Entity ID (UEI)</p>
-                <p className="font-semibold text-navy-900 dark:text-white font-mono">{company.uei}</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">Unique Entity ID (UEI)</p>
+                <p className="font-semibold text-navy-900 dark:text-white font-mono mt-0.5">{company.uei || '—'}</p>
               </div>
               <div>
-                <p className="text-xs text-slate-400 dark:text-slate-500">CAGE Code</p>
-                <p className="font-semibold text-navy-900 dark:text-white font-mono">{company.cage_code || 'N/A'}</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">CAGE Code</p>
+                <p className="font-semibold text-navy-900 dark:text-white font-mono mt-0.5">{company.cage_code || '—'}</p>
               </div>
               <div>
-                <p className="text-xs text-slate-400 dark:text-slate-500">Entity Structure</p>
-                <p className="font-semibold text-navy-900 dark:text-white">{company.entity_structure || 'N/A'}</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">DBA Name</p>
+                <p className="font-semibold text-navy-900 dark:text-white mt-0.5">{company.dba_name || '—'}</p>
               </div>
               <div>
-                <p className="text-xs text-slate-400 dark:text-slate-500">Exclusions Status</p>
-                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
-                  hasExclusions 
-                    ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/25 dark:text-rose-400' 
-                    : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/25 dark:text-emerald-400'
-                }`}>
-                  {hasExclusions ? 'Active Exclusions Found' : 'No Exclusions'}
-                </span>
+                <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">Entity Structure</p>
+                <p className="font-semibold text-navy-900 dark:text-white mt-0.5">{company.entity_structure || '—'}</p>
               </div>
               <div>
-                <p className="text-xs text-slate-400 dark:text-slate-500">Expiration Date</p>
-                <p className="font-semibold text-navy-900 dark:text-white">{company.expiration_date || 'N/A'}</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">Registration Purpose</p>
+                <p className="font-semibold text-navy-900 dark:text-white mt-0.5">{company.purpose || '—'}</p>
               </div>
               <div>
-                <p className="text-xs text-slate-400 dark:text-slate-500">Revenue (Exec Comp)</p>
-                <p className="font-semibold text-navy-900 dark:text-white">{company.revenue || 'N/A'}</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">Exclusions Status</p>
+                <div className="mt-1">
+                  <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                    hasExclusions 
+                      ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/25 dark:text-rose-450' 
+                      : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/25 dark:text-emerald-450'
+                  }`}>
+                    {hasExclusions ? 'Active Exclusions' : 'No Exclusions'}
+                  </span>
+                </div>
               </div>
               <div>
-                <p className="text-xs text-slate-400 dark:text-slate-500">Primary NAICS Code</p>
-                <p className="font-semibold text-navy-900 dark:text-white font-mono">{company.primary_naics || 'N/A'}</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">Registration Date</p>
+                <p className="font-semibold text-navy-900 dark:text-white mt-0.5">{company.registration_date || '—'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">Last Updated Date</p>
+                <p className="font-semibold text-navy-900 dark:text-white mt-0.5">{company.last_updated || '—'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">Expiration Date</p>
+                <p className="font-semibold text-navy-900 dark:text-white mt-0.5">{company.expiration_date || '—'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">Revenue</p>
+                <p className="font-semibold text-navy-900 dark:text-white mt-0.5">{company.revenue || '—'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">Primary NAICS Code</p>
+                <p className="font-semibold text-navy-900 dark:text-white font-mono mt-0.5">{company.primary_naics || '—'}</p>
               </div>
               <div className="sm:col-span-2">
-                <p className="text-xs text-slate-400 dark:text-slate-500">Primary NAICS Sector</p>
-                <p className="font-semibold text-navy-900 dark:text-white text-xs truncate" title={company.primary_naics_desc}>{company.primary_naics_desc || 'N/A'}</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">Primary NAICS Sector</p>
+                <p className="font-semibold text-navy-900 dark:text-white text-xs mt-0.5 break-words" title={company.primary_naics_desc}>{company.primary_naics_desc || '—'}</p>
+              </div>
+              <div className="sm:col-span-2">
+                <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">Secondary NAICS Codes</p>
+                <p className="font-semibold text-navy-900 dark:text-white text-xs mt-0.5 break-words leading-relaxed font-mono">
+                  {company.secondary_naics && company.secondary_naics !== 'None' ? company.secondary_naics : '—'}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">PSC Codes</p>
+                <p className="font-semibold text-navy-900 dark:text-white text-xs mt-0.5 break-words font-mono">{company.psc_codes || '—'}</p>
               </div>
             </div>
 
             {/* Certifications & Badges */}
             <div className="mt-5 pt-4 border-t border-slate-100 dark:border-navy-700 flex flex-wrap gap-2">
-              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isSmall ? 'bg-sky-50 text-sky-700 dark:bg-navy-900 dark:text-sky-400' : 'bg-slate-50 text-slate-400'}`}>
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isSmall ? 'bg-sky-50 text-sky-700 dark:bg-sky-950/20 dark:text-sky-400' : 'bg-slate-50 text-slate-450 dark:bg-navy-900/40 dark:text-slate-500'}`}>
                 Small Business
               </span>
-              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isNonProfit ? 'bg-indigo-50 text-indigo-700 dark:bg-navy-900 dark:text-indigo-400' : 'bg-slate-50 text-slate-400'}`}>
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isNonProfit ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/20 dark:text-indigo-400' : 'bg-slate-50 text-slate-450 dark:bg-navy-900/40 dark:text-slate-500'}`}>
                 Non-Profit
               </span>
-              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isWomenOwned ? 'bg-fuchsia-50 text-fuchsia-700 dark:bg-navy-900 dark:text-fuchsia-400' : 'bg-slate-50 text-slate-400'}`}>
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isWomenOwned ? 'bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-950/20 dark:text-fuchsia-400' : 'bg-slate-50 text-slate-450 dark:bg-navy-900/40 dark:text-slate-500'}`}>
                 Women Owned
               </span>
-              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isVeteranOwned ? 'bg-teal-50 text-teal-700 dark:bg-navy-900 dark:text-teal-400' : 'bg-slate-50 text-slate-400'}`}>
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isVeteranOwned ? 'bg-teal-50 text-teal-700 dark:bg-teal-950/20 dark:text-teal-400' : 'bg-slate-50 text-slate-450 dark:bg-navy-900/40 dark:text-slate-500'}`}>
                 Veteran Owned
               </span>
-              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isSdvoseb ? 'bg-amber-50 text-amber-700 dark:bg-navy-900 dark:text-amber-400' : 'bg-slate-50 text-slate-400'}`}>
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isSdvoseb ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400' : 'bg-slate-50 text-slate-450 dark:bg-navy-900/40 dark:text-slate-500'}`}>
                 SDVOSB
+              </span>
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isMinorityOwned ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400' : 'bg-slate-50 text-slate-450 dark:bg-navy-900/40 dark:text-slate-500'}`}>
+                Minority Owned
+              </span>
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isHubzone ? 'bg-orange-50 text-orange-700 dark:bg-orange-950/20 dark:text-orange-400' : 'bg-slate-50 text-slate-450 dark:bg-navy-900/40 dark:text-slate-500'}`}>
+                HUBZone
+              </span>
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${is8aProgram ? 'bg-violet-50 text-violet-700 dark:bg-violet-950/20 dark:text-violet-400' : 'bg-slate-50 text-slate-450 dark:bg-navy-900/40 dark:text-slate-500'}`}>
+                8(a) Program
               </span>
             </div>
           </Card>

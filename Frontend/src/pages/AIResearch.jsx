@@ -212,11 +212,36 @@ export default function AIResearch() {
 
   // Update selectedProfile whenever selectedCompany or profiles changes
   useEffect(() => {
-    if (selectedCompany && profiles.length > 0) {
-      setSelectedProfile(matchProfile(selectedCompany, profiles));
-    } else {
-      setSelectedProfile(null);
-    }
+    let active = true;
+    const loadProfile = async () => {
+      if (!selectedCompany) {
+        if (active) setSelectedProfile(null);
+        return;
+      }
+      
+      let matched = matchProfile(selectedCompany, profiles);
+      if (matched) {
+        if (active) setSelectedProfile(matched);
+        return;
+      }
+
+      // If marked as researched but not found in preloaded profiles list, try querying the API directly
+      if (selectedCompany.is_researched || selectedCompany.hasResearchedProfile) {
+        try {
+          const res = await api.searchProfile(selectedCompany.name);
+          if (res && Array.isArray(res) && res.length > 0 && active) {
+            setSelectedProfile(res[0]);
+            return;
+          }
+        } catch (err) {
+          console.error("Error searching profile for selected company:", err);
+        }
+      }
+      if (active) setSelectedProfile(null);
+    };
+
+    loadProfile();
+    return () => { active = false; };
   }, [selectedCompany, profiles, matchProfile]);
 
   // ─── Research polling ─────────────────────────────────────────────────────────
@@ -341,12 +366,18 @@ export default function AIResearch() {
 
   // ─── Derived state ────────────────────────────────────────────────────────────
 
+  const hasProfileForCompany = (c) => {
+    if (!c) return false;
+    if (c.hasResearchedProfile || c.is_researched) return true;
+    return !!matchProfile(c, profiles);
+  };
+
   const filteredCompanies = companiesList.filter(c => {
     const matchesSearch = c.name.toLowerCase().includes(searchInput.toLowerCase()) ||
       (c.industry && c.industry.toLowerCase().includes(searchInput.toLowerCase()));
     if (!matchesSearch) return false;
     if (researchFilter === 'all') return true;
-    const isResearched = !!matchProfile(c, profiles);
+    const isResearched = hasProfileForCompany(c);
     return researchFilter === 'researched' ? isResearched : !isResearched;
   });
 
@@ -361,12 +392,6 @@ export default function AIResearch() {
     ? companiesList.filter(c => c.name.toLowerCase().includes(newCompanyInput.toLowerCase())).slice(0, 5)
     : [];
 
-  const hasProfileForCompany = (c) => {
-    if (!c) return false;
-    if (c.hasResearchedProfile || c.is_researched) return true;
-    return !!matchProfile(c, profiles);
-  };
-
   // ─── Render ───────────────────────────────────────────────────────────────────
 
   return (
@@ -378,7 +403,7 @@ export default function AIResearch() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* ── Left Sidebar ── */}
-        <div className="space-y-6 lg:col-span-1">
+        <div className={`space-y-6 lg:col-span-1 ${selectedCompany ? 'hidden lg:block' : 'block'}`}>
           {/* Start New Research */}
           <Card className="p-5 border-brand-100 bg-brand-50/10">
             <h3 className="flex items-center gap-2 text-sm font-bold text-navy-900 dark:text-white">
@@ -544,7 +569,15 @@ export default function AIResearch() {
         </div>
 
         {/* ── Right Pane: Profile Display ── */}
-        <div className="lg:col-span-2">
+        <div className={`lg:col-span-2 ${selectedCompany ? 'block' : 'hidden lg:block'}`}>
+          {selectedCompany && (
+            <button
+              onClick={() => setSelectedCompany(null)}
+              className="lg:hidden mb-4 flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 dark:border-navy-700 dark:bg-navy-800 dark:text-slate-300 dark:hover:bg-navy-750 transition-colors"
+            >
+              <ChevronLeft size={16} /> Back to Company List
+            </button>
+          )}
           {selectedCompany ? (
             selectedProfile ? (
               <div className="space-y-6">
@@ -638,52 +671,72 @@ export default function AIResearch() {
                   {activeTab === 'swot' && (
                     <div className="mt-6 space-y-5">
                       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div className="rounded-xl border border-emerald-100 bg-emerald-50/20 p-4 dark:border-emerald-950/20">
-                          <h4 className="flex items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-300">
-                            <Award size={14} /> Strengths
+                        <div className="rounded-xl border border-emerald-100 bg-emerald-50/20 p-4 dark:border-emerald-950/25">
+                          <h4 className="flex items-center gap-1.5 text-xs font-bold text-emerald-850 dark:text-emerald-300">
+                            <ShieldCheck size={15} className="text-emerald-550" /> Strengths
                           </h4>
-                          <ul className="mt-2 list-inside list-disc space-y-1 text-xs text-emerald-900 dark:text-slate-300">
+                          <ul className="mt-3.5 space-y-2 text-xs text-emerald-950 dark:text-slate-300">
                             {(selectedProfile.rfp_strengths || []).length > 0
-                              ? (selectedProfile.rfp_strengths || []).map((s, idx) => <li key={idx}>{s}</li>)
-                              : <li className="list-none text-slate-400 italic">No strengths data available.</li>
+                              ? (selectedProfile.rfp_strengths || []).map((s, idx) => (
+                                  <li key={idx} className="flex items-start gap-2.5 leading-relaxed">
+                                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+                                    <span>{s}</span>
+                                  </li>
+                                ))
+                              : <li className="text-slate-400 italic">No strengths data available.</li>
                             }
                           </ul>
                         </div>
 
-                        <div className="rounded-xl border border-rose-100 bg-rose-50/20 p-4 dark:border-rose-950/20">
-                          <h4 className="flex items-center gap-1.5 text-xs font-bold text-rose-800 dark:text-rose-300">
-                            <AlertTriangle size={14} /> Weaknesses
+                        <div className="rounded-xl border border-rose-100 bg-rose-50/20 p-4 dark:border-rose-950/25">
+                          <h4 className="flex items-center gap-1.5 text-xs font-bold text-rose-850 dark:text-rose-300">
+                            <AlertTriangle size={15} className="text-rose-550" /> Weaknesses / Risks
                           </h4>
-                          <ul className="mt-2 list-inside list-disc space-y-1 text-xs text-rose-900 dark:text-slate-300">
+                          <ul className="mt-3.5 space-y-2 text-xs text-rose-950 dark:text-slate-300">
                             {(selectedProfile.rfp_weaknesses || []).length > 0
-                              ? (selectedProfile.rfp_weaknesses || []).map((w, idx) => <li key={idx}>{w}</li>)
-                              : <li className="list-none text-slate-400 italic">No weaknesses data available.</li>
+                              ? (selectedProfile.rfp_weaknesses || []).map((w, idx) => (
+                                  <li key={idx} className="flex items-start gap-2.5 leading-relaxed">
+                                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" />
+                                    <span>{w}</span>
+                                  </li>
+                                ))
+                              : <li className="text-slate-400 italic">No weaknesses data available.</li>
                             }
                           </ul>
                         </div>
                       </div>
 
                       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div className="rounded-xl border border-blue-100 bg-blue-50/20 p-4 dark:border-blue-950/20">
-                          <h4 className="flex items-center gap-1.5 text-xs font-bold text-blue-800 dark:text-blue-300">
-                            <Zap size={14} /> Opportunities
+                        <div className="rounded-xl border border-blue-100 bg-blue-50/20 p-4 dark:border-blue-950/25">
+                          <h4 className="flex items-center gap-1.5 text-xs font-bold text-blue-850 dark:text-blue-300">
+                            <Zap size={15} className="text-blue-550" /> Opportunities
                           </h4>
-                          <ul className="mt-2 list-inside list-disc space-y-1 text-xs text-blue-900 dark:text-slate-300">
+                          <ul className="mt-3.5 space-y-2 text-xs text-blue-950 dark:text-slate-300">
                             {(selectedProfile.opportunities || []).length > 0
-                              ? (selectedProfile.opportunities || []).map((o, idx) => <li key={idx}>{o}</li>)
-                              : <li className="list-none text-slate-400 italic">No opportunities data available.</li>
+                              ? (selectedProfile.opportunities || []).map((o, idx) => (
+                                  <li key={idx} className="flex items-start gap-2.5 leading-relaxed">
+                                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
+                                    <span>{o}</span>
+                                  </li>
+                                ))
+                              : <li className="text-slate-400 italic">No opportunities data available.</li>
                             }
                           </ul>
                         </div>
 
-                        <div className="rounded-xl border border-amber-100 bg-amber-50/20 p-4 dark:border-amber-950/20">
-                          <h4 className="flex items-center gap-1.5 text-xs font-bold text-amber-800 dark:text-amber-300">
-                            <AlertCircle size={14} /> Challenges / Threats
+                        <div className="rounded-xl border border-amber-100 bg-amber-50/20 p-4 dark:border-amber-950/25">
+                          <h4 className="flex items-center gap-1.5 text-xs font-bold text-amber-850 dark:text-amber-300">
+                            <AlertCircle size={15} className="text-amber-550" /> Threats / Challenges
                           </h4>
-                          <ul className="mt-2 list-inside list-disc space-y-1 text-xs text-amber-900 dark:text-slate-300">
+                          <ul className="mt-3.5 space-y-2 text-xs text-amber-950 dark:text-slate-300">
                             {(selectedProfile.challenges || []).length > 0
-                              ? (selectedProfile.challenges || []).map((c, idx) => <li key={idx}>{c}</li>)
-                              : <li className="list-none text-slate-400 italic">No challenges data available.</li>
+                              ? (selectedProfile.challenges || []).map((c, idx) => (
+                                  <li key={idx} className="flex items-start gap-2.5 leading-relaxed">
+                                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+                                    <span>{c}</span>
+                                  </li>
+                                ))
+                              : <li className="text-slate-400 italic">No challenges data available.</li>
                             }
                           </ul>
                         </div>

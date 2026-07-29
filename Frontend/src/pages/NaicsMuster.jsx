@@ -379,84 +379,140 @@ export default function NaicsMuster() {
             <p className="text-xs text-slate-400">Try adjusting your search terms or selecting a different sector.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left text-sm">
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/70 text-xs font-bold uppercase tracking-wider text-slate-500 dark:border-navy-800 dark:bg-navy-950 dark:text-slate-400">
-                  <th className="px-6 py-4 w-32">Code</th>
-                  <th className="px-6 py-4 w-64">Title</th>
-                  <th className="px-6 py-4">Description</th>
-                  <th className="px-6 py-4 text-center w-24">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-navy-800">
-                {items.map((item) => {
-                  const isExpanded = expandedCodes[item.code];
-                  const hasLongDesc = item.description && item.description.length > 200;
-                  const displayDesc = hasLongDesc && !isExpanded
-                    ? `${item.description.slice(0, 200)}...`
-                    : item.description;
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full border-collapse text-left text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50/70 text-xs font-bold uppercase tracking-wider text-slate-500 dark:border-navy-800 dark:bg-navy-950 dark:text-slate-400">
+                    <th className="px-6 py-4 w-32">Code</th>
+                    <th className="px-6 py-4 w-64">Title</th>
+                    <th className="px-6 py-4">Description</th>
+                    <th className="px-6 py-4 text-center w-24">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-navy-800">
+                  {items.map((item) => {
+                    const isExpanded = expandedCodes[item.code];
+                    const hasLongDesc = item.description && item.description.length > 200;
+                    const displayDesc = hasLongDesc && !isExpanded
+                      ? `${item.description.slice(0, 200)}...`
+                      : item.description;
 
-                  return (
-                    <tr key={item.code} className="hover:bg-slate-50/50 dark:hover:bg-navy-950/20">
-                      {/* Code Badge */}
-                      <td className="whitespace-nowrap px-6 py-4">
-                        <span className="inline-flex items-center rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-bold text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
+                    return (
+                      <tr key={item.code} className="hover:bg-slate-50/50 dark:hover:bg-navy-950/20">
+                        {/* Code Badge */}
+                        <td className="whitespace-nowrap px-6 py-4">
+                          <span className="inline-flex items-center rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-bold text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
+                            {item.code}
+                          </span>
+                        </td>
+
+                        {/* Title */}
+                        <td className="px-6 py-4 font-bold text-navy-900 dark:text-white">
+                          {item.title}
+                        </td>
+
+                        {/* Description */}
+                        <td className="px-6 py-4 text-slate-600 dark:text-slate-300 max-w-md">
+                          <p className="text-xs leading-relaxed">
+                            {displayDesc || <span className="italic text-slate-400">No description available</span>}
+                          </p>
+                          {hasLongDesc && (
+                            <button
+                              onClick={() => toggleExpand(item.code)}
+                              className="mt-1 text-[11px] font-bold text-brand-500 hover:text-brand-600 outline-none"
+                            >
+                              {isExpanded ? 'Show less' : 'Read more'}
+                            </button>
+                          )}
+                        </td>
+
+                        {/* Action buttons */}
+                        <td className="whitespace-nowrap px-6 py-4 text-center">
+                          <button
+                            onClick={() => handleCopy(item.code)}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                              copiedCode === item.code
+                                ? 'border-green-200 bg-green-50 text-green-600 dark:border-green-500/20 dark:bg-green-500/10 dark:text-green-400'
+                                : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:border-navy-700 dark:bg-navy-800 dark:hover:border-navy-600 dark:hover:text-white'
+                            }`}
+                            title="Copy NAICS Code"
+                          >
+                            {copiedCode === item.code ? (
+                              <>
+                                <Check size={13} />
+                                <span>Copied!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy size={13} />
+                                <span>Copy</span>
+                              </>
+                            )}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card List View */}
+            <div className="block md:hidden divide-y divide-slate-100 dark:divide-navy-800">
+              {items.map((item) => {
+                const isExpanded = expandedCodes[item.code];
+                const hasLongDesc = item.description && item.description.length > 200;
+                const displayDesc = hasLongDesc && !isExpanded
+                  ? `${item.description.slice(0, 200)}...`
+                  : item.description;
+
+                return (
+                  <div key={item.code} className="p-4 space-y-3 hover:bg-slate-50/40 dark:hover:bg-navy-800/40 transition-colors">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <span className="inline-flex items-center rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-bold text-brand-600 dark:bg-brand-500/10 dark:text-brand-400 mb-2">
                           {item.code}
                         </span>
-                      </td>
+                        <h4 className="font-bold text-navy-900 dark:text-white text-sm leading-snug">
+                          {item.title}
+                        </h4>
+                      </div>
+                      
+                      <button
+                        onClick={() => handleCopy(item.code)}
+                        className={`shrink-0 inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg border transition-all ${
+                          copiedCode === item.code
+                            ? 'border-green-200 bg-green-50 text-green-600 dark:border-green-500/20 dark:bg-green-500/10 dark:text-green-400'
+                            : 'border-slate-200 bg-white text-slate-500 hover:border-slate-350 hover:text-slate-700 dark:border-navy-700 dark:bg-navy-800 dark:hover:border-navy-600 dark:hover:text-white'
+                        }`}
+                      >
+                        {copiedCode === item.code ? <Check size={12} /> : <Copy size={12} />}
+                        <span>{copiedCode === item.code ? 'Copied' : 'Copy'}</span>
+                      </button>
+                    </div>
 
-                      {/* Title */}
-                      <td className="px-6 py-4 font-bold text-navy-900 dark:text-white">
-                        {item.title}
-                      </td>
-
-                      {/* Description */}
-                      <td className="px-6 py-4 text-slate-600 dark:text-slate-300 max-w-md">
-                        <p className="text-xs leading-relaxed">
-                          {displayDesc || <span className="italic text-slate-400">No description available</span>}
-                        </p>
+                    {item.description && (
+                      <div className="text-xs text-slate-600 dark:text-slate-350 leading-relaxed bg-slate-50/80 dark:bg-navy-950 p-2.5 rounded-xl border border-slate-100/40 dark:border-navy-800/30">
+                        <p>{displayDesc}</p>
                         {hasLongDesc && (
                           <button
                             onClick={() => toggleExpand(item.code)}
-                            className="mt-1 text-[11px] font-bold text-brand-500 hover:text-brand-600 outline-none"
+                            className="mt-1.5 text-[11px] font-bold text-brand-500 hover:text-brand-600 outline-none"
                           >
                             {isExpanded ? 'Show less' : 'Read more'}
                           </button>
                         )}
-                      </td>
-
-                      {/* Action buttons */}
-                      <td className="whitespace-nowrap px-6 py-4 text-center">
-                        <button
-                          onClick={() => handleCopy(item.code)}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
-                            copiedCode === item.code
-                              ? 'border-green-200 bg-green-50 text-green-600 dark:border-green-500/20 dark:bg-green-500/10 dark:text-green-400'
-                              : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:border-navy-700 dark:bg-navy-800 dark:hover:border-navy-600 dark:hover:text-white'
-                          }`}
-                          title="Copy NAICS Code"
-                        >
-                          {copiedCode === item.code ? (
-                            <>
-                              <Check size={13} />
-                              <span>Copied!</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy size={13} />
-                              <span>Copy</span>
-                            </>
-                          )}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )
+}
 
         {/* Pagination bar */}
         {total > 0 && (
