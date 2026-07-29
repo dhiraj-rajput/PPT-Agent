@@ -17,7 +17,15 @@ export function AuthProvider({ children }) {
     api
       .me()
       .then(({ user }) => setUser(user))
-      .catch(() => localStorage.removeItem(TOKEN_KEY))
+      .catch((err) => {
+        if (err.message && err.message.includes('401')) {
+          setUser(null);
+        } else {
+          console.warn('Could not verify session, will retry on next action:', err.message);
+          const currentToken = localStorage.getItem('orbitavanya_token');
+          if (!currentToken) setUser(null);
+        }
+      })
       .finally(() => setLoading(false));
   }, []);
 

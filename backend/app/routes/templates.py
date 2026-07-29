@@ -43,16 +43,24 @@ async def upload_default_template(
     if not template_file.filename or not template_file.filename.lower().endswith(".docx"):
         raise HTTPException(400, "Default template must be a .docx file.")
 
-    content = await template_file.read()
-    if len(content) > MAX_FILE_SIZE:
-        raise HTTPException(400, "Template file exceeds the 10MB size limit.")
+    # Chunked read with hard size cap \u2014 prevents OOM from oversized uploads
+    _chunks: list[bytes] = []
+    _total = 0
+    async for _chunk in template_file:
+        _total += len(_chunk)
+        if _total > MAX_FILE_SIZE:
+            raise HTTPException(413, "Template file exceeds the 10MB size limit.")
+        _chunks.append(_chunk)
+    content = b"".join(_chunks)
+    if not content:
+        raise HTTPException(400, "Uploaded template file is empty.")
 
     with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tmp:
         tmp.write(content)
         tmp_path = tmp.name
 
     try:
-        meta = set_default_template(tmp_path, template_file.filename, uploaded_by=str(current_user["_id"]))
+        meta = set_default_template(tmp_path, template_file.filename, uploaded_by=str(current_user["id"]))
     finally:
         Path(tmp_path).unlink(missing_ok=True)
 

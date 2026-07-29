@@ -180,7 +180,7 @@ export default function Analytics() {
                   <CartesianGrid horizontal={false} stroke="#F1F3F9" />
                   <XAxis type="number" hide />
                   <YAxis type="category" dataKey="stage" tick={{ fontSize: 12, fill: '#1c151e' }} axisLine={false} tickLine={false} width={140} />
-                  <Tooltip formatter={(val, name, item) => [`${(item.payload.count || 0).toLocaleString()} Records`, 'Count']} />
+                  <Tooltip formatter={(val, name, item) => [`${(item?.payload?.count ?? 0).toLocaleString()} Records`, 'Count']} />
                   <Bar dataKey="scaledValue" fill="#2f879d" radius={[0, 6, 6, 0]} barSize={22} name="Count">
                     <LabelList dataKey="count" position="right" formatter={(v) => (v || 0).toLocaleString()} style={{ fontSize: 11, fontWeight: 'bold', fill: '#2f879d' }} />
                   </Bar>

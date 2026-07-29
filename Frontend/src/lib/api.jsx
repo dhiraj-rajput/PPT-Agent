@@ -718,6 +718,12 @@ export const api = {
   getInitialsAvatar(name) {
     const cleanName = (name || 'User').trim();
     const initials = cleanName.split(/\s+/).map(n => n[0]).slice(0, 2).join('').toUpperCase();
+    const escapeXml = (s) => String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
     const colors = [
       '#3b82f6',
       '#10b981',
@@ -732,7 +738,7 @@ export const api = {
       hash = cleanName.charCodeAt(i) + ((hash << 5) - hash);
     }
     const color = colors[Math.abs(hash) % colors.length];
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%"><rect width="100" height="100" fill="${encodeURIComponent(color)}"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="40" font-weight="bold" fill="%23ffffff" dy=".3em">${initials}</text></svg>`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%"><rect width="100" height="100" fill="${encodeURIComponent(color)}"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="40" font-weight="bold" fill="%23ffffff" dy=".3em">${escapeXml(initials)}</text></svg>`;
     return `data:image/svg+xml;utf8,${svg}`;
   },
   getBaseUrl() {

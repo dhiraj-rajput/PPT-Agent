@@ -373,13 +373,18 @@ export default function AIResearch() {
   };
 
   const filteredCompanies = companiesList.filter(c => {
-    const matchesSearch = c.name.toLowerCase().includes(searchInput.toLowerCase()) ||
-      (c.industry && c.industry.toLowerCase().includes(searchInput.toLowerCase()));
+    if (!c) return false;
+    const nameStr = (c.name || c.company_name || c.title || '').toString();
+    const indStr = (c.industry || '').toString();
+    const searchLower = (searchInput || '').toLowerCase();
+    const matchesSearch = nameStr.toLowerCase().includes(searchLower) ||
+      indStr.toLowerCase().includes(searchLower);
     if (!matchesSearch) return false;
     if (researchFilter === 'all') return true;
     const isResearched = hasProfileForCompany(c);
     return researchFilter === 'researched' ? isResearched : !isResearched;
   });
+
 
   const totalPages = Math.ceil(filteredCompanies.length / PAGE_SIZE);
   const safePage = Math.min(currentPage, totalPages || 1);

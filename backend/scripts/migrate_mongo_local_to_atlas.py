@@ -18,6 +18,8 @@ if str(PROJECT_ROOT) not in sys.path:
 
 import pymongo
 from pymongo import MongoClient
+from pymongo.errors import BulkWriteError
+
 
 try:
     import certifi
@@ -78,7 +80,7 @@ def migrate():
     # 1. Connect to Local Mongo
     local_client, local_db, local_uri, local_db_name = find_active_local_db()
 
-    if not local_db:
+    if local_db is None:
         print("❌ No active local MongoDB database found with data.")
         print(f"Checked local URIs: {LOCAL_URI_CANDIDATES}")
         print(f"Checked DB names: {LOCAL_DB_NAMES}")
@@ -140,7 +142,7 @@ def migrate():
                 try:
                     res = target_coll.insert_many(batch, ordered=False)
                     inserted_count += len(res.inserted_ids)
-                except pymongo.errors.BulkWriteError as bwe:
+                except BulkWriteError as bwe:
                     # Ignore duplicate key errors if re-running
                     inserted_count += bwe.details.get("nInserted", 0)
                 batch = []
@@ -149,8 +151,9 @@ def migrate():
             try:
                 res = target_coll.insert_many(batch, ordered=False)
                 inserted_count += len(res.inserted_ids)
-            except pymongo.errors.BulkWriteError as bwe:
+            except BulkWriteError as bwe:
                 inserted_count += bwe.details.get("nInserted", 0)
+
 
         print(f"   ✅ Done! Successfully migrated {inserted_count}/{total_source_docs} documents into Atlas.")
         total_docs_migrated += inserted_count

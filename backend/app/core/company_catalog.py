@@ -103,6 +103,13 @@ def _parse_excel_workbook(path: Path) -> Optional[Dict[str, Any]]:
 
 
 def load_services_catalog(force_refresh: bool = False) -> Dict[str, Any]:
+    """
+    Loads and caches the company catalog.
+    
+    NOTE: This function performs synchronous file I/O and synchronous MongoDB calls.
+    To avoid blocking the async event loop, it should be called via `asyncio.to_thread()` 
+    when used in async routes, or run during the synchronous startup context (lifespan).
+    """
     global _cached_catalog
     if _cached_catalog is not None and not force_refresh:
         return _cached_catalog

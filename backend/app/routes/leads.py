@@ -1,7 +1,7 @@
 """
 app/routes/leads.py
 --------------------
-Lead management & bulk import endpoints using async Motor.
+Lead management & bulk import endpoints using MySQL (relational) and MongoDB (document store for profiles).
 """
 
 from __future__ import annotations
@@ -11,13 +11,18 @@ import io
 import re
 from datetime import datetime, timezone
 from typing import Any, List, Optional
-from bson import ObjectId
-from bson.errors import InvalidId
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 
 from app.core.auth import get_current_user
-from utils.db_client import get_async_collection
+from utils.db_client import get_async_collection, get_db_session, _mysql_available
+from models.sql_models import (
+    Campaign as SQL_Campaign,
+    Lead as SQL_Lead,
+    Suppression as SQL_Suppression,
+    AuditLog as SQL_AuditLog,
+)
+from sqlalchemy import select, insert, update, delete, func
 
 router = APIRouter(prefix="/leads", tags=["leads"])
 
@@ -86,10 +91,17 @@ class BulkCompanyImportBody(BaseModel):
     companies: List[CompanySelectItem]
 
 
-async def _assert_campaign_ownership(campaign_id: ObjectId, user_id: ObjectId) -> bool:
-    campaigns_col = get_async_collection("campaigns")
-    campaign = await campaigns_col.find_one({"_id": campaign_id})
-    return bool(campaign)
+async def _assert_campaign_ownership(campaign_id: int, user_id: int) -> bool:
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_Campaign).where(SQL_Campaign.id == campaign_id)
+                res = await db.execute(stmt)
+                campaign = res.scalar_one_or_none()
+                return bool(campaign)
+        except Exception:
+            pass
+    return False
 
 
 def _normalize_company_key(name: Optional[str], uei: Optional[str] = "") -> str:
@@ -102,33 +114,33 @@ def _iso(dt: Any) -> Optional[str]:
     return dt.isoformat() if dt and hasattr(dt, "isoformat") else None
 
 
-def _format_lead(l: Optional[dict]) -> dict:
+def _format_lead(l: SQL_Lead) -> dict:
     if not l:
         return {}
     return {
-        "id": str(l["_id"]),
-        "companyName": l.get("companyName", ""),
-        "contactName": l.get("contactName", ""),
-        "email": l.get("email", ""),
-        "title": l.get("title", ""),
-        "website": l.get("website", ""),
-        "linkedin": l.get("linkedin", ""),
-        "campaignId": str(l["campaignId"]),
-        "status": l.get("status", "pending"),
-        "score": l.get("score", 0),
-        "grade": l.get("grade", "cold"),
-        "sendAttempts": l.get("sendAttempts", 0),
-        "resendCount": l.get("resendCount", 0),
-        "lastSendError": l.get("lastSendError", ""),
-        "sentAt": _iso(l.get("sentAt")),
-        "openedAt": _iso(l.get("openedAt")),
-        "clickedAt": _iso(l.get("clickedAt")),
-        "repliedAt": _iso(l.get("repliedAt")),
-        "bouncedAt": _iso(l.get("bouncedAt")),
-        "unsubscribedAt": _iso(l.get("unsubscribedAt")),
-        "replyPreview": l.get("replyPreview", ""),
-        "createdAt": _iso(l.get("createdAt")),
-        "updatedAt": _iso(l.get("updatedAt")),
+        "id": str(l.id),
+        "companyName": l.company_name or "",
+        "contactName": l.contact_name or "",
+        "email": l.email or "",
+        "title": l.title or "",
+        "website": l.website or "",
+        "linkedin": l.linkedin or "",
+        "campaignId": str(l.campaign_id),
+        "status": l.status or "pending",
+        "score": l.score or 0,
+        "grade": l.grade or "cold",
+        "sendAttempts": l.send_attempts or 0,
+        "resendCount": l.resend_count or 0,
+        "lastSendError": l.last_send_error or "",
+        "sentAt": _iso(l.sent_at),
+        "openedAt": _iso(l.opened_at),
+        "clickedAt": _iso(l.clicked_at),
+        "repliedAt": _iso(l.replied_at),
+        "bouncedAt": _iso(l.bounced_at),
+        "unsubscribedAt": _iso(l.unsubscribed_at),
+        "replyPreview": l.reply_preview or "",
+        "createdAt": _iso(l.created_at),
+        "updatedAt": _iso(l.updated_at),
     }
 
 
@@ -139,20 +151,26 @@ async def list_leads(
     current_user: dict = Depends(get_current_user),
 ):
     try:
-        camp_oid = ObjectId(campaignId)
-    except InvalidId:
+        camp_id = int(campaignId)
+    except ValueError:
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
-    if not await _assert_campaign_ownership(camp_oid, current_user["_id"]):
+    if not await _assert_campaign_ownership(camp_id, int(current_user["id"])):
         raise HTTPException(status_code=404, detail="Campaign not found.")
 
-    leads_col = get_async_collection("leads")
-    query: dict = {"campaignId": camp_oid}
-    if status:
-        query["status"] = status
-
-    leads = await leads_col.find(query).sort("createdAt", -1).limit(2000).to_list(length=2000)
-    return {"leads": [_format_lead(l) for l in leads]}
+    leads = []
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_Lead).where(SQL_Lead.campaign_id == camp_id)
+                if status:
+                    stmt = stmt.where(SQL_Lead.status == status)
+                stmt = stmt.order_by(SQL_Lead.created_at.desc()).limit(2000)
+                res = await db.execute(stmt)
+                leads = [_format_lead(l) for l in res.scalars().all()]
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Database error: {e}")
+    return {"leads": leads}
 
 
 @router.post("", status_code=201)
@@ -161,57 +179,75 @@ async def create_lead(
     current_user: dict = Depends(get_current_user),
 ):
     try:
-        camp_oid = ObjectId(body.campaignId)
-    except InvalidId:
+        camp_id = int(body.campaignId)
+    except ValueError:
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
-    if not await _assert_campaign_ownership(camp_oid, current_user["_id"]):
+    if not await _assert_campaign_ownership(camp_id, int(current_user["id"])):
         raise HTTPException(status_code=404, detail="Campaign not found.")
 
     normalized = normalize_email(body.email)
     if not is_valid_email(normalized) or not is_plausible_domain(extract_domain(normalized)):
         raise HTTPException(status_code=400, detail="Invalid email address.")
 
-    suppressions_col = get_async_collection("suppressions")
-    if await suppressions_col.find_one({"email": normalized}):
-        raise HTTPException(status_code=400, detail="Email is on the suppression list.")
+    user_id = int(current_user["id"])
 
-    leads_col = get_async_collection("leads")
-    if await leads_col.find_one({"campaignId": camp_oid, "email": normalized}):
-        raise HTTPException(status_code=409, detail="This email is already a lead in this campaign.")
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                # Suppression check
+                stmt_sup = select(SQL_Suppression).where(SQL_Suppression.email == normalized)
+                sup = (await db.execute(stmt_sup)).scalar_one_or_none()
+                if sup:
+                    raise HTTPException(status_code=400, detail="Email is on the suppression list.")
 
-    company_key = _normalize_company_key(body.companyName, "") if (body.companyName or "").strip() else ""
+                # Duplicate check
+                stmt_dup = select(SQL_Lead).where(SQL_Lead.campaign_id == camp_id, SQL_Lead.email == normalized)
+                dup = (await db.execute(stmt_dup)).scalar_one_or_none()
+                if dup:
+                    raise HTTPException(status_code=409, detail="This email is already a lead in this campaign.")
 
-    doc = {
-        "campaignId": camp_oid,
-        "companyName": body.companyName or "",
-        "companyKey": company_key,
-        "contactName": body.contactName or "",
-        "email": normalized,
-        "title": body.title or "",
-        "website": body.website or "",
-        "linkedin": body.linkedin or "",
-        "status": "pending",
-        "score": 0,
-        "grade": "cold",
-        "sendAttempts": 0,
-        "resendCount": 0,
-        "lastSendError": "",
-        "sentAt": None,
-        "openedAt": None,
-        "clickedAt": None,
-        "repliedAt": None,
-        "bouncedAt": None,
-        "unsubscribedAt": None,
-        "replyPreview": "",
-        "createdBy": current_user["_id"],
-        "createdAt": datetime.now(timezone.utc),
-        "updatedAt": datetime.now(timezone.utc),
-    }
+                company_key = _normalize_company_key(body.companyName, "") if (body.companyName or "").strip() else ""
 
-    result = await leads_col.insert_one(doc)
-    lead = await leads_col.find_one({"_id": result.inserted_id})
-    return {"lead": _format_lead(lead)}
+                stmt = insert(SQL_Lead).values(
+                    campaign_id=camp_id,
+                    company_name=body.companyName or "",
+                    company_key=company_key,
+                    company_uei="",
+                    contact_name=body.contactName or "",
+                    email=normalized,
+                    title=body.title or "",
+                    website=body.website or "",
+                    linkedin=body.linkedin or "",
+                    status="pending",
+                    score=0,
+                    grade="cold",
+                    send_attempts=0,
+                    resend_count=0,
+                    last_send_error="",
+                    sent_at=None,
+                    opened_at=None,
+                    clicked_at=None,
+                    replied_at=None,
+                    bounced_at=None,
+                    unsubscribed_at=None,
+                    reply_preview="",
+                    created_by=user_id,
+                    created_at=datetime.now(timezone.utc).replace(tzinfo=None),
+                    updated_at=datetime.now(timezone.utc).replace(tzinfo=None)
+                )
+                await db.execute(stmt)
+                await db.commit()
+
+                stmt_new = select(SQL_Lead).where(SQL_Lead.campaign_id == body.campaignId, SQL_Lead.email == normalized).order_by(SQL_Lead.id.desc())
+                lead = (await db.execute(stmt_new)).scalar_one()
+                return {"lead": _format_lead(lead)}
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Database error: {e}")
+    raise HTTPException(status_code=500, detail="MySQL database is unavailable.")
 
 
 @router.post("/import/csv")
@@ -221,11 +257,11 @@ async def import_leads_csv(
     current_user: dict = Depends(get_current_user),
 ):
     try:
-        camp_oid = ObjectId(campaignId)
-    except InvalidId:
+        camp_id = int(campaignId)
+    except ValueError:
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
-    if not await _assert_campaign_ownership(camp_oid, current_user["_id"]):
+    if not await _assert_campaign_ownership(camp_id, int(current_user["id"])):
         raise HTTPException(status_code=404, detail="Campaign not found.")
 
     contents = await file.read()
@@ -241,73 +277,83 @@ async def import_leads_csv(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Could not parse CSV: {e}")
 
-    leads_col = get_async_collection("leads")
-    suppressions_col = get_async_collection("suppressions")
-
-    # Batch set lookup for existing and suppressed emails
-    extracted_emails = [normalize_email(r.get("email") or "") for r in rows if r.get("email")]
-    valid_extracted = [e for e in extracted_emails if is_valid_email(e)]
-
-    existing_docs = await leads_col.find({"campaignId": camp_oid, "email": {"$in": valid_extracted}}, {"email": 1}).to_list(length=len(valid_extracted))
-    existing_emails = set(l["email"] for l in existing_docs)
-
-    suppressed_docs = await suppressions_col.find({"email": {"$in": valid_extracted}}, {"email": 1}).to_list(length=len(valid_extracted))
-    suppressed_emails = set(s["email"] for s in suppressed_docs)
-
+    user_id = int(current_user["id"])
     report = {"totalRows": len(rows), "imported": 0, "duplicates": 0, "invalidEmail": 0, "suppressed": 0}
-    to_insert = []
 
-    for row in rows:
-        raw_email = row.get("email") or ""
-        email = normalize_email(raw_email)
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                extracted_emails = [normalize_email(r.get("email") or "") for r in rows if r.get("email")]
+                valid_extracted = [e for e in extracted_emails if is_valid_email(e)]
 
-        if not is_valid_email(email) or not is_plausible_domain(extract_domain(email)):
-            report["invalidEmail"] += 1
-            continue
-        if email in existing_emails:
-            report["duplicates"] += 1
-            continue
-        if email in suppressed_emails:
-            report["suppressed"] += 1
-            continue
+                if valid_extracted:
+                    stmt_existing = select(SQL_Lead.email).where(SQL_Lead.campaign_id == camp_id, SQL_Lead.email.in_(valid_extracted))
+                    existing_emails = set((await db.execute(stmt_existing)).scalars().all())
 
-        existing_emails.add(email)
+                    stmt_sup = select(SQL_Suppression.email).where(SQL_Suppression.email.in_(valid_extracted))
+                    suppressed_emails = set((await db.execute(stmt_sup)).scalars().all())
+                else:
+                    existing_emails = set()
+                    suppressed_emails = set()
 
-        company = row.get("companyname") or row.get("company") or ""
-        name = row.get("contactname") or row.get("name") or ""
-        title = row.get("title") or ""
-        website = row.get("website") or ""
-        linkedin = row.get("linkedin") or ""
+                to_insert = []
+                for row in rows:
+                    raw_email = row.get("email") or ""
+                    email = normalize_email(raw_email)
 
-        to_insert.append({
-            "campaignId": camp_oid,
-            "companyName": company,
-            "contactName": name,
-            "email": email,
-            "title": title,
-            "website": website,
-            "linkedin": linkedin,
-            "status": "pending",
-            "score": 0,
-            "grade": "cold",
-            "sendAttempts": 0,
-            "lastSendError": "",
-            "sentAt": None,
-            "openedAt": None,
-            "clickedAt": None,
-            "repliedAt": None,
-            "bouncedAt": None,
-            "unsubscribedAt": None,
-            "replyPreview": "",
-            "createdBy": current_user["_id"],
-            "createdAt": datetime.now(timezone.utc),
-            "updatedAt": datetime.now(timezone.utc),
-        })
+                    if not is_valid_email(email) or not is_plausible_domain(extract_domain(email)):
+                        report["invalidEmail"] += 1
+                        continue
+                    if email in existing_emails:
+                        report["duplicates"] += 1
+                        continue
+                    if email in suppressed_emails:
+                        report["suppressed"] += 1
+                        continue
 
-    if to_insert:
-        await leads_col.insert_many(to_insert, ordered=False)
-    report["imported"] = len(to_insert)
+                    existing_emails.add(email)
 
+                    company = row.get("companyname") or row.get("company") or ""
+                    name = row.get("contactname") or row.get("name") or ""
+                    title = row.get("title") or ""
+                    website = row.get("website") or ""
+                    linkedin = row.get("linkedin") or ""
+                    company_key = _normalize_company_key(company, "") if company.strip() else ""
+
+                    to_insert.append({
+                        "campaign_id": camp_id,
+                        "company_name": company,
+                        "company_key": company_key,
+                        "company_uei": "",
+                        "contact_name": name,
+                        "email": email,
+                        "title": title,
+                        "website": website,
+                        "linkedin": linkedin,
+                        "status": "pending",
+                        "score": 0,
+                        "grade": "cold",
+                        "send_attempts": 0,
+                        "resend_count": 0,
+                        "last_send_error": "",
+                        "sent_at": None,
+                        "opened_at": None,
+                        "clicked_at": None,
+                        "replied_at": None,
+                        "bounced_at": None,
+                        "unsubscribed_at": None,
+                        "reply_preview": "",
+                        "created_by": user_id,
+                        "created_at": datetime.utcnow(),
+                        "updated_at": datetime.utcnow()
+                    })
+
+                if to_insert:
+                    await db.execute(insert(SQL_Lead).values(to_insert))
+                    await db.commit()
+                report["imported"] = len(to_insert)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Database error: {e}")
     return {"report": report}
 
 
@@ -317,104 +363,125 @@ async def import_leads_api(
     current_user: dict = Depends(get_current_user),
 ):
     try:
-        camp_oid = ObjectId(body.campaignId)
-    except InvalidId:
+        camp_id = int(body.campaignId)
+    except ValueError:
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
-    if not await _assert_campaign_ownership(camp_oid, current_user["_id"]):
+    if not await _assert_campaign_ownership(camp_id, int(current_user["id"])):
         raise HTTPException(status_code=404, detail="Campaign not found.")
 
-    leads_col = get_async_collection("leads")
-    suppressions_col = get_async_collection("suppressions")
-
-    valid_extracted = [normalize_email(r.email) for r in body.leads if is_valid_email(normalize_email(r.email))]
-    
-    existing_docs = await leads_col.find({"campaignId": camp_oid, "email": {"$in": valid_extracted}}, {"email": 1}).to_list(length=len(valid_extracted))
-    existing_emails = set(l["email"] for l in existing_docs)
-
-    suppressed_docs = await suppressions_col.find({"email": {"$in": valid_extracted}}, {"email": 1}).to_list(length=len(valid_extracted))
-    suppressed_emails = set(s["email"] for s in suppressed_docs)
-
+    user_id = int(current_user["id"])
     report = {"totalRows": len(body.leads), "imported": 0, "duplicates": 0, "invalidEmail": 0, "suppressed": 0}
-    to_insert = []
 
-    for row in body.leads:
-        email = normalize_email(row.email)
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                valid_extracted = [normalize_email(r.email) for r in body.leads if is_valid_email(normalize_email(r.email))]
 
-        if not is_valid_email(email) or not is_plausible_domain(extract_domain(email)):
-            report["invalidEmail"] += 1
-            continue
-        if email in existing_emails:
-            report["duplicates"] += 1
-            continue
-        if email in suppressed_emails:
-            report["suppressed"] += 1
-            continue
+                if valid_extracted:
+                    stmt_existing = select(SQL_Lead.email).where(SQL_Lead.campaign_id == camp_id, SQL_Lead.email.in_(valid_extracted))
+                    existing_emails = set((await db.execute(stmt_existing)).scalars().all())
 
-        existing_emails.add(email)
-        to_insert.append({
-            "campaignId": camp_oid,
-            "companyName": row.companyName or "",
-            "contactName": row.contactName or "",
-            "email": email,
-            "title": row.title or "",
-            "website": row.website or "",
-            "linkedin": row.linkedin or "",
-            "status": "pending",
-            "score": 0,
-            "grade": "cold",
-            "sendAttempts": 0,
-            "lastSendError": "",
-            "sentAt": None,
-            "openedAt": None,
-            "clickedAt": None,
-            "repliedAt": None,
-            "bouncedAt": None,
-            "unsubscribedAt": None,
-            "replyPreview": "",
-            "createdBy": current_user["_id"],
-            "createdAt": datetime.now(timezone.utc),
-            "updatedAt": datetime.now(timezone.utc),
-        })
+                    stmt_sup = select(SQL_Suppression.email).where(SQL_Suppression.email.in_(valid_extracted))
+                    suppressed_emails = set((await db.execute(stmt_sup)).scalars().all())
+                else:
+                    existing_emails = set()
+                    suppressed_emails = set()
 
-    if to_insert:
-        await leads_col.insert_many(to_insert, ordered=False)
-    report["imported"] = len(to_insert)
+                to_insert = []
+                for row in body.leads:
+                    email = normalize_email(row.email)
 
+                    if not is_valid_email(email) or not is_plausible_domain(extract_domain(email)):
+                        report["invalidEmail"] += 1
+                        continue
+                    if email in existing_emails:
+                        report["duplicates"] += 1
+                        continue
+                    if email in suppressed_emails:
+                        report["suppressed"] += 1
+                        continue
+
+                    existing_emails.add(email)
+                    company_key = _normalize_company_key(row.companyName, "") if (row.companyName or "").strip() else ""
+
+                    to_insert.append({
+                        "campaign_id": camp_id,
+                        "company_name": row.companyName or "",
+                        "company_key": company_key,
+                        "company_uei": "",
+                        "contact_name": row.contactName or "",
+                        "email": email,
+                        "title": row.title or "",
+                        "website": row.website or "",
+                        "linkedin": row.linkedin or "",
+                        "status": "pending",
+                        "score": 0,
+                        "grade": "cold",
+                        "send_attempts": 0,
+                        "resend_count": 0,
+                        "last_send_error": "",
+                        "sent_at": None,
+                        "opened_at": None,
+                        "clicked_at": None,
+                        "replied_at": None,
+                        "bounced_at": None,
+                        "unsubscribed_at": None,
+                        "reply_preview": "",
+                        "created_by": user_id,
+                        "created_at": datetime.utcnow(),
+                        "updated_at": datetime.utcnow()
+                    })
+
+                if to_insert:
+                    await db.execute(insert(SQL_Lead).values(to_insert))
+                    await db.commit()
+                report["imported"] = len(to_insert)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Database error: {e}")
     return {"report": report}
 
 
 @router.get("/companies-in-use")
 async def get_companies_in_use(current_user: dict = Depends(get_current_user)):
-    campaigns_col = get_async_collection("campaigns")
-    leads_col = get_async_collection("leads")
-
-    campaigns = await campaigns_col.find({"createdBy": current_user["_id"]}, {"_id": 1, "name": 1}).to_list(length=1000)
-    if not campaigns:
-        return {"inUse": []}
-
-    campaign_ids = [c["_id"] for c in campaigns]
-    campaign_names = {str(c["_id"]): c.get("name", "") for c in campaigns}
-
-    rows = await leads_col.find(
-        {"campaignId": {"$in": campaign_ids}, "companyKey": {"$ne": ""}},
-        {"companyKey": 1, "companyName": 1, "campaignId": 1}
-    ).to_list(length=5000)
-
+    user_id = int(current_user["id"])
     in_use = []
-    seen = set()
-    for r in rows:
-        key = r.get("companyKey")
-        if not key or key in seen:
-            continue
-        seen.add(key)
-        in_use.append({
-            "companyKey": key,
-            "companyName": r.get("companyName", ""),
-            "campaignId": str(r["campaignId"]),
-            "campaignName": campaign_names.get(str(r["campaignId"]), ""),
-        })
 
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                # Get campaigns by user
+                stmt_camp = select(SQL_Campaign).where(SQL_Campaign.user_id == user_id)
+                res_camp = await db.execute(stmt_camp)
+                campaigns = res_camp.scalars().all()
+                if not campaigns:
+                    return {"inUse": []}
+
+                campaign_ids = [c.id for c in campaigns]
+                campaign_names = {str(c.id): c.name or "" for c in campaigns}
+
+                # Get leads with company keys in those campaigns
+                stmt_leads = select(SQL_Lead).where(
+                    SQL_Lead.campaign_id.in_(campaign_ids),
+                    SQL_Lead.company_key != ""
+                )
+                res_leads = await db.execute(stmt_leads)
+                rows = res_leads.scalars().all()
+
+                seen = set()
+                for r in rows:
+                    key = str(getattr(r, "company_key", "") or "")
+                    if not key or key in seen:
+                        continue
+                    seen.add(key)
+                    in_use.append({
+                        "companyKey": key,
+                        "companyName": r.company_name or "",
+                        "campaignId": str(r.campaign_id),
+                        "campaignName": campaign_names.get(str(r.campaign_id), ""),
+                    })
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Database error: {e}")
     return {"inUse": in_use}
 
 
@@ -424,22 +491,17 @@ async def import_leads_from_companies(
     current_user: dict = Depends(get_current_user),
 ):
     try:
-        camp_oid = ObjectId(body.campaignId)
-    except InvalidId:
+        camp_id = int(body.campaignId)
+    except ValueError:
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
-    if not await _assert_campaign_ownership(camp_oid, current_user["_id"]):
+    if not await _assert_campaign_ownership(camp_id, int(current_user["id"])):
         raise HTTPException(status_code=404, detail="Campaign not found.")
 
-    leads_col = get_async_collection("leads")
-    suppressions_col = get_async_collection("suppressions")
-    profile_col = get_async_collection("company_profiles")
+    user_id = int(current_user["id"])
 
-    existing_docs = await leads_col.find({"campaignId": camp_oid}, {"email": 1}).to_list(length=10000)
-    existing_emails = set(l["email"] for l in existing_docs)
-    
-    suppressed_docs = await suppressions_col.find({}, {"email": 1}).to_list(length=10000)
-    suppressed_emails = set(s["email"] for s in suppressed_docs)
+    # Profiles stays in MongoDB (document store)
+    profile_col = get_async_collection("company_profiles")
 
     report = {
         "totalSelected": len(body.companies),
@@ -449,140 +511,181 @@ async def import_leads_from_companies(
         "suppressed": 0,
         "conflicts": [],
     }
-    to_insert = []
-    used_keys_this_batch = set()
 
-    for company in body.companies:
-        email = normalize_email(company.email)
-        if not email or "@" not in email:
-            profile = await profile_col.find_one({
-                "company_name": {"$regex": f"^{re.escape(company.companyName)}$", "$options": "i"}
-            })
-            if profile and profile.get("emails"):
-                email = normalize_email(str(profile["emails"][0]))
-            else:
-                report["invalidEmail"] += 1
-                continue
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                # Get existing emails
+                stmt_existing = select(SQL_Lead.email).where(SQL_Lead.campaign_id == camp_id)
+                existing_emails = set((await db.execute(stmt_existing)).scalars().all())
 
-        if not is_valid_email(email) or not is_plausible_domain(extract_domain(email)):
-            report["invalidEmail"] += 1
-            continue
-        if email in existing_emails:
-            report["duplicates"] += 1
-            continue
-        if email in suppressed_emails:
-            report["suppressed"] += 1
-            continue
+                # Get all suppressed emails
+                stmt_sup = select(SQL_Suppression.email)
+                suppressed_emails = set((await db.execute(stmt_sup)).scalars().all())
 
-        company_key = _normalize_company_key(company.companyName, company.uei)
+                to_insert = []
+                used_keys_this_batch = set()
 
-        if company_key in used_keys_this_batch:
-            report["duplicates"] += 1
-            continue
+                for company in body.companies:
+                    email = normalize_email(company.email)
+                    if not email or "@" not in email:
+                        # MongoDB query
+                        profile = await profile_col.find_one({
+                            "company_name": {"$regex": f"^{re.escape(company.companyName)}$", "$options": "i"}
+                        })
+                        if profile and profile.get("emails"):
+                            email = normalize_email(str(profile["emails"][0]))
+                        else:
+                            report["invalidEmail"] += 1
+                            continue
 
-        existing_emails.add(email)
-        used_keys_this_batch.add(company_key)
+                    if not is_valid_email(email) or not is_plausible_domain(extract_domain(email)):
+                        report["invalidEmail"] += 1
+                        continue
+                    if email in existing_emails:
+                        report["duplicates"] += 1
+                        continue
+                    if email in suppressed_emails:
+                        report["suppressed"] += 1
+                        continue
 
-        to_insert.append({
-            "campaignId": camp_oid,
-            "companyName": company.companyName or "",
-            "companyKey": company_key,
-            "companyUei": company.uei or "",
-            "contactName": company.contactName or "",
-            "email": email,
-            "title": company.title or "",
-            "website": company.website or "",
-            "linkedin": company.linkedin or "",
-            "status": "pending",
-            "score": 0,
-            "grade": "cold",
-            "sendAttempts": 0,
-            "resendCount": 0,
-            "lastSendError": "",
-            "sentAt": None,
-            "openedAt": None,
-            "clickedAt": None,
-            "repliedAt": None,
-            "bouncedAt": None,
-            "unsubscribedAt": None,
-            "replyPreview": "",
-            "createdBy": current_user["_id"],
-            "createdAt": datetime.now(timezone.utc),
-            "updatedAt": datetime.now(timezone.utc),
-        })
+                    company_key = _normalize_company_key(company.companyName, company.uei)
 
-    if to_insert:
-        await leads_col.insert_many(to_insert, ordered=False)
-    report["added"] = len(to_insert)
+                    if company_key in used_keys_this_batch:
+                        report["duplicates"] += 1
+                        continue
 
-    return {"report": report}
+                    existing_emails.add(email)
+                    used_keys_this_batch.add(company_key)
+
+                    to_insert.append({
+                        "campaign_id": camp_id,
+                        "company_name": company.companyName or "",
+                        "company_key": company_key,
+                        "company_uei": company.uei or "",
+                        "contact_name": company.contactName or "",
+                        "email": email,
+                        "title": company.title or "",
+                        "website": company.website or "",
+                        "linkedin": company.linkedin or "",
+                        "status": "pending",
+                        "score": 0,
+                        "grade": "cold",
+                        "send_attempts": 0,
+                        "resend_count": 0,
+                        "last_send_error": "",
+                        "sent_at": None,
+                        "opened_at": None,
+                        "clicked_at": None,
+                        "replied_at": None,
+                        "bounced_at": None,
+                        "unsubscribed_at": None,
+                        "reply_preview": "",
+                        "created_by": user_id,
+                        "created_at": datetime.utcnow(),
+                        "updated_at": datetime.utcnow()
+                    })
+
+                if to_insert:
+                    await db.execute(insert(SQL_Lead).values(to_insert))
+                    await db.commit()
+                report["added"] = len(to_insert)
+            return {"report": report}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/{id}/resend")
-async def resend_lead(id: str, current_user: dict = Depends(get_current_user)):
-    try:
-        oid = ObjectId(id)
-    except InvalidId:
-        raise HTTPException(status_code=400, detail="Invalid lead ID.")
 
-    leads_col = get_async_collection("leads")
-    lead = await leads_col.find_one({"_id": oid})
-    if not lead:
-        raise HTTPException(status_code=404, detail="Lead not found.")
+@router.post("/{lead_id}/resend")
+async def resend_lead_email(lead_id: int, current_user: dict = Depends(get_current_user)):
+    """
+    Reset a lead back to pending status so it will be resent on the next worker run.
+    Increments resend_count, updates campaign totalResent stats, and logs an audit record.
+    """
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_Lead).where(SQL_Lead.id == lead_id)
+                res = await db.execute(stmt)
+                lead = res.scalar_one_or_none()
+                if not lead:
+                    raise HTTPException(status_code=404, detail="Lead not found.")
 
-    if not await _assert_campaign_ownership(lead["campaignId"], current_user["_id"]):
-        raise HTTPException(status_code=403, detail="Not authorized.")
+                if not await _assert_campaign_ownership(int(getattr(lead, "campaign_id", 0) or 0), int(current_user["id"])):
+                    raise HTTPException(status_code=403, detail="Not authorized.")
 
-    now = datetime.now(timezone.utc)
-    await leads_col.update_one(
-        {"_id": oid},
-        {
-            "$set": {
-                "status": "pending",
-                "send_after": now,
-                "lastSendError": "",
-                "updatedAt": now,
-            },
-            "$inc": {"resendCount": 1},
-        }
-    )
 
-    campaigns_col = get_async_collection("campaigns")
-    await campaigns_col.update_one(
-        {"_id": lead["campaignId"]},
-        {"$inc": {"stats.totalResent": 1}, "$set": {"updatedAt": now}}
-    )
+                now = datetime.utcnow()
+                await db.execute(
+                    update(SQL_Lead)
+                    .where(SQL_Lead.id == lead_id)
+                    .values(status="pending", send_after=now, last_send_error="", resend_count=SQL_Lead.resend_count + 1, updated_at=now)
+                )
 
-    audit_col = get_async_collection("audit_logs")
-    await audit_col.insert_one({
-        "action": "lead.resend",
-        "entityType": "Lead",
-        "entityId": oid,
-        "performedBy": current_user["_id"],
-        "createdAt": now,
-    })
+                # Update campaign stats
+                campaign_row = (await db.execute(select(SQL_Campaign).where(SQL_Campaign.id == lead.campaign_id))).scalar_one()
+                raw_stats = getattr(campaign_row, "stats", {})
+                stats = {str(k): v for k, v in dict(raw_stats).items()} if isinstance(raw_stats, dict) else {}
+                stats["totalResent"] = int(str(stats.get("totalResent", 0) or 0)) + 1
 
-    updated = await leads_col.find_one({"_id": oid})
-    return {"lead": _format_lead(updated)}
+
+
+                await db.execute(
+                    update(SQL_Campaign)
+                    .where(SQL_Campaign.id == lead.campaign_id)
+                    .values(stats=stats, updated_at=now)
+                )
+
+
+                # Audit Log
+                await db.execute(insert(SQL_AuditLog).values(
+                    action="lead.resend",
+                    entity_type="Lead",
+                    entity_id=str(lead_id),
+                    performed_by=int(current_user["id"]),
+                    created_at=now
+                ))
+                await db.commit()
+
+                # refetch
+                stmt_new = select(SQL_Lead).where(SQL_Lead.id == lead_id)
+                updated = (await db.execute(stmt_new)).scalar_one()
+                return {"lead": _format_lead(updated)}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Database error: {e}")
+    raise HTTPException(status_code=500, detail="MySQL database is unavailable.")
 
 
 @router.delete("/{id}")
 async def delete_lead(id: str, current_user: dict = Depends(get_current_user)):
     try:
-        oid = ObjectId(id)
-    except InvalidId:
+        lead_id = int(id)
+    except ValueError:
         raise HTTPException(status_code=400, detail="Invalid lead ID.")
 
-    leads_col = get_async_collection("leads")
-    lead = await leads_col.find_one({"_id": oid})
-    if not lead:
-        raise HTTPException(status_code=404, detail="Lead not found.")
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_Lead).where(SQL_Lead.id == lead_id)
+                res = await db.execute(stmt)
+                lead = res.scalar_one_or_none()
+                if not lead:
+                    raise HTTPException(status_code=404, detail="Lead not found.")
 
-    if not await _assert_campaign_ownership(lead["campaignId"], current_user["_id"]):
-        raise HTTPException(status_code=403, detail="Not authorized.")
+                if not await _assert_campaign_ownership(int(getattr(lead, "campaign_id", 0) or 0), int(current_user["id"])):
 
-    await leads_col.delete_one({"_id": oid})
-    return {"ok": True}
+                    raise HTTPException(status_code=403, detail="Not authorized.")
+
+                await db.execute(delete(SQL_Lead).where(SQL_Lead.id == lead_id))
+                await db.commit()
+                return {"ok": True}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Database error: {e}")
+    raise HTTPException(status_code=500, detail="MySQL database is unavailable.")
 
 
 @router.delete("/suppressions/{email:path}")
@@ -591,7 +694,15 @@ async def unsuppress_email(
     current_user: dict = Depends(get_current_user),
 ):
     """Remove an email address from the suppression list."""
-    suppressions_col = get_async_collection("suppressions")
+    if current_user.get('role') not in ('Admin', 'Owner', 'Administrator'):
+        raise HTTPException(403, 'Only administrators can manage the suppression list.')
     target = email.strip().lower()
-    res = await suppressions_col.delete_one({"email": target})
-    return {"ok": True, "deletedCount": res.deleted_count, "email": target}
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                await db.execute(delete(SQL_Suppression).where(SQL_Suppression.email == target))
+                await db.commit()
+                return {"ok": True, "deletedCount": 1, "email": target}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Database error: {e}")
+    raise HTTPException(status_code=500, detail="MySQL database is unavailable.")

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Plus, SlidersHorizontal, Eye, FileText, X, Upload, Check, Loader2, AlertOctagon, Calendar } from 'lucide-react';
 import { PageHeader, Card, MatchBadge, StatusBadge, renderSafeText } from '../components/ui/Common.jsx';
@@ -92,14 +92,16 @@ export default function Companies() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
 
+  const debounceRef = useRef(null);
+
   // Fetch companies dynamically from FastAPI backend
-  const fetchCompanies = () => {
+  const fetchCompanies = (searchQuery = query) => {
     setLoading(true);
     const params = {
       page: currentPage.toString(),
       limit: itemsPerPage.toString(),
     };
-    if (query) params.query = query;
+    if (searchQuery) params.query = searchQuery;
     if (sizeFilter !== 'All') params.size = sizeFilter;
     if (naicsFilter !== 'All') params.naics = naicsFilter;
     if (researchedFilter !== 'All') {
@@ -124,7 +126,7 @@ export default function Companies() {
 
   useEffect(() => {
     fetchCompanies();
-  }, [currentPage, query, sizeFilter, naicsFilter, researchedFilter, matchCompanyDescription]);
+  }, [currentPage, sizeFilter, naicsFilter, researchedFilter, matchCompanyDescription]);
 
   // Reset page when filters change
   useEffect(() => {
@@ -188,6 +190,10 @@ export default function Companies() {
           await api.importCompanies({ data: selectedFile, format: 'csv' });
         } else {
           // JSON: read as text (JSON files are typically small)
+          const MAX_IMPORT_SIZE = 10 * 1024 * 1024; // 10MB
+          if (selectedFile.size > MAX_IMPORT_SIZE) {
+            throw new Error('File too large. Maximum allowed size is 10MB.');
+          }
           const text = await new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = e => resolve(e.target.result);
@@ -232,8 +238,13 @@ export default function Companies() {
             <input
               value={query}
               onChange={(e) => {
-                setQuery(e.target.value);
+                const val = e.target.value;
+                setQuery(val);
                 if (matchCompanyDescription) setMatchCompanyDescription(false);
+                if (debounceRef.current) clearTimeout(debounceRef.current);
+                debounceRef.current = setTimeout(() => {
+                  fetchCompanies(val);
+                }, 400);
               }}
               placeholder="Search by name, UEI, contact, or description keywords (e.g. cloud security)..."
               className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-white"
@@ -347,36 +358,7 @@ export default function Companies() {
       ) : (
         <Card className="mt-5 !p-0 overflow-hidden">
           {/* Top Pagination Controls */}
-          {pageCount > 1 && (
-            <div className="flex items-center justify-between border-b border-slate-100 p-4 dark:border-navy-800 bg-slate-50/50 dark:bg-navy-950/20">
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Showing <span className="font-semibold text-navy-900 dark:text-white">{(currentPage - 1) * itemsPerPage + 1}</span> to{' '}
-                <span className="font-semibold text-navy-900 dark:text-white">
-                  {Math.min(currentPage * itemsPerPage, totalCompanies)}
-                </span>{' '}
-                of <span className="font-semibold text-navy-900 dark:text-white">{totalCompanies.toLocaleString()}</span> companies
-              </p>
-              <div className="flex gap-2 items-center">
-                <button
-                  disabled={currentPage === 1}
-                  onClick={() => setCurrentPage((p) => p - 1)}
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-navy-900 hover:bg-slate-50 disabled:opacity-50 dark:border-navy-700 dark:bg-navy-800 dark:text-white dark:hover:bg-navy-750 transition-colors"
-                >
-                  Previous
-                </button>
-                <span className="text-xs font-bold text-slate-600 dark:text-slate-400 px-1">
-                  {currentPage} / {pageCount}
-                </span>
-                <button
-                  disabled={currentPage === pageCount}
-                  onClick={() => setCurrentPage((p) => p + 1)}
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-navy-900 hover:bg-slate-50 disabled:opacity-50 dark:border-navy-700 dark:bg-navy-800 dark:text-white dark:hover:bg-navy-750 transition-colors"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
+
 
           {/* Desktop Table View */}
           <div className="hidden md:block overflow-x-auto">
@@ -557,7 +539,7 @@ export default function Companies() {
           {pageCount > 1 && (
             <div className="flex items-center justify-between border-t border-slate-100 p-4 dark:border-navy-800">
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Showing <span className="font-semibold text-navy-900 dark:text-white">{(currentPage - 1) * itemsPerPage + 1}</span> to{' '}
+                Showing <span className="font-semibold text-navy-900 dark:text-white">{totalCompanies === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}</span> to{' '}
                 <span className="font-semibold text-navy-900 dark:text-white">
                   {Math.min(currentPage * itemsPerPage, totalCompanies)}
                 </span>{' '}

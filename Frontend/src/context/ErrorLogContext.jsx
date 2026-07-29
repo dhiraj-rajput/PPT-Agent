@@ -47,7 +47,7 @@ export function ErrorLogProvider({ children }) {
           setActiveAlerts((prev) => {
             const existingIds = new Set(prev.map((p) => p.id));
             const merged = [...fresh.filter((f) => !existingIds.has(f.id)), ...prev];
-            return merged.slice(0, 5); // cap how many stack up in the banner
+            return merged.slice(0, 500); // cap how many stack up in the banner
           });
         }
         refreshSummary();

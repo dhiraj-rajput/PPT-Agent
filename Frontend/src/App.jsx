@@ -1,8 +1,61 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, Component } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import DashboardLayout from './layouts/DashboardLayout.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import AdminRoute from './components/AdminRoute.jsx';
+
+// ---------------------------------------------------------------------------
+// Global Error Boundary — catches render errors and shows a recovery UI
+// instead of a blank screen (class component required by React error boundary API)
+// ---------------------------------------------------------------------------
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, info) {
+    console.error('[ErrorBoundary] Caught render error:', error, info);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          justifyContent: 'center', height: '100vh', gap: 16, padding: 32,
+          fontFamily: 'system-ui, sans-serif', background: '#0f172a', color: '#e2e8f0',
+        }}>
+          <div style={{ fontSize: 48 }}>⚠️</div>
+          <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Something went wrong</h1>
+          <p style={{ color: '#94a3b8', maxWidth: 480, textAlign: 'center', margin: 0 }}>
+            An unexpected error occurred. Your data is safe — click below to reload.
+          </p>
+          <code style={{
+            background: '#1e293b', padding: '8px 16px', borderRadius: 8,
+            fontSize: 12, color: '#f87171', maxWidth: 480, wordBreak: 'break-all',
+          }}>
+            {this.state.error?.message || 'Unknown error'}
+          </code>
+          <button
+            onClick={() => window.location.reload()}
+            style={{
+              background: '#6366f1', color: '#fff', border: 'none', borderRadius: 8,
+              padding: '10px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            Reload Page
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Lazy-loaded pages — Vite splits each into its own chunk automatically.
@@ -70,44 +123,46 @@ function PageLoader() {
 
 export default function App() {
   return (
-    <Suspense fallback={<PageLoader />}>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/verify-otp" element={<VerifyOtp />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/document-viewer" element={<DocumentViewer />} />
+    <ErrorBoundary>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/verify-otp" element={<VerifyOtp />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/document-viewer" element={<DocumentViewer />} />
 
-        <Route element={<ProtectedRoute />}>
-          <Route path="/force-change-password" element={<ForceChangePassword />} />
-          <Route element={<DashboardLayout />}>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/companies" element={<Companies />} />
-            <Route path="/companies/:id" element={<CompanyDetail />} />
-            <Route path="/tenders" element={<Tenders />} />
-            <Route path="/tenders/:id" element={<TenderDetail />} />
-            <Route path="/naics" element={<NaicsMuster />} />
-            <Route path="/ai-research" element={<AIResearch />} />
-            <Route path="/proposal-builder" element={<ProposalBuilder />} />
-            <Route path="/email-campaign" element={<EmailCampaign />} />
-            <Route path="/newsletter" element={<Newsletter />} />
-            <Route path="/crm-pipeline" element={<CRMPipeline />} />
-            <Route path="/meetings" element={<Meetings />} />
-            <Route path="/tasks" element={<Tasks />} />
-            <Route path="/analytics" element={<Analytics />} />
-            <Route path="/reports" element={<Reports />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/settings/users" element={<UsersRoles />} />
-            <Route path="/settings/integrations" element={<Integrations />} />
-            <Route element={<AdminRoute />}>
-              <Route path="/settings/server-logs" element={<ServerLogs />} />
+          <Route element={<ProtectedRoute />}>
+            <Route path="/force-change-password" element={<ForceChangePassword />} />
+            <Route element={<DashboardLayout />}>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/companies" element={<Companies />} />
+              <Route path="/companies/:id" element={<CompanyDetail />} />
+              <Route path="/tenders" element={<Tenders />} />
+              <Route path="/tenders/:id" element={<TenderDetail />} />
+              <Route path="/naics" element={<NaicsMuster />} />
+              <Route path="/ai-research" element={<AIResearch />} />
+              <Route path="/proposal-builder" element={<ProposalBuilder />} />
+              <Route path="/email-campaign" element={<EmailCampaign />} />
+              <Route path="/newsletter" element={<Newsletter />} />
+              <Route path="/crm-pipeline" element={<CRMPipeline />} />
+              <Route path="/meetings" element={<Meetings />} />
+              <Route path="/tasks" element={<Tasks />} />
+              <Route path="/analytics" element={<Analytics />} />
+              <Route path="/reports" element={<Reports />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/settings/users" element={<UsersRoles />} />
+              <Route path="/settings/integrations" element={<Integrations />} />
+              <Route element={<AdminRoute />}>
+                <Route path="/settings/server-logs" element={<ServerLogs />} />
+              </Route>
+              <Route path="/rfp-auto-respond" element={<RFPAutoRespond />} />
             </Route>
-            <Route path="/rfp-auto-respond" element={<RFPAutoRespond />} />
           </Route>
-        </Route>
 
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </Suspense>
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Suspense>
+    </ErrorBoundary>
   );
 }

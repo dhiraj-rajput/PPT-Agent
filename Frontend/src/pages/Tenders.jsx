@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Search, DollarSign, Calendar, Building2, MapPin, Mail,
@@ -63,11 +63,13 @@ export default function Tenders() {
     api_source: 'sam_gov', // 'sam_gov' | 'companies_house_uk'
   });
 
+  const debounceRef = useRef(null);
+
   // ----- Fetch cached tenders from backend -----
-  const fetchTenders = useCallback(() => {
+  const fetchTenders = useCallback((searchQuery = query) => {
     setLoading(true);
     const params = { page: currentPage, limit: itemsPerPage };
-    if (query) params.query = query;
+    if (searchQuery) params.query = searchQuery;
     if (naicsFilter) params.naics = naicsFilter;
     if (setAsideFilter) params.set_aside = setAsideFilter;
     if (statusFilter !== 'All') params.status = statusFilter;
@@ -119,7 +121,7 @@ export default function Tenders() {
   };
 
   useEffect(() => { fetchTenders(); fetchMeta(); }, [fetchTenders]);
-  useEffect(() => { setCurrentPage(1); }, [query, naicsFilter, setAsideFilter, statusFilter, urgencyFilter]);
+  useEffect(() => { setCurrentPage(1); }, [sizeFilter, setAsideFilter, statusFilter, urgencyFilter]); // Removed query from here
 
   // ----- Trigger SAM.gov Sync -----
   const handleSync = (e) => {
@@ -245,7 +247,14 @@ export default function Tenders() {
             <Search size={16} className="text-slate-400 dark:text-slate-500" />
             <input
               value={query}
-              onChange={e => setQuery(e.target.value)}
+              onChange={e => {
+                const val = e.target.value;
+                setQuery(val);
+                if (debounceRef.current) clearTimeout(debounceRef.current);
+                debounceRef.current = setTimeout(() => {
+                  fetchTenders(val);
+                }, 400);
+              }}
               placeholder="Search title, agency, solicitation #..."
               className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-white"
             />
@@ -445,7 +454,7 @@ export default function Tenders() {
           {pageCount > 1 && (
             <div className="mt-5 flex items-center justify-between">
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Showing <span className="font-semibold text-navy-900 dark:text-white">{(currentPage - 1) * itemsPerPage + 1}</span> –{' '}
+                Showing <span className="font-semibold text-navy-900 dark:text-white">{total === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}</span> –{' '}
                 <span className="font-semibold text-navy-900 dark:text-white">{Math.min(currentPage * itemsPerPage, total)}</span> of{' '}
                 <span className="font-semibold text-navy-900 dark:text-white">{total.toLocaleString()}</span> tenders
               </p>

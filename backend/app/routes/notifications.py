@@ -1,53 +1,66 @@
 """
 app/routes/notifications.py
 ----------------------------
-In-app notification endpoints — mirrors Node.js server/routes/notifications.js.
-
-Endpoints:
-  GET    /api/notifications           — list user's notifications (+ unreadCount)
-  POST   /api/notifications           — create a custom alert
-  PATCH  /api/notifications/read-all  — mark all as read
-  PATCH  /api/notifications/:id/read  — mark one as read
-  DELETE /api/notifications/:id       — delete one
+In-app notification endpoints — using MySQL.
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Optional
-
-from bson import ObjectId
-from bson.errors import InvalidId
+from typing import Optional, Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.core.auth import get_current_user
-from utils.db_client import get_async_collection
+from utils.db_client import get_db_session, _mysql_available
+from models.sql_models import (
+    Notification as SQL_Notification,
+    User as SQLUser,
+)
+from sqlalchemy import select, insert, update, delete, func
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 
-def _to_public_notification(n: dict) -> dict:
+def _iso(dt: Any) -> Optional[str]:
+    return dt.isoformat() if dt and hasattr(dt, "isoformat") else None
+
+
+def _to_public_notification(n: SQL_Notification) -> dict:
+    if not n:
+        return {}
     return {
-        "id": str(n["_id"]),
-        "type": n.get("type", ""),
-        "title": n.get("title", ""),
-        "message": n.get("message", ""),
-        "link": n.get("link", ""),
-        "relatedId": n.get("relatedId", ""),
-        "read": n.get("read", False),
-        "createdAt": n.get("createdAt", ""),
+        "id": str(n.id),
+        "type": n.notification_type or "",
+        "title": n.title or "",
+        "message": n.message or "",
+        "link": n.link or "",
+        "relatedId": n.related_id or "",
+        "read": bool(n.is_read),
+        "createdAt": _iso(n.created_at),
     }
 
 
 @router.get("")
 async def list_notifications(current_user: dict = Depends(get_current_user)):
-    notifs_col = get_async_collection("notifications")
-    uid = current_user["_id"]
-    notifications = await notifs_col.find({"user": uid}).sort("createdAt", -1).limit(50).to_list(length=50)
-    unread_count = await notifs_col.count_documents({"user": uid, "read": False})
+    uid = int(current_user["id"])
+    notifications = []
+    unread_count = 0
+
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_Notification).where(SQL_Notification.user_id == uid).order_by(SQL_Notification.created_at.desc()).limit(50)
+                res = await db.execute(stmt)
+                notifications = [_to_public_notification(n) for n in res.scalars().all()]
+
+                stmt_count = select(func.count()).select_from(SQL_Notification).where(SQL_Notification.user_id == uid, SQL_Notification.is_read == False)
+                unread_count = (await db.execute(stmt_count)).scalar() or 0
+        except Exception as e:
+            raise HTTPException(500, f"Database error: {e}")
+
     return {
-        "notifications": [_to_public_notification(n) for n in notifications],
+        "notifications": notifications,
         "unreadCount": unread_count,
     }
 
@@ -67,43 +80,61 @@ async def create_notification(
     if not body.title:
         raise HTTPException(400, "Title is required.")
 
-    notifs_col = get_async_collection("notifications")
-    users_col = get_async_collection("users")
+    target_id = int(current_user["id"])
 
-    target_id = current_user["_id"]
-    if body.userId:
+    if _mysql_available:
         try:
-            target_oid = ObjectId(body.userId)
-        except InvalidId:
-            raise HTTPException(400, "Invalid userId.")
-        if not await users_col.find_one({"_id": target_oid}):
-            raise HTTPException(400, "Target user not found.")
-        target_id = target_oid
+            async for db in get_db_session():
+                if body.userId:
+                    try:
+                        target_oid = int(body.userId)
+                    except ValueError:
+                        raise HTTPException(400, "Invalid userId.")
+                    
+                    stmt_u = select(SQLUser).where(SQLUser.id == target_oid)
+                    u = (await db.execute(stmt_u)).scalar_one_or_none()
+                    if not u:
+                        raise HTTPException(400, "Target user not found.")
+                    target_id = target_oid
 
-    result = await notifs_col.insert_one({
-        "user": target_id,
-        "type": "custom",
-        "title": body.title,
-        "message": body.message or "",
-        "link": body.link or "",
-        "relatedId": "",
-        "read": False,
-        "createdAt": datetime.now(tz=timezone.utc),
-    })
-    notification = await notifs_col.find_one({"_id": result.inserted_id})
-    if not notification:
-        raise HTTPException(500, "Could not create alert.")
-    return {"notification": _to_public_notification(notification)}
+                new_notif = SQL_Notification(
+                    user_id=target_id,
+                    notification_type="custom",
+                    title=body.title,
+                    message=body.message or "",
+                    link=body.link or "",
+                    related_id="",
+                    is_read=False,
+                    created_at=datetime.utcnow()
+                )
+                db.add(new_notif)
+                await db.commit()
+                await db.refresh(new_notif)
+
+                return {"notification": _to_public_notification(new_notif)}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, f"Database error creating notification: {e}")
+    raise HTTPException(500, "Database is unavailable.")
 
 
 @router.patch("/read-all")
 async def mark_all_read(current_user: dict = Depends(get_current_user)):
-    notifs_col = get_async_collection("notifications")
-    await notifs_col.update_many(
-        {"user": current_user["_id"], "read": False},
-        {"$set": {"read": True}},
-    )
-    return {"ok": True}
+    uid = int(current_user["id"])
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                await db.execute(
+                    update(SQL_Notification)
+                    .where(SQL_Notification.user_id == uid, SQL_Notification.is_read == False)
+                    .values(is_read=True)
+                )
+                await db.commit()
+                return {"ok": True}
+        except Exception as e:
+            raise HTTPException(500, f"Database error: {e}")
+    raise HTTPException(500, "Database is unavailable.")
 
 
 @router.patch("/{notif_id}/read")
@@ -112,26 +143,51 @@ async def mark_read(
     current_user: dict = Depends(get_current_user),
 ):
     try:
-        oid = ObjectId(notif_id)
-    except InvalidId:
+        nid = int(notif_id)
+    except ValueError:
         raise HTTPException(400, "Invalid notification ID.")
 
-    notifs_col = get_async_collection("notifications")
-    await notifs_col.update_one(
-        {"_id": oid, "user": current_user["_id"]},
-        {"$set": {"read": True}},
-    )
-    notification = await notifs_col.find_one({"_id": oid, "user": current_user["_id"]})
-    if not notification:
-        raise HTTPException(404, "Alert not found.")
-    return {"notification": _to_public_notification(notification)}
+    uid = int(current_user["id"])
+
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_Notification).where(SQL_Notification.id == nid, SQL_Notification.user_id == uid)
+                notif = (await db.execute(stmt)).scalar_one_or_none()
+                if not notif:
+                    raise HTTPException(404, "Notification not found.")
+
+                await db.execute(
+                    update(SQL_Notification)
+                    .where(SQL_Notification.id == nid, SQL_Notification.user_id == uid)
+                    .values(is_read=True)
+                )
+                await db.commit()
+
+                # refetch
+                stmt_new = select(SQL_Notification).where(SQL_Notification.id == nid, SQL_Notification.user_id == uid)
+                notif = (await db.execute(stmt_new)).scalar_one()
+                return {"notification": _to_public_notification(notif)}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, f"Database error: {e}")
+    raise HTTPException(500, "Database is unavailable.")
 
 
 @router.delete("")
 async def clear_all_notifications(current_user: dict = Depends(get_current_user)):
-    notifs_col = get_async_collection("notifications")
-    result = await notifs_col.delete_many({"user": current_user["_id"]})
-    return {"ok": True, "deleted": result.deleted_count}
+    uid = int(current_user["id"])
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                res = await db.execute(delete(SQL_Notification).where(SQL_Notification.user_id == uid))
+                await db.commit()
+                return {"ok": True, "deleted": getattr(res, "rowcount", 0)}
+
+        except Exception as e:
+            raise HTTPException(500, f"Database error: {e}")
+    raise HTTPException(500, "Database is unavailable.")
 
 
 @router.delete("/{notif_id}")
@@ -140,14 +196,25 @@ async def delete_notification(
     current_user: dict = Depends(get_current_user),
 ):
     try:
-        oid = ObjectId(notif_id)
-    except InvalidId:
+        nid = int(notif_id)
+    except ValueError:
         raise HTTPException(400, "Invalid notification ID.")
 
-    notifs_col = get_async_collection("notifications")
-    result = await notifs_col.find_one_and_delete(
-        {"_id": oid, "user": current_user["_id"]}
-    )
-    if not result:
-        raise HTTPException(404, "Alert not found.")
-    return {"ok": True}
+    uid = int(current_user["id"])
+
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_Notification).where(SQL_Notification.id == nid, SQL_Notification.user_id == uid)
+                notif = (await db.execute(stmt)).scalar_one_or_none()
+                if not notif:
+                    raise HTTPException(404, "Notification not found.")
+
+                await db.execute(delete(SQL_Notification).where(SQL_Notification.id == nid, SQL_Notification.user_id == uid))
+                await db.commit()
+                return {"ok": True}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, f"Database error: {e}")
+    raise HTTPException(500, "Database is unavailable.")

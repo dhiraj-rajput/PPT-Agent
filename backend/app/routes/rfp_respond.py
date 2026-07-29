@@ -1,12 +1,7 @@
 """
 app/routes/rfp_respond.py
 --------------------------
-RFP Auto-Respond — upload an RFP document, get back a fully-written proposal using Motor async.
-
-Endpoints:
-  POST /api/rfp-respond/upload              — upload RFP + optional template, kick off pipeline
-  GET  /api/rfp-respond/status/{task_id}    — poll for progress
-  GET  /api/rfp-respond/download/{filename} — download the generated proposal
+RFP Auto-Respond — upload an RFP document, get back a fully-written proposal using MySQL.
 """
 
 from __future__ import annotations
@@ -17,6 +12,8 @@ import re
 import subprocess
 import sys
 import uuid
+import json
+import ast
 from pathlib import Path
 from typing import Optional
 
@@ -25,12 +22,15 @@ from fastapi.responses import FileResponse
 
 from app.core.auth import get_current_user
 from utils.db_client import (
+    get_db_session,
+    _mysql_available,
     update_task_status,
     get_task_status_db,
     update_task_status_async,
     get_task_status_async,
-    get_async_collection,
 )
+from models.sql_models import TaskStatus as SQL_TaskStatus
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/rfp-respond", tags=["rfp-respond"])
@@ -49,6 +49,19 @@ def _safe_name(name: str) -> str:
     return f"{safe_stem}{ext}"
 
 
+def _get_task_user_id(task: dict) -> str:
+    res_val = task.get("result") or {}
+    if isinstance(res_val, str):
+        try:
+            res_val = json.loads(res_val)
+        except Exception:
+            try:
+                res_val = ast.literal_eval(res_val)
+            except Exception:
+                res_val = {}
+    return str(res_val.get("userId") or "")
+
+
 def _run_pipeline_sync(
     task_id: str,
     rfp_paths: str,
@@ -56,7 +69,7 @@ def _run_pipeline_sync(
     template_path: Optional[Path],
     wizard_config: Optional[str] = None,
 ) -> None:
-    """Run bidforge_cli.py as a subprocess and update progress in MongoDB."""
+    """Run bidforge_cli.py as a subprocess and update progress in MySQL."""
 
     from utils.helpers import get_python_executable
     python_bin = get_python_executable()
@@ -135,14 +148,10 @@ async def upload_rfp(
     wizard_config: Optional[str] = Form(None),
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    Upload one or more RFP files (PDF / DOCX / TXT) and optionally a .docx template.
-    Returns a task_id to poll via GET /api/rfp-respond/status/{task_id}.
-    """
     if len(rfp_files) > 5:
         raise HTTPException(status_code=400, detail="Cannot upload more than 5 RFP files at once.")
 
-    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+    MAX_FILE_SIZE = 10 * 1024 * 1024
 
     task_id = uuid.uuid4().hex[:12]
     task_dir = UPLOAD_DIR / task_id
@@ -151,9 +160,18 @@ async def upload_rfp(
     rfp_dests = []
     for file in rfp_files:
         if file.filename:
-            content = await file.read()
-            if len(content) > MAX_FILE_SIZE:
-                raise HTTPException(status_code=400, detail=f"File '{file.filename}' exceeds the 10MB size limit.")
+            # Read with a hard cap — reject before fully loading into RAM (prevents OOM)
+            _chunks: list[bytes] = []
+            _total = 0
+            async for _chunk in file:
+                _total += len(_chunk)
+                if _total > MAX_FILE_SIZE:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"File '{file.filename}' exceeds the 10MB size limit."
+                    )
+                _chunks.append(_chunk)
+            content = b"".join(_chunks)
             dest = task_dir / _safe_name(file.filename)
 
             def write_rfp_file(path_target, file_content):
@@ -172,9 +190,15 @@ async def upload_rfp(
     if template_file is not None and template_file.filename:
         if not template_file.filename.lower().endswith(".docx"):
             raise HTTPException(400, "Template must be a .docx file.")
-        content = await template_file.read()
-        if len(content) > MAX_FILE_SIZE:
-            raise HTTPException(status_code=400, detail="Template file exceeds the 10MB size limit.")
+        # Read template with the same cap to prevent OOM
+        _chunks = []
+        _total = 0
+        async for _chunk in template_file:
+            _total += len(_chunk)
+            if _total > MAX_FILE_SIZE:
+                raise HTTPException(status_code=413, detail="Template file exceeds the 10MB size limit.")
+            _chunks.append(_chunk)
+        content = b"".join(_chunks)
         template_dest = task_dir / _safe_name(template_file.filename)
 
         def write_tmpl_file(path_target, file_content):
@@ -183,17 +207,13 @@ async def upload_rfp(
 
         await asyncio.to_thread(write_tmpl_file, template_dest, content)
     else:
-        # No one-off template attached to this request -- fall back to the
-        # org-wide default template (if one has been uploaded via the
-        # Proposal Template settings) instead of the hardcoded brand defaults.
         from documents.default_template import get_default_template_path
-
         default_path = get_default_template_path()
         if default_path:
             template_dest = Path(default_path)
 
     output_name = f"rfp_respond_{task_id}"
-    user_id = str(current_user["_id"])
+    user_id = str(current_user["id"])
     await update_task_status_async(
         task_id,
         "rfp_respond",
@@ -216,8 +236,8 @@ async def get_status(task_id: str, current_user: dict = Depends(get_current_user
     if not task:
         raise HTTPException(404, "Unknown task_id")
 
-    user_id = str(current_user["_id"])
-    if task.get("userId") and str(task.get("userId")) != user_id:
+    user_id = str(current_user["id"])
+    if _get_task_user_id(task) != user_id:
         raise HTTPException(403, "Access denied: You do not own this task.")
     return task
 
@@ -226,12 +246,20 @@ async def get_status(task_id: str, current_user: dict = Depends(get_current_user
 async def download_result(filename: str, current_user: dict = Depends(get_current_user)):
     safe_filename = Path(filename).name
 
-    col = get_async_collection("task_statuses")
-    task = await col.find_one({"filename": safe_filename})
-    if task:
-        user_id = str(current_user["_id"])
-        if task.get("userId") and str(task.get("userId")) != user_id:
-            raise HTTPException(403, "Access denied: You do not own this file.")
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_TaskStatus).where(SQL_TaskStatus.extra_data["filename"].as_string() == safe_filename)
+                task = (await db.execute(stmt)).scalars().first()
+                if task and getattr(task, "extra_data", None):
+                    extra = task.extra_data if isinstance(task.extra_data, dict) else {}
+                    user_id = str(current_user["id"])
+                    if extra.get("userId") and str(extra.get("userId")) != user_id:
+                        raise HTTPException(403, "Access denied: You do not own this file.")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
 
     path = OUTPUT_DIR / safe_filename
     if path.exists():
@@ -247,17 +275,23 @@ async def download_result(filename: str, current_user: dict = Depends(get_curren
 
 @router.get("/view/{filename}")
 async def view_result(filename: str, current_user: dict = Depends(get_current_user)):
-    """Serve a generated RFP response file inline, so it can be previewed in
-    the browser (PDF renders natively; .docx is fetched by the frontend and
-    rendered client-side) without forcing a download."""
     safe_filename = Path(filename).name
 
-    col = get_async_collection("task_statuses")
-    task = await col.find_one({"filename": safe_filename})
-    if task:
-        user_id = str(current_user["_id"])
-        if task.get("userId") and str(task.get("userId")) != user_id:
-            raise HTTPException(403, "Access denied: You do not own this file.")
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_TaskStatus).where(SQL_TaskStatus.extra_data["filename"].as_string() == safe_filename)
+                task = (await db.execute(stmt)).scalars().first()
+                if task and getattr(task, "extra_data", None):
+                    extra = task.extra_data if isinstance(task.extra_data, dict) else {}
+                    user_id = str(current_user["id"])
+                    if extra.get("userId") and str(extra.get("userId")) != user_id:
+                        raise HTTPException(403, "Access denied: You do not own this file.")
+
+        except HTTPException:
+            raise
+        except Exception:
+            pass
 
     path = OUTPUT_DIR / safe_filename
     if not path.exists():
@@ -269,20 +303,16 @@ async def view_result(filename: str, current_user: dict = Depends(get_current_us
         if suffix == ".docx"
         else "application/pdf" if suffix == ".pdf" else "application/octet-stream"
     )
-    # Omitting `filename=` avoids the "attachment" Content-Disposition header,
-    # so browsers render it inline instead of triggering a download.
     return FileResponse(path, media_type=media_type)
 
 
 @router.get("/view-upload/{task_id}/{filename}")
 async def view_uploaded_source(task_id: str, filename: str, current_user: dict = Depends(get_current_user)):
-    """Serve an uploaded source RFP/template file (PDF or .docx) inline, so
-    it can be previewed before generation without downloading it."""
     task = await get_task_status_async(task_id)
     if not task:
         raise HTTPException(404, "Unknown task_id")
-    user_id = str(current_user["_id"])
-    if task.get("userId") and str(task.get("userId")) != user_id:
+    user_id = str(current_user["id"])
+    if _get_task_user_id(task) != user_id:
         raise HTTPException(403, "Access denied: You do not own this task.")
 
     safe_filename = Path(filename).name

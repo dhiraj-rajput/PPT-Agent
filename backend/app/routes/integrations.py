@@ -1,12 +1,7 @@
 """
 app/routes/integrations.py
 ---------------------------
-Integration settings endpoints — mirrors Node.js server/routes/integrations.js.
-
-Endpoints:
-  GET  /api/integrations/google/status   — check if Google is connected
-  GET  /api/integrations/google/auth-url — get Google OAuth consent URL
-  GET  /api/integrations/google/callback — OAuth callback (Google redirects here)
+Integration settings endpoints — using MySQL.
 """
 
 from __future__ import annotations
@@ -17,27 +12,25 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
+
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from app.core.auth import get_current_user
-from utils.db_client import get_async_collection, get_collection
+from utils.db_client import get_db_session, _mysql_available
 from config.settings import settings
+from models.sql_models import (
+    Integration as SQL_Integration,
+    OAuthState as SQL_OAuthState,
+)
+from sqlalchemy import select, insert, update, delete
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
 
 _CLIENT_URL = settings.CLIENT_URL
 
-# ---------------------------------------------------------------------------
-# Google OAuth helpers
-#
-# NOTE: Google credentials are read fresh from `settings`/env on every call
-# (via _google_config()) instead of being cached once at import time. The
-# Integrations page lets an admin save new GOOGLE_CLIENT_ID/SECRET values at
-# runtime through POST /env-keys, and those updates need to take effect
-# immediately without a server restart.
-# ---------------------------------------------------------------------------
 
 def _google_config() -> tuple[str, str, str]:
     """Read the current Google OAuth client id/secret/redirect URI, preferring
@@ -62,9 +55,9 @@ async def _get_google_auth_url_async(user_id: str) -> str:
     if not _is_google_client_id_configured(_GOOGLE_CLIENT_ID):
         raise HTTPException(
             status_code=400,
-            detail="Google OAuth is not configured. Please set a valid GOOGLE_CLIENT_ID from Google Cloud Console in backend/.env file."
+            detail="Google OAuth is not configured. Please set a valid GOOGLE_CLIENT_ID in settings."
         )
-    from google_auth_oauthlib.flow import Flow  # type: ignore
+    from google_auth_oauthlib.flow import Flow
     flow = Flow.from_client_config(
         {
             "web": {
@@ -88,13 +81,21 @@ async def _get_google_auth_url_async(user_id: str) -> str:
     state_token = secrets.token_urlsafe(32)
     auth_url, _ = flow.authorization_url(access_type="offline", prompt="consent", state=state_token)
     
-    oauth_states_col = get_async_collection("oauth_states")
-    await oauth_states_col.insert_one({
-        "state": state_token,
-        "userId": user_id,
-        "codeVerifier": getattr(flow, "code_verifier", None),
-        "expireAt": datetime.now(timezone.utc) + timedelta(minutes=10)
-    })
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                db.add(SQL_OAuthState(
+                    state=state_token,
+                    service="google",
+                    user_id=int(user_id),
+                    code_verifier=getattr(flow, "code_verifier", ""),
+                    expires_at=datetime.utcnow() + timedelta(minutes=10),
+                    created_at=datetime.utcnow()
+                ))
+                await db.commit()
+        except Exception as e:
+            logger.error(f"Failed to save Google OAuth state in MySQL: {e}")
+            raise HTTPException(500, "Database error saving OAuth state.")
     
     return auth_url
 
@@ -106,15 +107,20 @@ async def _handle_google_callback_async(code: str, state: Optional[str] = None) 
         
     user_id_clean = "global"
     code_verifier = None
-    if state:
-        oauth_states_col = get_async_collection("oauth_states")
-        state_doc = await oauth_states_col.find_one_and_delete({"state": state})
-        if not state_doc:
-            raise HTTPException(400, "Invalid or expired OAuth state parameter.")
-        user_id_clean = state_doc.get("userId") or "global"
-        code_verifier = state_doc.get("codeVerifier")
+    if state and _mysql_available:
+        async for db in get_db_session():
+            stmt = select(SQL_OAuthState).where(SQL_OAuthState.state == state)
+            state_doc = (await db.execute(stmt)).scalar_one_or_none()
+            if not state_doc:
+                raise HTTPException(400, "Invalid or expired OAuth state parameter.")
+            user_id_clean = str(state_doc.user_id) if state_doc.user_id is not None else "global"
+            code_verifier = state_doc.code_verifier
+
+            # Delete the state token
+            await db.execute(delete(SQL_OAuthState).where(SQL_OAuthState.state == state))
+            await db.commit()
         
-    from google_auth_oauthlib.flow import Flow  # type: ignore
+    from google_auth_oauthlib.flow import Flow
 
     flow = Flow.from_client_config(
         {
@@ -136,25 +142,48 @@ async def _handle_google_callback_async(code: str, state: Optional[str] = None) 
     flow.fetch_token(code=code, code_verifier=code_verifier)
     creds = flow.credentials
 
-    integrations_col = get_async_collection("integrations")
-    await integrations_col.update_one(
-        {"service": "google", "userId": user_id_clean},
-        {"$set": {
-            "service": "google",
-            "userId": user_id_clean,
-            "connected": True,
-            "refreshToken": creds.refresh_token,
-            "accessToken": creds.token,
-            "tokenExpiry": str(creds.expiry),
-        }},
-        upsert=True,
-    )
+    if _mysql_available and user_id_clean != "global":
+        uid = int(user_id_clean)
+        async for db in get_db_session():
+            stmt_int = select(SQL_Integration).where(SQL_Integration.service == "google", SQL_Integration.user_id == uid)
+            existing = (await db.execute(stmt_int)).scalar_one_or_none()
+            if existing:
+                await db.execute(
+                    update(SQL_Integration)
+                    .where(SQL_Integration.id == existing.id)
+                    .values(
+                        connected=True,
+                        refresh_token=creds.refresh_token or existing.refresh_token,
+                        access_token=creds.token,
+                        token_expiry=creds.expiry,
+                        updated_at=datetime.utcnow()
+                    )
+                )
+            else:
+                db.add(SQL_Integration(
+                    user_id=uid,
+                    service="google",
+                    connected=True,
+                    refresh_token=creds.refresh_token or "",
+                    access_token=creds.token or "",
+                    token_expiry=creds.expiry,
+                    created_at=datetime.utcnow(),
+                    updated_at=datetime.utcnow()
+                ))
+            await db.commit()
 
 
 async def _get_google_connection_status_async(user_id: str) -> dict:
-    integrations_col = get_async_collection("integrations")
-    doc = await integrations_col.find_one({"service": "google", "userId": user_id})
-    return {"connected": bool(doc and doc.get("connected"))}
+    if _mysql_available:
+        try:
+            uid = int(user_id)
+            async for db in get_db_session():
+                stmt = select(SQL_Integration).where(SQL_Integration.service == "google", SQL_Integration.user_id == uid)
+                doc = (await db.execute(stmt)).scalar_one_or_none()
+                return {"connected": bool(doc and doc.connected)}
+        except Exception:
+            pass
+    return {"connected": False}
 
 
 # ---------------------------------------------------------------------------
@@ -164,7 +193,7 @@ async def _get_google_connection_status_async(user_id: str) -> dict:
 @router.get("/google/status")
 async def google_status(current_user: dict = Depends(get_current_user)):
     try:
-        user_id = str(current_user["_id"])
+        user_id = str(current_user["id"])
         return await _get_google_connection_status_async(user_id)
     except Exception as exc:
         raise HTTPException(500, f"Could not check Google connection status: {exc}")
@@ -173,9 +202,11 @@ async def google_status(current_user: dict = Depends(get_current_user)):
 @router.delete("/google")
 async def disconnect_google(current_user: dict = Depends(get_current_user)):
     try:
-        user_id = str(current_user["_id"])
-        integrations_col = get_async_collection("integrations")
-        await integrations_col.delete_one({"service": "google", "userId": user_id})
+        user_id = int(current_user["id"])
+        if _mysql_available:
+            async for db in get_db_session():
+                await db.execute(delete(SQL_Integration).where(SQL_Integration.service == "google", SQL_Integration.user_id == user_id))
+                await db.commit()
         return {"success": True, "message": "Google Meet integration disconnected."}
     except Exception as exc:
         raise HTTPException(500, f"Could not disconnect Google integration: {exc}")
@@ -184,7 +215,7 @@ async def disconnect_google(current_user: dict = Depends(get_current_user)):
 @router.get("/google/auth-url")
 async def google_auth_url(current_user: dict = Depends(get_current_user)):
     try:
-        user_id = str(current_user["_id"])
+        user_id = str(current_user["id"])
         url = await _get_google_auth_url_async(user_id)
         return {"url": url}
     except HTTPException:
@@ -220,19 +251,25 @@ class SamApiKeyPayload(BaseModel):
 @router.get("/sam/status")
 async def sam_status(current_user: dict = Depends(get_current_user)):
     try:
-        user_id = str(current_user["_id"])
-        integrations_col = get_async_collection("integrations")
-        doc = await integrations_col.find_one({"service": "sam", "userId": user_id})
+        user_id = int(current_user["id"])
         raw_key = ""
-        if doc and doc.get("connected"):
-            raw_key = doc.get("apiKey", "")
+        if _mysql_available:
+            async for db in get_db_session():
+                stmt = select(SQL_Integration).where(SQL_Integration.service == "sam", SQL_Integration.user_id == user_id)
+                doc = (await db.execute(stmt)).scalar_one_or_none()
+                if doc and getattr(doc, "connected", False):
+                    raw_key = str(doc.access_token or "")
+
+        
         if not raw_key:
             env_keys = read_env_file_keys()
             raw_key = env_keys.get("SAM_GOV_API_KEY") or os.environ.get("SAM_GOV_API_KEY") or getattr(settings, "SAM_GOV_API_KEY", "") or ""
             
-        if raw_key and not raw_key.startswith("your_") and len(raw_key) > 5:
-            obfuscated = f"****{raw_key[-4:]}" if len(raw_key) >= 4 else "****"
+        r_str = str(raw_key or "")
+        if r_str and not r_str.startswith("your_") and len(r_str) > 5:
+            obfuscated = f"****{r_str[-4:]}" if len(r_str) >= 4 else "****"
             return {"connected": True, "apiKey": obfuscated}
+
         return {"connected": False, "apiKey": ""}
     except Exception as exc:
         raise HTTPException(500, f"Could not check SAM.gov connection status: {exc}")
@@ -241,22 +278,32 @@ async def sam_status(current_user: dict = Depends(get_current_user)):
 @router.post("/sam/connect")
 async def sam_connect(payload: SamApiKeyPayload, current_user: dict = Depends(get_current_user)):
     try:
-        user_id = str(current_user["_id"])
+        user_id = int(current_user["id"])
         api_key = payload.api_key.strip()
         if not api_key:
             raise HTTPException(400, "API key cannot be empty.")
             
-        integrations_col = get_async_collection("integrations")
-        await integrations_col.update_one(
-            {"service": "sam", "userId": user_id},
-            {"$set": {
-                "service": "sam",
-                "userId": user_id,
-                "apiKey": api_key,
-                "connected": True
-            }},
-            upsert=True
-        )
+        if _mysql_available:
+            async for db in get_db_session():
+                stmt = select(SQL_Integration).where(SQL_Integration.service == "sam", SQL_Integration.user_id == user_id)
+                existing = (await db.execute(stmt)).scalar_one_or_none()
+                if existing:
+                    await db.execute(
+                        update(SQL_Integration)
+                        .where(SQL_Integration.id == existing.id)
+                        .values(connected=True, access_token=api_key, updated_at=datetime.utcnow())
+                    )
+                else:
+                    db.add(SQL_Integration(
+                        user_id=user_id,
+                        service="sam",
+                        connected=True,
+                        access_token=api_key,
+                        refresh_token="",
+                        created_at=datetime.utcnow(),
+                        updated_at=datetime.utcnow()
+                    ))
+                await db.commit()
         
         update_env_file({"SAM_GOV_API_KEY": api_key})
         os.environ["SAM_GOV_API_KEY"] = api_key
@@ -271,9 +318,11 @@ async def sam_connect(payload: SamApiKeyPayload, current_user: dict = Depends(ge
 @router.delete("/sam")
 async def sam_disconnect(current_user: dict = Depends(get_current_user)):
     try:
-        user_id = str(current_user["_id"])
-        integrations_col = get_async_collection("integrations")
-        await integrations_col.delete_one({"service": "sam", "userId": user_id})
+        user_id = int(current_user["id"])
+        if _mysql_available:
+            async for db in get_db_session():
+                await db.execute(delete(SQL_Integration).where(SQL_Integration.service == "sam", SQL_Integration.user_id == user_id))
+                await db.commit()
         return {"success": True, "message": "SAM.gov API Key disconnected."}
     except Exception as exc:
         raise HTTPException(500, f"Could not disconnect SAM.gov: {exc}")
@@ -394,17 +443,24 @@ def get_env_keys(current_user: dict = Depends(get_current_user)):
 @router.get("/linkedin/status")
 async def linkedin_status(current_user: dict = Depends(get_current_user)):
     try:
-        user_id = str(current_user["_id"])
+        user_id = int(current_user["id"])
         env_keys = read_env_file_keys()
         li_at = env_keys.get("LINKEDIN_LI_AT") or os.environ.get("LINKEDIN_LI_AT") or ""
         
-        integrations_col = get_async_collection("integrations")
-        doc = await integrations_col.find_one({"service": "linkedin", "userId": user_id})
+        expired = True
+        connected = False
+        if _mysql_available:
+            async for db in get_db_session():
+                stmt = select(SQL_Integration).where(SQL_Integration.service == "linkedin", SQL_Integration.user_id == user_id)
+                doc = (await db.execute(stmt)).scalar_one_or_none()
+                if doc:
+                    expired = bool(doc.extra_data.get("expired", True))
+                    connected = bool(doc.connected)
         
-        if not li_at or "EXPIRED" in li_at.upper() or (doc and doc.get("expired")):
+        if not li_at or "EXPIRED" in li_at.upper() or expired:
             return {"connected": False, "expired": True, "status": "expired"}
             
-        return {"connected": True, "expired": False, "status": "connected"}
+        return {"connected": connected, "expired": False, "status": "connected"}
     except Exception:
         return {"connected": False, "expired": True, "status": "expired"}
 
@@ -442,14 +498,29 @@ async def save_env_keys(payload: dict, current_user: dict = Depends(get_current_
                         logger.error(f"Failed to cast env variable {k} to type {current_type}: {e}")
                         setattr(settings, k, v)
                 
-                if k == "LINKEDIN_LI_AT" and v:
-                    user_id = str(current_user["_id"])
-                    integrations_col = get_async_collection("integrations")
-                    await integrations_col.update_one(
-                        {"service": "linkedin", "userId": user_id},
-                        {"$set": {"connected": True, "expired": False, "status": "connected", "li_at": v}},
-                        upsert=True
-                    )
+                if k == "LINKEDIN_LI_AT" and v and _mysql_available:
+                    user_id = int(current_user["id"])
+                    async for db in get_db_session():
+                        stmt = select(SQL_Integration).where(SQL_Integration.service == "linkedin", SQL_Integration.user_id == user_id)
+                        existing = (await db.execute(stmt)).scalar_one_or_none()
+                        if existing:
+                            await db.execute(
+                                update(SQL_Integration)
+                                .where(SQL_Integration.id == existing.id)
+                                .values(connected=True, extra_data={"expired": False, "status": "connected", "li_at": v}, updated_at=datetime.utcnow())
+                            )
+                        else:
+                            db.add(SQL_Integration(
+                                user_id=user_id,
+                                service="linkedin",
+                                connected=True,
+                                access_token=v,
+                                refresh_token="",
+                                extra_data={"expired": False, "status": "connected", "li_at": v},
+                                created_at=datetime.utcnow(),
+                                updated_at=datetime.utcnow()
+                            ))
+                        await db.commit()
                         
         return {"status": "success", "message": "API keys updated successfully."}
     except Exception as exc:

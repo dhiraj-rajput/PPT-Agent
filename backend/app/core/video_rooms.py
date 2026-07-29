@@ -1,10 +1,7 @@
 """
 app/core/video_rooms.py
 --------------------------
-Video meeting room creation — mirrors Node.js server/utils/googleMeet.js
-and server/utils/zoom.js but running inside FastAPI.
-
-Priority: user's chosen provider → Jitsi fallback (always works, no API key).
+Video meeting room creation — using MySQL.
 """
 
 from __future__ import annotations
@@ -16,8 +13,10 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from utils.db_client import get_async_collection, get_collection
+from utils.db_client import get_db_session, _mysql_available
 from config.settings import settings
+from models.sql_models import Integration as SQL_Integration
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -41,10 +40,6 @@ def _google_config() -> tuple[str, str]:
     )
 
 
-# ---------------------------------------------------------------------------
-# Jitsi (always available, no API key required)
-# ---------------------------------------------------------------------------
-
 def _slugify(text: str) -> str:
     return (
         text.lower()
@@ -60,14 +55,9 @@ def generate_jitsi_link(title: str) -> str:
     return f"https://meet.jit.si/{room}"
 
 
-# ---------------------------------------------------------------------------
-# Zoom
-# ---------------------------------------------------------------------------
-
 async def _create_zoom_meeting(title: str, date: str, time: str) -> str:
     """
     Creates a Zoom meeting via Zoom Server-to-Server OAuth and returns the join URL.
-    Raises on failure so the caller can fall back to Jitsi.
     """
     import httpx
 
@@ -100,10 +90,6 @@ async def _create_zoom_meeting(title: str, date: str, time: str) -> str:
         return meeting_resp.json()["join_url"]
 
 
-# ---------------------------------------------------------------------------
-# Google Meet
-# ---------------------------------------------------------------------------
-
 async def _create_google_meet(
     user_id: Optional[str],
     title: str,
@@ -113,29 +99,39 @@ async def _create_google_meet(
 ) -> str:
     """
     Creates a Google Calendar event with a Meet link.
-    Requires GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET + a stored refresh token.
-    Uses Motor for DB and asyncio.to_thread for blocking Google API calls.
     """
     google_client_id, google_client_secret = _google_config()
     if not google_client_id:
         raise ValueError("Google OAuth client ID is not configured.")
 
-    user_oid_or_str = user_id or "global"
-    integrations_col = get_async_collection("integrations")
-    doc = await integrations_col.find_one({"service": "google", "userId": user_oid_or_str})
-    if not doc and user_oid_or_str != "global":
-        doc = await integrations_col.find_one({"service": "google", "userId": "global"})
+    doc = None
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                if user_id:
+                    stmt = select(SQL_Integration).where(SQL_Integration.service == "google", SQL_Integration.user_id == int(user_id))
+                    doc = (await db.execute(stmt)).scalar_one_or_none()
+                if not doc:
+                    stmt = select(SQL_Integration).where(SQL_Integration.service == "google")
+                    res = await db.execute(stmt)
+                    doc = res.scalars().first()
+        except Exception as e:
+            logger.warning(f"Error fetching Google integration from MySQL: {e}")
 
-    if not doc or not doc.get("connected") or not doc.get("refreshToken"):
+    if not doc or not getattr(doc, "connected", False) or not getattr(doc, "refresh_token", None):
         raise ValueError("Google Meet integration is not connected. Connect in Settings > Integrations.")
+
+
+    access_token_val = doc.access_token
+    refresh_token_val = doc.refresh_token
 
     def _sync_google_event_create():
         from google.oauth2.credentials import Credentials
         from googleapiclient.discovery import build
 
         creds = Credentials(
-            token=doc.get("accessToken"),
-            refresh_token=doc.get("refreshToken"),
+            token=access_token_val,
+            refresh_token=refresh_token_val,
             token_uri="https://oauth2.googleapis.com/token",
             client_id=google_client_id,
             client_secret=google_client_secret,
@@ -199,10 +195,6 @@ async def _create_google_meet(
 
     return await asyncio.to_thread(_sync_google_event_create)
 
-
-# ---------------------------------------------------------------------------
-# Public interface
-# ---------------------------------------------------------------------------
 
 async def create_video_room(
     provider: str,

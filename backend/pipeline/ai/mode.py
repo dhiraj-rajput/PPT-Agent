@@ -59,23 +59,44 @@ class AIMode(str, Enum):
     AUTO = "auto"
 
 
+import time
+
+_ai_mode_cache: dict = {'value': None, 'expires': 0.0}
+
 def get_ai_mode() -> AIMode:
+    now = time.monotonic()
+    if _ai_mode_cache['value'] is not None and now < _ai_mode_cache['expires']:
+        return _ai_mode_cache['value']
+
+    mode_result = None
+
     try:
-        from utils.db_client import get_collection
-        col = get_collection("system_settings")
-        record = col.find_one({"key": "ai_mode"})
-        if record and "value" in record:
-            return AIMode(record["value"])
+        from utils.db_client import get_sync_db_session, _mysql_available
+        if _mysql_available:
+            from models.sql_models import SystemSettings as SQL_SystemSettings
+            from sqlalchemy import select
+            with get_sync_db_session() as db:
+                stmt = select(SQL_SystemSettings).where(SQL_SystemSettings.key_name == "ai_mode")
+                row = db.execute(stmt).scalar_one_or_none()
+                if row:
+                    val = getattr(row, "value", None)
+                    if val:
+                        mode_result = AIMode(str(val))
     except Exception:
         pass
 
-    from config.settings import settings
-    raw = str(getattr(settings, "AI_MODE", "auto") or "auto").strip().lower()
-    try:
-        return AIMode(raw)
-    except ValueError:
-        logger.warning(f"[ai.mode] Unrecognised AI_MODE='{raw}', defaulting to 'auto'.")
-        return AIMode.AUTO
+    if mode_result is None:
+        from config.settings import settings
+        raw = str(getattr(settings, "AI_MODE", "auto") or "auto").strip().lower()
+        try:
+            mode_result = AIMode(raw)
+        except ValueError:
+            logger.warning(f"[ai.mode] Unrecognised AI_MODE='{raw}', defaulting to 'auto'.")
+            mode_result = AIMode.AUTO
+
+    _ai_mode_cache['value'] = mode_result
+    _ai_mode_cache['expires'] = now + 60.0
+    return mode_result
 
 
 def ai_enabled() -> bool:

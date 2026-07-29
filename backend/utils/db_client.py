@@ -1,27 +1,37 @@
 """
 utils/db_client.py
 ------------------
-MongoDB connection management for the entire PPT-Agent application.
+Dual-DB connection management: MongoDB (Motor + pymongo) AND MySQL (SQLAlchemy 2.x async).
 
-Dual-access pattern:
+MongoDB patterns (unchanged — existing code continues to work):
   - Async Motor client  → FastAPI routes and async core modules
   - Sync pymongo client → CLI scripts, pipeline workers, tests
 
+MySQL patterns (new — used for all relational/flat collections):
+  - get_db_session()      → FastAPI async dependency (yields AsyncSession)
+  - get_sync_db_session() → sync context manager for scripts/workers
+  - init_mysql()          → create all tables at startup
+
 Usage (async — FastAPI routes):
-    from utils.db_client import get_async_collection
-    col = get_async_collection("users")
-    user = await col.find_one({"email": email})
+    from utils.db_client import get_async_collection  # MongoDB (document store)
+    from utils.mysql_client import get_db_session     # MySQL (relational)
+
+    col = get_async_collection("raw_linkedin")
+    doc = await col.find_one({"company_slug": "acme"})
+
+    async with get_db_session() as db:
+        result = await db.execute(select(User).where(User.email == email))
 
 Usage (sync — scripts / pipeline):
-    from utils.db_client import get_collection
-    col = get_collection("raw_linkedin")
-    doc = col.find_one({"company_slug": "acme"})
+    from utils.db_client import get_collection            # MongoDB
+    from utils.mysql_client import get_sync_db_session   # MySQL
 """
 
 from __future__ import annotations
 
 import re
 from typing import Optional, Any
+import threading
 
 import pymongo
 from pymongo import MongoClient
@@ -104,6 +114,16 @@ def close_connection() -> None:
 # Async Motor singleton (FastAPI routes and async core modules)
 # ---------------------------------------------------------------------------
 
+from utils.mysql_client import (
+    get_sync_db_session,
+    get_db_session,
+)
+
+
+
+_mysql_available = True
+
+
 _motor_client: Optional[AsyncIOMotorClient] = None
 _motor_database: Optional[AsyncIOMotorDatabase] = None
 
@@ -116,6 +136,7 @@ def get_motor_client() -> AsyncIOMotorClient:
     global _motor_client
     if _motor_client is None:
         init_motor_client()
+    assert _motor_client is not None
     return _motor_client
 
 
@@ -150,6 +171,7 @@ def init_motor_client() -> AsyncIOMotorClient:
     )
     _motor_database = _motor_client[settings.MONGO_DB_NAME]
     logger.info(f"[motor] Motor async client ready. DB: '{settings.MONGO_DB_NAME}'")
+    assert _motor_client is not None
     return _motor_client
 
 
@@ -168,6 +190,7 @@ def get_async_db() -> AsyncIOMotorDatabase:
     global _motor_database
     if _motor_database is None:
         init_motor_client()
+    assert _motor_database is not None
     return _motor_database
 
 
@@ -216,14 +239,21 @@ def ensure_indexes() -> None:
         logger.warning(f"MongoDB core index setup note: {e}")
 
 
+_indexes_ensured_flag = False
+_indexes_lock = threading.Lock()
+
 def ensure_all_indexes() -> None:
-    """
-    Creates indexes for ALL collections across the application.
-    Safe to call repeatedly — only creates indexes that don't exist.
-    """
+    """Idempotent sync startup task to create MongoDB indexes."""
+    global _indexes_ensured_flag
+    with _indexes_lock:
+        if _indexes_ensured_flag:
+            return
+        _indexes_ensured_flag = True
+
     logger.info("Creating indexes for all collections...")
 
     ensure_indexes()
+
 
     def _safe_create(col_name: str, keys: list, **kwargs):
         try:
@@ -281,8 +311,47 @@ def ensure_all_indexes() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Task status helpers (sync — used by background threads/scripts)
+# MySQL passthrough helpers (thin wrappers around mysql_client)
 # ---------------------------------------------------------------------------
+# Import here so callers can do: `from utils.db_client import get_db_session`
+# while also being able to use: `from utils.mysql_client import get_db_session`
+# Both work identically.
+
+try:
+    from utils.mysql_client import (  # noqa: F401 — re-exported for convenience
+        get_db_session as get_db_session,
+        get_sync_db_session as get_sync_db_session,
+        init_mysql as init_mysql,
+        ping_mysql as ping_mysql,
+        ping_mysql_sync as ping_mysql_sync,
+    )
+    _mysql_available = True
+except ImportError:
+    _mysql_available = False
+
+
+def close_mysql() -> None:
+    """Dispose the MySQL async engine. Call in FastAPI lifespan shutdown."""
+    if not _mysql_available:
+        return
+    try:
+        from utils.mysql_client import _get_async_engine
+        engine = _get_async_engine()
+        if engine:
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+                loop.run_until_complete(engine.dispose())
+            except RuntimeError:
+                pass  # No running loop — safe to ignore
+    except Exception as exc:
+        logger.warning(f"[mysql] close_mysql() error: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# Task status helpers (MySQL only)
+# ---------------------------------------------------------------------------
+
 
 def update_task_status(
     task_id: str,
@@ -293,43 +362,82 @@ def update_task_status(
     filename: Optional[str] = None,
     extra: Optional[dict] = None,
 ) -> None:
-    """Upsert background task progress/status into MongoDB."""
-    from datetime import datetime, timezone, timedelta
-    col = get_collection("task_statuses")
-    now = datetime.now(timezone.utc)
-    doc: dict[str, Any] = {
-        "task_id": task_id,
-        "type": task_type,
-        "progress": progress,
-        "status": status,
-        "message": message,
-        "updatedAt": now,
-        "expireAt": now + timedelta(days=1),
-    }
-    if filename is not None:
-        doc["filename"] = filename
-    if extra:
-        doc.update(extra)
-    try:
-        col.update_one({"task_id": task_id}, {"$set": doc}, upsert=True)
-    except PyMongoError as e:
-        logger.error(f"Failed to update task status for {task_id}: {e}")
+    """
+    Upsert background task progress/status.
+    MySQL task_statuses table only.
+    """
+    from datetime import datetime, timezone
+
+    if _mysql_available:
+        try:
+            from sqlalchemy import text
+            with get_sync_db_session() as db:
+                result_dict: dict[str, Any] = {
+                    "task_id": task_id,
+                    "status": status,
+                    "progress": progress,
+                    "message": message,
+                    "last_updated": datetime.now(timezone.utc),
+                }
+                if extra:
+                    result_dict["result"] = extra
+                db.execute(
+                    text(
+                        "INSERT INTO task_statuses (task_id, status, progress, message, last_updated, result, created_at) "
+                        "VALUES (:task_id, :status, :progress, :message, :last_updated, :result, :created_at) "
+                        "ON DUPLICATE KEY UPDATE status=VALUES(status), progress=VALUES(progress), "
+                        "message=VALUES(message), last_updated=VALUES(last_updated), result=VALUES(result)"
+                    ),
+                    {
+                        **result_dict,
+                        "result": str(extra or {}),
+                        "created_at": datetime.now(timezone.utc),
+                    },
+                )
+        except Exception as e:
+            logger.error(f"[mysql] update_task_status MySQL failed: {e}")
 
 
 def get_task_status_db(task_id: str) -> Optional[dict]:
-    """Retrieve background task status from MongoDB by task_id."""
-    col = get_collection("task_statuses")
-    return col.find_one({"task_id": task_id}, {"_id": 0, "expireAt": 0, "updatedAt": 0})
+    """
+    Retrieve background task status by task_id.
+    MySQL only.
+    """
+    if _mysql_available:
+        try:
+            from sqlalchemy import text
+            with get_sync_db_session() as db:
+                row = db.execute(
+                    text("SELECT task_id, status, progress, message, result FROM task_statuses WHERE task_id = :tid"),
+                    {"tid": task_id},
+                ).mappings().first()
+                if row:
+                    return dict(row)
+        except Exception as e:
+            logger.error(f"[mysql] get_task_status_db MySQL failed: {e}")
+    return None
 
 
 def get_all_task_statuses_db() -> list[dict]:
-    """Retrieve all background task statuses from MongoDB."""
-    col = get_collection("task_statuses")
-    return list(col.find({}, {"_id": 0, "expireAt": 0, "updatedAt": 0}))
+    """
+    Retrieve all background task statuses.
+    MySQL only.
+    """
+    if _mysql_available:
+        try:
+            from sqlalchemy import text
+            with get_sync_db_session() as db:
+                rows = db.execute(
+                    text("SELECT task_id, status, progress, message, result, created_at FROM task_statuses ORDER BY created_at DESC")
+                ).mappings().all()
+                return [dict(r) for r in rows]
+        except Exception as e:
+            logger.error(f"[mysql] get_all_task_statuses_db MySQL failed: {e}")
+    return []
 
 
 # ---------------------------------------------------------------------------
-# Async task status helpers (Motor — used by async routes)
+# Async task status helpers (MySQL only)
 # ---------------------------------------------------------------------------
 
 async def update_task_status_async(
@@ -341,30 +449,51 @@ async def update_task_status_async(
     filename: Optional[str] = None,
     extra: Optional[dict] = None,
 ) -> None:
-    """Async version of update_task_status for use in async FastAPI routes."""
-    from datetime import datetime, timezone, timedelta
-    col = get_async_collection("task_statuses")
-    now = datetime.now(timezone.utc)
-    doc: dict[str, Any] = {
-        "task_id": task_id,
-        "type": task_type,
-        "progress": progress,
-        "status": status,
-        "message": message,
-        "updatedAt": now,
-        "expireAt": now + timedelta(days=1),
-    }
-    if filename is not None:
-        doc["filename"] = filename
-    if extra:
-        doc.update(extra)
-    try:
-        await col.update_one({"task_id": task_id}, {"$set": doc}, upsert=True)
-    except Exception as e:
-        logger.error(f"[motor] Failed to update task status for {task_id}: {e}")
+    """
+    Async upsert of background task progress/status.
+    MySQL only.
+    """
+    from datetime import datetime, timezone
+
+    if _mysql_available:
+        try:
+            from sqlalchemy import text
+            async for db in get_db_session():
+                await db.execute(
+                    text(
+                        "INSERT INTO task_statuses (task_id, status, progress, message, last_updated, result, created_at) "
+                        "VALUES (:task_id, :status, :progress, :message, :last_updated, :result, :created_at) "
+                        "ON DUPLICATE KEY UPDATE status=VALUES(status), progress=VALUES(progress), "
+                        "message=VALUES(message), last_updated=VALUES(last_updated), result=VALUES(result)"
+                    ),
+                    {
+                        "task_id": task_id,
+                        "status": status,
+                        "progress": progress,
+                        "message": message,
+                        "last_updated": datetime.now(timezone.utc),
+                        "result": str(extra or {}),
+                        "created_at": datetime.now(timezone.utc),
+                    },
+                )
+        except Exception as e:
+            logger.error(f"[mysql] update_task_status_async MySQL failed: {e}")
 
 
 async def get_task_status_async(task_id: str) -> Optional[dict]:
-    """Async version of get_task_status_db for use in async FastAPI routes."""
-    col = get_async_collection("task_statuses")
-    return await col.find_one({"task_id": task_id}, {"_id": 0, "expireAt": 0, "updatedAt": 0})
+    """
+    Async get task status. MySQL only.
+    """
+    if _mysql_available:
+        try:
+            from sqlalchemy import text
+            async for db in get_db_session():
+                row = (await db.execute(
+                    text("SELECT task_id, status, progress, message, result FROM task_statuses WHERE task_id = :tid"),
+                    {"tid": task_id},
+                )).mappings().first()
+                if row:
+                    return dict(row)
+        except Exception as e:
+            logger.error(f"[mysql] get_task_status_async MySQL failed: {e}")
+    return None

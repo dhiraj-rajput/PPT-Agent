@@ -1,86 +1,61 @@
 """
 app/routes/system_logs.py
 --------------------------
-Admin-only "Server Logs" endpoints.
-
-Every WARNING/ERROR/CRITICAL logged anywhere in the backend (via
-utils.helpers.setup_logger) is persisted to the `error_logs` MongoDB
-collection by utils.helpers.MongoErrorLogHandler. These endpoints expose
-that collection to the frontend Server Logs admin page:
-
-  GET    /api/system-logs                 — paginated, filterable log list
-  GET    /api/system-logs/summary         — counts for the dashboard cards
-  GET    /api/system-logs/poll            — lightweight "is there anything new"
-                                             check, used to drive the live
-                                             top-of-app alert banner
-  GET    /api/system-logs/stream          — SSE live tail of backend/logs/app.log
-                                             (real-time stdout/INFO lines)
-  PATCH  /api/system-logs/{id}/resolve    — mark one entry resolved
-  PATCH  /api/system-logs/{id}/unresolve  — reopen a resolved entry
-  DELETE /api/system-logs/{id}            — delete one entry
-  DELETE /api/system-logs                 — bulk clear (resolved only, or all)
-  POST   /api/system-logs/test            — emit a synthetic error, useful to
-                                             verify the pipeline end-to-end
-                                             after a deploy
+Admin-only "Server Logs" endpoints — using MySQL.
 """
 
 from __future__ import annotations
 
 import asyncio
 import os
-from datetime import datetime, timezone
+import json
+import logging
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator, Optional, Any
 
-from bson import ObjectId
-from bson.errors import InvalidId
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
-from pymongo import DESCENDING
 
 from app.core.auth import require_admin
-from utils.db_client import get_async_collection
-from utils.helpers import setup_logger
+from utils.db_client import get_db_session, _mysql_available
+from models.sql_models import (
+    ErrorLog as SQL_ErrorLog,
+    User as SQLUser,
+)
+from sqlalchemy import select, update, insert, delete, func, or_, and_, desc
 
-logger = setup_logger(__name__)
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/system-logs", tags=["system-logs"])
 
 VALID_LEVELS = {"WARNING", "ERROR", "CRITICAL"}
 
-# Path to the rolling log file written by helpers.setup_logger
 _LOG_FILE = Path(__file__).resolve().parent.parent.parent / "logs" / "app.log"
+
+
+def _iso(dt: Any) -> Optional[str]:
+    return dt.isoformat() if dt and hasattr(dt, "isoformat") else None
 
 
 async def _require_admin_sse(
     request: Request,
-    token: Optional[str] = Query(None, description="JWT token (for SSE EventSource which cannot send headers)"),
+    token: Optional[str] = Query(None, description="JWT token for SSE"),
 ) -> dict:
-    """
-    Auth dependency for SSE endpoints.
-    EventSource (browser SSE) cannot set custom headers, so we accept the
-    JWT as a ?token= query parameter in addition to the Authorization header.
-    This is safe because: SSE is read-only, the connection is over HTTPS,
-    and the token still expires normally.
-    """
     from jose import JWTError, jwt as _jwt
     from config.settings import settings as _settings
 
     exc = HTTPException(
         status_code=401,
         detail="Not authenticated or token expired.",
-        headers={"WWW-Authenticate": "Bearer"},
     )
 
-    # 1. Try Authorization: Bearer header first
     auth_header = request.headers.get("Authorization", "")
     resolved_token = None
     if auth_header.startswith("Bearer "):
         resolved_token = auth_header[7:].strip()
-    # 2. Fall back to ?token= query parameter (needed for EventSource)
     elif token:
         resolved_token = token
-    # 3. Cookie fallback
     else:
         resolved_token = request.cookies.get("orbitavanya_token")
 
@@ -95,83 +70,70 @@ async def _require_admin_sse(
     except JWTError:
         raise exc
 
-    users_col = get_async_collection("users")
-    user = await users_col.find_one({"_id": ObjectId(user_id)})
-    if not user:
-        raise exc
+    if _mysql_available:
+        async for db in get_db_session():
+            stmt = select(SQLUser).where(SQLUser.id == int(user_id))
+            user_obj = (await db.execute(stmt)).scalar_one_or_none()
+            if not user_obj:
+                raise exc
+            if user_obj.role.lower() not in ("admin", "owner"):
+                raise HTTPException(status_code=403, detail="Admin access required.")
+            return {
+                "id": user_obj.id,
+                "email": user_obj.email,
+                "name": user_obj.name,
+                "role": user_obj.role
+            }
+    raise exc
 
-    if user.get("role", "").lower() not in ("admin", "owner"):
-        raise HTTPException(status_code=403, detail="Admin access required.")
 
-    return user
-
-
-def _to_public(doc: dict) -> dict:
+def _to_public(doc: SQL_ErrorLog) -> dict:
+    if not doc:
+        return {}
+    extra = doc.extra_data or {}
     return {
-        "id": str(doc["_id"]),
-        "timestamp": doc.get("timestamp"),
-        "level": doc.get("level", "ERROR"),
-        "source": doc.get("source", ""),
-        "message": doc.get("message", ""),
-        "detail": doc.get("detail", ""),
-        "path": doc.get("path"),
-        "method": doc.get("method"),
-        "statusCode": doc.get("statusCode"),
-        "userEmail": doc.get("userEmail"),
-        "ip": doc.get("ip"),
-        "module": doc.get("module"),
-        "func": doc.get("func"),
-        "line": doc.get("line"),
-        "resolved": doc.get("resolved", False),
-        "resolvedBy": doc.get("resolvedBy"),
-        "resolvedAt": doc.get("resolvedAt"),
+        "id": str(doc.id),
+        "timestamp": _iso(doc.timestamp),
+        "level": doc.level or "ERROR",
+        "source": doc.source or "",
+        "message": doc.message or "",
+        "detail": doc.stack_trace or "",
+        "path": extra.get("path"),
+        "method": extra.get("method"),
+        "statusCode": extra.get("statusCode"),
+        "userEmail": extra.get("userEmail"),
+        "ip": extra.get("ip"),
+        "module": extra.get("module"),
+        "func": extra.get("func"),
+        "line": extra.get("line"),
+        "resolved": bool(doc.resolved),
+        "resolvedBy": doc.resolved_by,
+        "resolvedAt": _iso(doc.resolved_at),
     }
 
 
-def _oid(log_id: str) -> ObjectId:
-    try:
-        return ObjectId(log_id)
-    except InvalidId:
-        raise HTTPException(400, "Invalid log ID.")
-
-
-# ---------------------------------------------------------------------------
-# SSE live log stream — tails backend/logs/app.log in real time
-# ---------------------------------------------------------------------------
-
 async def _tail_log_file(log_path: Path) -> AsyncGenerator[str, None]:
-    """
-    Async generator that tails a log file, yielding new lines as SSE events.
-
-    Falls back to sending heartbeat comments when no new lines arrive,
-    which keeps the connection alive through Apache's proxy timeout
-    (and avoids the 504 Gateway Timeout on cPanel).
-    """
-    # Send the last N lines as initial backfill so the page isn't blank
     BACKFILL_LINES = 100
-    HEARTBEAT_SECS = 15   # Apache ProxyTimeout keepalive
-    POLL_INTERVAL  = 0.5  # seconds between inode checks
+    HEARTBEAT_SECS = 15
+    POLL_INTERVAL = 0.5
 
     try:
         if log_path.exists():
             with open(log_path, "r", encoding="utf-8", errors="replace") as f:
-                # Backfill: seek near end, read last BACKFILL_LINES lines
                 try:
-                    f.seek(0, 2)  # seek to EOF
+                    f.seek(0, 2)
                     file_size = f.tell()
-                    # Read up to 50 KB from end for backfill
                     f.seek(max(0, file_size - 50_000))
                     tail_lines = f.read().splitlines()[-BACKFILL_LINES:]
                     for line in tail_lines:
                         if line.strip():
                             yield f"data: {line}\n\n"
                 except Exception:
-                    pass  # backfill best-effort
+                    pass
 
-        # Now tail indefinitely
         last_heartbeat = asyncio.get_event_loop().time()
         with open(log_path, "a+", encoding="utf-8", errors="replace") as f:
-            f.seek(0, 2)  # start at EOF
+            f.seek(0, 2)
             while True:
                 line = f.readline()
                 if line:
@@ -182,7 +144,6 @@ async def _tail_log_file(log_path: Path) -> AsyncGenerator[str, None]:
                 else:
                     now = asyncio.get_event_loop().time()
                     if now - last_heartbeat >= HEARTBEAT_SECS:
-                        # SSE comment — keeps connection alive, ignored by clients
                         yield ": keepalive\n\n"
                         last_heartbeat = now
                     await asyncio.sleep(POLL_INTERVAL)
@@ -195,11 +156,6 @@ async def _tail_log_file(log_path: Path) -> AsyncGenerator[str, None]:
 
 @router.get("/stream")
 async def stream_logs(_admin: dict = Depends(_require_admin_sse)):
-    """
-    SSE endpoint: tails backend/logs/app.log and pushes every new line to
-    the browser in real time.  Works through Apache mod_proxy on cPanel via
-    the X-Accel-Buffering: no + Cache-Control: no-transform headers.
-    """
     if not _LOG_FILE.parent.exists():
         _LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
     if not _LOG_FILE.exists():
@@ -209,11 +165,10 @@ async def stream_logs(_admin: dict = Depends(_require_admin_sse)):
         _tail_log_file(_LOG_FILE),
         media_type="text/event-stream",
         headers={
-            # Critical for SSE through Apache / cPanel reverse proxy:
             "Cache-Control": "no-cache, no-transform",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",   # disables Nginx/Apache output buffering
-            "Content-Encoding": "none",  # prevents gzip holding back chunks
+            "X-Accel-Buffering": "no",
+            "Content-Encoding": "none",
             "Access-Control-Allow-Origin": "*",
         },
     )
@@ -221,52 +176,69 @@ async def stream_logs(_admin: dict = Depends(_require_admin_sse)):
 
 @router.get("")
 async def list_logs(
-    level: Optional[str] = Query(None, description="Comma-separated: WARNING,ERROR,CRITICAL"),
+    level: Optional[str] = Query(None, description="Comma-separated levels"),
     resolved: Optional[bool] = Query(None),
-    q: Optional[str] = Query(None, description="Free-text search across message/detail/source/path"),
+    q: Optional[str] = Query(None, description="Search text"),
     source: Optional[str] = Query(None),
-    since: Optional[str] = Query(None, description="ISO timestamp — only logs after this"),
+    since: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     limit: int = Query(25, ge=1, le=200),
     _admin: dict = Depends(require_admin),
 ):
-    col = get_async_collection("error_logs")
+    logs = []
+    total = 0
 
-    query: dict = {}
-
-    if level:
-        levels = [lvl.strip().upper() for lvl in level.split(",") if lvl.strip().upper() in VALID_LEVELS]
-        if levels:
-            query["level"] = {"$in": levels}
-
-    if resolved is not None:
-        query["resolved"] = resolved
-
-    if source:
-        query["source"] = {"$regex": source, "$options": "i"}
-
-    if since:
+    if _mysql_available:
         try:
-            since_dt = datetime.fromisoformat(since.replace("Z", "+00:00"))
-            query["timestamp"] = {"$gt": since_dt}
-        except ValueError:
-            raise HTTPException(400, "Invalid 'since' timestamp — use ISO 8601.")
+            async for db in get_db_session():
+                filter_conditions = []
+                if level:
+                    levels = [lvl.strip().upper() for lvl in level.split(",") if lvl.strip().upper() in VALID_LEVELS]
+                    if levels:
+                        filter_conditions.append(SQL_ErrorLog.level.in_(levels))
 
-    if q:
-        query["$or"] = [
-            {"message": {"$regex": q, "$options": "i"}},
-            {"detail": {"$regex": q, "$options": "i"}},
-            {"source": {"$regex": q, "$options": "i"}},
-            {"path": {"$regex": q, "$options": "i"}},
-        ]
+                if resolved is not None:
+                    filter_conditions.append(SQL_ErrorLog.resolved == resolved)
 
-    total = await col.count_documents(query)
-    skip = (page - 1) * limit
-    cursor = col.find(query).sort("timestamp", DESCENDING).skip(skip).limit(limit)
-    docs = await cursor.to_list(length=limit)
+                if source:
+                    filter_conditions.append(SQL_ErrorLog.source.ilike(f"%{source.strip()}%"))
+
+                if since:
+                    try:
+                        since_dt = datetime.fromisoformat(since.replace("Z", "+00:00"))
+                        if since_dt.tzinfo:
+                            since_dt = since_dt.astimezone(timezone.utc).replace(tzinfo=None)
+                        filter_conditions.append(SQL_ErrorLog.timestamp > since_dt)
+                    except ValueError:
+                        raise HTTPException(400, "Invalid 'since' timestamp format.")
+
+                if q:
+                    qs = f"%{q.strip()}%"
+                    filter_conditions.append(or_(
+                        SQL_ErrorLog.message.ilike(qs),
+                        SQL_ErrorLog.stack_trace.ilike(qs),
+                        SQL_ErrorLog.source.ilike(qs)
+                    ))
+
+                stmt_count = select(func.count()).select_from(SQL_ErrorLog)
+                stmt_select = select(SQL_ErrorLog)
+                if filter_conditions:
+                    stmt_count = stmt_count.where(and_(*filter_conditions))
+                    stmt_select = stmt_select.where(and_(*filter_conditions))
+
+                total = (await db.execute(stmt_count)).scalar() or 0
+
+                skip = (page - 1) * limit
+                stmt_select = stmt_select.order_by(desc(SQL_ErrorLog.timestamp)).offset(skip).limit(limit)
+                res = await db.execute(stmt_select)
+                logs = [_to_public(d) for d in res.scalars().all()]
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, f"Database error: {e}")
 
     return {
-        "logs": [_to_public(d) for d in docs],
+        "logs": logs,
         "total": total,
         "page": page,
         "limit": limit,
@@ -276,23 +248,36 @@ async def list_logs(
 
 @router.get("/summary")
 async def logs_summary(_admin: dict = Depends(require_admin)):
-    col = get_async_collection("error_logs")
+    total = 0
+    unresolved = 0
+    critical = 0
+    errors = 0
+    warnings = 0
+    last_24h_count = 0
+    last_7d_count = 0
+    latest = None
 
-    from datetime import timedelta
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
     last_24h = now - timedelta(hours=24)
     last_7d = now - timedelta(days=7)
 
-    total = await col.count_documents({})
-    unresolved = await col.count_documents({"resolved": False})
-    critical = await col.count_documents({"level": "CRITICAL", "resolved": False})
-    errors = await col.count_documents({"level": "ERROR", "resolved": False})
-    warnings = await col.count_documents({"level": "WARNING", "resolved": False})
-    last_24h_count = await col.count_documents({"timestamp": {"$gte": last_24h}})
-    last_7d_count = await col.count_documents({"timestamp": {"$gte": last_7d}})
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                total = (await db.execute(select(func.count()).select_from(SQL_ErrorLog))).scalar() or 0
+                unresolved = (await db.execute(select(func.count()).select_from(SQL_ErrorLog).where(SQL_ErrorLog.resolved == False))).scalar() or 0
+                critical = (await db.execute(select(func.count()).select_from(SQL_ErrorLog).where(SQL_ErrorLog.level == "CRITICAL", SQL_ErrorLog.resolved == False))).scalar() or 0
+                errors = (await db.execute(select(func.count()).select_from(SQL_ErrorLog).where(SQL_ErrorLog.level == "ERROR", SQL_ErrorLog.resolved == False))).scalar() or 0
+                warnings = (await db.execute(select(func.count()).select_from(SQL_ErrorLog).where(SQL_ErrorLog.level == "WARNING", SQL_ErrorLog.resolved == False))).scalar() or 0
 
-    latest_doc = await col.find_one({}, sort=[("timestamp", DESCENDING)])
-    latest = _to_public(latest_doc) if latest_doc else None
+                last_24h_count = (await db.execute(select(func.count()).select_from(SQL_ErrorLog).where(SQL_ErrorLog.timestamp >= last_24h))).scalar() or 0
+                last_7d_count = (await db.execute(select(func.count()).select_from(SQL_ErrorLog).where(SQL_ErrorLog.timestamp >= last_7d))).scalar() or 0
+
+                stmt_latest = select(SQL_ErrorLog).order_by(desc(SQL_ErrorLog.timestamp)).limit(1)
+                latest_doc = (await db.execute(stmt_latest)).scalar_one_or_none()
+                latest = _to_public(latest_doc) if latest_doc else None
+        except Exception as e:
+            raise HTTPException(500, f"Database error: {e}")
 
     return {
         "total": total,
@@ -308,74 +293,125 @@ async def logs_summary(_admin: dict = Depends(require_admin)):
 
 @router.get("/poll")
 async def poll_new_errors(
-    since: Optional[str] = Query(None, description="ISO timestamp of the last log the client has already seen"),
+    since: Optional[str] = Query(None),
     _admin: dict = Depends(require_admin),
 ):
-    """
-    Lightweight endpoint the frontend polls every few seconds to drive the
-    live top-of-app alert banner, without pulling the full paginated list.
-    Only reports unresolved ERROR/CRITICAL entries — warnings don't trigger
-    an interrupt-style alert.
-    """
-    col = get_async_collection("error_logs")
-
-    query: dict = {"level": {"$in": ["ERROR", "CRITICAL"]}, "resolved": False}
-    if since:
+    new_logs = []
+    if _mysql_available:
         try:
-            since_dt = datetime.fromisoformat(since.replace("Z", "+00:00"))
-            query["timestamp"] = {"$gt": since_dt}
-        except ValueError:
-            raise HTTPException(400, "Invalid 'since' timestamp — use ISO 8601.")
+            async for db in get_db_session():
+                filter_conditions = [SQL_ErrorLog.level.in_(["ERROR", "CRITICAL"]), SQL_ErrorLog.resolved == False]
+                if since:
+                    try:
+                        since_dt = datetime.fromisoformat(since.replace("Z", "+00:00"))
+                        if since_dt.tzinfo:
+                            since_dt = since_dt.astimezone(timezone.utc).replace(tzinfo=None)
+                        filter_conditions.append(SQL_ErrorLog.timestamp > since_dt)
+                    except ValueError:
+                        raise HTTPException(400, "Invalid 'since' timestamp format.")
 
-    cursor = col.find(query).sort("timestamp", DESCENDING).limit(10)
-    docs = await cursor.to_list(length=10)
+                stmt = select(SQL_ErrorLog).where(and_(*filter_conditions)).order_by(desc(SQL_ErrorLog.timestamp)).limit(10)
+                res = await db.execute(stmt)
+                new_logs = [_to_public(d) for d in res.scalars().all()]
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, f"Database error: {e}")
 
-    return {"newLogs": [_to_public(d) for d in docs]}
+    return {"newLogs": new_logs}
 
 
 @router.patch("/{log_id}/resolve")
 async def resolve_log(log_id: str, admin: dict = Depends(require_admin)):
-    col = get_async_collection("error_logs")
-    oid = _oid(log_id)
+    try:
+        lid = int(log_id)
+    except ValueError:
+        raise HTTPException(400, "Invalid log ID.")
 
-    await col.update_one(
-        {"_id": oid},
-        {"$set": {
-            "resolved": True,
-            "resolvedBy": admin.get("email") or admin.get("name") or "Admin",
-            "resolvedAt": datetime.now(tz=timezone.utc),
-        }},
-    )
-    doc = await col.find_one({"_id": oid})
-    if not doc:
-        raise HTTPException(404, "Log entry not found.")
-    return {"log": _to_public(doc)}
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_ErrorLog).where(SQL_ErrorLog.id == lid)
+                doc = (await db.execute(stmt)).scalar_one_or_none()
+                if not doc:
+                    raise HTTPException(404, "Log entry not found.")
+
+                await db.execute(
+                    update(SQL_ErrorLog)
+                    .where(SQL_ErrorLog.id == lid)
+                    .values(
+                        resolved=True,
+                        resolved_by=admin.get("email") or admin.get("name") or "Admin",
+                        resolved_at=datetime.utcnow()
+                    )
+                )
+                await db.commit()
+
+                # refetch
+                doc = (await db.execute(select(SQL_ErrorLog).where(SQL_ErrorLog.id == lid))).scalar_one()
+                return {"log": _to_public(doc)}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, f"Database error: {e}")
+    raise HTTPException(500, "Database is unavailable.")
 
 
 @router.patch("/{log_id}/unresolve")
 async def unresolve_log(log_id: str, _admin: dict = Depends(require_admin)):
-    col = get_async_collection("error_logs")
-    oid = _oid(log_id)
+    try:
+        lid = int(log_id)
+    except ValueError:
+        raise HTTPException(400, "Invalid log ID.")
 
-    await col.update_one(
-        {"_id": oid},
-        {"$set": {"resolved": False}, "$unset": {"resolvedBy": "", "resolvedAt": ""}},
-    )
-    doc = await col.find_one({"_id": oid})
-    if not doc:
-        raise HTTPException(404, "Log entry not found.")
-    return {"log": _to_public(doc)}
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_ErrorLog).where(SQL_ErrorLog.id == lid)
+                doc = (await db.execute(stmt)).scalar_one_or_none()
+                if not doc:
+                    raise HTTPException(404, "Log entry not found.")
+
+                await db.execute(
+                    update(SQL_ErrorLog)
+                    .where(SQL_ErrorLog.id == lid)
+                    .values(resolved=False, resolved_by="", resolved_at=None)
+                )
+                await db.commit()
+
+                # refetch
+                doc = (await db.execute(select(SQL_ErrorLog).where(SQL_ErrorLog.id == lid))).scalar_one()
+                return {"log": _to_public(doc)}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, f"Database error: {e}")
+    raise HTTPException(500, "Database is unavailable.")
 
 
 @router.delete("/{log_id}")
 async def delete_log(log_id: str, _admin: dict = Depends(require_admin)):
-    col = get_async_collection("error_logs")
-    oid = _oid(log_id)
+    try:
+        lid = int(log_id)
+    except ValueError:
+        raise HTTPException(400, "Invalid log ID.")
 
-    result = await col.find_one_and_delete({"_id": oid})
-    if not result:
-        raise HTTPException(404, "Log entry not found.")
-    return {"ok": True}
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_ErrorLog).where(SQL_ErrorLog.id == lid)
+                doc = (await db.execute(stmt)).scalar_one_or_none()
+                if not doc:
+                    raise HTTPException(404, "Log entry not found.")
+
+                await db.execute(delete(SQL_ErrorLog).where(SQL_ErrorLog.id == lid))
+                await db.commit()
+                return {"ok": True}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, f"Database error: {e}")
+    raise HTTPException(500, "Database is unavailable.")
 
 
 @router.delete("")
@@ -383,24 +419,28 @@ async def clear_logs(
     scope: str = Query("resolved", pattern="^(resolved|all)$"),
     _admin: dict = Depends(require_admin),
 ):
-    col = get_async_collection("error_logs")
-    query = {} if scope == "all" else {"resolved": True}
-    result = await col.delete_many(query)
-    return {"ok": True, "deleted": result.deleted_count}
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = delete(SQL_ErrorLog)
+                if scope != "all":
+                    stmt = stmt.where(SQL_ErrorLog.resolved == True)
+                res = await db.execute(stmt)
+                await db.commit()
+                return {"ok": True, "deleted": getattr(res, "rowcount", 0)}
+
+        except Exception as e:
+            raise HTTPException(500, f"Database error: {e}")
+    raise HTTPException(500, "Database is unavailable.")
 
 
 @router.post("/test", status_code=201)
 async def emit_test_error(admin: dict = Depends(require_admin)):
-    """
-    Deliberately logs a synthetic error so an admin can verify — right from
-    the Server Logs page — that the logging pipeline (handler → MongoDB →
-    API → alert banner) is working end-to-end after a deploy.
-    """
     try:
         raise RuntimeError("This is a test error triggered manually from the Server Logs page.")
     except RuntimeError:
         logger.error(
-            f"Test error triggered by admin {admin.get('email', 'unknown')} to verify the logging pipeline.",
+            "Test error triggered by admin to verify the logging pipeline.",
             exc_info=True,
             extra={"path": "/api/system-logs/test", "method": "POST", "status_code": 201, "user_email": admin.get("email")},
         )

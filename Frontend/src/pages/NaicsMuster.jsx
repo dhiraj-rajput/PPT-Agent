@@ -82,14 +82,14 @@ export default function NaicsMuster() {
     title: '',
     description: ''
   });
-  async function fetchNaics() {
+  const fetchNaics = useCallback(async (targetPage = page, targetSearch = search, targetSector = sector, targetMatch = matchCompanyDescription) => {
     setLoading(true);
     try {
       const res = await api.getNaicsCodes({
-        search,
-        sector,
-        match_company_description: matchCompanyDescription && !search,
-        page,
+        search: targetSearch,
+        sector: targetSector,
+        match_company_description: targetMatch && !targetSearch,
+        page: targetPage,
         limit,
       });
       setItems(res.items || []);
@@ -99,20 +99,21 @@ export default function NaicsMuster() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [limit]);
 
   // Debounced search and direct filter refetch
   useEffect(() => {
     const timer = setTimeout(() => {
-      fetchNaics();
-    }, 250); // 250ms debounce
+      fetchNaics(page, search, sector, matchCompanyDescription);
+    }, 200);
     return () => clearTimeout(timer);
-  }, [page, search, sector, matchCompanyDescription]);
+  }, [page, search, sector, matchCompanyDescription, fetchNaics]);
 
   // Reset page to 1 on filter or search changes
   useEffect(() => {
     setPage(1);
   }, [search, sector, matchCompanyDescription]);
+
 
   // Copy code to clipboard
   function handleCopy(code) {
@@ -341,7 +342,11 @@ export default function NaicsMuster() {
             {total > 0 && (
               <div className="flex items-center gap-3 bg-slate-50/70 px-4 py-2 rounded-xl border border-slate-200 dark:border-navy-800 dark:bg-navy-950/40">
                 <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  onClick={() => {
+                    const prevP = Math.max(1, page - 1);
+                    setPage(prevP);
+                    fetchNaics(prevP, search, sector, matchCompanyDescription);
+                  }}
                   disabled={page === 1}
                   className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-all hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-white dark:border-navy-700 dark:bg-navy-800 dark:text-slate-400 dark:hover:bg-navy-750"
                   title="Previous Page"
@@ -352,7 +357,11 @@ export default function NaicsMuster() {
                   {page} / {totalPages}
                 </span>
                 <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  onClick={() => {
+                    const nextP = Math.min(totalPages, page + 1);
+                    setPage(nextP);
+                    fetchNaics(nextP, search, sector, matchCompanyDescription);
+                  }}
                   disabled={page === totalPages}
                   className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-all hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-white dark:border-navy-700 dark:bg-navy-800 dark:text-slate-400 dark:hover:bg-navy-750"
                   title="Next Page"
@@ -525,7 +534,12 @@ export default function NaicsMuster() {
 
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                onClick={() => {
+                  const prevP = Math.max(1, page - 1);
+                  setPage(prevP);
+                  fetchNaics(prevP, search, sector, matchCompanyDescription);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
                 disabled={page === 1}
                 className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-all hover:bg-slate-55 disabled:opacity-50 disabled:hover:bg-white dark:border-navy-700 dark:bg-navy-800 dark:text-slate-400 dark:hover:bg-navy-750"
               >
@@ -537,7 +551,12 @@ export default function NaicsMuster() {
               </div>
 
               <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                onClick={() => {
+                  const nextP = Math.min(totalPages, page + 1);
+                  setPage(nextP);
+                  fetchNaics(nextP, search, sector, matchCompanyDescription);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
                 disabled={page === totalPages}
                 className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-all hover:bg-slate-55 disabled:opacity-50 disabled:hover:bg-white dark:border-navy-700 dark:bg-navy-800 dark:text-slate-400 dark:hover:bg-navy-750"
               >

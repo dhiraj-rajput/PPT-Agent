@@ -24,8 +24,10 @@ from bson import ObjectId
 from bson.errors import InvalidId
 from pymongo.errors import PyMongoError
 
-from utils.db_client import get_async_collection, get_collection
+from utils.db_client import get_async_collection, get_collection, get_db_session, get_sync_db_session, _mysql_available
 from config.settings import settings
+from sqlalchemy import select
+from models.sql_models import User
 
 # ---------------------------------------------------------------------------
 # Config
@@ -79,11 +81,30 @@ def verify_action_token(token: str, expected_purpose: str) -> Optional[str]:
 # FastAPI dependencies
 # ---------------------------------------------------------------------------
 
+def _sql_user_to_dict(u) -> dict:
+    if not u:
+        return {}
+    return {
+        "id": str(u.id),
+        "_id": str(u.id),
+        "name": u.name or "",
+        "email": u.email or "",
+        "phone": u.phone or "",
+        "role": u.role or "Team Member",
+        "passwordHash": u.password_hash or "",
+        "isVerified": bool(u.is_verified),
+        "mustChangePassword": bool(u.must_change_password),
+        "createdAt": u.created_at if u.created_at else datetime.now(timezone.utc),
+        "avatarUrl": u.avatar_url or "",
+    }
+
+
+
 async def get_current_user(
     request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
 ) -> dict:
-    """FastAPI dependency — decode Bearer token or cookie and return the user document using Motor async."""
+    """FastAPI dependency — decode Bearer token or cookie and return the user document using MySQL."""
     exc = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Not authenticated or token expired.",
@@ -108,15 +129,23 @@ async def get_current_user(
     except JWTError:
         raise exc
 
-    try:
-        users_col = get_async_collection("users")
-        user = await users_col.find_one({"_id": ObjectId(user_id)})
-    except (InvalidId, PyMongoError, Exception):
-        raise exc
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                try:
+                    uid = int(user_id)
+                    stmt = select(User).where(User.id == uid)
+                    res = await db.execute(stmt)
+                    user_row = res.scalar_one_or_none()
+                    if user_row:
+                        return _sql_user_to_dict(user_row)
+                except ValueError:
+                    pass
+        except Exception as e:
+            import logging
+            logging.getLogger("auth").error(f"MySQL get_current_user error: {e}")
 
-    if not user:
-        raise exc
-    return user
+    raise exc
 
 
 async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
@@ -136,43 +165,63 @@ async def decode_and_get_user_async(token: str) -> Optional[dict]:
         user_id = payload.get("sub", "")
         if not user_id:
             return None
-        users_col = get_async_collection("users")
-        query_list = [{"_id": user_id}]
-        if ObjectId.is_valid(user_id):
-            query_list.append({"_id": ObjectId(user_id)})
-        user = await users_col.find_one({"$or": query_list})
-        if not user and payload.get("email"):
-            user = await users_col.find_one({"email": payload.get("email")})
-        return user
-    except (JWTError, InvalidId, PyMongoError) as e:
-        import logging
-        logging.getLogger("auth").error(f"WebSocket authentication decode failed: {e}")
+
+        # MySQL only
+        if _mysql_available:
+            async for db in get_db_session():
+                try:
+                    uid = int(user_id)
+                    stmt = select(User).where(User.id == uid)
+                    res = await db.execute(stmt)
+                    user_row = res.scalar_one_or_none()
+                    if user_row:
+                        return _sql_user_to_dict(user_row)
+                except ValueError:
+                    pass
+                # Try email match if payload has it
+                email = payload.get("email")
+                if email:
+                    stmt = select(User).where(User.email == email.lower().strip())
+                    res = await db.execute(stmt)
+                    user_row = res.scalar_one_or_none()
+                    if user_row:
+                        return _sql_user_to_dict(user_row)
         return None
     except Exception as e:
         import logging
-        logging.getLogger("auth").error(f"Unexpected error decoding token: {e}")
+        logging.getLogger("auth").error(f"WebSocket authentication decode failed: {e}")
         return None
 
 
 def decode_and_get_user(token: str) -> Optional[dict]:
-    """Sync fallback helper to decode a JWT token and retrieve the user document."""
+    """Sync helper to decode a JWT token and retrieve the user document."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = payload.get("sub", "")
         if not user_id:
             return None
-        query_list = [{"_id": user_id}]
-        if ObjectId.is_valid(user_id):
-            query_list.append({"_id": ObjectId(user_id)})
-        user = get_collection("users").find_one({"$or": query_list})
-        if not user and payload.get("email"):
-            user = get_collection("users").find_one({"email": payload.get("email")})
-        return user
-    except (JWTError, InvalidId, PyMongoError) as e:
-        import logging
-        logging.getLogger("auth").error(f"Sync authentication decode failed: {e}")
+
+        # MySQL only
+        if _mysql_available:
+            with get_sync_db_session() as db:
+                try:
+                    uid = int(user_id)
+                    stmt = select(User).where(User.id == uid)
+                    user_row = db.execute(stmt).scalar_one_or_none()
+                    if user_row:
+                        return _sql_user_to_dict(user_row)
+                except ValueError:
+                    pass
+                email = payload.get("email")
+                if email:
+                    stmt = select(User).where(User.email == email.lower().strip())
+                    user_row = db.execute(stmt).scalar_one_or_none()
+                    if user_row:
+                        return _sql_user_to_dict(user_row)
         return None
     except Exception as e:
         import logging
-        logging.getLogger("auth").error(f"Unexpected error in sync decode token: {e}")
+        logging.getLogger("auth").error(f"Sync authentication decode failed: {e}")
         return None
+
+

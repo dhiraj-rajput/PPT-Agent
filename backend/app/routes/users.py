@@ -17,8 +17,6 @@ import secrets
 from datetime import datetime, timezone
 from enum import Enum
 
-from bson import ObjectId
-from bson.errors import InvalidId
 from fastapi import APIRouter, Depends, HTTPException
 import bcrypt
 from pydantic import BaseModel
@@ -26,9 +24,12 @@ from typing import Optional, Any
 
 from app.core.auth import get_current_user, require_admin
 from app.core.mailer import send_invite_email
-from utils.db_client import get_async_collection
+from utils.db_client import get_db_session, _mysql_available
+from models.sql_models import User as SQLUser
+from sqlalchemy import select, insert, update, delete
 
 router = APIRouter(prefix="/users", tags=["users"])
+
 
 
 class ValidRoles(str, Enum):
@@ -45,14 +46,15 @@ class ValidRoles(str, Enum):
 def _to_public_user(u: Optional[dict]) -> dict:
     if not u:
         return {}
+    uid = u.get("_id") or u.get("id")
     return {
-        "id": str(u["_id"]),
+        "id": str(uid) if uid is not None else "",
         "name": u.get("name", ""),
         "email": u.get("email", ""),
         "role": u.get("role", "Team Member"),
-        "status": "Active" if u.get("isVerified") else "Pending",
+        "status": "Active" if (u.get("isVerified") or u.get("is_verified")) else "Pending",
         "seed": u.get("email", ""),
-        "createdAt": u.get("createdAt", ""),
+        "createdAt": str(u.get("createdAt") or u.get("created_at") or ""),
     }
 
 
@@ -70,9 +72,25 @@ def _hash_pw_sync(pw: str) -> str:
 
 @router.get("")
 async def list_users(current_user: dict = Depends(get_current_user)):
-    users_col = get_async_collection("users")
-    users = await users_col.find().sort("createdAt", -1).to_list(length=1000)
-    return {"users": [_to_public_user(u) for u in users]}
+    users = []
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQLUser).order_by(SQLUser.created_at.desc())
+                res = await db.execute(stmt)
+                for u in res.scalars().all():
+                    users.append({
+                        "id": str(u.id),
+                        "name": u.name or "",
+                        "email": u.email or "",
+                        "role": u.role or "Team Member",
+                        "status": "Active" if getattr(u, "is_verified", True) else "Pending",
+                        "seed": u.email or "",
+                        "createdAt": str(u.created_at or "")
+                    })
+        except Exception as e:
+            raise HTTPException(500, f"Database error: {e}")
+    return {"users": users}
 
 
 class InviteBody(BaseModel):
@@ -89,9 +107,17 @@ async def invite_user(
     if not body.email or not _is_valid_email(body.email):
         raise HTTPException(400, "A valid email address is required.")
 
-    users_col = get_async_collection("users")
     normalized = body.email.lower().strip()
-    existing = await users_col.find_one({"email": normalized})
+    existing = None
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQLUser).where(SQLUser.email == normalized)
+                res = await db.execute(stmt)
+                existing = res.scalar_one_or_none()
+        except Exception as e:
+            raise HTTPException(500, f"Database error: {e}")
+
     if existing:
         raise HTTPException(409, "A user with that email already exists.")
 
@@ -101,19 +127,42 @@ async def invite_user(
     raw_role = body.role.value if isinstance(body.role, ValidRoles) else str(body.role or "Team Member")
     assigned_role = "Admin" if raw_role.lower() in ("admin", "administrator") else raw_role
 
-    result = await users_col.insert_one({
-        "name": invitee_name,
-        "email": normalized,
-        "phone": "",
-        "passwordHash": pw_hash,
-        "isVerified": True,
-        "role": assigned_role,
-        "mustChangePassword": True,
-        "invitedBy": current_user["_id"],
-        "createdAt": datetime.now(tz=timezone.utc),
-    })
+    user_dict: dict[str, Any] = {}
+    if _mysql_available:
+        try:
+            from datetime import timezone
+            now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+            async for db in get_db_session():
+                stmt = insert(SQLUser).values(
+                    name=invitee_name,
+                    email=normalized,
+                    phone="",
+                    password_hash=pw_hash,
+                    is_verified=True,
+                    role=assigned_role,
+                    must_change_password=True,
+                    invited_by=int(current_user["id"]),
+                    created_at=now_utc,
+                    updated_at=now_utc
+                )
+                await db.execute(stmt)
+                await db.commit()
+                
+                stmt_new = select(SQLUser).where(SQLUser.email == normalized)
+                new_row = (await db.execute(stmt_new)).scalar_one()
+                user_dict = {
+                    "id": str(new_row.id),
+                    "name": new_row.name or "",
+                    "email": new_row.email or "",
+                    "role": new_row.role or "Team Member",
+                    "status": "Active" if getattr(new_row, "is_verified", True) else "Pending",
+                    "seed": new_row.email or "",
+                    "createdAt": str(new_row.created_at or "")
+                }
 
-    user = await users_col.find_one({"_id": result.inserted_id})
+        except Exception as e:
+            raise HTTPException(500, f"Database error during invite: {e}")
+
     warning = None
     try:
         await send_invite_email(
@@ -126,7 +175,7 @@ async def invite_user(
     except Exception:
         warning = "User created, but the invite email could not be sent. Check SMTP settings."
 
-    response: dict[str, Any] = {"user": _to_public_user(user)}
+    response: dict[str, Any] = {"user": user_dict}
     if warning:
         response["warning"] = warning
     return response
@@ -143,22 +192,45 @@ async def update_role(
     current_user: dict = Depends(require_admin),
 ):
     try:
-        oid = ObjectId(user_id)
-    except (InvalidId, Exception):
+        uid = int(user_id)
+    except ValueError:
         raise HTTPException(400, "Invalid user ID.")
 
-    users_col = get_async_collection("users")
     raw_role = body.role.value if isinstance(body.role, ValidRoles) else str(body.role)
     assigned_role = "Admin" if raw_role.lower() in ("admin", "administrator") else raw_role
     
-    await users_col.update_one(
-        {"_id": oid},
-        {"$set": {"role": assigned_role}},
-    )
-    user = await users_col.find_one({"_id": oid})
-    if not user:
-        raise HTTPException(404, "User not found.")
-    return {"user": _to_public_user(user)}
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQLUser).where(SQLUser.id == uid)
+                res = await db.execute(stmt)
+                user_row = res.scalar_one_or_none()
+                if not user_row:
+                    raise HTTPException(404, "User not found.")
+
+                await db.execute(
+                    update(SQLUser)
+                    .where(SQLUser.id == uid)
+                    .values(role=assigned_role, updated_at=datetime.now(timezone.utc))
+                )
+                await db.commit()
+
+                res2 = await db.execute(select(SQLUser).where(SQLUser.id == uid))
+                u = res2.scalar_one()
+                return {"user": {
+                    "id": str(u.id),
+                    "name": u.name or "",
+                    "email": u.email or "",
+                    "role": u.role or "Team Member",
+                    "status": "Active" if getattr(u, "is_verified", False) else "Pending",
+                    "seed": u.email or "",
+                    "createdAt": str(u.created_at or "")
+                }}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, f"Database error: {e}")
+    raise HTTPException(500, "MySQL unavailable")
 
 
 @router.delete("/{user_id}")
@@ -167,20 +239,30 @@ async def delete_user(
     current_user: dict = Depends(require_admin),
 ):
     try:
-        oid = ObjectId(user_id)
-    except (InvalidId, Exception):
+        uid = int(user_id)
+    except ValueError:
         raise HTTPException(400, "Invalid user ID.")
 
-    if str(current_user["_id"]) == str(user_id):
+    if str(current_user["id"]) == str(user_id):
         raise HTTPException(400, "You cannot delete your own account.")
 
-    users_col = get_async_collection("users")
-    user = await users_col.find_one({"_id": oid})
-    if not user:
-        raise HTTPException(404, "User not found.")
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQLUser).where(SQLUser.id == uid)
+                res = await db.execute(stmt)
+                user = res.scalar_one_or_none()
+                if not user:
+                    raise HTTPException(404, "User not found.")
 
-    await users_col.delete_one({"_id": oid})
-    return {"ok": True, "message": f"User {user.get('email')} has been deleted."}
+                await db.execute(delete(SQLUser).where(SQLUser.id == uid))
+                await db.commit()
+                return {"ok": True, "message": f"User {user.email} has been deleted."}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, f"Database error: {e}")
+    raise HTTPException(500, "MySQL unavailable")
 
 
 @router.post("/{user_id}/resend-invite")
@@ -189,41 +271,61 @@ async def resend_invite(
     current_user: dict = Depends(require_admin),
 ):
     try:
-        oid = ObjectId(user_id)
-    except (InvalidId, Exception):
+        uid = int(user_id)
+    except ValueError:
         raise HTTPException(400, "Invalid user ID.")
 
-    users_col = get_async_collection("users")
-    user = await users_col.find_one({"_id": oid})
-    if not user:
-        raise HTTPException(404, "User not found.")
+    user_dict = {}
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQLUser).where(SQLUser.id == uid)
+                res = await db.execute(stmt)
+                user = res.scalar_one_or_none()
+                if not user:
+                    raise HTTPException(404, "User not found.")
 
-    temp_password = secrets.token_urlsafe(9)
-    pw_hash = await asyncio.to_thread(_hash_pw_sync, temp_password)
+                temp_password = secrets.token_urlsafe(9)
+                pw_hash = await asyncio.to_thread(_hash_pw_sync, temp_password)
 
-    await users_col.update_one(
-        {"_id": oid},
-        {"$set": {
-            "passwordHash": pw_hash,
-            "mustChangePassword": True,
-            "updatedAt": datetime.now(tz=timezone.utc),
-        }}
-    )
+                await db.execute(
+                    update(SQLUser)
+                    .where(SQLUser.id == uid)
+                    .values(password_hash=pw_hash, must_change_password=True, updated_at=datetime.now(timezone.utc))
+                )
+                await db.commit()
+
+                res2 = await db.execute(select(SQLUser).where(SQLUser.id == uid))
+                u = res2.scalar_one()
+                user_dict = {
+                    "id": str(u.id),
+                    "name": u.name or "",
+                    "email": u.email or "",
+                    "role": u.role or "Team Member",
+                    "status": "Active" if getattr(u, "is_verified", False) else "Pending",
+
+                    "seed": u.email or "",
+                    "createdAt": str(u.created_at or "")
+                }
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, f"Database error: {e}")
 
     warning = None
     try:
         await send_invite_email(
-            to_email=user["email"],
-            invitee_name=user.get("name", user["email"].split("@")[0]),
-            role=user.get("role", "Team Member"),
+            to_email=user_dict["email"],
+            invitee_name=user_dict.get("name", user_dict["email"].split("@")[0]),
+            role=user_dict.get("role", "Team Member"),
             inviter_name=current_user.get("name"),
             temp_password=temp_password,
         )
     except Exception:
         warning = "Temp password updated, but the invite email could not be sent. Check SMTP settings."
 
-    updated = await users_col.find_one({"_id": oid})
-    response: dict[str, Any] = {"ok": True, "user": _to_public_user(updated), "tempPassword": temp_password}
+    response: dict[str, Any] = {"ok": True, "user": user_dict, "tempPassword": temp_password}
     if warning:
         response["warning"] = warning
     return response
+

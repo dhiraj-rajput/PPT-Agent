@@ -1,13 +1,30 @@
+"""
+app/routes/analytics.py
+------------------------
+Analytics aggregates and dashboards — using MySQL.
+"""
+
+from __future__ import annotations
+
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
-import asyncio
-from bson import ObjectId
-from bson.errors import InvalidId
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.auth import get_current_user
-from utils.db_client import get_async_collection
+from utils.db_client import get_db_session, _mysql_available
+from models.sql_models import (
+    Company as SQL_Company,
+    Lead as SQL_Lead,
+    Report as SQL_Report,
+    Meeting as SQL_Meeting,
+    Tender as SQL_Tender,
+    Campaign as SQL_Campaign,
+    WebsiteEvent as SQL_WebsiteEvent,
+)
+from sqlalchemy import select, func, and_, or_, cast, String
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
@@ -15,10 +32,6 @@ DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
 def _to_int(val: Any) -> int:
     return int(val) if isinstance(val, (int, float, str)) else 0
-
-
-def _to_list(val: Any) -> list:
-    return list(val) if isinstance(val, (list, tuple, set)) else []
 
 
 def _calculate_rates(stats: dict) -> dict:
@@ -38,61 +51,86 @@ def _calculate_rates(stats: dict) -> dict:
 
 @router.get("/dashboard")
 async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
-    """Fetch aggregated real metrics for the dashboard from MongoDB via Motor concurrently."""
-    companies_col = get_async_collection("companies")
-    tenders_col = get_async_collection("tenders")
-    campaigns_col = get_async_collection("campaigns")
-    meetings_col = get_async_collection("meetings")
-    reports_col = get_async_collection("reports")
-    leads_col = get_async_collection("leads")
+    """Fetch aggregated real metrics for the dashboard from MySQL."""
+    prospects_count = 0
+    contacted_count = 0
+    proposals_count = 0
+    meetings_count = 0
+    negotiation_count = 0
+    won_count = 0
+    campaigns = []
+    high = 0
+    medium = 0
+    low = 0
+    closing_soon = []
+    recent_companies = []
+    recent_tenders = []
+    recent_companies_count = 0
+    active_tenders_count = 0
+    recent_tenders_count = 0
+    recent_emails = 0
+    current_meetings = 0
+    prev_meetings = 0
+    recent_contacted = 0
 
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
     seven_days_ago = now - timedelta(days=7)
     fourteen_days_ago = now - timedelta(days=14)
 
-    res = await asyncio.gather(
-        companies_col.count_documents({}),
-        leads_col.count_documents({"status": {"$in": ["sent", "opened", "clicked", "replied"]}}),
-        reports_col.count_documents({}),
-        meetings_col.count_documents({}),
-        leads_col.count_documents({"status": "replied"}),
-        tenders_col.count_documents({"has_award": True}),
-        campaigns_col.find().to_list(length=1000),
-        companies_col.count_documents({"matchScore": {"$gte": 80}}),
-        companies_col.count_documents({"matchScore": {"$gte": 50, "$lt": 80}}),
-        companies_col.count_documents({"matchScore": {"$lt": 50}}),
-        tenders_col.find({"is_active": True, "closing_date": {"$ne": None, "$ne": ""}}).sort("days_until_close", 1).limit(3).to_list(length=3),
-        companies_col.find().sort("_id", -1).limit(5).to_list(length=5),
-        tenders_col.find().sort("match", -1).limit(5).to_list(length=5),
-        companies_col.count_documents({"createdAt": {"$gte": seven_days_ago}}),
-        tenders_col.count_documents({"is_active": True}),
-        tenders_col.count_documents({"is_active": True, "createdAt": {"$gte": seven_days_ago}}),
-        leads_col.count_documents({"status": "sent", "createdAt": {"$gte": seven_days_ago}}),
-        meetings_col.count_documents({"createdAt": {"$gte": seven_days_ago}}),
-        meetings_col.count_documents({"createdAt": {"$gte": fourteen_days_ago, "$lt": seven_days_ago}}),
-        leads_col.count_documents({"status": {"$in": ["sent", "opened", "clicked", "replied"]}, "createdAt": {"$gte": seven_days_ago}}),
-    )
+    import asyncio
 
-    prospects_count = _to_int(res[0])
-    contacted_count = _to_int(res[1])
-    proposals_count = _to_int(res[2])
-    meetings_count = _to_int(res[3])
-    negotiation_count = _to_int(res[4])
-    won_count = _to_int(res[5])
-    campaigns = _to_list(res[6])
-    high = _to_int(res[7])
-    medium = _to_int(res[8])
-    low = _to_int(res[9])
-    closing_soon = _to_list(res[10])
-    recent_companies = _to_list(res[11])
-    recent_tenders = _to_list(res[12])
-    recent_companies_count = _to_int(res[13])
-    active_tenders_count = _to_int(res[14])
-    recent_tenders_count = _to_int(res[15])
-    recent_emails = _to_int(res[16])
-    current_meetings = _to_int(res[17])
-    prev_meetings = _to_int(res[18])
-    recent_contacted = _to_int(res[19])
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                results = await asyncio.gather(
+                    db.execute(select(func.count()).select_from(SQL_Company)),
+                    db.execute(select(func.count()).select_from(SQL_Lead).where(SQL_Lead.status.in_(["sent", "opened", "clicked", "replied"]))),
+                    db.execute(select(func.count()).select_from(SQL_Report)),
+                    db.execute(select(func.count()).select_from(SQL_Meeting)),
+                    db.execute(select(func.count()).select_from(SQL_Lead).where(SQL_Lead.status == "replied")),
+                    db.execute(select(func.count()).select_from(SQL_Tender).where(SQL_Tender.has_award == True)),
+                    db.execute(select(SQL_Campaign)),
+                    db.execute(select(func.count()).select_from(SQL_Company).where(SQL_Company.match_score >= 80)),
+                    db.execute(select(func.count()).select_from(SQL_Company).where(SQL_Company.match_score >= 50, SQL_Company.match_score < 80)),
+                    db.execute(select(func.count()).select_from(SQL_Company).where(SQL_Company.match_score < 50)),
+                    db.execute(select(SQL_Tender).where(
+                        SQL_Tender.is_active == True,
+                        SQL_Tender.closing_date != None,
+                        SQL_Tender.closing_date != ""
+                    ).order_by(SQL_Tender.closing_date.asc()).limit(3)),
+                    db.execute(select(SQL_Company).order_by(SQL_Company.id.desc()).limit(5)),
+                    db.execute(select(SQL_Tender).order_by(SQL_Tender.match_score.desc()).limit(5)),
+                    db.execute(select(func.count()).select_from(SQL_Company).where(SQL_Company.created_at >= seven_days_ago)),
+                    db.execute(select(func.count()).select_from(SQL_Tender).where(SQL_Tender.is_active == True)),
+                    db.execute(select(func.count()).select_from(SQL_Tender).where(SQL_Tender.is_active == True, SQL_Tender.created_at >= seven_days_ago)),
+                    db.execute(select(func.count()).select_from(SQL_Lead).where(SQL_Lead.status == "sent", SQL_Lead.created_at >= seven_days_ago)),
+                    db.execute(select(func.count()).select_from(SQL_Meeting).where(SQL_Meeting.created_at >= seven_days_ago)),
+                    db.execute(select(func.count()).select_from(SQL_Meeting).where(SQL_Meeting.created_at >= fourteen_days_ago, SQL_Meeting.created_at < seven_days_ago)),
+                    db.execute(select(func.count()).select_from(SQL_Lead).where(SQL_Lead.status.in_(["sent", "opened", "clicked", "replied"]), SQL_Lead.created_at >= seven_days_ago))
+                )
+
+                prospects_count = results[0].scalar() or 0
+                contacted_count = results[1].scalar() or 0
+                proposals_count = results[2].scalar() or 0
+                meetings_count = results[3].scalar() or 0
+                negotiation_count = results[4].scalar() or 0
+                won_count = results[5].scalar() or 0
+                campaigns = results[6].scalars().all()
+                high = results[7].scalar() or 0
+                medium = results[8].scalar() or 0
+                low = results[9].scalar() or 0
+                closing_soon = results[10].scalars().all()
+                recent_companies = results[11].scalars().all()
+                recent_tenders = results[12].scalars().all()
+                recent_companies_count = results[13].scalar() or 0
+                active_tenders_count = results[14].scalar() or 0
+                recent_tenders_count = results[15].scalar() or 0
+                recent_emails = results[16].scalar() or 0
+                current_meetings = results[17].scalar() or 0
+                prev_meetings = results[18].scalar() or 0
+                recent_contacted = results[19].scalar() or 0
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Database error: {e}")
 
     pipeline_stages = [
         {"key": "leads", "label": "Prospects", "count": prospects_count, "icon": "Search", "color": "sky"},
@@ -109,7 +147,7 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
     emails_replied = 0
 
     for c in campaigns:
-        stats = c.get("stats", {})
+        stats = c.stats or {}
         emails_sent += stats.get("totalSent", 0)
         emails_opened += stats.get("totalOpened", 0)
         emails_clicked += stats.get("totalClicked", 0)
@@ -124,33 +162,33 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
     formatted_closing_soon = []
     for t in closing_soon:
         formatted_closing_soon.append({
-            "id": t.get("id") or str(t.get("_id")),
-            "title": t.get("title", ""),
-            "agency": t.get("agency") or t.get("department") or "Unknown Agency",
-            "value": t.get("value") or "$0",
-            "postedDate": t.get("postedDate") or t.get("posted_date") or "",
-            "closingDate": t.get("closingDate") or t.get("closing_date") or "",
-            "rfpUrl": t.get("rfp_url") or "",
+            "id": str(t.id),
+            "title": t.title or "",
+            "agency": t.agency or t.department or "Unknown Agency",
+            "value": t.value or "$0",
+            "postedDate": t.posted_date or "",
+            "closingDate": t.closing_date or "",
+            "rfpUrl": t.rfp_url or "",
         })
 
     formatted_recent_companies = []
     for c in recent_companies:
         formatted_recent_companies.append({
-            "id": str(c.get("_id")),
-            "uei": c.get("uei", ""),
-            "name": c.get("name", ""),
-            "industry": c.get("industry", "Other"),
-            "matchScore": c.get("matchScore") or c.get("match_score") or 0,
+            "id": str(c.id),
+            "uei": c.uei or "",
+            "name": c.name or "",
+            "industry": c.industry or "Other",
+            "matchScore": c.match_score or 0,
         })
 
     formatted_recent_tenders = []
     for t in recent_tenders:
         formatted_recent_tenders.append({
-            "id": t.get("id") or str(t.get("_id")),
-            "title": t.get("title", ""),
-            "agency": t.get("agency") or t.get("department") or "Unknown Agency",
-            "match": t.get("match") or t.get("matchScore") or 0,
-            "closingDate": t.get("closingDate") or t.get("closing_date") or "",
+            "id": str(t.id),
+            "title": t.title or "",
+            "agency": t.agency or t.department or "Unknown Agency",
+            "match": t.match_score or 0,
+            "closingDate": t.closing_date or "",
         })
 
     if recent_companies_count == 0:
@@ -261,15 +299,7 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
 
 @router.get("/overview")
 async def get_overview(current_user: dict = Depends(get_current_user)):
-    campaigns_col = get_async_collection("campaigns")
-    leads_col = get_async_collection("leads")
-    user_id = current_user["_id"]
-
-    campaigns, conversions = await asyncio.gather(
-        campaigns_col.find({"createdBy": user_id}).to_list(length=1000),
-        leads_col.count_documents({"createdBy": user_id, "status": "replied"}),
-    )
-
+    user_id = int(current_user["id"])
     totals = {
         "totalSent": 0,
         "totalOpened": 0,
@@ -279,16 +309,34 @@ async def get_overview(current_user: dict = Depends(get_current_user)):
         "totalUnsubscribed": 0,
         "totalResent": 0
     }
+    conversions = 0
+    campaigns_len = 0
+    active_count = 0
 
-    for c in campaigns:
-        stats = c.get("stats", {})
-        totals["totalSent"] += stats.get("totalSent", 0)
-        totals["totalOpened"] += stats.get("totalOpened", 0)
-        totals["totalClicked"] += stats.get("totalClicked", 0)
-        totals["totalReplied"] += stats.get("totalReplied", 0)
-        totals["totalBounced"] += stats.get("totalBounced", 0)
-        totals["totalUnsubscribed"] += stats.get("totalUnsubscribed", 0)
-        totals["totalResent"] += stats.get("totalResent", 0)
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt_c = select(SQL_Campaign).where(SQL_Campaign.user_id == user_id)
+                res_c = await db.execute(stmt_c)
+                campaigns = res_c.scalars().all()
+                campaigns_len = len(campaigns)
+                active_count = sum(1 for c in campaigns if getattr(c, "status", "") == "running")
+
+
+                for c in campaigns:
+                    stats = c.stats or {}
+                    totals["totalSent"] += stats.get("totalSent", 0)
+                    totals["totalOpened"] += stats.get("totalOpened", 0)
+                    totals["totalClicked"] += stats.get("totalClicked", 0)
+                    totals["totalReplied"] += stats.get("totalReplied", 0)
+                    totals["totalBounced"] += stats.get("totalBounced", 0)
+                    totals["totalUnsubscribed"] += stats.get("totalUnsubscribed", 0)
+                    totals["totalResent"] += stats.get("totalResent", 0)
+
+                stmt_conv = select(func.count()).select_from(SQL_Lead).where(SQL_Lead.created_by == user_id, SQL_Lead.status == "replied")
+                conversions = (await db.execute(stmt_conv)).scalar() or 0
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
 
     rates = _calculate_rates(totals)
     sent = totals["totalSent"]
@@ -297,8 +345,8 @@ async def get_overview(current_user: dict = Depends(get_current_user)):
     return {
         **rates,
         "conversionRate": conversion_rate,
-        "activeCampaigns": sum(1 for c in campaigns if c.get("status") == "running"),
-        "totalCampaigns": len(campaigns),
+        "activeCampaigns": active_count,
+        "totalCampaigns": campaigns_len,
         "totalResent": totals["totalResent"],
     }
 
@@ -306,50 +354,42 @@ async def get_overview(current_user: dict = Depends(get_current_user)):
 @router.get("/campaign/{id}")
 async def get_campaign_analytics(id: str, current_user: dict = Depends(get_current_user)):
     try:
-        oid = ObjectId(id)
-    except InvalidId:
+        cid = int(id)
+    except ValueError:
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
-    campaigns_col = get_async_collection("campaigns")
-    campaign = await campaigns_col.find_one({"_id": oid, "createdBy": current_user["_id"]})
-    if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found.")
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt_c = select(SQL_Campaign).where(SQL_Campaign.id == cid, SQL_Campaign.user_id == int(current_user["id"]))
+                campaign = (await db.execute(stmt_c)).scalar_one_or_none()
+                if not campaign:
+                    raise HTTPException(status_code=404, detail="Campaign not found.")
 
-    leads_col = get_async_collection("leads")
-    pipeline = [
-        {"$match": {"campaignId": oid}},
-        {"$group": {"_id": "$status", "count": {"$sum": 1}}}
-    ]
-    lead_counts_cursor = leads_col.aggregate(pipeline)
-    lead_counts = await lead_counts_cursor.to_list(length=100)
-    by_status = {r["_id"]: r["count"] for r in lead_counts}
+                stmt_leads = select(SQL_Lead.status, func.count()).where(SQL_Lead.campaign_id == cid).group_by(SQL_Lead.status)
+                res_leads = await db.execute(stmt_leads)
+                by_status = {row[0]: row[1] for row in res_leads.all()}
 
-    rates = _calculate_rates(campaign.get("stats", {}))
+                rates = _calculate_rates(dict(campaign.stats) if isinstance(campaign.stats, dict) else {})
 
-    return {
-        "campaignId": str(campaign["_id"]),
-        "name": campaign.get("name", ""),
-        "status": campaign.get("status", "draft"),
-        **rates,
-        "leadsByStatus": by_status,
-    }
+                return {
+                    "campaignId": str(campaign.id),
+                    "name": campaign.name or "",
+                    "status": campaign.status or "draft",
+                    **rates,
+                    "leadsByStatus": by_status,
+                }
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+    raise HTTPException(500, "Database is unavailable.")
 
 
 @router.get("/trends")
 async def get_weekly_trends(current_user: dict = Depends(get_current_user)):
-    campaigns_col = get_async_collection("campaigns")
-    leads_col = get_async_collection("leads")
-    user_id = current_user["_id"]
-
-    campaigns = await campaigns_col.find({"createdBy": user_id}, {"_id": 1}).to_list(length=1000)
-    campaign_ids = [c["_id"] for c in campaigns]
-
-    since = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=6)
-
-    leads = await leads_col.find(
-        {"campaignId": {"$in": campaign_ids}, "updatedAt": {"$gte": since}},
-        {"sentAt": 1, "openedAt": 1, "clickedAt": 1, "repliedAt": 1}
-    ).to_list(length=10000)
+    user_id = int(current_user["id"])
+    since = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=6)
 
     buckets = {}
     for i in range(7):
@@ -364,19 +404,35 @@ async def get_weekly_trends(current_user: dict = Depends(get_current_user)):
             "replied": 0
         }
 
-    def bump(dt: Optional[datetime], field: str):
-        if not dt:
-            return
-        dt_utc = dt.astimezone(timezone.utc) if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
-        key = dt_utc.isoformat()[:10]
-        if key in buckets:
-            buckets[key][field] += 1
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt_c = select(SQL_Campaign.id).where(SQL_Campaign.user_id == user_id)
+                res_c = await db.execute(stmt_c)
+                campaign_ids = res_c.scalars().all()
 
-    for lead in leads:
-        bump(lead.get("sentAt"), "sent")
-        bump(lead.get("openedAt"), "opened")
-        bump(lead.get("clickedAt"), "clicked")
-        bump(lead.get("repliedAt"), "replied")
+                if campaign_ids:
+                    stmt_leads = select(SQL_Lead.sent_at, SQL_Lead.opened_at, SQL_Lead.clicked_at, SQL_Lead.replied_at).where(
+                        SQL_Lead.campaign_id.in_(campaign_ids),
+                        SQL_Lead.updated_at >= since
+                    )
+                    res_leads = await db.execute(stmt_leads)
+                    leads = res_leads.all()
+
+                    def bump(dt: Optional[datetime], field: str):
+                        if not dt:
+                            return
+                        key = dt.isoformat()[:10]
+                        if key in buckets:
+                            buckets[key][field] += 1
+
+                    for row in leads:
+                        bump(row[0], "sent")
+                        bump(row[1], "opened")
+                        bump(row[2], "clicked")
+                        bump(row[3], "replied")
+        except Exception as e:
+            logger.error(f"Error fetching weekly trends: {e}")
 
     sorted_keys = sorted(buckets.keys())
     return [buckets[k] for k in sorted_keys]
@@ -384,42 +440,48 @@ async def get_weekly_trends(current_user: dict = Depends(get_current_user)):
 
 @router.get("/website-engagement")
 async def get_website_engagement(current_user: dict = Depends(get_current_user)):
-    campaigns_col = get_async_collection("campaigns")
-    events_col = get_async_collection("website_events")
-    user_id = current_user["_id"]
-
-    campaigns = await campaigns_col.find({"createdBy": user_id}, {"_id": 1, "name": 1}).to_list(length=1000)
-    campaign_ids = [c["_id"] for c in campaigns]
-    name_by_id = {str(c["_id"]): c["name"] for c in campaigns}
-
-    pipeline = [
-        {"$match": {"campaignId": {"$in": campaign_ids}}},
-        {
-            "$group": {
-                "_id": "$campaignId",
-                "pageViews": {"$sum": {"$cond": [{"$eq": ["$eventType", "page_view"]}, 1, 0]}},
-                "formSubmits": {"$sum": {"$cond": [{"$eq": ["$eventType", "form_submit"]}, 1, 0]}},
-                "avgDuration": {"$avg": "$duration"},
-                "uniqueVisitors": {"$addToSet": "$visitorId"}
-            }
-        }
-    ]
-
-    cursor = events_col.aggregate(pipeline)
-    rows = await cursor.to_list(length=1000)
-
+    user_id = int(current_user["id"])
     results = []
-    for r in rows:
-        camp_str_id = str(r["_id"])
-        visitors = r.get("uniqueVisitors", [])
-        unique_count = len([v for v in visitors if v])
-        results.append({
-            "campaignId": camp_str_id,
-            "campaignName": name_by_id.get(camp_str_id, "Unknown campaign"),
-            "pageViews": r.get("pageViews", 0),
-            "formSubmits": r.get("formSubmits", 0),
-            "avgDuration": round(r.get("avgDuration") or 0.0),
-            "uniqueVisitors": unique_count,
-        })
+
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt_c = select(SQL_Campaign).where(SQL_Campaign.user_id == user_id)
+
+                campaigns = (await db.execute(stmt_c)).scalars().all()
+                campaign_ids = [c.id for c in campaigns]
+                name_by_id = {str(c.id): c.name for c in campaigns}
+
+                if campaign_ids:
+                    # Query aggregations
+                    stmt_agg = select(
+                        SQL_WebsiteEvent.campaign_id,
+                        func.sum(func.distinct(cast(SQL_WebsiteEvent.visitor_id, String))),
+                        func.sum(func.if_(SQL_WebsiteEvent.event_type == "page_view", 1, 0)),
+                        func.sum(func.if_(SQL_WebsiteEvent.event_type == "form_submit", 1, 0)),
+                        func.avg(SQL_WebsiteEvent.duration)
+                    ).where(SQL_WebsiteEvent.campaign_id.in_(campaign_ids)).group_by(SQL_WebsiteEvent.campaign_id)
+
+                    res_agg = await db.execute(stmt_agg)
+                    for row in res_agg.all():
+                        camp_str_id = str(row[0])
+                        # Count unique visitors
+                        stmt_vis = select(func.count(func.distinct(SQL_WebsiteEvent.visitor_id))).where(
+                            SQL_WebsiteEvent.campaign_id == row[0],
+                            SQL_WebsiteEvent.visitor_id != None,
+                            SQL_WebsiteEvent.visitor_id != ""
+                        )
+                        unique_count = (await db.execute(stmt_vis)).scalar() or 0
+
+                        results.append({
+                            "campaignId": camp_str_id,
+                            "campaignName": name_by_id.get(camp_str_id, "Unknown campaign"),
+                            "pageViews": int(row[2] or 0),
+                            "formSubmits": int(row[3] or 0),
+                            "avgDuration": round(float(row[4] or 0.0)),
+                            "uniqueVisitors": unique_count,
+                        })
+        except Exception as e:
+            logger.error(f"Error querying website engagement: {e}")
 
     return results

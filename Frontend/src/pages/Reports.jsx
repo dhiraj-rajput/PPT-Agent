@@ -162,11 +162,15 @@ export default function Reports() {
     const isSub = (report.proposal_type || '').toLowerCase().includes('subcontract');
     const typeLabel = isPrime ? 'Prime Proposal' : isSub ? 'Subcontract Teaming Proposal' : 'Partnership Proposal';
 
+    const escapeHtml = (s) => String(s || '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
+
     setEmailForm({
       to_email: report.sentTo || 'procurement@' + (report.company_name || 'company').toLowerCase().replace(/[^a-z0-9]/g, '') + '.com',
       subject: `[${typeLabel}] ${report.title || report.company_name} — Solicitation ${report.solicitation_number || report.ref || 'Ref'}`,
-      body: `<p>Dear Team at ${report.company_name},</p>
-<p>Please find attached our generated <strong>${typeLabel}</strong> for solicitation <strong>${report.solicitation_number || report.ref || ''}</strong>.</p>
+      body: `<p>Dear Team at ${escapeHtml(report.company_name)},</p>
+<p>Please find attached our generated <strong>${typeLabel}</strong> for solicitation <strong>${escapeHtml(report.solicitation_number || report.ref || '')}</strong>.</p>
 <p>We welcome the opportunity to discuss our technical approach, capabilities, and delivery timeline.</p>
 <p>Best regards,<br/>OrbitAvanya Tech LLP Teaming & Contracting Team</p>`,
     });
@@ -203,17 +207,23 @@ export default function Reports() {
   };
 
   const handleSamUploadRedirect = async (report) => {
-    // 1. Download file locally
-    await handleDownload(null, report.filename);
-
-    // 2. Update status to Submitted
-    await handleStatusChange(report.filename, 'Submitted');
-
-    // 3. Open SAM.gov workspace in new tab
     const samUrl = report.solicitation_number && report.solicitation_number !== 'N/A'
       ? `https://sam.gov/search/?index=opp&q=${encodeURIComponent(report.solicitation_number)}`
       : 'https://sam.gov/workspace/opportunities';
-    window.open(samUrl, '_blank');
+    const newWindow = window.open('about:blank', '_blank');
+    try {
+      // 1. Download file locally
+      await handleDownload(null, report.filename);
+
+      // 2. Update status to Submitted
+      await handleStatusChange(report.filename, 'Submitted');
+
+      // 3. Open SAM.gov workspace in new tab
+      if (newWindow) newWindow.location.href = samUrl;
+    } catch (e) {
+      if (newWindow) newWindow.close();
+      console.error(e.message);
+    }
   };
 
   // Filter and sort reports

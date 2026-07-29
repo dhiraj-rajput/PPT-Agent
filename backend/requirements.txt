@@ -5,6 +5,15 @@ pydantic-settings>=2.0.0
 python-dotenv>=1.0.0
 motor>=3.6.0
 
+# MySQL (dual-DB setup)
+sqlalchemy[asyncio]>=2.0.0
+aiomysql>=0.2.0           # async MySQL driver for SQLAlchemy
+asyncmy>=0.2.8            # fast async MySQL driver for SQLAlchemy
+pymysql>=1.1.0            # sync MySQL driver for background workers
+alembic>=1.13.0           # schema migration tool (optional, use for production upgrades)
+cryptography>=41.0.0      # required by aiomysql/asyncmy for TLS connections
+
+
 # Presentation generation & Excel catalog matching
 python-pptx>=0.6.21
 openpyxl>=3.1.0
@@ -52,8 +61,9 @@ weasyprint>=60.0
 pytesseract>=0.3.10
 Pillow>=10.0.0
 
-uvicorn
-fastapi
+uvicorn>=0.23.0
+fastapi>=0.103.0
+slowapi>=0.1.9
 python-multipart>=0.0.9
 a2wsgi>=1.10.0
 

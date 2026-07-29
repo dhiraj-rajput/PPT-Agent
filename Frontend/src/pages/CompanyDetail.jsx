@@ -70,10 +70,15 @@ export default function CompanyDetail() {
 
   const openEmailModal = () => {
     if (!company) return;
+
+    const escapeHtml = (s) => String(s || '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
+
     const defaultSubject = `Teaming Partnership Discussion - OrbitAvanya`;
-    const defaultBody = `<p>Hi ${company.contact || 'there'},</p>
+    const defaultBody = `<p>Hi ${escapeHtml(company.contact || 'there')},</p>
 <p>I hope this email finds you well.</p>
-<p>I would like to explore potential federal teaming and contracting opportunities with <strong>${company.name}</strong>. Attached is our generated capability proposal document for your consideration.</p>
+<p>I would like to explore potential federal teaming and contracting opportunities with <strong>${escapeHtml(company.name)}</strong>. Attached is our generated capability proposal document for your consideration.</p>
 <p>Please let me know if you are open to a brief call this week.</p>
 <p>Best regards,<br/>Procurement Teaming Team</p>`;
     

@@ -35,32 +35,46 @@ from tenacity import (
 import uuid
 from config.settings import settings
 
+from datetime import datetime, timedelta
+
 class MongoSemaphore:
     def __init__(self, name="subprocess_limit", max_leases=3):
         self.name = name
         self.max_leases = max_leases
         self.lease_id = None
+        self.slot_name = None
 
     def __enter__(self):
-        from utils.db_client import get_collection
-        coll = get_collection("active_leases")
-        stale_threshold = time.time() - 600
-        try:
-            coll.delete_many({"name": self.name, "timestamp": {"$lt": stale_threshold}})
-        except Exception:
-            pass
+        from utils.db_client import get_sync_db_session, _mysql_available
+        if not _mysql_available:
+            return self
 
         self.lease_id = str(uuid.uuid4())
         while True:
             try:
-                count = coll.count_documents({"name": self.name})
-                if count < self.max_leases:
-                    coll.insert_one({
-                        "name": self.name,
-                        "lease_id": self.lease_id,
-                        "timestamp": time.time()
-                    })
-                    break
+                with get_sync_db_session() as db:
+                    from models.sql_models import ActiveLease as SQL_ActiveLease
+                    from sqlalchemy import delete, select, func
+                    # delete stale leases
+                    db.execute(delete(SQL_ActiveLease).where(SQL_ActiveLease.resource.like(f"{self.name}%"), SQL_ActiveLease.expires_at < datetime.utcnow()))
+                    db.commit()
+
+                    # count active ones
+                    cnt = db.execute(select(func.count()).select_from(SQL_ActiveLease).where(SQL_ActiveLease.resource.like(f"{self.name}%"))).scalar() or 0
+                    if cnt < self.max_leases:
+                        for i in range(self.max_leases):
+                            slot_name = f"{self.name}_{i}"
+                            slot_taken = db.execute(select(SQL_ActiveLease).where(SQL_ActiveLease.resource == slot_name)).scalar_one_or_none()
+                            if not slot_taken:
+                                db.add(SQL_ActiveLease(
+                                    resource=slot_name,
+                                    holder=self.lease_id,
+                                    expires_at=datetime.utcnow() + timedelta(minutes=10),
+                                    acquired_at=datetime.utcnow()
+                                ))
+                                db.commit()
+                                self.slot_name = slot_name
+                                return self
             except Exception:
                 pass
             time.sleep(2.0)
@@ -69,11 +83,16 @@ class MongoSemaphore:
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.lease_id:
             try:
-                from utils.db_client import get_collection
-                coll = get_collection("active_leases")
-                coll.delete_one({"lease_id": self.lease_id})
+                from utils.db_client import get_sync_db_session, _mysql_available
+                if _mysql_available and self.slot_name:
+                    from models.sql_models import ActiveLease as SQL_ActiveLease
+                    from sqlalchemy import delete
+                    with get_sync_db_session() as db:
+                        db.execute(delete(SQL_ActiveLease).where(SQL_ActiveLease.resource == self.slot_name, SQL_ActiveLease.holder == self.lease_id))
+                        db.commit()
             except Exception:
                 pass
+
 
 SUBPROCESS_SEMAPHORE = MongoSemaphore("subprocess_limit", 3)
 
@@ -147,14 +166,36 @@ class MongoErrorLogHandler(logging.Handler):
 
 
 def _write_error_log_doc(doc: dict) -> None:
-    """Runs on a background thread — inserts one error-log document into MongoDB."""
+    """Runs on a background thread — inserts one error-log document into MySQL."""
     try:
-        # Imported lazily to avoid a circular import (db_client imports this module).
-        from utils.db_client import get_collection
-        get_collection("error_logs").insert_one(doc)
+        from utils.db_client import get_sync_db_session, _mysql_available
+        if _mysql_available:
+            from models.sql_models import ErrorLog as SQL_ErrorLog
+            with get_sync_db_session() as db:
+                db.add(SQL_ErrorLog(
+                    level=doc.get("level", "ERROR"),
+                    source=doc.get("source", ""),
+                    message=doc.get("message", ""),
+                    stack_trace=doc.get("detail", ""),
+                    resolved=False,
+                    extra_data={
+                        "path": doc.get("path"),
+                        "method": doc.get("method"),
+                        "statusCode": doc.get("statusCode"),
+                        "userEmail": doc.get("userEmail"),
+                        "ip": doc.get("ip"),
+                        "module": doc.get("module"),
+                        "func": doc.get("func"),
+                        "line": doc.get("line"),
+                    },
+                    timestamp=doc.get("timestamp") or datetime.utcnow(),
+                    created_at=datetime.utcnow()
+                ))
+                db.commit()
     except Exception:
-        # If MongoDB is briefly unreachable, don't lose the process over a log line.
+        # If DB is briefly unreachable, don't lose the process over a log line.
         pass
+
 
 
 def setup_logger(logger_name: str) -> logging.Logger:

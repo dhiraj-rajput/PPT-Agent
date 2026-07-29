@@ -78,12 +78,17 @@ export default function RFPAutoRespond() {
         }
       } catch (err) {
         consecutiveErrors += 1;
-        console.warn(`RFP Polling error (attempt ${consecutiveErrors}):`, err);
-        if (consecutiveErrors >= 5) {
+        const errStr = String(err?.message || err);
+        if (errStr.includes('Unknown task_id') || errStr.includes('404') || consecutiveErrors >= 3) {
           clearInterval(pollRef.current);
-          setError('Lost connection to server. RFP polling stopped.');
+          localStorage.removeItem('rfp_active_task_id');
+          setTaskId(null);
+          setTaskState(null);
+        } else {
+          console.warn(`RFP Polling error (attempt ${consecutiveErrors}):`, err);
         }
       }
+
     }, POLL_INTERVAL_MS);
     return () => clearInterval(pollRef.current);
   }, [taskId]);

@@ -1,12 +1,7 @@
 """
 app/routes/meetings.py
 -----------------------
-Meetings CRUD — mirrors Node.js server/routes/meetings.js.
-
-Endpoints:
-  GET  /api/meetings            — list meetings
-  POST /api/meetings            — create meeting + auto video room + invite emails
-  POST /api/meetings/:id/cancel — cancel + email attendees
+Meetings CRUD — using MySQL.
 """
 
 from __future__ import annotations
@@ -14,31 +9,35 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Any
 
-from bson import ObjectId
-from bson.errors import InvalidId
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 
 from app.core.auth import get_current_user
 from app.core.mailer import send_meeting_invite_email, send_meeting_cancelled_email
 from app.core.video_rooms import create_video_room
-from utils.db_client import get_async_collection
+from utils.db_client import get_db_session, _mysql_available
+from models.sql_models import (
+    Meeting as SQL_Meeting,
+    User as SQLUser,
+    Notification as SQL_Notification,
+)
+from sqlalchemy import select, insert, update, delete
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/meetings", tags=["meetings"])
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+def _iso(dt: Any) -> Optional[str]:
+    return dt.isoformat() if dt and hasattr(dt, "isoformat") else None
 
-def _to_public_meeting(m: Optional[dict]) -> dict:
+
+def _to_public_meeting(m: SQL_Meeting) -> dict:
     if not m:
         return {}
     attendees = []
-    for a in m.get("attendees", []):
+    for a in (m.attendees or []):
         attendees.append({
             "name": a.get("name", ""),
             "email": a.get("email", ""),
@@ -46,50 +45,52 @@ def _to_public_meeting(m: Optional[dict]) -> dict:
             "inviteSent": a.get("inviteSent", False),
         })
     return {
-        "id": str(m["_id"]),
-        "title": m.get("title", ""),
-        "with": m.get("with", ""),
-        "date": m.get("date", ""),
-        "time": m.get("time", ""),
-        "type": m.get("type", "Video Call"),
-        "provider": m.get("provider", "jitsi"),
-        "location": m.get("location", ""),
-        "meetingLink": m.get("meetingLink", ""),
+        "id": str(m.id),
+        "title": m.title or "",
+        "with": m.with_someone or "",
+        "date": m.date or "",
+        "time": m.time or "",
+        "type": "In Person" if getattr(m, "provider", "") == "in-person" else "Video Call",
+        "provider": m.provider or "jitsi",
+        "location": m.description or "",
+        "meetingLink": m.meeting_url or "",
         "attendees": attendees,
-        "status": m.get("status", "scheduled"),
-        "cancelledAt": m.get("cancelledAt"),
-        "createdAt": m.get("createdAt", ""),
+        "status": m.status or "scheduled",
+        "cancelledAt": _iso(m.updated_at) if getattr(m, "status", "") == "cancelled" else None,
+
+        "createdAt": _iso(m.created_at),
     }
 
 
 async def _resolve_attendees(raw_attendees: List[dict]) -> List[dict]:
-    """Normalize the mixed user-id / email attendees list (batch $in query)."""
+    """Normalize the mixed user-id / email attendees list (batch query) from MySQL."""
     if not raw_attendees:
         return []
 
-    users_col = get_async_collection("users")
-    user_oids = []
+    user_ids = []
     for a in raw_attendees:
         if a.get("userId"):
             try:
-                user_oids.append(ObjectId(str(a["userId"])))
-            except InvalidId:
+                user_ids.append(int(a["userId"]))
+            except ValueError:
                 pass
 
     users = {}
-    if user_oids:
-        user_docs = await users_col.find({"_id": {"$in": user_oids}}).to_list(length=len(user_oids))
-        for u in user_docs:
-            users[str(u["_id"])] = u
+    if _mysql_available and user_ids:
+        async for db in get_db_session():
+            stmt = select(SQLUser).where(SQLUser.id.in_(user_ids))
+            res = await db.execute(stmt)
+            for u in res.scalars().all():
+                users[str(u.id)] = u
 
     by_email: dict[str, dict] = {}
     for raw in raw_attendees:
         if raw.get("userId") and str(raw["userId"]) in users:
             u = users[str(raw["userId"])]
-            by_email[u["email"]] = {
-                "name": u.get("name", ""),
-                "email": u["email"],
-                "userId": u["_id"],
+            by_email[u.email] = {
+                "name": u.name or "",
+                "email": u.email,
+                "userId": str(u.id),
                 "inviteSent": False,
             }
         elif raw.get("email"):
@@ -105,33 +106,29 @@ async def _resolve_attendees(raw_attendees: List[dict]) -> List[dict]:
 
 
 async def _push_notifications_async(user_ids: List[str], notif_type: str, title: str, message: str, link: str, related_id: str) -> None:
+    if not _mysql_available:
+        return
     try:
-        notifs_col = get_async_collection("notifications")
-        docs = []
-        for uid in user_ids:
-            if uid:
-                try:
-                    docs.append({
-                        "user": ObjectId(uid),
-                        "type": notif_type,
-                        "title": title,
-                        "message": message,
-                        "link": link,
-                        "relatedId": related_id,
-                        "read": False,
-                        "createdAt": datetime.now(tz=timezone.utc),
-                    })
-                except InvalidId:
-                    pass
-        if docs:
-            await notifs_col.insert_many(docs)
+        async for db in get_db_session():
+            for uid in user_ids:
+                if uid:
+                    try:
+                        db.add(SQL_Notification(
+                            user_id=int(uid),
+                            notification_type=notif_type,
+                            title=title,
+                            message=message,
+                            link=link,
+                            related_id=related_id,
+                            is_read=False,
+                            created_at=datetime.utcnow()
+                        ))
+                    except ValueError:
+                        pass
+            await db.commit()
     except Exception as e:
         logger.warning(f"[Meetings] Push notification error: {e}")
 
-
-# ---------------------------------------------------------------------------
-# Pydantic models
-# ---------------------------------------------------------------------------
 
 class AttendeeInput(BaseModel):
     userId: Optional[str] = None
@@ -153,15 +150,18 @@ class CreateMeetingBody(BaseModel):
         populate_by_name = True
 
 
-# ---------------------------------------------------------------------------
-# Routes
-# ---------------------------------------------------------------------------
-
 @router.get("")
 async def list_meetings(current_user: dict = Depends(get_current_user)):
-    meetings_col = get_async_collection("meetings")
-    meetings = await meetings_col.find().sort("date", 1).to_list(length=1000)
-    return {"meetings": [_to_public_meeting(m) for m in meetings]}
+    meetings = []
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_Meeting).order_by(SQL_Meeting.date.asc())
+                res = await db.execute(stmt)
+                meetings = [_to_public_meeting(m) for m in res.scalars().all()]
+        except Exception as e:
+            raise HTTPException(500, f"Database error: {e}")
+    return {"meetings": meetings}
 
 
 @router.post("", status_code=201)
@@ -189,7 +189,7 @@ async def create_meeting(
             date=body.date,
             time=body.time,
             attendee_emails=[a["email"] for a in resolved],
-            user_id=str(current_user["_id"]),
+            user_id=str(current_user["id"]),
         )
         meeting_link = room["meeting_link"]
         used_provider = room["provider"]
@@ -197,30 +197,36 @@ async def create_meeting(
 
     with_name = getattr(body, "with_", None) or ""
 
-    meetings_col = get_async_collection("meetings")
-    result = await meetings_col.insert_one({
-        "title": body.title,
-        "with": with_name,
-        "date": body.date,
-        "time": body.time,
-        "type": meeting_type,
-        "provider": used_provider,
-        "location": body.location or "",
-        "meetingLink": meeting_link,
-        "attendees": resolved,
-        "status": "scheduled",
-        "createdBy": current_user["_id"],
-        "createdAt": datetime.now(tz=timezone.utc),
-    })
-
-    meeting = await meetings_col.find_one({"_id": result.inserted_id})
-    meeting_id = str(result.inserted_id)
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                new_meet = SQL_Meeting(
+                    user_id=int(current_user["id"]),
+                    title=body.title,
+                    description=body.location or "",
+                    date=body.date,
+                    time=body.time,
+                    provider=used_provider,
+                    meeting_url=meeting_link,
+                    with_someone=with_name,
+                    attendees=resolved,
+                    status="scheduled",
+                    created_at=datetime.utcnow(),
+                    updated_at=datetime.utcnow()
+                )
+                db.add(new_meet)
+                await db.commit()
+                await db.refresh(new_meet)
+                meeting_id = str(new_meet.id)
+                meeting_obj = new_meet
+        except Exception as e:
+            raise HTTPException(500, f"Database error creating meeting: {e}")
 
     # Send invite emails asynchronously (best-effort)
     if resolved:
         organizer_name = current_user.get("name")
 
-        async def send_invites():
+        async def send_invites(m_id):
             results = await asyncio.gather(
                 *[
                     send_meeting_invite_email(
@@ -240,14 +246,21 @@ async def create_meeting(
             # Update inviteSent flags
             for i, r in enumerate(results):
                 resolved[i]["inviteSent"] = not isinstance(r, Exception)
-            await meetings_col.update_one({"_id": result.inserted_id}, {"$set": {"attendees": resolved}})
+            
+            async for db in get_db_session():
+                await db.execute(
+                    update(SQL_Meeting)
+                    .where(SQL_Meeting.id == int(m_id))
+                    .values(attendees=resolved)
+                )
+                await db.commit()
 
-        background_tasks.add_task(send_invites)
+        background_tasks.add_task(send_invites, meeting_id)
 
     # In-app notifications for all attendee users
     attendee_user_ids = [str(a["userId"]) for a in resolved if a.get("userId")]
     await _push_notifications_async(
-        [str(current_user["_id"])] + attendee_user_ids,
+        [str(current_user["id"])] + attendee_user_ids,
         notif_type="meeting_scheduled",
         title="Meeting scheduled",
         message=f"\"{body.title}\" is set for {body.date} at {body.time}.",
@@ -255,7 +268,7 @@ async def create_meeting(
         related_id=meeting_id,
     )
 
-    response = {"meeting": _to_public_meeting(meeting)}
+    response = {"meeting": _to_public_meeting(meeting_obj)}
     if provider_warning:
         response["providerWarning"] = provider_warning
     return response
@@ -268,56 +281,69 @@ async def cancel_meeting(
     current_user: dict = Depends(get_current_user),
 ):
     try:
-        oid = ObjectId(meeting_id)
-    except InvalidId:
+        mid = int(meeting_id)
+    except ValueError:
         raise HTTPException(400, "Invalid meeting ID.")
 
-    meetings_col = get_async_collection("meetings")
-    meeting = await meetings_col.find_one({"_id": oid})
-    if not meeting:
-        raise HTTPException(404, "Meeting not found.")
-    if meeting.get("status") == "cancelled":
-        raise HTTPException(400, "This meeting is already cancelled.")
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_Meeting).where(SQL_Meeting.id == mid)
+                res = await db.execute(stmt)
+                meeting = res.scalar_one_or_none()
+                if not meeting:
+                    raise HTTPException(404, "Meeting not found.")
+                if getattr(meeting, "status", "") == "cancelled":
+                    raise HTTPException(400, "This meeting is already cancelled.")
 
-    await meetings_col.update_one(
-        {"_id": oid},
-        {"$set": {"status": "cancelled", "cancelledAt": datetime.now(tz=timezone.utc)}},
-    )
-    meeting = await meetings_col.find_one({"_id": oid})
-    if not meeting:
-        raise HTTPException(404, "Meeting not found.")
+                await db.execute(
+                    update(SQL_Meeting)
+                    .where(SQL_Meeting.id == mid)
+                    .values(status="cancelled", updated_at=datetime.utcnow())
+                )
+                await db.commit()
+
+                # refetch
+                stmt_new = select(SQL_Meeting).where(SQL_Meeting.id == mid)
+                meeting = (await db.execute(stmt_new)).scalar_one()
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, f"Database error cancelling meeting: {e}")
 
     # Send cancellation emails (best-effort)
-    attendees = meeting.get("attendees", [])
+    raw_att = getattr(meeting, "attendees", [])
+    attendees = raw_att if isinstance(raw_att, list) else []
     if attendees:
         organizer_name = current_user.get("name")
-        meeting_title = meeting.get("title", "")
-        meeting_date = meeting.get("date", "")
-        meeting_time = meeting.get("time", "")
+        meeting_title = meeting.title or ""
+        meeting_date = meeting.date or ""
+        meeting_time = meeting.time or ""
         
         async def send_cancellations():
             await asyncio.gather(
                 *[
                     send_meeting_cancelled_email(
-                        to_email=a["email"],
-                        title=meeting_title,
-                        date=meeting_date,
-                        time=meeting_time,
-                        organizer_name=organizer_name,
+                        to_email=str(a.get("email", "") or ""),
+                        title=str(meeting_title or ""),
+                        date=str(meeting_date or ""),
+                        time=str(meeting_time or ""),
+                        organizer_name=str(organizer_name) if organizer_name else None,
                     )
                     for a in attendees
                 ],
                 return_exceptions=True,
             )
+
         background_tasks.add_task(send_cancellations)
 
     # In-app notifications
     attendee_user_ids = [str(a["userId"]) for a in attendees if a.get("userId")]
     await _push_notifications_async(
-        [str(current_user["_id"])] + attendee_user_ids,
+        [str(current_user["id"])] + attendee_user_ids,
         notif_type="meeting_cancelled",
         title="Meeting cancelled",
-        message=f"\"{meeting.get('title', '')}\" originally set for {meeting.get('date', '')} at {meeting.get('time', '')} has been cancelled.",
+        message=f"\"{meeting.title}\" originally set for {meeting.date} at {meeting.time} has been cancelled.",
         link="/meetings",
         related_id=meeting_id,
     )

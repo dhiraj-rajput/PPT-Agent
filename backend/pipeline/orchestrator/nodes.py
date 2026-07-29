@@ -133,7 +133,7 @@ def discover_website(state: AgentState) -> dict:
     except Exception as e:
         msg = f"discover_website failed: {e}"
         logger.error(f"[discover_website] {msg}")
-        return {"website_url": None, "errors": state.get("errors", []) + [msg]}
+        return {"website_url": None, "errors": [msg]}
 
 
 # ---------------------------------------------------------------------------
@@ -165,7 +165,7 @@ def discover_linkedin(state: AgentState) -> dict:
     except Exception as e:
         msg = f"discover_linkedin failed: {e}"
         logger.error(f"[discover_linkedin] {msg}")
-        return {"linkedin_url": None, "errors": state.get("errors", []) + [msg]}
+        return {"linkedin_url": None, "errors": [msg]}
 
 
 # ---------------------------------------------------------------------------
@@ -202,7 +202,7 @@ def discover_from_website(state: AgentState) -> dict:
     except Exception as e:
         msg = f"discover_from_website failed: {e}"
         logger.error(f"[discover_from_website] {msg}")
-        updates["errors"] = state.get("errors", []) + [msg]
+        updates["errors"] = [msg]
 
     return updates
 
@@ -250,7 +250,7 @@ def run_website_agent(state: AgentState) -> dict:
     except Exception as e:
         msg = f"run_website_agent failed: {e}"
         logger.error(f"[run_website_agent] {msg}", exc_info=True)
-        return {"website_data": None, "errors": state.get("errors", []) + [msg]}
+        return {"website_data": None, "errors": [msg]}
 
 
 # ---------------------------------------------------------------------------
@@ -312,7 +312,7 @@ def run_linkedin_agent(state: AgentState) -> dict:
     except Exception as e:
         msg = f"run_linkedin_agent failed: {e}"
         logger.error(f"[run_linkedin_agent] {msg}", exc_info=True)
-        return {"linkedin_data": None, "errors": state.get("errors", []) + [msg]}
+        return {"linkedin_data": None, "errors": [msg]}
 
 
 # ---------------------------------------------------------------------------
@@ -880,7 +880,7 @@ def run_compactor(state: AgentState) -> dict:
         logger.error(f"[run_compactor] {msg}", exc_info=True)
         return {
             "optimized_profile": None,
-            "errors": state.get("errors", []) + [msg],
+            "errors": [msg],
         }
 
 
@@ -942,7 +942,7 @@ def generate_pitch_proposal(state: AgentState) -> dict:
         logger.error(f"[generate_pitch_proposal] {msg}", exc_info=True)
         return {
             "pdf_proposal_path": None,
-            "errors": state.get("errors", []) + [msg],
+            "errors": [msg],
         }
 
 
@@ -1050,5 +1050,5 @@ def generate_rfp_response(state: AgentState) -> dict:
         logger.error(f"[generate_rfp_response] {msg}", exc_info=True)
         return {
             "rfp_response_pdf_path": None,
-            "errors": state.get("errors", []) + [msg],
+            "errors": [msg],
         }

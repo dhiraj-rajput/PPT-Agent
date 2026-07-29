@@ -9,6 +9,7 @@ export default function Login() {
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [keepSignedIn, setKeepSignedIn] = useState(false);
   const navigate = useNavigate();
 
   async function handleSubmit(e) {
@@ -18,8 +19,12 @@ export default function Login() {
     try {
       await api.login(email, password);
       if (typeof localStorage !== 'undefined') {
-        localStorage.setItem('pending_otp_email', email);
-        localStorage.setItem('pending_otp_purpose', 'login');
+        try {
+          localStorage.setItem('pending_otp_email', email);
+          localStorage.setItem('pending_otp_purpose', 'login');
+        } catch (storageErr) {
+          console.warn('localStorage unavailable:', storageErr);
+        }
       }
       navigate('/verify-otp', { state: { email, purpose: 'login' } });
     } catch (err) {
@@ -67,7 +72,7 @@ export default function Login() {
           </div>
         </div>
 
-        <p className="relative text-xs text-slate-500 dark:text-slate-400">© 2026 OrbitAvanya Tech. All rights reserved.</p>
+        <p className="relative text-xs text-slate-500 dark:text-slate-400">© {new Date().getFullYear()} OrbitAvanya Tech. All rights reserved.</p>
       </div>
 
       {/* Right form panel */}
@@ -124,7 +129,7 @@ export default function Login() {
             </div>
 
             <label className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-              <input type="checkbox" defaultChecked className="h-4 w-4 rounded border-slate-300 dark:border-navy-600 text-brand-600" />
+              <input type="checkbox" checked={keepSignedIn} onChange={e => setKeepSignedIn(e.target.checked)} className="h-4 w-4 rounded border-slate-300 dark:border-navy-600 text-brand-600" />
               Keep me signed in
             </label>
 

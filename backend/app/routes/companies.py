@@ -2,6 +2,7 @@
 app/routes/companies.py
 -------------------------
 Company intelligence, search, filtering, and research management endpoints.
+Uses MySQL for relational companies and task status databases, and MongoDB for company profiles.
 """
 
 from __future__ import annotations
@@ -13,7 +14,6 @@ import io
 import json
 import logging
 import os
-import random
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,8 +21,6 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, UploadFile, File, Form
 from pydantic import BaseModel
-from bson import ObjectId
-from bson.errors import InvalidId
 
 from app.core.auth import get_current_user
 from utils.db_client import (
@@ -30,7 +28,21 @@ from utils.db_client import (
     get_collection,
     update_task_status,
     get_task_status_db,
+    get_db_session,
+    get_sync_db_session,
+    _mysql_available,
 )
+from models.sql_models import (
+    Company as SQL_Company,
+    Lead as SQL_Lead,
+    Report as SQL_Report,
+    Meeting as SQL_Meeting,
+    Tender as SQL_Tender,
+    NaicsCode as SQL_NaicsCode,
+    TaskStatus as SQL_TaskStatus,
+    SystemSettings as SQL_SystemSettings,
+)
+from sqlalchemy import select, insert, update, delete, func, or_, and_
 from config.settings import settings
 from app.core.match_engine import compute_company_match_score
 
@@ -63,66 +75,71 @@ DEFAULT_OWN_COMPANY = {
 }
 
 
-
-
 def import_sam_entities_csv():
-    """Initialise / populate SAM entities in companies collection from CSV if empty."""
+    """Initialise / populate SAM entities in companies table from CSV if empty."""
+    if not _mysql_available:
+        return
+
     try:
-        col = get_collection("companies")
-        if col.count_documents({}) > 0:
-            return
+        with get_sync_db_session() as db:
+            stmt = select(func.count()).select_from(SQL_Company)
+            cnt = db.execute(stmt).scalar()
+            if (cnt or 0) > 0:
+                return
 
-        csv_path = PROJECT_ROOT / "private" / "sam_entities.csv"
-        if not csv_path.exists():
-            csv_path = PROJECT_ROOT / "documents" / "sam_entities.csv"
-        if not csv_path.exists():
-            return
 
-        logger.info("Seeding initial company database from sam_entities.csv...")
+            csv_path = PROJECT_ROOT / "private" / "sam_entities.csv"
+            if not csv_path.exists():
+                csv_path = PROJECT_ROOT / "documents" / "sam_entities.csv"
+            if not csv_path.exists():
+                return
 
-        # Pre-load the catalog ONCE before the loop — not on every row.
-        # Without this, compute_company_match_score() called the MongoDB catalog
-        # loader tens-of-thousands of times, freezing startup for minutes.
-        from app.core.company_catalog import load_services_catalog
-        load_services_catalog()  # warms the in-process cache
+            logger.info("Seeding initial company database from sam_entities.csv...")
 
-        # Cap the initial seed at 5000 rows to prevent an extremely large CSV
-        # from blocking the background thread for an unreasonable amount of time.
-        MAX_SEED_ROWS = 5000
+            from app.core.company_catalog import load_services_catalog
+            load_services_catalog()  # warms the in-process cache
 
-        with open(csv_path, "r", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            batch = []
-            row_count = 0
-            for row in reader:
-                if row_count >= MAX_SEED_ROWS:
-                    break
-                uei = (row.get("UEI") or row.get("uei", "")).strip()
-                if uei:
-                    is_small = (row.get("Is_Small_Business") or row.get("is_small_business", "")).strip().upper() in ("Y", "YES", "TRUE")
-                    batch.append({
-                        "uei": uei,
-                        "name": row.get("Legal_Business_Name") or row.get("name") or "Unnamed Company",
-                        "status": row.get("Registration_Status") or row.get("status") or "Active",
-                        "primary_naics": row.get("Primary_NAICS_Code") or row.get("primary_naics") or "",
-                        "primary_naics_desc": row.get("Primary_NAICS_Description") or row.get("primary_naics_desc") or "",
-                        "size": "Small" if is_small else "Large",
-                        "matchScore": compute_company_match_score(
-                            primary_naics=row.get("Primary_NAICS_Code") or row.get("primary_naics") or "",
-                            industry_desc=row.get("Primary_NAICS_Description") or "Other",
-                            company_name=row.get("Legal_Business_Name") or row.get("name") or "Unnamed Company"
-                        ),
-                        "industry": row.get("Primary_NAICS_Description") or "Other",
-                        "contact": row.get("Gov_Contact_Name") or "N/A",
-                        "email": row.get("Gov_Contact_Email") or "info@company.com"
-                    })
-                    row_count += 1
-                if len(batch) >= 500:
-                    col.insert_many(batch, ordered=False)
-                    batch = []
-            if batch:
-                col.insert_many(batch, ordered=False)
-        logger.info(f"SAM entities seeded successfully ({row_count} records).")
+            MAX_SEED_ROWS = 5000
+
+            with open(csv_path, "r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                batch = []
+                row_count = 0
+                for row in reader:
+                    if row_count >= MAX_SEED_ROWS:
+                        break
+                    uei = (row.get("UEI") or row.get("uei", "")).strip()
+                    if uei:
+                        is_small = (row.get("Is_Small_Business") or row.get("is_small_business", "")).strip().upper() in ("Y", "YES", "TRUE")
+                        primary_naics = row.get("Primary_NAICS_Code") or row.get("primary_naics") or ""
+                        primary_naics_desc = row.get("Primary_NAICS_Description") or row.get("primary_naics_desc") or ""
+                        name = row.get("Legal_Business_Name") or row.get("name") or "Unnamed Company"
+                        
+                        batch.append({
+                            "uei": uei,
+                            "name": name,
+                            "status": row.get("Registration_Status") or row.get("status") or "Active",
+                            "naics_code": primary_naics,
+                            "industry": primary_naics_desc or "Other",
+                            "size": "Small" if is_small else "Large",
+                            "is_small_business": "Y" if is_small else "N",
+                            "match_score": compute_company_match_score(
+                                primary_naics=primary_naics,
+                                industry_desc=primary_naics_desc or "Other",
+                                company_name=name
+                            ),
+                            "contact": row.get("Gov_Contact_Name") or "N/A",
+                            "email": row.get("Gov_Contact_Email") or "info@company.com"
+                        })
+                        row_count += 1
+                    if len(batch) >= 500:
+                        db.execute(insert(SQL_Company).values(batch))
+                        db.commit()
+                        batch = []
+                if batch:
+                    db.execute(insert(SQL_Company).values(batch))
+                    db.commit()
+            logger.info(f"SAM entities seeded successfully ({row_count} records).")
     except Exception as e:
         logger.warning(f"Failed to seed SAM entities CSV: {e}")
 
@@ -179,7 +196,13 @@ async def send_company_email(body: SendCompanyEmailBody, current_user: dict = De
         raise HTTPException(status_code=400, detail="Recipient email is required.")
     
     attachments_list = []
-    
+    from pathlib import Path
+    def _safe_attachment_path(base_dir: Path, fname: str) -> Path:
+        resolved = (base_dir / fname).resolve()
+        if not str(resolved).startswith(str(base_dir.resolve())):
+            raise ValueError(f"Path traversal attempt detected: {fname!r}")
+        return resolved
+
     def locate_and_add_file(filename: str):
         dirs = [
             PROJECT_ROOT / "output" / "pdf",
@@ -188,10 +211,13 @@ async def send_company_email(body: SendCompanyEmailBody, current_user: dict = De
         ]
         for d in dirs:
             if d.exists():
-                p = d / filename
+                try:
+                    p = _safe_attachment_path(d, filename)
+                except ValueError:
+                    continue
                 if p.exists() and p.is_file():
                     attachments_list.append({
-                        "path": str(p.resolve()),
+                        "path": str(p),
                         "filename": filename
                     })
                     return True
@@ -244,6 +270,43 @@ def extract_keywords(description: str) -> list[str]:
     return list(dict.fromkeys(keywords))
 
 
+def _iso(dt: Any) -> Optional[str]:
+    return dt.isoformat() if dt and hasattr(dt, "isoformat") else None
+
+
+def _format_company(c: SQL_Company) -> dict:
+    if not c:
+        return {}
+    return {
+        "id": str(c.id),
+        "uei": c.uei or "",
+        "name": c.name or "",
+        "website": c.website or "",
+        "industry": c.industry or "",
+        "size": c.size or "",
+        "location": c.location or "",
+        "description": c.description or "",
+        "naics_code": c.naics_code or "",
+        "matchScore": c.match_score or 0,
+        "contact": c.contact or "N/A",
+        "email": c.email or "",
+        "phone": c.phone or "",
+        "cage_code": c.cage_code or "",
+        "status": c.status or "Active",
+        "address": c.address or "",
+        "is_small_business": c.is_small_business or "N",
+        "is_minority_owned": c.is_minority_owned or "N",
+        "is_women_owned": c.is_women_owned or "N",
+        "is_veteran_owned": c.is_veteran_owned or "N",
+        "secondary_naics": c.secondary_naics or "",
+        "is_researched": bool(c.is_researched),
+        "research_status": c.research_status or "pending",
+        "last_researched_at": _iso(c.last_researched_at),
+        "createdAt": _iso(c.created_at),
+        "updatedAt": _iso(c.updated_at)
+    }
+
+
 @router.get("")
 async def get_companies(
     query: Optional[str] = None,
@@ -256,52 +319,35 @@ async def get_companies(
     limit: int = 20,
     current_user: dict = Depends(get_current_user),
 ):
-    """Query companies from MongoDB with search, filters, and pagination using Motor."""
+    """Query companies from MySQL with search, filters, and pagination."""
+    if not _mysql_available:
+        raise HTTPException(status_code=500, detail="MySQL database is not connected.")
+
     try:
-        col = get_async_collection("companies")
-        filter_query = {}
+        filter_conditions = []
 
-        # ------------------------------------------------------------------
-        # Unified search: one `query` value is matched against BOTH the
-        # company's key fields (name / UEI / contact / email) AND its
-        # description/NAICS-derived keywords, combined with OR so a single
-        # search box finds a match on either -- no separate description
-        # search field or "which field" selector required.
-        #
-        # `match_company_description=true` (with no free-typed `query`) still
-        # works as before: it pulls the signed-in company's own profile
-        # description and searches with those keywords instead.
-        # ------------------------------------------------------------------
-        search_conditions: List[Dict[str, Any]] = []
-
+        # Unified search conditions
+        search_conditions = []
         if query and query.strip():
-            q = re.escape(query.strip())
+            q = query.strip()
             search_conditions.extend([
-                {"name": {"$regex": q, "$options": "i"}},
-                {"uei": {"$regex": q, "$options": "i"}},
-                {"contact": {"$regex": q, "$options": "i"}},
-                {"email": {"$regex": q, "$options": "i"}},
+                SQL_Company.name.ilike(f"%{q}%"),
+                SQL_Company.uei.ilike(f"%{q}%"),
+                SQL_Company.contact.ilike(f"%{q}%"),
+                SQL_Company.email.ilike(f"%{q}%"),
             ])
 
         if size and size != "All":
-            filter_query["size"] = size
+            filter_conditions.append(SQL_Company.size == size)
 
         if naics and naics != "All":
-            naics_escaped = re.escape(naics.strip())
-            filter_query["$and"] = filter_query.get("$and", []) + [{"$or": [
-                {"primary_naics": {"$regex": naics_escaped, "$options": "i"}},
-                {"primary_naics_desc": {"$regex": naics_escaped, "$options": "i"}}
-            ]}]
+            naics_clean = naics.strip()
+            filter_conditions.append(or_(
+                SQL_Company.naics_code.ilike(f"%{naics_clean}%"),
+                SQL_Company.industry.ilike(f"%{naics_clean}%")
+            ))
 
-        profiles_col = get_async_collection("company_profiles")
-        tasks_col = get_async_collection("task_statuses")
-        
-        active_task_docs = await tasks_col.find({"type": "company_research"}).to_list(length=1000)
-        active_tasks = {t["task_id"].lower(): t["status"] for t in active_task_docs}
-
-        # Description-keyword matching: use the typed query text if present,
-        # otherwise (only when the "Match My Company Description" toggle is
-        # on) fall back to the signed-in company's own profile description.
+        # Description-keyword matching
         desc_to_match = ""
         if query and query.strip():
             desc_to_match = query.strip()
@@ -315,131 +361,135 @@ async def get_companies(
         if desc_to_match:
             keywords = extract_keywords(desc_to_match)
             if keywords:
-                # 1. Match keywords on naics_codes collection first to find related numeric codes
-                naics_coll = get_async_collection("naics_codes")
-                naics_kw_conditions = []
-                for kw in keywords:
-                    naics_kw_conditions.append({"title": {"$regex": kw, "$options": "i"}})
-                    naics_kw_conditions.append({"description": {"$regex": kw, "$options": "i"}})
-                
+                # Get db session to find naics codes
                 matched_naics_codes = []
-                if naics_kw_conditions:
-                    naics_cursor = naics_coll.find({"$or": naics_kw_conditions}, {"code": 1})
-                    matched_naics_codes = [doc["code"] async for doc in naics_cursor if "code" in doc]
+                async for db in get_db_session():
+                    stmt_naics = select(SQL_NaicsCode.code).where(or_(
+                        *[SQL_NaicsCode.title.ilike(f"%{kw}%") for kw in keywords] + 
+                         [SQL_NaicsCode.description.ilike(f"%{kw}%") for kw in keywords]
+                    ))
+                    res_naics = await db.execute(stmt_naics)
+                    matched_naics_codes = res_naics.scalars().all()
 
-                # 2. Companies whose primary_naics or secondary_naics matches those NAICS codes
                 if matched_naics_codes:
-                    search_conditions.append({"primary_naics": {"$in": matched_naics_codes}})
-                    naics_regex = "|".join([re.escape(c) for c in matched_naics_codes])
-                    search_conditions.append({"secondary_naics": {"$regex": naics_regex}})
+                    search_conditions.append(SQL_Company.naics_code.in_(matched_naics_codes))
+                    for code in matched_naics_codes:
+                        search_conditions.append(SQL_Company.secondary_naics.ilike(f"%{code}%"))
 
-                # 3. Keyword matches directly in company name and description
                 for kw in keywords:
-                    search_conditions.append({"name": {"$regex": kw, "$options": "i"}})
-                    search_conditions.append({"primary_naics_desc": {"$regex": kw, "$options": "i"}})
+                    search_conditions.append(SQL_Company.name.ilike(f"%{kw}%"))
+                    search_conditions.append(SQL_Company.industry.ilike(f"%{kw}%"))
 
         if search_conditions:
-            search_or = {"$or": search_conditions}
-            if "$and" in filter_query:
-                filter_query["$and"].append(search_or)
-            else:
-                filter_query.update(search_or)
+            filter_conditions.append(or_(*search_conditions))
 
-        # Look up profiles and active tasks
+        # Build main statement
+        stmt = select(SQL_Company)
+        if filter_conditions:
+            stmt = stmt.where(and_(*filter_conditions))
+        stmt = stmt.order_by(SQL_Company.created_at.desc())
+
+        # Load profiles check (MongoDB) — ultra-fast single query
         profiles_col = get_async_collection("company_profiles")
-        tasks_col = get_async_collection("task_statuses")
-        active_task_docs = await tasks_col.find({"type": "company_research"}).to_list(length=1000)
-        active_tasks = {t["task_id"].lower(): t["status"] for t in active_task_docs}
-
-        # Identity sets for profile check
+        prof_map = {}
         profile_names = set()
         profile_slugs = set()
-        profiles_cursor = profiles_col.find({}, {"company_name": 1, "company_slug": 1})
-        async for p in profiles_cursor:
-            if p.get("company_name"):
-                profile_names.add(p["company_name"].strip().lower())
-            if p.get("company_slug"):
-                profile_slugs.add(p["company_slug"])
+        try:
+            all_profiles = await profiles_col.find({}, projection={"company_name": 1, "company_slug": 1, "_id": 1}).to_list(length=1000)
+            for p in all_profiles:
+                p_name = (p.get("company_name") or "").strip().lower()
+                p_slug = (p.get("company_slug") or "").strip().lower()
+                if p_name:
+                    profile_names.add(p_name)
+                    prof_map[p_name] = p
+                if p_slug:
+                    profile_slugs.add(p_slug)
+                    prof_map[p_slug] = p
+        except Exception as e:
+            logger.warning(f"Failed to load MongoDB company_profiles: {e}")
 
         def _slugify(name: str) -> str:
             return re.sub(r"[^a-z0-9]+", "-", (name or "").lower()).strip("-")
 
-        def _is_researched(c: dict) -> bool:
-            if bool(c.get("is_researched")) or c.get("research_status") == "completed":
+        def _is_researched(c: SQL_Company) -> bool:
+            if getattr(c, "is_researched", False) or getattr(c, "research_status", "") == "completed":
                 return True
-            name = (c.get("name") or "").strip().lower()
-            return name in profile_names or _slugify(c.get("name") or "") in profile_slugs
+            name = (c.name or "").strip().lower()
+            return name in profile_names or _slugify(str(c.name or "")) in profile_slugs
+
+        # Get active tasks
+        active_tasks = {}
+        async for db in get_db_session():
+            task_stmt = select(SQL_TaskStatus).where(SQL_TaskStatus.task_type == "company_research")
+            res_tasks = await db.execute(task_stmt)
+            for t in res_tasks.scalars().all():
+                active_tasks[str(t.task_id).lower()] = t.status
 
         researched_norm = (researched or "").strip().lower()
         wants_researched_filter = researched_norm in ("true", "false", "researched", "not_researched")
 
-        if wants_researched_filter:
-            want_true = researched_norm in ("true", "researched")
-            all_matching = await col.find(filter_query).to_list(length=10000)
-            filtered = [c for c in all_matching if _is_researched(c) == want_true]
-            total = len(filtered)
-            skip = (page - 1) * limit
-            results = filtered[skip:skip + limit]
-        else:
-            total = await col.count_documents(filter_query)
-            skip = (page - 1) * limit
-            results = await col.find(filter_query).skip(skip).limit(limit).to_list(length=limit)
+        # Fetch records
+        results = []
+        total = 0
+        async for db in get_db_session():
+            if wants_researched_filter:
+                want_true = researched_norm in ("true", "researched")
+                if want_true and profile_names:
+                    # Filter efficiently using SQL + memory
+                    names_list = list(profile_names)
+                    stmt_res = stmt.where(or_(SQL_Company.is_researched == True, func.lower(SQL_Company.name).in_(names_list)))
+                    res = await db.execute(stmt_res)
+                    all_matching = res.scalars().all()
+                    filtered = [c for c in all_matching if _is_researched(c) == want_true]
+                else:
+                    res = await db.execute(stmt)
+                    all_matching = res.scalars().all()
+                    filtered = [c for c in all_matching if _is_researched(c) == want_true]
 
+                total = len(filtered)
+                skip = (page - 1) * limit
+                results = filtered[skip:skip + limit]
+            else:
+                count_stmt = select(func.count()).select_from(SQL_Company)
+                if filter_conditions:
+                    count_stmt = count_stmt.where(and_(*filter_conditions))
+                total = (await db.execute(count_stmt)).scalar() or 0
+
+                skip = (page - 1) * limit
+                res = await db.execute(stmt.offset(skip).limit(limit))
+                results = res.scalars().all()
+
+        # Format results
+        formatted_results = []
         for c in results:
-            if "_id" in c:
-                c["id"] = str(c["_id"])
-                del c["_id"]
-            if not c.get("uei"):
-                c["uei"] = c.get("id", "")
+            c_formatted = _format_company(c)
+            c_name_lower = (c.name or "").lower().strip()
+            c_slug = _slugify(str(c.name or ""))
 
-        # Batch lookup profiles for the paginated results (Fixes N+1 query)
-        company_names = [c["name"] for c in results if c.get("name")]
-        company_slugs = [_slugify(c["name"]) for c in results if c.get("name")]
-        
-        prof_map = {}
-        if company_names:
-            name_regexes = [{"company_name": {"$regex": f"^{re.escape(n)}$", "$options": "i"}} for n in company_names]
-            slug_matches = [{"company_slug": {"$in": company_slugs}}]
-            or_conditions = name_regexes + slug_matches
-            
-            matched_profiles = await profiles_col.find({"$or": or_conditions}).to_list(length=len(results) * 2)
-            for p in matched_profiles:
-                p_name = (p.get("company_name") or "").lower().strip()
-                p_slug = p.get("company_slug") or ""
-                if p_name:
-                    prof_map[p_name] = p
-                if p_slug:
-                    prof_map[p_slug] = p
-
-        for c in results:
-            c_name_lower = (c.get("name") or "").lower().strip()
-            c_slug = _slugify(c.get("name"))
             profile = prof_map.get(c_name_lower) or prof_map.get(c_slug)
-            
             is_researched_flag = _is_researched(c) or bool(profile)
 
             if profile:
-                if (not c.get("email") or not c["email"].strip()) and profile.get("emails"):
-                    c["email"] = profile["emails"][0]
-                if (not c.get("phone") or not c["phone"].strip()) and profile.get("phone_numbers"):
-                    c["phone"] = profile["phone_numbers"][0]
-                if (not c.get("contact") or c.get("contact") == "N/A") and profile.get("leadership"):
-                    c["contact"] = profile["leadership"][0]
+                if (not c_formatted.get("email") or not c_formatted["email"].strip()) and profile.get("emails"):
+                    c_formatted["email"] = profile["emails"][0]
+                if (not c_formatted.get("phone") or not c_formatted["phone"].strip()) and profile.get("phone_numbers"):
+                    c_formatted["phone"] = profile["phone_numbers"][0]
+                if (not c_formatted.get("contact") or c_formatted.get("contact") == "N/A") and profile.get("leadership"):
+                    c_formatted["contact"] = profile["leadership"][0]
 
-            c["hasResearchedProfile"] = is_researched_flag
-            c["is_researched"] = is_researched_flag
-            c["isResearching"] = active_tasks.get((c.get("name") or "").lower()) == "processing"
-
-        naics_list = await col.distinct("primary_naics_desc")
-        naics_list = sorted([n for n in naics_list if n])
+            c_formatted["hasResearchedProfile"] = is_researched_flag
+            c_formatted["is_researched"] = is_researched_flag
+            c_formatted["isResearching"] = active_tasks.get((c.name or "").lower()) == "processing"
+            formatted_results.append(c_formatted)
 
         return {
             "total": total,
             "page": page,
             "limit": limit,
-            "companies": results,
-            "naics_codes": naics_list
+            "companies": formatted_results,
+            "naics_codes": []
         }
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -481,26 +531,60 @@ async def add_company(
     company_data: CompanyCreateBody,
     current_user: dict = Depends(get_current_user),
 ):
-    """Add a single company record manually using Motor."""
-    col = get_async_collection("companies")
+    """Add a single company record manually to MySQL."""
+    if not _mysql_available:
+        raise HTTPException(status_code=500, detail="MySQL database is unavailable.")
+
     uei = company_data.uei.strip()
     if not uei:
         raise HTTPException(status_code=400, detail="UEI is required")
 
-    if await col.find_one({"uei": uei}):
-        raise HTTPException(status_code=400, detail="Company with this UEI already exists")
+    try:
+        async for db in get_db_session():
+            stmt = select(SQL_Company).where(SQL_Company.uei == uei)
+            existing = (await db.execute(stmt)).scalar_one_or_none()
+            if existing:
+                raise HTTPException(status_code=400, detail="Company with this UEI already exists")
 
-    doc = company_data.model_dump()
-    doc["matchScore"] = doc.get("matchScore") or compute_company_match_score(
-        primary_naics=doc.get("primary_naics") or "",
-        industry_desc=doc.get("industry") or doc.get("primary_naics_desc") or "Other",
-        company_name=doc.get("name") or ""
-    )
-    doc["industry"] = doc.get("industry") or doc.get("primary_naics_desc") or "Other"
-    doc["contact"] = doc.get("contact") or "N/A"
+            match_score = company_data.matchScore or compute_company_match_score(
+                primary_naics=company_data.primary_naics or "",
+                industry_desc=company_data.industry or company_data.primary_naics_desc or "Other",
+                company_name=company_data.name or ""
+            )
 
-    await col.insert_one(doc)
-    return {"status": "success", "message": "Company added successfully"}
+            stmt_ins = insert(SQL_Company).values(
+                uei=uei,
+                name=company_data.name,
+                website=company_data.location or "",
+                industry=company_data.industry or company_data.primary_naics_desc or "Other",
+                size=company_data.size or "Small",
+                location=company_data.location or "",
+                description=company_data.primary_naics_desc or "",
+                naics_code=company_data.primary_naics or "",
+                match_score=match_score,
+                contact=company_data.contact or "N/A",
+                email=company_data.email or "",
+                phone=company_data.phone or "",
+                cage_code=company_data.cage_code or "",
+                status=company_data.status or "Active",
+                address=company_data.address or "",
+                is_small_business=company_data.is_small_business or "N",
+                is_minority_owned=company_data.is_minority_owned or "N",
+                is_women_owned=company_data.is_women_owned or "N",
+                is_veteran_owned=company_data.is_veteran_owned or "N",
+                secondary_naics=company_data.secondary_naics or "",
+                is_researched=False,
+                research_status="pending",
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+            await db.execute(stmt_ins)
+            await db.commit()
+            return {"status": "success", "message": "Company added successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {e}")
 
 
 @router.post("/import")
@@ -508,48 +592,68 @@ async def import_companies(payload: dict, current_user: dict = Depends(get_curre
     """Bulk import companies from a raw JSON array (small payloads only). For CSV use /import/file."""
     format_type = payload.get("format")
     raw_data = payload.get("data")
-    col = get_async_collection("companies")
 
     imported_count = 0
     if format_type == "json":
         try:
             items = (json.loads(raw_data) if isinstance(raw_data, str) else raw_data) or []
-            for item in items:
-                try:
-                    validated_item = CompanyCreateBody(**item)
-                except Exception:
-                    continue
-
-                uei = validated_item.uei.strip().upper()
-                if uei and not await col.find_one({"uei": uei}):
-                    doc = validated_item.model_dump()
+            async for db in get_db_session():
+                for item in items:
                     try:
-                        doc["matchScore"] = doc.get("matchScore") or compute_company_match_score(
-                            primary_naics=doc.get("primary_naics") or "",
-                            industry_desc=doc.get("industry") or doc.get("primary_naics_desc") or "Other",
-                            company_name=doc.get("name") or ""
-                        )
+                        validated_item = CompanyCreateBody(**item)
                     except Exception:
-                        doc["matchScore"] = 75
-                    doc["industry"] = doc.get("industry") or doc.get("primary_naics_desc") or "Other"
-                    doc["contact"] = doc.get("contact") or "N/A"
-                    await col.insert_one(doc)
-                    imported_count += 1
-        except HTTPException:
-            raise
+                        continue
+
+                    uei = validated_item.uei.strip().upper()
+                    stmt = select(SQL_Company).where(SQL_Company.uei == uei)
+                    existing = (await db.execute(stmt)).scalar_one_or_none()
+                    if uei and not existing:
+                        try:
+                            match_score = validated_item.matchScore or compute_company_match_score(
+                                primary_naics=validated_item.primary_naics or "",
+                                industry_desc=validated_item.industry or validated_item.primary_naics_desc or "Other",
+                                company_name=validated_item.name or ""
+                            )
+                        except Exception:
+                            match_score = 75
+
+                        await db.execute(insert(SQL_Company).values(
+                            uei=uei,
+                            name=validated_item.name,
+                            website=validated_item.location or "",
+                            industry=validated_item.industry or validated_item.primary_naics_desc or "Other",
+                            size=validated_item.size or "Small",
+                            location=validated_item.location or "",
+                            description=validated_item.primary_naics_desc or "",
+                            naics_code=validated_item.primary_naics or "",
+                            match_score=match_score,
+                            contact=validated_item.contact or "N/A",
+                            email=validated_item.email or "",
+                            phone=validated_item.phone or "",
+                            cage_code=validated_item.cage_code or "",
+                            status=validated_item.status or "Active",
+                            address=validated_item.address or "",
+                            is_small_business=validated_item.is_small_business or "N",
+                            is_minority_owned=validated_item.is_minority_owned or "N",
+                            is_women_owned=validated_item.is_women_owned or "N",
+                            is_veteran_owned=validated_item.is_veteran_owned or "N",
+                            secondary_naics=validated_item.secondary_naics or "",
+                            is_researched=False,
+                            research_status="pending",
+                            created_at=datetime.now(timezone.utc).replace(tzinfo=None),
+                            updated_at=datetime.now(timezone.utc).replace(tzinfo=None)
+                        ))
+
+                        imported_count += 1
+                await db.commit()
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid JSON format: {str(e)}")
     elif format_type == "csv":
-        # For small CSV strings only — large files must use /import/file
         try:
             raw_str = (raw_data or "").replace("\x00", "").strip()
             if not raw_str:
                 return {"status": "success", "count": 0}
-            imported_count = await _process_csv_stream(
-                io.StringIO(raw_str), col
-            )
-        except HTTPException:
-            raise
+            imported_count = await _process_csv_stream(io.StringIO(raw_str))
         except Exception as e:
             logger.error(f"CSV import failed: {e}")
             raise HTTPException(status_code=400, detail=f"Invalid CSV format: {str(e)}")
@@ -563,20 +667,14 @@ async def import_companies_file(
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Stream-import companies from a CSV file upload (handles files of any size).
-    Uses multipart/form-data so the CSV is never loaded entirely into memory.
+    Stream-import companies from a CSV file upload (handles files of any size) to MySQL.
     """
     if not file.filename or not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="Please upload a .csv file.")
 
-    col = get_async_collection("companies")
     try:
-        # Stream-decode: wrap the SpooledTemporaryFile in a UTF-8 text reader
-        # so csv.DictReader reads line-by-line without loading the whole file.
         text_stream = codecs.iterdecode(file.file, "utf-8", errors="replace")
-        imported_count = await _process_csv_stream(text_stream, col)
-    except HTTPException:
-        raise
+        imported_count = await _process_csv_stream(text_stream)
     except Exception as e:
         logger.error(f"CSV file import failed: {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=f"CSV processing failed: {str(e)}")
@@ -586,11 +684,9 @@ async def import_companies_file(
     return {"status": "success", "count": imported_count}
 
 
-async def _process_csv_stream(text_stream, col) -> int:
+async def _process_csv_stream(text_stream) -> int:
     """
-    Core CSV processing logic: reads rows from any text iterable,
-    batch-inserts new companies into MongoDB in chunks of 500.
-    Returns the number of documents actually inserted.
+    reads rows from any text iterable, bulk-inserts into MySQL companies table in chunks.
     """
     reader = csv.DictReader(text_stream)
     imported_count = 0
@@ -601,25 +697,19 @@ async def _process_csv_stream(text_stream, col) -> int:
     async def _flush_chunk(chunk: list) -> int:
         if not chunk:
             return 0
-        # Deduplicate against DB in one round-trip
         all_ueis = [d["uei"] for d in chunk]
+        
         existing_ueis: set[str] = set()
-        try:
-            cursor = col.find({"uei": {"$in": all_ueis}}, {"uei": 1, "_id": 0})
-            existing_ueis = {doc["uei"] async for doc in cursor if "uei" in doc}
-        except Exception as e:
-            logger.warning(f"Error querying existing UEIs: {e}")
+        async for db in get_db_session():
+            stmt = select(SQL_Company.uei).where(SQL_Company.uei.in_(all_ueis))
+            existing_ueis = set((await db.execute(stmt)).scalars().all())
 
-        new_docs = [d for d in chunk if d["uei"] not in existing_ueis]
-        if not new_docs:
-            return 0
-        try:
-            res = await col.insert_many(new_docs, ordered=False)
-            return len(res.inserted_ids)
-        except Exception as e:
-            inserted = getattr(e, "details", {}).get("nInserted", 0)
-            logger.warning(f"Bulk insert warning (some may be duplicates): {e}")
-            return inserted
+            new_docs = [d for d in chunk if d["uei"] not in existing_ueis]
+            if new_docs:
+                await db.execute(insert(SQL_Company).values(new_docs))
+                await db.commit()
+                return len(new_docs)
+        return 0
 
     for row in reader:
         if not isinstance(row, dict):
@@ -673,42 +763,38 @@ async def _process_csv_stream(text_stream, col) -> int:
         docs_to_insert.append({
             "uei": uei,
             "name": name,
-            "dba_name": dba_name,
+            "website": location or "",
+            "industry": primary_naics_desc or "Other",
+            "size": "Small" if is_small else "Large",
+            "location": location,
+            "description": primary_naics_desc or "",
+            "naics_code": primary_naics,
+            "match_score": match_score,
+            "contact": contact,
+            "email": email_val,
+            "phone": phone,
             "cage_code": cage_code,
             "status": (row.get("Registration_Status") or row.get("status") or "Active").strip().title(),
-            "registration_date": (row.get("Registration_Date") or row.get("registration_date") or "").strip(),
-            "expiration_date": (row.get("Expiration_Date") or row.get("expiration_date") or "").strip(),
-            "primary_naics": primary_naics,
-            "primary_naics_desc": primary_naics_desc,
-            "city": city, "state": state, "country": country, "zip": phys_zip,
-            "location": location, "address": full_address,
-            "entity_structure": (row.get("Entity_Structure") or row.get("entity_structure") or "").strip(),
-            "size": "Small" if is_small else "Large",
+            "address": full_address,
             "is_small_business": "Y" if is_small else "N",
             "is_minority_owned": (row.get("Is_Minority_Owned") or "").strip().upper() or "N",
             "is_women_owned": (row.get("Is_Women_Owned") or "").strip().upper() or "N",
             "is_veteran_owned": (row.get("Is_Veteran_Owned") or "").strip().upper() or "N",
-            "matchScore": match_score,
-            "industry": primary_naics_desc or "Other",
-            "contact": contact,
-            "email": email_val,
-            "phone": phone,
-            "ebiz_contact": (row.get("EBiz_Contact_Name") or "").strip(),
-            "ebiz_email": (row.get("EBiz_Contact_Email") or "").strip(),
-            "ebiz_phone": (row.get("EBiz_Contact_Phone") or "").strip(),
+            "secondary_naics": (row.get("Secondary_NAICS_Codes") or "").strip(),
+            "is_researched": False,
+            "research_status": "pending",
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
         })
 
-        # Flush in chunks to keep memory bounded
         if len(docs_to_insert) >= CHUNK:
             imported_count += await _flush_chunk(docs_to_insert)
             docs_to_insert = []
 
-    # Flush remaining
     if docs_to_insert:
         imported_count += await _flush_chunk(docs_to_insert)
 
     return imported_count
-
 
 
 def update_research_task(task_key: str, progress: int, status: str, message: str, started_at: Optional[str] = None, resolved_slug: Optional[str] = None):
@@ -731,7 +817,6 @@ def update_research_task(task_key: str, progress: int, status: str, message: str
 def run_company_research_sync(company_input: str, force_rescrape: bool = False):
     import subprocess
     import sys
-    import re
     from utils.helpers import get_python_executable
     
     task_key = company_input.strip()
@@ -748,11 +833,6 @@ def run_company_research_sync(company_input: str, force_rescrape: bool = False):
         
     try:
         update_research_task(task_key, 10, "processing", "Starting company research...")
-
-        # Pass all current environment variables to the child process so
-        # settings like OPENROUTER_API_KEY, AI_MODE, MONGO_URI are inherited.
-        # This is the main reason AI falls back to rule-based on cPanel:
-        # the child process loses the parent's env if env= is not forwarded.
         child_env = os.environ.copy()
 
         p = subprocess.Popen(
@@ -811,26 +891,20 @@ def run_company_research_sync(company_input: str, force_rescrape: bool = False):
             update_research_task(task_key, 100, "completed", "Research completed successfully!", resolved_slug=resolved_slug)
             try:
                 if prof:
-                    comp_col = get_collection("companies")
-                    upd = {
-                        "is_researched": True,
-                        "research_status": "completed",
-                        "last_researched_at": datetime.now(timezone.utc).isoformat(),
-                    }
-                    if prof.get("emails") and len(prof["emails"]) > 0:
-                        upd["email"] = prof["emails"][0]
-                    if prof.get("phone_numbers") and len(prof["phone_numbers"]) > 0:
-                        upd["phone"] = prof["phone_numbers"][0]
-                    if prof.get("leadership") and len(prof["leadership"]) > 0:
-                        upd["contact"] = prof["leadership"][0]
-
-                    comp_col.update_many(
-                        {"$or": [
-                            {"name": {"$regex": f"^{re.escape(task_key)}$", "$options": "i"}},
-                            {"uei": task_key}
-                        ]},
-                        {"$set": upd}
-                    )
+                    with get_sync_db_session() as db:
+                        stmt = update(SQL_Company).where(or_(
+                            SQL_Company.name.ilike(task_key),
+                            SQL_Company.uei == task_key
+                        )).values(
+                            is_researched=True,
+                            research_status="completed",
+                            last_researched_at=datetime.utcnow(),
+                            email=prof["emails"][0] if (prof.get("emails") and len(prof["emails"]) > 0) else SQL_Company.email,
+                            phone=prof["phone_numbers"][0] if (prof.get("phone_numbers") and len(prof["phone_numbers"]) > 0) else SQL_Company.phone,
+                            contact=prof["leadership"][0] if (prof.get("leadership") and len(prof["leadership"]) > 0) else SQL_Company.contact
+                        )
+                        db.execute(stmt)
+                        db.commit()
             except Exception as sync_err:
                 print(f"Error syncing researched profile to companies DB: {sync_err}")
         else:
@@ -864,24 +938,29 @@ def trigger_company_research(
 
 @router.get("/research/status")
 async def get_research_status(current_user: dict = Depends(get_current_user)):
-    col = get_async_collection("task_statuses")
-    tasks = await col.find({"type": "company_research"}, {"_id": 0, "expireAt": 0, "updatedAt": 0}).to_list(length=1000)
     result = {}
-    for t in tasks:
-        task_id = t["task_id"]
-        result[task_id] = {
-            "progress": t["progress"],
-            "status": t["status"],
-            "message": t["message"],
-            "started_at": t.get("started_at"),
-            "resolved_slug": t.get("resolved_slug")
-        }
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_TaskStatus).where(SQL_TaskStatus.task_type == "company_research")
+                res = await db.execute(stmt)
+                for t in res.scalars().all():
+                    extra = t.extra_data or {}
+                    result[t.task_id] = {
+                        "progress": t.progress,
+                        "status": t.status,
+                        "message": t.message,
+                        "started_at": extra.get("started_at"),
+                        "resolved_slug": extra.get("resolved_slug")
+                    }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
     return result
 
 
 @router.get("/profiles")
 async def get_compacted_profiles(current_user: dict = Depends(get_current_user)):
-    """Retrieve all compacted company profiles."""
+    """Retrieve all compacted company profiles from MongoDB."""
     try:
         col = get_async_collection("company_profiles")
         profiles = await col.find({}, {"_id": 0}).to_list(length=1000)
@@ -896,8 +975,7 @@ async def search_compacted_profiles(
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Search compacted profiles by company_name, website, company_slug, or company_name_slug.
-    Returns the best matching profile. Used by the frontend after research completes.
+    Search compacted profiles in MongoDB.
     """
     try:
         col = get_async_collection("company_profiles")
@@ -924,7 +1002,7 @@ async def get_latest_profiles(
     limit: int = 5,
     current_user: dict = Depends(get_current_user),
 ):
-    """Returns the N most recently updated profiles."""
+    """Returns the N most recently updated profiles from MongoDB."""
     try:
         col = get_async_collection("company_profiles")
         profiles = await col.find({}, {"_id": 0, "company_name": 1, "company_slug": 1, "company_name_slug": 1,
@@ -939,7 +1017,7 @@ async def get_profile_detail(
     slug: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """Retrieve full detail of a compacted company profile by slug."""
+    """Retrieve full detail of a compacted company profile by slug from MongoDB."""
     try:
         col = get_async_collection("company_profiles")
         profile = await col.find_one({
@@ -971,15 +1049,26 @@ async def set_ai_mode(
     if mode not in ("auto", "ai", "rule_based"):
         raise HTTPException(status_code=400, detail="Invalid mode. Must be auto, ai, or rule_based.")
     
-    try:
-        col = get_async_collection("system_settings")
-        await col.update_one(
-            {"key": "ai_mode"},
-            {"$set": {"value": mode, "updated_at": datetime.now(timezone.utc)}},
-            upsert=True
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save AI mode settings: {e}")
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_SystemSettings).where(SQL_SystemSettings.key_name == "ai_mode")
+                row = (await db.execute(stmt)).scalar_one_or_none()
+                if row:
+                    await db.execute(
+                        update(SQL_SystemSettings)
+                        .where(SQL_SystemSettings.key_name == "ai_mode")
+                        .values(value=mode, updated_at=datetime.utcnow())
+                    )
+                else:
+                    await db.execute(insert(SQL_SystemSettings).values(
+                        key_name="ai_mode",
+                        value=mode,
+                        updated_at=datetime.utcnow()
+                    ))
+                await db.commit()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to save AI mode settings: {e}")
         
     settings.AI_MODE = mode
     return {"status": "success", "ai_mode": mode}
@@ -987,45 +1076,110 @@ async def set_ai_mode(
 
 @router.get("/settings/ai-mode")
 async def get_ai_mode(current_user: dict = Depends(get_current_user)):
-    try:
-        col = get_async_collection("system_settings")
-        record = await col.find_one({"key": "ai_mode"})
-        if record and "value" in record:
-            return {"ai_mode": record["value"]}
-    except Exception:
-        pass
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_SystemSettings).where(SQL_SystemSettings.key_name == "ai_mode")
+                row = (await db.execute(stmt)).scalar_one_or_none()
+                if row:
+                    val = getattr(row, "value", None)
+                    if val:
+                        return {"ai_mode": str(val)}
+        except Exception:
+            pass
+
     return {"ai_mode": settings.AI_MODE}
 
 
 @router.get("/pipeline")
 async def get_pipeline_items(current_user: dict = Depends(get_current_user)):
-    """Retrieve items categorized for the CRM Pipeline stages."""
-    companies_col = get_async_collection("companies")
-    tenders_col = get_async_collection("tenders")
-    reports_col = get_async_collection("reports")
-    meetings_col = get_async_collection("meetings")
-    leads_col = get_async_collection("leads")
+    """Retrieve items categorized for the CRM Pipeline stages from MySQL."""
+    prospects = []
+    contacted = []
+    proposals = []
+    meetings = []
+    negotiation = []
+    won = []
 
-    prospects = await companies_col.find({}, {"name": 1, "industry": 1, "matchScore": 1, "contact": 1, "uei": 1}).limit(10).to_list(length=10)
-    contacted = await leads_col.find({"status": {"$in": ["sent", "opened", "clicked", "replied"]}}, {"email": 1, "contactName": 1, "companyName": 1, "status": 1}).limit(10).to_list(length=10)
-    proposals = await reports_col.find({}, {"title": 1, "company_name": 1, "proposal_type": 1, "size": 1, "filename": 1}).limit(10).to_list(length=10)
-    meetings = await meetings_col.find({}, {"title": 1, "host": 1, "startTime": 1}).limit(10).to_list(length=10)
-    negotiation = await leads_col.find({"status": "replied"}, {"email": 1, "contactName": 1, "companyName": 1}).limit(10).to_list(length=10)
-    won = await tenders_col.find({"has_award": True}, {"title": 1, "agency": 1, "value": 1, "id": 1}).limit(10).to_list(length=10)
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                # leads -> prospects
+                stmt_prosp = select(SQL_Company).limit(10)
+                res = await db.execute(stmt_prosp)
+                prospects = [{
+                    "id": str(c.id),
+                    "name": c.name or "",
+                    "industry": c.industry or "",
+                    "matchScore": c.match_score or 0,
+                    "contact": c.contact or "",
+                    "uei": c.uei or ""
+                } for c in res.scalars().all()]
 
-    def fmt_id(doc):
-        doc["id"] = str(doc.get("_id") or doc.get("id") or doc.get("uei") or doc.get("filename") or "")
-        if "_id" in doc:
-            del doc["_id"]
-        return doc
+                # contacted leads
+                stmt_cont = select(SQL_Lead).where(SQL_Lead.status.in_(["sent", "opened", "clicked", "replied"])).limit(10)
+                res = await db.execute(stmt_cont)
+                contacted = [{
+                    "id": str(l.id),
+                    "email": l.email or "",
+                    "contactName": l.contact_name or "",
+                    "companyName": l.company_name or "",
+                    "status": l.status or ""
+                } for l in res.scalars().all()]
+
+                # proposals -> reports table
+                stmt_prop = select(SQL_Report).limit(10)
+                res = await db.execute(stmt_prop)
+                proposals = [{
+                    "id": str(r.id),
+                    "title": r.title or "",
+                    "company_name": r.company_name or "",
+                    "proposal_type": r.proposal_type or "",
+                    "size": r.size or "",
+                    "filename": r.filename or ""
+                } for r in res.scalars().all()]
+
+                # meetings
+                stmt_meet = select(SQL_Meeting).limit(10)
+                res = await db.execute(stmt_meet)
+                meetings = [{
+                    "id": str(m.id),
+                    "title": m.title or "",
+                    "host": m.host or "",
+                    "startTime": _iso(m.start_time)
+                } for m in res.scalars().all()]
+
+                # negotiation -> leads with status = replied
+                stmt_neg = select(SQL_Lead).where(SQL_Lead.status == "replied").limit(10)
+                res = await db.execute(stmt_neg)
+                negotiation = [{
+                    "id": str(l.id),
+                    "email": l.email or "",
+                    "contactName": l.contact_name or "",
+                    "companyName": l.company_name or ""
+                } for l in res.scalars().all()]
+
+                # won -> tenders with has_award = True
+                stmt_won = select(SQL_Tender).where(SQL_Tender.has_award == True).limit(10)
+                res = await db.execute(stmt_won)
+                won = [{
+                    "id": str(t.id),
+                    "title": t.title or "",
+                    "agency": t.agency or "",
+                    "value": float(getattr(t, "value", 0) or 0)
+                } for t in res.scalars().all()]
+
+
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
 
     return {
-        "leads": [fmt_id(p) for p in prospects],
-        "contacted": [fmt_id(c) for c in contacted],
-        "proposals": [fmt_id(p) for p in proposals],
-        "meetings": [fmt_id(m) for m in meetings],
-        "negotiation": [fmt_id(n) for n in negotiation],
-        "won": [fmt_id(w) for w in won]
+        "leads": prospects,
+        "contacted": contacted,
+        "proposals": proposals,
+        "meetings": meetings,
+        "negotiation": negotiation,
+        "won": won
     }
 
 
@@ -1061,7 +1215,7 @@ DEFAULT_OWN_PROFILE = {
 async def get_own_company_profile(
     current_user: dict = Depends(get_current_user),
 ):
-    """Retrieve Orbit Avanya's own company profile & inventory."""
+    """Retrieve Orbit Avanya's own company profile & inventory from MongoDB."""
     col = get_async_collection("own_company_profile")
     doc = await col.find_one({})
     if not doc:
@@ -1077,7 +1231,7 @@ async def update_own_company_profile(
     data: dict,
     current_user: dict = Depends(get_current_user),
 ):
-    """Update or save Orbit Avanya's own company profile."""
+    """Update or save Orbit Avanya's own company profile in MongoDB."""
     col = get_async_collection("own_company_profile")
     data["updatedAt"] = datetime.now(timezone.utc)
     res = await col.find_one_and_update(
@@ -1097,16 +1251,28 @@ async def get_company_detail(
     uei: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """Retrieve full details of a specific company by its UEI, slug, or ID identifier."""
-    col = get_async_collection("companies")
-    query_conditions: list[dict[str, Any]] = [{"uei": uei}, {"company_slug": uei}, {"id": uei}, {"name": uei}]
-    if ObjectId.is_valid(uei):
-        query_conditions.append({"_id": ObjectId(uei)})
-        
-    company = await col.find_one({"$or": query_conditions})
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
-    if "_id" in company:
-        company["id"] = str(company["_id"])
-        del company["_id"]
-    return company
+    """Retrieve full details of a specific company from MySQL."""
+    if not _mysql_available:
+        raise HTTPException(status_code=500, detail="MySQL database is unavailable.")
+
+    try:
+        async for db in get_db_session():
+            try:
+                comp_id = int(uei)
+            except ValueError:
+                comp_id = -1
+
+            stmt = select(SQL_Company).where(or_(
+                SQL_Company.uei == uei,
+                SQL_Company.id == comp_id,
+                SQL_Company.name.ilike(uei)
+            ))
+            res = await db.execute(stmt)
+            company = res.scalar_one_or_none()
+            if not company:
+                raise HTTPException(status_code=404, detail="Company not found")
+            return _format_company(company)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

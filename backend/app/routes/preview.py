@@ -1,18 +1,24 @@
 """
 app/routes/preview.py
 ---------------------
-Pre-generation Preview Wizard API endpoints using Motor async client.
+Pre-generation Preview Wizard API endpoints using MySQL for tenders.
 """
 
+from __future__ import annotations
+
 import asyncio
+import logging
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.core.auth import get_current_user
-from utils.db_client import get_async_collection
+from utils.db_client import get_db_session, get_collection, _mysql_available
 from pipeline.ai.client import get_ai_client
+from models.sql_models import Tender as SQL_Tender
+from sqlalchemy import select, or_
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/preview", tags=["preview"])
 
 
@@ -62,16 +68,25 @@ async def get_wizard_questions(
 ):
     tender_info = {}
     if tender_id:
-        col = get_async_collection("tenders")
-        tender = await col.find_one({"$or": [{"noticeId": tender_id}, {"_id": tender_id}]})
-        if tender:
-            tender_info = tender
+        if _mysql_available:
+            try:
+                async for db in get_db_session():
+                    stmt = select(SQL_Tender).where(or_(SQL_Tender.id == tender_id, SQL_Tender.notice_id == tender_id))
+                    tender = (await db.execute(stmt)).scalar_one_or_none()
+                    if tender:
+                        tender_info = {
+                            "title": tender.title,
+                            "naicsCode": tender.naics_code,
+                        }
+            except Exception as e:
+                logger.error(f"Failed to fetch tender in preview: {e}")
 
     title = tender_info.get("title") or solicitation_number or "Government Contracting Opportunity"
     naics = tender_info.get("naicsCode", "General")
     
-    company_col = get_async_collection("own_company_profile")
-    company_profile = await company_col.find_one({}) or {}
+    # own_company_profile remains on MongoDB
+    company_col = get_collection("own_company_profile")
+    company_profile = company_col.find_one({}) or {}
     company_context = company_profile.get("company_name", "Our Company")
     if company_profile.get("capabilities"):
         company_context += f" - Capabilities: {company_profile.get('capabilities')}"
@@ -211,17 +226,25 @@ async def generate_proposal_outline(
 
     tender_info = {}
     if payload.tender_id:
-        col = get_async_collection("tenders")
-        tender = await col.find_one({"$or": [{"noticeId": payload.tender_id}, {"_id": payload.tender_id}]})
-        if tender:
-            tender_info = tender
+        if _mysql_available:
+            try:
+                async for db in get_db_session():
+                    stmt = select(SQL_Tender).where(or_(SQL_Tender.id == payload.tender_id, SQL_Tender.notice_id == payload.tender_id))
+                    tender = (await db.execute(stmt)).scalar_one_or_none()
+                    if tender:
+                        tender_info = {
+                            "title": tender.title,
+                        }
+            except Exception:
+                pass
 
     title = tender_info.get("title", "Government Opportunity")
     
     company_profile = payload.company_profile
     if not company_profile:
-        company_col = get_async_collection("own_company_profile")
-        company_profile = await company_col.find_one({}) or {}
+        # own_company_profile remains on MongoDB
+        company_col = get_collection("own_company_profile")
+        company_profile = company_col.find_one({}) or {}
     company_context = company_profile.get("name") or company_profile.get("company_name", "Our Company")
     
     try:

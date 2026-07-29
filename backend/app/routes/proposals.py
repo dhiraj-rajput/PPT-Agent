@@ -1,8 +1,10 @@
 """
 app/routes/proposals.py
 -------------------------
-Proposal generation endpoints & WebSockets using Motor async DB client.
+Proposal generation endpoints & WebSockets using MySQL.
 """
+
+from __future__ import annotations
 
 import asyncio
 import logging
@@ -11,12 +13,20 @@ import sys
 import subprocess
 import traceback
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
-from utils.db_client import get_async_collection, get_collection, update_task_status, get_task_status_db
-from app.routes.reports import sync_reports_with_mongo
+from utils.db_client import get_db_session, get_sync_db_session, _mysql_available, update_task_status, get_task_status_db
+from app.routes.reports import sync_reports_with_db, _format_report_dict
 from app.core.auth import get_current_user, decode_and_get_user_async
+from models.sql_models import (
+    TaskStatus as SQL_TaskStatus,
+    DraftRequest as SQL_DraftRequest,
+    Tender as SQL_Tender,
+    Report as SQL_Report,
+)
+from sqlalchemy import select, update, insert, delete, func, or_, and_
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/proposals", tags=["proposals"])
@@ -39,21 +49,26 @@ def update_proposal_task(task_key: str, progress: int, status: str, message: str
 
 
 async def get_user_proposal_tasks_dict_async(user_id: str) -> dict:
-    col = get_async_collection("task_statuses")
-    tasks = await col.find({"type": "proposal_generation", "userId": user_id}, {"_id": 0, "expireAt": 0, "updatedAt": 0}).to_list(length=1000)
     result = {}
-    for t in tasks:
-        task_id = t["task_id"]
-        result[task_id] = {
-            "progress": t["progress"],
-            "status": t["status"],
-            "message": t["message"],
-            "filename": t.get("filename"),
-            "mode": t.get("mode"),
-            "solicitation": t.get("solicitation"),
-            "winner": t.get("winner"),
-            "tender_title": t.get("tender_title")
-        }
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_TaskStatus).where(SQL_TaskStatus.result["userId"].as_string() == user_id)
+                res = await db.execute(stmt)
+                for t in res.scalars().all():
+                    extra = t.result or {}
+                    result[t.task_id] = {
+                        "progress": t.progress,
+                        "status": t.status,
+                        "message": t.message,
+                        "filename": extra.get("filename"),
+                        "mode": extra.get("mode"),
+                        "solicitation": extra.get("solicitation"),
+                        "winner": extra.get("winner"),
+                        "tender_title": extra.get("tender_title")
+                    }
+        except Exception as e:
+            logger.error(f"Failed to fetch proposal tasks from MySQL: {e}")
     return result
 
 
@@ -76,17 +91,19 @@ class ConnectionManager:
             except Exception:
                 pass
 
+
 manager = ConnectionManager()
 
 
 @router.get("/active-tasks")
 async def get_active_proposal_tasks(current_user: dict = Depends(get_current_user)):
     """HTTP polling fallback for environments where WebSockets are not enabled (e.g. shared hosting)."""
-    user_id = str(current_user.get("_id") or current_user.get("id") or "")
+    user_id = str(current_user.get("id") or "")
     return await get_user_proposal_tasks_dict_async(user_id)
 
 
 from utils.helpers import get_python_executable
+
 
 def run_proposal_generation_sync(mode: str, solicitation: Optional[str] = None, winner: Optional[str] = None, loop=None):
     """
@@ -146,23 +163,21 @@ def run_proposal_generation_sync(mode: str, solicitation: Optional[str] = None, 
             asyncio.run_coroutine_threadsafe(manager.broadcast_for_users(), loop)
 
     try:
-
         update_progress(10, "Initializing proposal generation task...")
 
         if solicitation:
             update_progress(12, f"Ensuring RFP documents are downloaded for {solicitation}...")
             try:
-                tenders_col = get_collection("tenders")
-                tender = tenders_col.find_one({
-                    "$or": [
-                        {"solicitation_number": {"$regex": f"^{re.escape(solicitation)}$", "$options": "i"}},
-                        {"solicitation_number": solicitation}
-                    ]
-                })
-                notice_id = tender["id"] if (tender and "id" in tender) else solicitation
-                
+                notice_id = solicitation
+                with get_sync_db_session() as db:
+                    stmt_t = select(SQL_Tender).where(SQL_Tender.solicitation_number == solicitation)
+                    tender = db.execute(stmt_t).scalars().first()
+                    if tender:
+                        notice_id = str(getattr(tender, "id", "") or solicitation)
+
                 from app.routes.tenders import ensure_rfp_downloaded
-                ensure_rfp_downloaded(notice_id, solicitation)
+                ensure_rfp_downloaded(str(notice_id), str(solicitation))
+
             except Exception as download_err:
                 logger.warning(f"[Proposals] RFP download check warning: {download_err}")
 
@@ -244,22 +259,18 @@ def run_proposal_generation_sync(mode: str, solicitation: Optional[str] = None, 
             update_progress(80, f"Generation failed (process code {p_doc.returncode})", "failed")
             return
 
-        sync_reports_with_mongo()
+        sync_reports_with_db()
 
         update_progress(100, "Proposal document compiled successfully!", "completed", target_filename)
 
         try:
-            drafts_col = get_collection("draft_requests")
-            drafts_col.update_one(
-                {
-                    "$or": [
-                        {"notice_id": solicitation},
-                        {"solicitation_number": solicitation}
-                    ],
-                    "mode": mode
-                },
-                {"$set": {"draft_status": "completed", "completed_filename": target_filename}}
-            )
+            with get_sync_db_session() as db:
+                db.execute(
+                    update(SQL_DraftRequest)
+                    .where(SQL_DraftRequest.notice_id == solicitation, SQL_DraftRequest.mode == mode)
+                    .values(draft_status="completed", updated_at=datetime.utcnow())
+                )
+                db.commit()
         except Exception as e:
             logger.warning(f"Could not update draft request status: {e}")
 
@@ -294,10 +305,11 @@ async def trigger_proposal_generation(
         private_dir = PROJECT_ROOT / "private"
         private_dir.mkdir(parents=True, exist_ok=True)
         import json
-        with open(private_dir / "active_bidding_company.json", "w", encoding="utf-8") as f:
+        import uuid
+        task_id = uuid.uuid4().hex[:8]
+        with open(private_dir / f"company_profile_{task_id}.json", "w", encoding="utf-8") as f:
             json.dump(company_profile, f, indent=2)
     else:
-        # Remove active bidding company profile to fallback to default
         active_bidding_path = PROJECT_ROOT / "private" / "active_bidding_company.json"
         if active_bidding_path.exists():
             try:
@@ -328,26 +340,23 @@ async def trigger_proposal_generation(
             "solicitation": solicitation,
             "winner": winner,
             "tender_title": tender_title,
-            "userId": str(current_user["_id"])
+            "userId": str(current_user["id"])
         }
     )
 
     background_tasks.add_task(run_proposal_generation_task, mode, solicitation, winner)
 
-    try:
-        drafts_col = get_async_collection("draft_requests")
-        await drafts_col.update_one(
-            {
-                "$or": [
-                    {"notice_id": solicitation},
-                    {"solicitation_number": solicitation}
-                ],
-                "mode": mode
-            },
-            {"$set": {"draft_status": "processing"}}
-        )
-    except Exception:
-        pass
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                await db.execute(
+                    update(SQL_DraftRequest)
+                    .where(SQL_DraftRequest.notice_id == solicitation, SQL_DraftRequest.mode == mode)
+                    .values(draft_status="processing", updated_at=datetime.utcnow())
+                )
+                await db.commit()
+        except Exception:
+            pass
 
     return {
         "status": "started",
@@ -368,7 +377,7 @@ async def generate_partnership(
 
 @router.get("")
 async def list_proposal_tasks(current_user: dict = Depends(get_current_user)):
-    return await get_user_proposal_tasks_dict_async(str(current_user["_id"]))
+    return await get_user_proposal_tasks_dict_async(str(current_user["id"]))
 
 
 @router.get("/status")
@@ -379,7 +388,7 @@ async def get_task_status(
     if not company_name:
         return {"progress": 0, "status": "idle", "message": "No company name provided."}
         
-    user_tasks = await get_user_proposal_tasks_dict_async(str(current_user["_id"]))
+    user_tasks = await get_user_proposal_tasks_dict_async(str(current_user["id"]))
     for key, task in user_tasks.items():
         if company_name.lower() in key.lower():
             return task
@@ -397,9 +406,8 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = None):
     user_id = None
     user = await decode_and_get_user_async(token)
     if user:
-        user_id = str(user.get("_id") or user.get("id", ""))
+        user_id = str(user.get("id", ""))
     else:
-        # Fallback decode if user collection record wasn't retrieved
         try:
             from app.core.auth import SECRET_KEY, ALGORITHM, jwt
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -427,13 +435,17 @@ async def get_recent_proposals(
     current_user: dict = Depends(get_current_user),
 ):
     try:
-        await asyncio.to_thread(sync_reports_with_mongo)
-        reports_col = get_async_collection("reports")
+        await asyncio.to_thread(sync_reports_with_db)
         
-        recent = await reports_col.find(
-            {"company_name": {"$regex": re.escape(company_name), "$options": "i"}},
-            {"_id": 0}
-        ).sort("date", -1).to_list(length=100)
+        recent = []
+        if _mysql_available:
+            async for db in get_db_session():
+                stmt = select(SQL_Report).order_by(SQL_Report.created_at.desc())
+                res = await db.execute(stmt)
+                for r in res.scalars().all():
+                    r_dict = _format_report_dict(r)
+                    if company_name.lower() in r_dict.get("company_name", "").lower():
+                        recent.append(r_dict)
         return recent
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

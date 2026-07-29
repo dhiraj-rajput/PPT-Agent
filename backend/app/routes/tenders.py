@@ -1,22 +1,7 @@
 """
 app/routes/tenders.py
 ---------------------
-Tenders API — SAM.gov Opportunities v2 integration with Motor MongoDB caching.
-
-SAM.gov Opportunities API: https://api.sam.gov/opportunities/v2/search
-Entity Management API (companies): https://api.sam.gov/entity-information/v3/entities
-
-Strategy:
-  - MongoDB (Motor async) is the single source of truth. The frontend never hits SAM.gov directly.
-  - SAM.gov is only called when the cache is empty OR the user triggers a manual sync.
-  - Cached results include computed lifecycle status (Open / Closing Soon / Expired / Won).
-
-Endpoints:
-  GET  /api/tenders          — list cached tenders (search + filter locally in Mongo)
-  GET  /api/tenders/meta     — sync metadata (last_synced, count, quota_used)
-  POST /api/tenders/sync     — fetch fresh data from SAM.gov and cache it
-  GET  /api/tenders/{id}     — single tender detail by noticeId
-  POST /api/tenders/{id}/request-draft  — "Ask for Project (Draft)" button
+Tenders API — SAM.gov Opportunities v2 integration with MySQL cache.
 """
 
 from __future__ import annotations
@@ -25,28 +10,38 @@ import asyncio
 import logging
 import re
 import httpx
-
-logger = logging.getLogger(__name__)
+import json
 from datetime import datetime, timezone, timedelta
-from typing import Optional
+from typing import Optional, Any
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from fastapi.responses import FileResponse
 
-from utils.db_client import get_async_collection, get_collection
+from utils.db_client import get_db_session, get_sync_db_session, _mysql_available
 from config.settings import settings
 from app.core.auth import get_current_user
+from models.sql_models import (
+    Tender as SQL_Tender,
+    DraftRequest as SQL_DraftRequest,
+    SystemSettings as SQL_SystemSettings,
+    User as SQLUser,
+)
+from sqlalchemy import select, update, insert, delete, func, or_, and_
 
-def _sanitize_path_component(value: str) -> str:
-    return re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', str(value)).strip('_. ')
-
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/tenders", tags=["tenders"])
 
 SAM_OPPORTUNITIES_BASE = getattr(settings, "SAM_GOV_API_URL", "https://api.sam.gov/opportunities/v2/search")
 
 
+def _sanitize_path_component(val: str) -> str:
+    return re.sub(r'[\\/*?:"<>|]', "_", str(val or "")).strip()
+
+
+
 def _utc_now_iso() -> str:
+
     return datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
@@ -244,7 +239,7 @@ def _map_opportunity(opp: dict) -> dict:
 
     return {
         "id": notice_id,
-        "noticeId": notice_id,
+        "notice_id": notice_id,
         "title": title,
         "solicitation_number": sol_num,
         "agency": dept,
@@ -252,10 +247,8 @@ def _map_opportunity(opp: dict) -> dict:
         "naics_code": str(naics),
         "set_aside": set_aside_desc,
         "set_aside_code": set_aside_code,
-        "type": opp.get("type") or "Solicitation",
-        "postedDate": posted_fmt,
+        "opportunity_type": opp.get("type") or "Solicitation",
         "posted_date": posted_fmt,
-        "closingDate": closing_fmt,
         "closing_date": closing_fmt,
         "days_until_close": lifecycle["days_until_close"],
         "status": lifecycle["status"],
@@ -265,8 +258,7 @@ def _map_opportunity(opp: dict) -> dict:
         "award_amount": award_amount,
         "award_date": award_date[:10] if award_date else "",
         "award_awardee": award_awardee,
-        "match": match_score,
-        "matchScore": match_score,
+        "match_score": match_score,
         "rfp_url": opp.get("uiLink") or f"https://sam.gov/opp/{notice_id}/view",
         "summary": summary[:2000],
         "poc_name": poc_name,
@@ -277,20 +269,78 @@ def _map_opportunity(opp: dict) -> dict:
     }
 
 
+def _format_tender(t: SQL_Tender) -> dict:
+    if not t:
+        return {}
+    return {
+        "id": t.id,
+        "noticeId": t.notice_id,
+        "title": t.title or "",
+        "solicitation_number": t.solicitation_number or "",
+        "solicitationNumber": t.solicitation_number or "",
+        "agency": t.agency or "",
+        "department": t.department or "",
+        "naics_code": t.naics_code or "",
+        "set_aside": t.set_aside or "",
+        "opportunity_type": t.opportunity_type or "",
+        "postedDate": t.posted_date or "",
+        "posted_date": t.posted_date or "",
+        "closingDate": t.closing_date or "",
+        "closing_date": t.closing_date or "",
+        "days_until_close": t.days_until_close or 0,
+        "status": t.status or "Open",
+        "urgency": t.urgency or "normal",
+        "is_active": bool(t.is_active),
+        "has_award": bool(t.has_award),
+        "award_amount": float(getattr(t, "award_amount", 0) or 0.0),
+        "award_date": t.award_date or "",
+        "award_awardee": t.award_awardee or "",
+        "match": t.match_score or 0,
+        "matchScore": t.match_score or 0,
+        "rfp_url": t.rfp_url or "",
+        "summary": t.summary or "",
+        "poc_name": t.poc_name or "",
+        "poc_email": t.poc_email or "",
+        "poc_phone": t.poc_phone or "",
+        "place_of_performance": t.place_of_performance or "",
+        "updatedAt": t.updated_at.isoformat() if getattr(t, "updated_at", None) else None,
+        "raw_sam_data": t.raw_sam_data
+    }
+
+
 @router.get("/meta")
 async def get_tenders_meta(current_user: dict = Depends(get_current_user)):
-    meta_col = get_async_collection("tenders_meta")
-    tenders_col = get_async_collection("tenders")
+    total_cached = 0
+    active_cached = 0
+    last_synced = None
+    quota_used_today = 0
 
-    meta = await meta_col.find_one({}) or {}
-    total_cached = await tenders_col.count_documents({})
-    active_cached = await tenders_col.count_documents({"is_active": True})
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                total_cached = (await db.execute(select(func.count()).select_from(SQL_Tender))).scalar() or 0
+                active_cached = (await db.execute(select(func.count()).select_from(SQL_Tender).where(SQL_Tender.is_active == True))).scalar() or 0
+
+                stmt = select(SQL_SystemSettings).where(SQL_SystemSettings.key_name == "tenders_meta")
+                row = (await db.execute(stmt)).scalar_one_or_none()
+                if row:
+                    val = getattr(row, "value", None)
+                    if val:
+                        try:
+                            data = json.loads(str(val))
+                            last_synced = data.get("last_synced")
+                            quota_used_today = data.get("quota_used_today", 0)
+                        except Exception:
+                            pass
+
+        except Exception as e:
+            logger.error(f"Failed to load tenders metadata: {e}")
 
     return {
         "total_cached": total_cached,
         "active_cached": active_cached,
-        "last_synced": meta.get("last_synced"),
-        "quota_used_today": meta.get("quota_used_today", 0),
+        "last_synced": last_synced,
+        "quota_used_today": quota_used_today,
         "quota_max_daily": 10,
     }
 
@@ -307,74 +357,88 @@ async def get_tenders(
     limit: int = Query(20, ge=1, le=100),
     current_user: dict = Depends(get_current_user),
 ):
-    try:
-        col = get_async_collection("tenders")
-        total_cached = await col.count_documents({})
+    tenders = []
+    total = 0
+    total_cached = 0
+    status_counts = {}
+    naics_codes = []
+    set_aside_opts = []
 
-        filter_q = {}
-        and_conditions = []
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                total_cached = (await db.execute(select(func.count()).select_from(SQL_Tender))).scalar() or 0
 
-        if q:
-            escaped_q = re.escape(q.strip())
-            and_conditions.append({
-                "$or": [
-                    {"title": {"$regex": escaped_q, "$options": "i"}},
-                    {"solicitation_number": {"$regex": escaped_q, "$options": "i"}},
-                    {"agency": {"$regex": escaped_q, "$options": "i"}},
-                    {"department": {"$regex": escaped_q, "$options": "i"}},
-                    {"summary": {"$regex": escaped_q, "$options": "i"}},
-                    {"naics_code": {"$regex": escaped_q, "$options": "i"}},
-                ]
-            })
+                filter_conditions = []
+                if q:
+                    qs = f"%{q.strip()}%"
+                    filter_conditions.append(or_(
+                        SQL_Tender.title.ilike(qs),
+                        SQL_Tender.solicitation_number.ilike(qs),
+                        SQL_Tender.agency.ilike(qs),
+                        SQL_Tender.department.ilike(qs),
+                        SQL_Tender.summary.ilike(qs),
+                        SQL_Tender.naics_code.ilike(qs)
+                    ))
 
-        if naics and naics.upper() != "ALL":
-            and_conditions.append({"naics_code": {"$regex": re.escape(naics.strip()), "$options": "i"}})
+                if naics and naics.upper() != "ALL":
+                    filter_conditions.append(SQL_Tender.naics_code.ilike(f"%{naics.strip()}%"))
 
-        if set_aside and set_aside.upper() != "ALL":
-            and_conditions.append({"$or": [
-                {"set_aside_code": {"$regex": re.escape(set_aside.strip()), "$options": "i"}},
-                {"set_aside": {"$regex": re.escape(set_aside.strip()), "$options": "i"}},
-            ]})
+                if set_aside and set_aside.upper() != "ALL":
+                    filter_conditions.append(or_(
+                        SQL_Tender.set_aside.ilike(f"%{set_aside.strip()}%"),
+                        SQL_Tender.set_aside.ilike(f"%{set_aside.strip()}%")
+                    ))
 
-        if status and status.upper() != "ALL":
-            and_conditions.append({"status": status})
+                if status and status.upper() != "ALL":
+                    filter_conditions.append(SQL_Tender.status == status)
 
-        if urgency and urgency.upper() != "ALL":
-            and_conditions.append({"urgency": urgency})
+                if urgency and urgency.upper() != "ALL":
+                    filter_conditions.append(SQL_Tender.urgency == urgency)
 
-        if has_award is not None:
-            and_conditions.append({"has_award": has_award})
+                if has_award is not None:
+                    filter_conditions.append(SQL_Tender.has_award == has_award)
 
-        if and_conditions:
-            filter_q["$and"] = and_conditions
+                stmt_count = select(func.count()).select_from(SQL_Tender)
+                stmt_select = select(SQL_Tender)
+                if filter_conditions:
+                    stmt_count = stmt_count.where(and_(*filter_conditions))
+                    stmt_select = stmt_select.where(and_(*filter_conditions))
 
-        total = await col.count_documents(filter_q)
-        skip = (page - 1) * limit
-        results = await col.find(filter_q, {"_id": 0}).skip(skip).limit(limit).to_list(length=limit)
+                total = (await db.execute(stmt_count)).scalar() or 0
 
-        pipeline = [
-            {"$group": {"_id": "$status", "count": {"$sum": 1}}}
-        ]
-        status_counts_cursor = col.aggregate(pipeline)
-        status_counts_raw = await status_counts_cursor.to_list(length=100)
-        status_counts = {s["_id"]: s["count"] for s in status_counts_raw if s.get("_id")}
+                skip = (page - 1) * limit
+                stmt_select = stmt_select.order_by(SQL_Tender.match_score.desc(), SQL_Tender.posted_date.desc()).offset(skip).limit(limit)
+                res = await db.execute(stmt_select)
+                tenders = [_format_tender(t) for t in res.scalars().all()]
 
-        naics_codes = sorted([n for n in await col.distinct("naics_code") if n])[:100]
-        set_aside_opts = sorted([s for s in await col.distinct("set_aside") if s])[:50]
+                # Status counts
+                stmt_stat = select(SQL_Tender.status, func.count()).group_by(SQL_Tender.status)
+                res_stat = await db.execute(stmt_stat)
+                for row in res_stat.all():
+                    if row[0]:
+                        status_counts[row[0].value if hasattr(row[0], "value") else str(row[0])] = row[1]
 
-        return {
-            "total": total,
-            "total_cached": total_cached,
-            "page": page,
-            "limit": limit,
-            "tenders": results,
-            "cache_empty": total_cached == 0,
-            "naics_codes": naics_codes,
-            "set_aside_options": set_aside_opts,
-            "status_counts": status_counts,
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+                # Distinct lists
+                stmt_naics = select(SQL_Tender.naics_code).distinct().where(SQL_Tender.naics_code != "").order_by(SQL_Tender.naics_code.asc()).limit(100)
+                naics_codes = [n for n in (await db.execute(stmt_naics)).scalars().all()]
+
+                stmt_sa = select(SQL_Tender.set_aside).distinct().where(SQL_Tender.set_aside != "").order_by(SQL_Tender.set_aside.asc()).limit(50)
+                set_aside_opts = [s for s in (await db.execute(stmt_sa)).scalars().all()]
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    return {
+        "total": total,
+        "total_cached": total_cached,
+        "page": page,
+        "limit": limit,
+        "tenders": tenders,
+        "cache_empty": total_cached == 0,
+        "naics_codes": naics_codes,
+        "set_aside_options": set_aside_opts,
+        "status_counts": status_counts,
+    }
 
 
 @router.post("/sync")
@@ -386,28 +450,36 @@ async def sync_tenders_from_sam(
     force_mock = settings.FORCE_MOCK_SAM_GOV
 
     if not force_mock:
-        meta_col = get_async_collection("tenders_meta")
-        meta = await meta_col.find_one({}) or {}
-        last_synced_str = meta.get("last_synced")
-        if last_synced_str:
-            try:
-                cleaned_str = last_synced_str.replace("Z", "+00:00")
-                last_synced_dt = datetime.fromisoformat(cleaned_str)
-                now = datetime.now(timezone.utc)
-                elapsed = now - last_synced_dt
-                cooldown_hours = 24
-                if elapsed < timedelta(hours=cooldown_hours):
-                    remaining = timedelta(hours=cooldown_hours) - elapsed
-                    hours, remainder = divmod(remaining.seconds, 3600)
-                    minutes, _ = divmod(remainder, 60)
-                    raise HTTPException(
-                        status_code=429,
-                        detail=f"Rate limit: Manual SAM.gov sync is on a 24-hour cooldown. Please try again in {hours}h {minutes}m."
-                    )
-            except HTTPException:
-                raise
-            except Exception as e:
-                logger.warning(f"[Tenders] Cooldown parse warning: {e}")
+        # Check cooldown
+        if _mysql_available:
+            async for db in get_db_session():
+                stmt = select(SQL_SystemSettings).where(SQL_SystemSettings.key_name == "tenders_meta")
+                row = (await db.execute(stmt)).scalar_one_or_none()
+                if row:
+                    val = getattr(row, "value", None)
+                    if val:
+                        try:
+                            data = json.loads(str(val))
+                            last_synced_str = data.get("last_synced")
+                            if last_synced_str:
+                                cleaned_str = last_synced_str.replace("Z", "+00:00")
+                                last_synced_dt = datetime.fromisoformat(cleaned_str)
+                                now = datetime.now(timezone.utc)
+                                elapsed = now - last_synced_dt
+                                cooldown_hours = 24
+                                if elapsed < timedelta(hours=cooldown_hours):
+                                    remaining = timedelta(hours=cooldown_hours) - elapsed
+                                    hours, remainder = divmod(remaining.seconds, 3600)
+                                    minutes, _ = divmod(remainder, 60)
+                                    raise HTTPException(
+                                        status_code=429,
+                                        detail=f"Rate limit: Manual SAM.gov sync is on a 24-hour cooldown. Please try again in {hours}h {minutes}m."
+                                    )
+                        except HTTPException:
+                            raise
+                        except Exception as e:
+                            logger.warning(f"[Tenders] Cooldown parse warning: {e}")
+
 
     if not api_key and not force_mock:
         raise HTTPException(
@@ -451,18 +523,14 @@ async def sync_tenders_from_sam(
         if resp.status_code == 429:
             raise HTTPException(
                 status_code=429,
-                detail=(
-                    "SAM.gov rate limit reached (10 requests/day on free tier). "
-                    "Register a SAM.gov role at sam.gov/workspace to unlock 1,000 req/day. "
-                    "Your cached tenders are still available."
-                ),
+                detail="SAM.gov rate limit reached (10 requests/day). Your cached tenders are still available."
             )
         if resp.status_code == 401:
             raise HTTPException(status_code=401, detail="SAM.gov API key is invalid or expired.")
         if resp.status_code == 403:
             raise HTTPException(
                 status_code=403,
-                detail="SAM.gov returned 403 Forbidden. Check that your API key is a real SAM.gov key (not DEMO_KEY).",
+                detail="SAM.gov returned 403 Forbidden. Check that your API key is correct.",
             )
         if not resp.is_success:
             raise HTTPException(
@@ -484,10 +552,7 @@ async def sync_tenders_from_sam(
                 "fetched": 0,
                 "upserted": 0,
                 "total_in_sam": total_in_sam,
-                "message": (
-                    "SAM.gov returned 0 results for these parameters. "
-                    "Try broadening the search (fewer filters, wider date range)."
-                ),
+                "message": "SAM.gov returned 0 results for these parameters.",
             }
 
         return await _upsert_tenders_async(opportunities, params)
@@ -499,80 +564,165 @@ async def sync_tenders_from_sam(
 
 
 async def _upsert_tenders_async(opportunities: list, sync_params: dict, is_mock: bool = False) -> dict:
-    tenders_col = get_async_collection("tenders")
-    meta_col = get_async_collection("tenders_meta")
     upserted = 0
 
-    for opp in opportunities:
-        mapped = _map_opportunity(opp)
-        if not mapped.get("id"):
-            continue
-        mapped["raw_sam_data"] = opp
-        if is_mock:
-            mapped["_data_source"] = "mock"
-        await tenders_col.update_one(
-            {"id": mapped["id"]},
-            {"$set": mapped},
-            upsert=True,
-        )
-        upserted += 1
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                for opp in opportunities:
+                    mapped = _map_opportunity(opp)
+                    if not mapped.get("notice_id"):
+                        continue
+                    mapped["raw_sam_data"] = opp
+                    if is_mock:
+                        mapped["raw_sam_data"]["_data_source"] = "mock"
 
-    await meta_col.update_one(
-        {},
-        {
-            "$set": {
-                "last_synced": _utc_now_iso(),
-                "last_sync_params": {
-                    k: v for k, v in sync_params.items() if k != "api_key"
-                },
-            },
-            "$inc": {"quota_used_today": 1},
-        },
-        upsert=True,
-    )
+                    stmt_exist = select(SQL_Tender).where(SQL_Tender.id == mapped["notice_id"])
+                    existing = (await db.execute(stmt_exist)).scalar_one_or_none()
 
-    await _refresh_expired_statuses_async(tenders_col)
+                    award_amt = mapped.pop("award_amount", 0.0)
+
+                    if existing:
+                        await db.execute(
+                            update(SQL_Tender)
+                            .where(SQL_Tender.id == mapped["notice_id"])
+                            .values(
+                                title=mapped["title"],
+                                solicitation_number=mapped["solicitation_number"],
+                                agency=mapped["agency"],
+                                department=mapped["department"],
+                                naics_code=mapped["naics_code"],
+                                set_aside=mapped["set_aside"],
+                                opportunity_type=mapped["opportunity_type"],
+                                posted_date=mapped["posted_date"],
+                                closing_date=mapped["closing_date"],
+                                days_until_close=mapped["days_until_close"],
+                                status=mapped["status"],
+                                urgency=mapped["urgency"],
+                                is_active=mapped["is_active"],
+                                has_award=mapped["has_award"],
+                                award_amount=award_amt,
+                                award_date=mapped["award_date"],
+                                award_awardee=mapped["award_awardee"],
+                                match_score=mapped["match_score"],
+                                rfp_url=mapped["rfp_url"],
+                                summary=mapped["summary"],
+                                poc_name=mapped["poc_name"],
+                                poc_email=mapped["poc_email"],
+                                poc_phone=mapped["poc_phone"],
+                                place_of_performance=mapped["place_of_performance"],
+                                raw_sam_data=mapped["raw_sam_data"],
+                                updated_at=datetime.utcnow()
+                            )
+                        )
+                    else:
+                        db.add(SQL_Tender(
+                            id=mapped["notice_id"],
+                            notice_id=mapped["notice_id"],
+                            title=mapped["title"],
+                            solicitation_number=mapped["solicitation_number"],
+                            agency=mapped["agency"],
+                            department=mapped["department"],
+                            naics_code=mapped["naics_code"],
+                            set_aside=mapped["set_aside"],
+                            opportunity_type=mapped["opportunity_type"],
+                            posted_date=mapped["posted_date"],
+                            closing_date=mapped["closing_date"],
+                            days_until_close=mapped["days_until_close"],
+                            status=mapped["status"],
+                            urgency=mapped["urgency"],
+                            is_active=mapped["is_active"],
+                            has_award=mapped["has_award"],
+                            award_amount=award_amt,
+                            award_date=mapped["award_date"],
+                            award_awardee=mapped["award_awardee"],
+                            match_score=mapped["match_score"],
+                            rfp_url=mapped["rfp_url"],
+                            summary=mapped["summary"],
+                            poc_name=mapped["poc_name"],
+                            poc_email=mapped["poc_email"],
+                            poc_phone=mapped["poc_phone"],
+                            place_of_performance=mapped["place_of_performance"],
+                            raw_sam_data=mapped["raw_sam_data"],
+                            updated_at=datetime.utcnow()
+                        ))
+                    upserted += 1
+
+                # Save meta inside SystemSettings
+                stmt_meta = select(SQL_SystemSettings).where(SQL_SystemSettings.key_name == "tenders_meta")
+                meta_row = (await db.execute(stmt_meta)).scalar_one_or_none()
+
+                meta_data = {
+                    "last_synced": _utc_now_iso(),
+                    "last_sync_params": {k: v for k, v in sync_params.items() if k != "api_key"},
+                    "quota_used_today": 1
+                }
+                if meta_row:
+                    val = getattr(meta_row, "value", None)
+                    if val:
+                        try:
+                            old_meta = json.loads(str(val))
+                            meta_data["quota_used_today"] = old_meta.get("quota_used_today", 0) + 1
+                        except Exception:
+                            pass
+
+
+                if meta_row:
+                    await db.execute(
+                        update(SQL_SystemSettings)
+                        .where(SQL_SystemSettings.key_name == "tenders_meta")
+                        .values(value=json.dumps(meta_data), updated_at=datetime.utcnow())
+                    )
+                else:
+                    db.add(SQL_SystemSettings(
+                        key_name="tenders_meta",
+                        value=json.dumps(meta_data),
+                        updated_at=datetime.utcnow()
+                    ))
+
+                await db.commit()
+
+                # Refresh statuses
+                await _refresh_expired_statuses_async()
+        except Exception as e:
+            logger.error(f"Failed to upsert opportunities: {e}")
+            raise HTTPException(500, f"Upsert failed: {e}")
 
     return {
         "status": "ok",
         "fetched": len(opportunities),
         "upserted": upserted,
-        "message": (
-            f"Successfully cached {upserted} tenders from SAM.gov. "
-            "Results are stored permanently — no need to sync again unless you want fresher data."
-        ),
+        "message": f"Successfully cached {upserted} tenders from SAM.gov.",
     }
 
 
-async def _refresh_expired_statuses_async(col) -> None:
+async def _refresh_expired_statuses_async() -> None:
     now = datetime.now(tz=timezone.utc)
     cutoff = now.strftime("%Y-%m-%d")
-    try:
-        await col.update_many(
-            {
-                "closing_date": {"$lt": cutoff, "$ne": ""},
-                "status": {"$nin": ["Won", "Expired"]},
-            },
-            {"$set": {"status": "Expired", "urgency": "expired", "is_active": False}},
-        )
-        in_7_days = (now + timedelta(days=7)).strftime("%Y-%m-%d")
-        await col.update_many(
-            {
-                "closing_date": {"$gte": cutoff, "$lte": in_7_days},
-                "status": "Open",
-            },
-            {"$set": {"status": "Closing Soon", "urgency": "critical"}},
-        )
-        in_30_days = (now + timedelta(days=30)).strftime("%Y-%m-%d")
-        await col.update_many(
-            {
-                "closing_date": {"$gt": in_7_days, "$lte": in_30_days},
-                "status": "Open",
-            },
-            {"$set": {"status": "Closing Soon", "urgency": "warning"}},
-        )
-    except Exception as e:
-        logger.warning(f"[Tenders] Warning: lifecycle refresh failed: {e}")
+    in_7_days = (now + timedelta(days=7)).strftime("%Y-%m-%d")
+    in_30_days = (now + timedelta(days=30)).strftime("%Y-%m-%d")
+
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                await db.execute(
+                    update(SQL_Tender)
+                    .where(SQL_Tender.closing_date < cutoff, SQL_Tender.closing_date != "", ~SQL_Tender.status.in_(["Won", "Expired"]))
+                    .values(status="Expired", urgency="expired", is_active=False)
+                )
+                await db.execute(
+                    update(SQL_Tender)
+                    .where(SQL_Tender.closing_date >= cutoff, SQL_Tender.closing_date <= in_7_days, SQL_Tender.status == "Open")
+                    .values(status="Closing Soon", urgency="critical")
+                )
+                await db.execute(
+                    update(SQL_Tender)
+                    .where(SQL_Tender.closing_date > in_7_days, SQL_Tender.closing_date <= in_30_days, SQL_Tender.status == "Open")
+                    .values(status="Closing Soon", urgency="warning")
+                )
+                await db.commit()
+        except Exception as e:
+            logger.warning(f"[Tenders] Lifecycle status refresh warning: {e}")
 
 
 async def _insert_mock_tenders_async(params: dict) -> dict:
@@ -677,14 +827,23 @@ async def get_tender_detail(
     notice_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    col = get_async_collection("tenders")
-    tender = await col.find_one({"id": notice_id}, {"_id": 0})
-    if not tender:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Tender '{notice_id}' not found in cache. Sync from SAM.gov first.",
-        )
-    return tender
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_Tender).where(SQL_Tender.id == notice_id)
+                res = await db.execute(stmt)
+                tender = res.scalar_one_or_none()
+                if not tender:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Tender '{notice_id}' not found in cache. Sync from SAM.gov first.",
+                    )
+                return _format_tender(tender)
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+    raise HTTPException(500, "Database is unavailable.")
 
 
 @router.post("/{notice_id}/request-draft")
@@ -694,89 +853,107 @@ async def request_draft(
     payload: dict = {},
     current_user: dict = Depends(get_current_user),
 ):
-    tenders_col = get_async_collection("tenders")
-    tender = await tenders_col.find_one({"id": notice_id}, {"_id": 0})
-    if not tender:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Tender '{notice_id}' not found. Sync from SAM.gov before requesting a draft.",
-        )
+    if not _mysql_available:
+        raise HTTPException(status_code=500, detail="Database is unavailable.")
 
-    tender_status = tender.get("status", "Open")
-    has_award = tender.get("has_award", False)
-    award_awardee = tender.get("award_awardee", "")
+    try:
+        async for db in get_db_session():
+            stmt = select(SQL_Tender).where(SQL_Tender.id == notice_id)
+            tender = (await db.execute(stmt)).scalar_one_or_none()
+            if not tender:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Tender '{notice_id}' not found. Sync from SAM.gov before requesting a draft.",
+                )
 
-    mode = payload.get("mode", "")
-    if not mode:
-        if tender_status in ("Won", "Expired", "Closed") or has_award:
-            mode = "subcontract"
-        else:
-            mode = "prime"
+            tender_status = tender.status or "Open"
+            has_award = bool(tender.has_award)
+            award_awardee = tender.award_awardee or ""
 
-    target_company = payload.get("target_company") or (award_awardee if mode == "subcontract" else "")
+            mode = payload.get("mode", "")
+            if not mode:
+                if tender_status in ("Won", "Expired", "Closed") or has_award:
+                    mode = "subcontract"
+                else:
+                    mode = "prime"
 
-    drafts_col = get_async_collection("draft_requests")
-    existing = await drafts_col.find_one({"notice_id": notice_id, "mode": mode})
-    if existing:
-        return {
-            "status": "already_requested",
-            "mode": mode,
-            "message": f"A '{mode}' draft request for this tender already exists. Check the Proposal Builder.",
-            "tender_title": tender.get("title"),
-            "requested_at": existing.get("requested_at"),
-            "target_company": existing.get("target_company"),
-        }
+            target_company = payload.get("target_company") or (award_awardee if mode == "subcontract" else "")
 
-    record = {
-        "notice_id": notice_id,
-        "mode": mode,
-        "tender_title": tender.get("title"),
-        "agency": tender.get("agency"),
-        "solicitation_number": tender.get("solicitation_number"),
-        "naics_code": tender.get("naics_code"),
-        "set_aside": tender.get("set_aside"),
-        "closing_date": tender.get("closing_date"),
-        "days_until_close": tender.get("days_until_close"),
-        "value": tender.get("value"),
-        "tender_status": tender_status,
-        "urgency": tender.get("urgency"),
-        "poc_email": tender.get("poc_email"),
-        "target_company": target_company,
-        "award_awardee": award_awardee,
-        "requester": payload.get("requester") or current_user.get("name") or current_user.get("email") or "Unknown User",
-        "notes": payload.get("notes", ""),
-        "draft_status": "pending",
-        "requested_at": _utc_now_iso(),
-    }
+            # Check if existing
+            stmt_exist = select(SQL_DraftRequest).where(SQL_DraftRequest.notice_id == notice_id, SQL_DraftRequest.mode == mode)
+            existing = (await db.execute(stmt_exist)).scalar_one_or_none()
+            if existing:
+                return {
+                    "status": "already_requested",
+                    "mode": mode,
+                    "message": f"A '{mode}' draft request for this tender already exists. Check the Proposal Builder.",
+                    "tender_title": tender.title,
+                    "requested_at": existing.created_at.isoformat() if getattr(existing, "created_at", None) else "",
+                    "target_company": existing.extra_data.get("target_company") if (existing and isinstance(existing.extra_data, dict)) else "",
+                }
 
-    await drafts_col.insert_one(record)
+            extra_info = {
+                "tender_title": tender.title,
+                "agency": tender.agency,
+                "solicitation_number": tender.solicitation_number,
+                "naics_code": tender.naics_code,
+                "set_aside": tender.set_aside,
+                "closing_date": tender.closing_date,
+                "days_until_close": tender.days_until_close,
+                "value": str(tender.award_amount or 0.0),
+                "tender_status": tender_status,
+                "urgency": tender.urgency,
+                "poc_email": tender.poc_email,
+                "target_company": target_company,
+                "award_awardee": award_awardee,
+                "requester_str": payload.get("requester") or current_user.get("name") or current_user.get("email") or "Unknown User",
+            }
 
-    if mode == "prime":
-        sol_num = tender.get("solicitation_number")
-        if sol_num:
-            background_tasks.add_task(ensure_rfp_downloaded, notice_id, sol_num)
+            new_req = SQL_DraftRequest(
+                notice_id=notice_id,
+                mode=mode,
+                requester=int(current_user["id"]),
+                draft_status="pending",
+                notes=payload.get("notes", ""),
+                extra_data=extra_info,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+            db.add(new_req)
+            await db.commit()
+            await db.refresh(new_req)
 
-    if mode == "prime":
-        msg = (
-            f"Prime contractor draft request saved. You can start building the technical "
-            f"response for '{tender.get('title')}' inside the Proposal Builder."
-        )
-    elif mode == "subcontract":
-        msg = (
-            f"Subcontract pitch draft request saved targeting '{target_company or 'the prime winner'}'. "
-            f"You can launch the profiling and teaming pitch generator inside the Proposal Builder."
-        )
-    else:
-        msg = "Draft request saved. Open the Proposal Builder to launch the build."
+            if mode == "prime":
+                sol_num = str(getattr(tender, "solicitation_number", "") or "")
+                if sol_num:
+                    background_tasks.add_task(ensure_rfp_downloaded, str(notice_id), sol_num)
 
-    return {
-        "status": "success",
-        "mode": mode,
-        "message": msg,
-        "tender_title": tender.get("title"),
-        "target_company": target_company,
-        "requested_at": record["requested_at"],
-    }
+            if mode == "prime":
+
+                msg = (
+                    f"Prime contractor draft request saved. You can start building the technical "
+                    f"response for '{tender.title}' inside the Proposal Builder."
+                )
+            elif mode == "subcontract":
+                msg = (
+                    f"Subcontract pitch draft request saved targeting '{target_company or 'the prime winner'}'. "
+                    f"You can launch the profiling and teaming pitch generator inside the Proposal Builder."
+                )
+            else:
+                msg = "Draft request saved. Open the Proposal Builder to launch the build."
+
+            return {
+                "status": "success",
+                "mode": mode,
+                "message": msg,
+                "tender_title": tender.title,
+                "target_company": target_company,
+                "requested_at": new_req.created_at.isoformat(),
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/{notice_id}/request-draft")
@@ -784,31 +961,83 @@ async def get_draft_request_status(
     notice_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    drafts_col = get_async_collection("draft_requests")
-    requests = await drafts_col.find(
-        {
-            "$or": [
-                {"notice_id": notice_id},
-                {"solicitation_number": notice_id}
-            ]
-        },
-        {"_id": 0}
-    ).to_list(length=100)
+    requests_list = []
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                conds = [SQL_DraftRequest.notice_id == notice_id]
+                if notice_id.isdigit():
+                    conds.append(SQL_DraftRequest.id == int(notice_id))
+                stmt = select(SQL_DraftRequest).where(or_(*conds))
+
+                res = await db.execute(stmt)
+                for r in res.scalars().all():
+                    extra = r.extra_data or {}
+                    requests_list.append({
+                        "notice_id": r.notice_id,
+                        "mode": r.mode,
+                        "tender_title": extra.get("tender_title"),
+                        "agency": extra.get("agency"),
+                        "solicitation_number": extra.get("solicitation_number"),
+                        "naics_code": extra.get("naics_code"),
+                        "set_aside": extra.get("set_aside"),
+                        "closing_date": extra.get("closing_date"),
+                        "days_until_close": extra.get("days_until_close"),
+                        "value": extra.get("value"),
+                        "tender_status": extra.get("tender_status"),
+                        "urgency": extra.get("urgency"),
+                        "poc_email": extra.get("poc_email"),
+                        "target_company": extra.get("target_company"),
+                        "award_awardee": extra.get("award_awardee"),
+                        "requester": extra.get("requester_str"),
+                        "notes": r.notes or "",
+                        "draft_status": r.draft_status.value if hasattr(r.draft_status, "value") else str(r.draft_status or "pending"),
+                        "requested_at": r.created_at.isoformat() if getattr(r, "created_at", None) else "",
+                    })
+        except Exception as e:
+            logger.error(f"Failed to fetch draft request status: {e}")
+
     return {
         "notice_id": notice_id,
-        "requests": requests,
-        "modes_requested": [r["mode"] for r in requests],
+        "requests": requests_list,
+        "modes_requested": [r["mode"] for r in requests_list],
     }
 
 
 @router.get("/draft-requests/all")
 async def get_all_draft_requests(current_user: dict = Depends(get_current_user)):
-    try:
-        drafts_col = get_async_collection("draft_requests")
-        requests = await drafts_col.find({}, {"_id": 0}).sort("requested_at", -1).to_list(length=1000)
-        return requests
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    requests_list = []
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_DraftRequest).order_by(SQL_DraftRequest.created_at.desc())
+                res = await db.execute(stmt)
+                for r in res.scalars().all():
+                    extra = r.extra_data or {}
+                    requests_list.append({
+                        "notice_id": r.notice_id,
+                        "mode": r.mode,
+                        "tender_title": extra.get("tender_title") or r.notice_id,
+                        "agency": extra.get("agency"),
+                        "solicitation_number": extra.get("solicitation_number"),
+                        "naics_code": extra.get("naics_code"),
+                        "set_aside": extra.get("set_aside"),
+                        "closing_date": extra.get("closing_date"),
+                        "days_until_close": extra.get("days_until_close"),
+                        "value": extra.get("value"),
+                        "tender_status": extra.get("tender_status"),
+                        "urgency": extra.get("urgency"),
+                        "poc_email": extra.get("poc_email"),
+                        "target_company": extra.get("target_company"),
+                        "award_awardee": extra.get("award_awardee"),
+                        "requester": extra.get("requester_str"),
+                        "notes": r.notes or "",
+                        "draft_status": r.draft_status.value if hasattr(r.draft_status, "value") else str(r.draft_status or "pending"),
+                        "requested_at": r.created_at.isoformat() if getattr(r, "created_at", None) else "",
+                    })
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+    return requests_list
 
 
 def ensure_rfp_downloaded(notice_id: str, solicitation_number: str) -> None:
@@ -817,15 +1046,20 @@ def ensure_rfp_downloaded(notice_id: str, solicitation_number: str) -> None:
         logger.info(f"[Tenders] RFP docs already downloaded for {solicitation_number}")
         return
 
-    tender = get_collection("tenders").find_one({"id": notice_id})
     raw_opp = None
-    if tender and "raw_sam_data" in tender:
-        raw_opp = tender["raw_sam_data"]
+    if _mysql_available:
+        try:
+            with get_sync_db_session() as db:
+                row = db.execute(select(SQL_Tender).where(SQL_Tender.id == notice_id)).scalar_one_or_none()
+                if row and getattr(row, "raw_sam_data", None):
+                    raw_opp = row.raw_sam_data
+        except Exception as e:
+            logger.warning(f"Failed to query tender raw data from MySQL: {e}")
 
     from app.sam_gov.opportunities import SAMOpportunitiesClient
     opp_client = SAMOpportunitiesClient()
 
-    if not raw_opp:
+    if raw_opp is None or not isinstance(raw_opp, dict):
         logger.info(f"[Tenders] Raw data missing. Querying SAM.gov for solicitation: {solicitation_number}")
         try:
             results = opp_client.search_opportunities(query=solicitation_number, posted_days=360)
@@ -835,12 +1069,12 @@ def ensure_rfp_downloaded(notice_id: str, solicitation_number: str) -> None:
                     if opp_sol.lower() == solicitation_number.lower():
                         raw_opp = opp
                         break
-                if not raw_opp:
+                if raw_opp is None:
                     raw_opp = results[0]
         except Exception as e:
             logger.error(f"[Tenders] Failed searching SAM.gov: {e}")
 
-    if raw_opp:
+    if isinstance(raw_opp, dict):
         logger.info(f"[Tenders] Triggering download and structuring for {solicitation_number}")
         try:
             opp_client.structure_rfp_profile(raw_opp)
@@ -849,17 +1083,23 @@ def ensure_rfp_downloaded(notice_id: str, solicitation_number: str) -> None:
             logger.error(f"[Tenders] Error downloading RFP documents: {e}")
 
 
+
 @router.get("/{notice_id}/documents")
 async def list_tender_documents(
     notice_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    col = get_async_collection("tenders")
-    tender = await col.find_one({"noticeId": notice_id}, {"solicitationNumber": 1, "title": 1})
-    if not tender:
-        raise HTTPException(status_code=404, detail="Tender not found")
+    sol_num = notice_id
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_Tender).where(SQL_Tender.id == notice_id)
+                tender = (await db.execute(stmt)).scalar_one_or_none()
+                if tender:
+                    sol_num = _sanitize_path_component(str(getattr(tender, "solicitation_number", "") or notice_id))
+        except Exception:
+            pass
 
-    sol_num = _sanitize_path_component(tender.get("solicitationNumber") or notice_id)
     rfp_docs_dir = Path("downloads") / "opportunities" / sol_num / "rfp_docs"
     
     documents = []
@@ -918,12 +1158,18 @@ async def serve_tender_document(
     if not safe_filename or safe_filename != filename:
         raise HTTPException(status_code=400, detail="Invalid filename")
 
-    col = get_async_collection("tenders")
-    tender = await col.find_one({"noticeId": notice_id}, {"solicitationNumber": 1})
-    if not tender:
-        raise HTTPException(status_code=404, detail="Tender not found")
+    sol_num = notice_id
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_Tender).where(SQL_Tender.id == notice_id)
+                tender = (await db.execute(stmt)).scalar_one_or_none()
+                if tender:
+                    sol_num = _sanitize_path_component(str(getattr(tender, "solicitation_number", "") or notice_id))
+        except Exception:
+            pass
 
-    sol_num = _sanitize_path_component(tender.get("solicitationNumber") or notice_id)
+
     file_path = Path("downloads") / "opportunities" / sol_num / "rfp_docs" / safe_filename
 
     if not file_path.exists():

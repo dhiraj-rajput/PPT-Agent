@@ -24,7 +24,14 @@ from datetime import datetime, timezone
 from typing import Optional, Any
 from urllib.parse import urlparse, urlsplit, urlunsplit
 
-from config.settings import settings, ConfigurationError, Settings
+from config.settings import settings
+
+class ConfigurationError(Exception):
+    pass
+
+Settings = Any
+
+
 from utils.db_client import get_collection
 from utils.helpers import is_valid_url, setup_logger
 

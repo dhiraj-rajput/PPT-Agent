@@ -54,6 +54,57 @@ class AppSettings(BaseSettings):
     )
 
     # ------------------------------------------------------------------
+    # MySQL (dual-DB setup — relational data goes here, documents stay in Mongo)
+    # ------------------------------------------------------------------
+    MYSQL_HOST: str = Field(
+        default="localhost",
+        description="MySQL server hostname.",
+    )
+    MYSQL_PORT: int = Field(
+        default=3306,
+        description="MySQL server port.",
+    )
+    MYSQL_USER: str = Field(
+        default="root",
+        description="MySQL username.",
+    )
+    MYSQL_PASSWORD: str = Field(
+        default="",
+        description="MySQL password.",
+    )
+    MYSQL_DB: str = Field(
+        default="winbidai",
+        description="MySQL database name.",
+    )
+    MYSQL_URI: str = Field(
+        default="",
+        description=(
+            "Full async MySQL connection string (mysql+aiomysql://...). "
+            "When set, takes precedence over MYSQL_HOST/PORT/USER/PASSWORD/DB. "
+            "Example: mysql+aiomysql://user:pass@host:3306/winbidai"
+        ),
+    )
+    MYSQL_URI_SYNC: str = Field(
+        default="",
+        description=(
+            "Full sync MySQL connection string (mysql+pymysql://...) for background workers. "
+            "Auto-derived from MYSQL_URI when not set."
+        ),
+    )
+    MYSQL_POOL_SIZE: int = Field(
+        default=5,
+        description="SQLAlchemy async pool size for MySQL.",
+    )
+    MYSQL_MAX_OVERFLOW: int = Field(
+        default=10,
+        description="SQLAlchemy max pool overflow for MySQL.",
+    )
+    MYSQL_ECHO: bool = Field(
+        default=False,
+        description="Echo all SQL statements to the logger (dev only).",
+    )
+
+    # ------------------------------------------------------------------
     # Search — Tavily (company name → LinkedIn URL resolution)
     # ------------------------------------------------------------------
     TAVILY_API_KEY: str = Field(
@@ -481,6 +532,37 @@ class AppSettings(BaseSettings):
     @property
     def ollama_api_key(self) -> str:
         return self.OLLAMA_API_KEY
+
+    @property
+    def mysql_uri(self) -> str:
+        """
+        Return the async MySQL connection URI.
+        Prefers MYSQL_URI env var; otherwise builds from individual host/port/user/pass/db.
+        """
+        if self.MYSQL_URI:
+            return self.MYSQL_URI
+        if self.MYSQL_PASSWORD:
+            return (
+                f"mysql+asyncmy://{self.MYSQL_USER}:{self.MYSQL_PASSWORD}"
+                f"@{self.MYSQL_HOST}:{self.MYSQL_PORT}/{self.MYSQL_DB}"
+            )
+        return (
+            f"mysql+asyncmy://{self.MYSQL_USER}"
+            f"@{self.MYSQL_HOST}:{self.MYSQL_PORT}/{self.MYSQL_DB}"
+        )
+
+    @property
+    def mysql_uri_sync(self) -> str:
+        """
+        Return the synchronous MySQL connection URI (pymysql dialect).
+        Used by background workers and cron jobs.
+        """
+        if self.MYSQL_URI_SYNC:
+            return self.MYSQL_URI_SYNC
+        uri = self.mysql_uri
+        uri = uri.replace("mysql+asyncmy://", "mysql+pymysql://")
+        uri = uri.replace("mysql+aiomysql://", "mysql+pymysql://")
+        return uri
 
 
 # Module-level singleton — import this everywhere

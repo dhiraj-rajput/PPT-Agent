@@ -1,7 +1,7 @@
 """
 app/routes/campaigns.py
 -------------------------
-Campaign management & execution endpoints using async Motor.
+Campaign management & execution endpoints using MySQL.
 """
 
 from __future__ import annotations
@@ -9,13 +9,18 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Any
-from bson import ObjectId
-from bson.errors import InvalidId
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File
 from pydantic import BaseModel
 
 from app.core.auth import get_current_user
-from utils.db_client import get_async_collection, get_collection
+from utils.db_client import get_db_session, _mysql_available
+from models.sql_models import (
+    Campaign as SQL_Campaign,
+    Lead as SQL_Lead,
+    AuditLog as SQL_AuditLog,
+    SystemStatus as SQL_SystemStatus,
+)
+from sqlalchemy import select, insert, update, delete, func
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"])
 
@@ -59,26 +64,27 @@ def _iso(val: Any) -> Optional[str]:
     return None
 
 
-def _format_campaign(c: Optional[dict]) -> dict:
+def _format_campaign(c: SQL_Campaign) -> dict:
     if not c:
         return {}
-    stats = c.get("stats", {}) or {}
+    stats = c.stats or {}
     return {
-        "id": str(c["_id"]),
-        "name": c.get("name", ""),
-        "description": c.get("description", ""),
-        "status": c.get("status", "draft"),
-        "subject": c.get("subject", ""),
-        "body": c.get("body", ""),
-        "senderEmail": c.get("senderEmail", ""),
-        "senderName": c.get("senderName", ""),
-        "dailyLimit": c.get("dailyLimit", 200),
-        "timezone": c.get("timezone", "America/Chicago"),
-        "workingHoursOnly": c.get("workingHoursOnly", False),
-        "scheduleStart": _iso(c.get("scheduleStart")),
-        "attachmentPath": c.get("attachmentPath", ""),
-        "attachmentFilename": c.get("attachmentFilename", ""),
-        "campaignNumber": c.get("campaignNumber", 0),
+        "id": str(c.id),
+        "name": c.name or "",
+        "description": c.description or "",
+        "status": c.status or "draft",
+        "subject": c.subject or "",
+        "body": c.body or "",
+        "senderEmail": c.sender_email or "",
+        "senderName": c.sender_name or "",
+        "dailyLimit": c.daily_limit or 200,
+        "timezone": c.timezone or "America/Chicago",
+        "workingHoursOnly": bool(c.working_hours_only),
+        "scheduleStart": _iso(c.schedule_start),
+        "attachmentPath": getattr(c, "attachment_path", "") or "",
+        "attachmentFilename": getattr(c, "attachment_filename", "") or "",
+        "campaignNumber": getattr(c, "campaign_number", 0) or 0,
+
         "stats": {
             "totalSent": stats.get("totalSent", 0),
             "totalOpened": stats.get("totalOpened", 0),
@@ -88,72 +94,87 @@ def _format_campaign(c: Optional[dict]) -> dict:
             "totalUnsubscribed": stats.get("totalUnsubscribed", 0),
             "totalResent": stats.get("totalResent", 0),
         },
-        "createdAt": _iso(c.get("createdAt")),
-        "updatedAt": _iso(c.get("updatedAt")),
+        "createdAt": _iso(c.created_at),
+        "updatedAt": _iso(c.updated_at),
     }
 
 
-async def _queue_pending_leads_async(campaign_id: ObjectId, daily_limit: int, base_time: Optional[datetime] = None):
-    """Calculate and assign send_after timestamps spacing out leads across the day.
-
-    base_time is the earliest moment the first email may go out. Pass a
-    campaign's scheduleStart here (if it's in the future) to get exact-time
-    scheduling — the worker loop won't send anything until send_after is
-    reached, so nothing goes out before base_time.
-    """
-    leads_col = get_async_collection("leads")
-    pending = await leads_col.find({"campaignId": campaign_id, "status": "pending"}, {"_id": 1}).to_list(length=10000)
-    if not pending:
+async def _queue_pending_leads_async(campaign_id: int, daily_limit: int, base_time: Optional[datetime] = None):
+    """Calculate and assign send_after timestamps spacing out leads across the day in MySQL."""
+    if not _mysql_available:
         return 0
 
-    now = datetime.now(timezone.utc)
-    start = base_time if (base_time and base_time > now) else now
-    limit = daily_limit or 200
-    spacing_ms = max(int((24 * 60 * 60 * 1000) / limit), 1000)
+    async for db in get_db_session():
+        # Get all pending leads
+        stmt = select(SQL_Lead).where(SQL_Lead.campaign_id == campaign_id, SQL_Lead.status == "pending")
+        res = await db.execute(stmt)
+        pending = res.scalars().all()
+        if not pending:
+            return 0
 
-    for i, lead in enumerate(pending):
-        if i >= limit:
-            break
-        send_after = start + timedelta(milliseconds=i * spacing_ms)
-        await leads_col.update_one(
-            {"_id": lead["_id"]},
-            {"$set": {"send_after": send_after}}
-        )
-    return min(len(pending), limit)
+        now = datetime.now(timezone.utc)
+        start = base_time if (base_time and base_time > now) else now
+        limit = daily_limit or 200
+        spacing_ms = max(int((24 * 60 * 60 * 1000) / limit), 1000)
+
+        for i, lead in enumerate(pending):
+            if i >= limit:
+                break
+            send_after = start + timedelta(milliseconds=i * spacing_ms)
+            await db.execute(
+                update(SQL_Lead)
+                .where(SQL_Lead.id == lead.id)
+                .values(send_after=send_after)
+            )
+        await db.commit()
+        return min(len(pending), limit)
 
 
 @router.get("/worker-status")
 async def get_worker_status(current_user: dict = Depends(get_current_user)):
     """Check if the background email campaign worker is active."""
-    col = get_async_collection("system_status")
-    status = await col.find_one({"key": "email_worker"})
-    if not status:
-        return {"active": False, "message": "Worker has never been started."}
+    if not _mysql_available:
+        return {"active": False, "message": "MySQL database is not connected."}
+
+    async for db in get_db_session():
+        stmt = select(SQL_SystemStatus).where(SQL_SystemStatus.key_name == "email_worker")
+        res = await db.execute(stmt)
+        status = res.scalar_one_or_none()
+        if not status:
+            return {"active": False, "message": "Worker has never been started."}
+            
+        last_active = getattr(status, "last_active", None)
+        if not last_active:
+            return {"active": False, "message": "No active heartbeat recorded."}
+
+            
+        now = datetime.now(timezone.utc)
+        if last_active.tzinfo is None:
+            last_active = last_active.replace(tzinfo=timezone.utc)
+            
+        diff = (now - last_active).total_seconds()
+        is_active = diff < 30.0
         
-    last_active = status.get("last_active")
-    if not last_active:
-        return {"active": False, "message": "No active heartbeat recorded."}
-        
-    now = datetime.now(timezone.utc)
-    if last_active.tzinfo is None:
-        last_active = last_active.replace(tzinfo=timezone.utc)
-        
-    diff = (now - last_active).total_seconds()
-    is_active = diff < 30.0
-    
-    return {
-        "active": is_active,
-        "last_active": last_active.isoformat(),
-        "diff_seconds": diff,
-        "message": "Worker is active and polling." if is_active else "Worker seems to be stalled or offline."
-    }
+        return {
+            "active": is_active,
+            "last_active": last_active.isoformat(),
+            "diff_seconds": diff,
+            "message": "Worker is active and polling." if is_active else "Worker seems to be stalled or offline."
+        }
 
 
 @router.get("")
 async def list_campaigns(current_user: dict = Depends(get_current_user)):
-    col = get_async_collection("campaigns")
-    campaigns = await col.find().sort("createdAt", -1).to_list(length=1000)
-    return {"campaigns": [_format_campaign(c) for c in campaigns]}
+    campaigns = []
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_Campaign).order_by(SQL_Campaign.created_at.desc())
+                res = await db.execute(stmt)
+                campaigns = [_format_campaign(c) for c in res.scalars().all()]
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Database error: {e}")
+    return {"campaigns": campaigns}
 
 
 @router.post("", status_code=201)
@@ -164,8 +185,7 @@ async def create_campaign(
     if not body.name or not body.subject:
         raise HTTPException(status_code=400, detail="name and subject are required.")
 
-    col = get_async_collection("campaigns")
-    user_id = current_user["_id"]
+    user_id = int(current_user["id"])
 
     sched_start = None
     if body.scheduleStart:
@@ -174,57 +194,66 @@ async def create_campaign(
         except Exception:
             raise HTTPException(status_code=400, detail="Invalid scheduleStart timestamp format.")
 
-    counters_col = get_async_collection("counters")
-    counter_doc = await counters_col.find_one_and_update(
-        {"_id": f"campaign_seq:{user_id}"},
-        {"$inc": {"seq": 1}},
-        upsert=True,
-        return_document=True,
-    )
-    campaign_number = counter_doc.get("seq", 1) if counter_doc else 1
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                # campaign seq count
+                stmt_count = select(func.count()).select_from(SQL_Campaign).where(SQL_Campaign.user_id == user_id)
+                campaign_number = ((await db.execute(stmt_count)).scalar() or 0) + 1
+                now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
 
-    doc = {
-        "name": body.name,
-        "description": body.description or "",
-        "status": "draft",
-        "subject": body.subject,
-        "body": body.body or "",
-        "senderEmail": body.senderEmail or "",
-        "senderName": body.senderName or "",
-        "dailyLimit": body.dailyLimit or 200,
-        "timezone": body.timezone or "America/Chicago",
-        "workingHoursOnly": body.workingHoursOnly or False,
-        "scheduleStart": sched_start,
-        "attachmentPath": body.attachmentPath or "",
-        "attachmentFilename": body.attachmentFilename or "",
-        "campaignNumber": campaign_number,
-        "stats": {
-            "totalSent": 0,
-            "totalOpened": 0,
-            "totalClicked": 0,
-            "totalReplied": 0,
-            "totalBounced": 0,
-            "totalUnsubscribed": 0,
-            "totalResent": 0
-        },
-        "createdBy": user_id,
-        "createdAt": datetime.now(timezone.utc),
-        "updatedAt": datetime.now(timezone.utc),
-    }
+                stmt = insert(SQL_Campaign).values(
+                    user_id=user_id,
+                    name=body.name,
+                    description=body.description or "",
+                    status="draft",
+                    subject=body.subject,
+                    body=body.body or "",
+                    sender_email=body.senderEmail or "",
+                    sender_name=body.senderName or "",
+                    daily_limit=body.dailyLimit or 200,
+                    timezone=body.timezone or "America/Chicago",
+                    working_hours_only=body.workingHoursOnly or False,
+                    schedule_start=sched_start,
+                    attachment_path=body.attachmentPath or "",
+                    attachment_filename=body.attachmentFilename or "",
+                    campaign_number=str(campaign_number),
+                    stats={
+                        "totalSent": 0,
+                        "totalOpened": 0,
+                        "totalClicked": 0,
+                        "totalReplied": 0,
+                        "totalBounced": 0,
+                        "totalUnsubscribed": 0,
+                        "totalResent": 0
+                    },
+                    created_at=now_utc,
+                    updated_at=now_utc
+                )
+                await db.execute(stmt)
+                await db.commit()
 
-    result = await col.insert_one(doc)
-    campaign = await col.find_one({"_id": result.inserted_id})
+                new_c = (await db.execute(select(SQL_Campaign).where(SQL_Campaign.name == body.name, SQL_Campaign.user_id == user_id).order_by(SQL_Campaign.id.desc()))).scalar_one()
+                campaign_id = new_c.id
 
-    audit_col = get_async_collection("audit_logs")
-    await audit_col.insert_one({
-        "action": "campaign.create",
-        "entityType": "Campaign",
-        "entityId": result.inserted_id,
-        "performedBy": user_id,
-        "createdAt": datetime.now(timezone.utc)
-    })
 
-    return {"campaign": _format_campaign(campaign)}
+                # Audit Log
+                await db.execute(insert(SQL_AuditLog).values(
+                    action="campaign.create",
+                    entity_type="Campaign",
+                    entity_id=str(campaign_id),
+                    performed_by=user_id,
+                    created_at=datetime.utcnow()
+                ))
+                await db.commit()
+
+                # fetch campaign
+                stmt_new = select(SQL_Campaign).where(SQL_Campaign.id == campaign_id)
+                campaign_obj = (await db.execute(stmt_new)).scalar_one()
+                return {"campaign": _format_campaign(campaign_obj)}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Database error: {e}")
+    raise HTTPException(status_code=500, detail="MySQL database is unavailable.")
 
 
 @router.post("/upload-attachment")
@@ -288,15 +317,24 @@ def view_campaign_file(path: str, current_user: dict = Depends(get_current_user)
 @router.get("/{id}")
 async def get_campaign(id: str, current_user: dict = Depends(get_current_user)):
     try:
-        oid = ObjectId(id)
-    except InvalidId:
+        campaign_id = int(id)
+    except ValueError:
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
-    col = get_async_collection("campaigns")
-    campaign = await col.find_one({"_id": oid})
-    if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found.")
-    return {"campaign": _format_campaign(campaign)}
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_Campaign).where(SQL_Campaign.id == campaign_id)
+                res = await db.execute(stmt)
+                campaign = res.scalar_one_or_none()
+                if not campaign:
+                    raise HTTPException(status_code=404, detail="Campaign not found.")
+                return {"campaign": _format_campaign(campaign)}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Database error: {e}")
+    raise HTTPException(status_code=500, detail="MySQL database is unavailable.")
 
 
 @router.patch("/{id}")
@@ -306,203 +344,298 @@ async def update_campaign(
     current_user: dict = Depends(get_current_user),
 ):
     try:
-        oid = ObjectId(id)
-    except InvalidId:
+        campaign_id = int(id)
+    except ValueError:
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
-    col = get_async_collection("campaigns")
-    campaign = await col.find_one({"_id": oid})
-    if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found.")
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_Campaign).where(SQL_Campaign.id == campaign_id)
+                res = await db.execute(stmt)
+                campaign = res.scalar_one_or_none()
+                if not campaign:
+                    raise HTTPException(status_code=404, detail="Campaign not found.")
 
-    if campaign.get("status") == "running":
-        raise HTTPException(status_code=400, detail="Pause the campaign before editing it.")
+                if getattr(campaign, "status", "") == "running":
+                    raise HTTPException(status_code=400, detail="Pause the campaign before editing it.")
 
-    updates = {}
-    if body.name is not None:
-        updates["name"] = body.name
-    if body.description is not None:
-        updates["description"] = body.description
-    if body.subject is not None:
-        updates["subject"] = body.subject
-    if body.body is not None:
-        updates["body"] = body.body
-    if body.senderEmail is not None:
-        updates["senderEmail"] = body.senderEmail
-    if body.senderName is not None:
-        updates["senderName"] = body.senderName
-    if body.dailyLimit is not None:
-        updates["dailyLimit"] = body.dailyLimit
-    if body.timezone is not None:
-        updates["timezone"] = body.timezone
-    if body.scheduleStart is not None:
-        if body.scheduleStart:
-            try:
-                updates["scheduleStart"] = datetime.fromisoformat(body.scheduleStart.replace("Z", "+00:00"))
-            except Exception:
-                raise HTTPException(status_code=400, detail="Invalid scheduleStart format.")
-    if body.workingHoursOnly is not None:
-        updates["workingHoursOnly"] = body.workingHoursOnly
-    if body.attachmentPath is not None:
-        updates["attachmentPath"] = body.attachmentPath
-    if body.attachmentFilename is not None:
-        updates["attachmentFilename"] = body.attachmentFilename
 
-    if updates:
-        updates["updatedAt"] = datetime.now(timezone.utc)
-        await col.update_one({"_id": oid}, {"$set": updates})
-        campaign = await col.find_one({"_id": oid})
+                updates = {}
+                if body.name is not None:
+                    updates["name"] = body.name
+                if body.description is not None:
+                    updates["description"] = body.description
+                if body.subject is not None:
+                    updates["subject"] = body.subject
+                if body.body is not None:
+                    updates["body"] = body.body
+                if body.senderEmail is not None:
+                    updates["sender_email"] = body.senderEmail
+                if body.senderName is not None:
+                    updates["sender_name"] = body.senderName
+                if body.dailyLimit is not None:
+                    updates["daily_limit"] = body.dailyLimit
+                if body.timezone is not None:
+                    updates["timezone"] = body.timezone
+                if body.scheduleStart is not None:
+                    if body.scheduleStart:
+                        try:
+                            updates["schedule_start"] = datetime.fromisoformat(body.scheduleStart.replace("Z", "+00:00"))
+                        except Exception:
+                            raise HTTPException(status_code=400, detail="Invalid scheduleStart format.")
+                if body.workingHoursOnly is not None:
+                    updates["working_hours_only"] = body.workingHoursOnly
+                if body.attachmentPath is not None:
+                    updates["attachment_path"] = body.attachmentPath
+                if body.attachmentFilename is not None:
+                    updates["attachment_filename"] = body.attachmentFilename
 
-    return {"campaign": _format_campaign(campaign)}
+                if updates:
+                    await db.execute(
+                        update(SQL_Campaign)
+                        .where(SQL_Campaign.id == campaign_id)
+                        .values(**updates, updated_at=datetime.utcnow())
+                    )
+                    await db.commit()
+
+                    # refetch
+                    stmt_new = select(SQL_Campaign).where(SQL_Campaign.id == campaign_id)
+                    campaign = (await db.execute(stmt_new)).scalar_one()
+
+                return {"campaign": _format_campaign(campaign)}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Database error: {e}")
+    raise HTTPException(status_code=500, detail="MySQL database is unavailable.")
 
 
 @router.delete("/{id}")
 async def delete_campaign(id: str, current_user: dict = Depends(get_current_user)):
     try:
-        oid = ObjectId(id)
-    except InvalidId:
+        campaign_id = int(id)
+    except ValueError:
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
-    col = get_async_collection("campaigns")
-    campaign = await col.find_one_and_delete({"_id": oid})
-    if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found.")
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_Campaign).where(SQL_Campaign.id == campaign_id)
+                res = await db.execute(stmt)
+                campaign = res.scalar_one_or_none()
+                if not campaign:
+                    raise HTTPException(status_code=404, detail="Campaign not found.")
 
-    await get_async_collection("leads").delete_many({"campaignId": oid})
+                await db.execute(delete(SQL_Campaign).where(SQL_Campaign.id == campaign_id))
+                await db.execute(delete(SQL_Lead).where(SQL_Lead.campaign_id == campaign_id))
 
-    audit_col = get_async_collection("audit_logs")
-    await audit_col.insert_one({
-        "action": "campaign.delete",
-        "entityType": "Campaign",
-        "entityId": oid,
-        "performedBy": current_user["_id"],
-        "createdAt": datetime.now(timezone.utc)
-    })
-
-    return {"ok": True}
+                await db.execute(insert(SQL_AuditLog).values(
+                    action="campaign.delete",
+                    entity_type="Campaign",
+                    entity_id=str(campaign_id),
+                    performed_by=int(current_user["id"]),
+                    created_at=datetime.utcnow()
+                ))
+                await db.commit()
+                return {"ok": True}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Database error: {e}")
+    raise HTTPException(status_code=500, detail="MySQL database is unavailable.")
 
 
 @router.post("/{id}/duplicate", status_code=201)
 async def duplicate_campaign(id: str, current_user: dict = Depends(get_current_user)):
     try:
-        oid = ObjectId(id)
-    except InvalidId:
+        campaign_id = int(id)
+    except ValueError:
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
-    col = get_async_collection("campaigns")
-    source = await col.find_one({"_id": oid})
-    if not source:
-        raise HTTPException(status_code=404, detail="Campaign not found.")
+    user_id = int(current_user["id"])
 
-    counters_col = get_async_collection("counters")
-    counter_doc = await counters_col.find_one_and_update(
-        {"_id": f"campaign_seq:{current_user['_id']}"},
-        {"$inc": {"seq": 1}},
-        upsert=True,
-        return_document=True,
-    )
-    campaign_number = counter_doc.get("seq", 1) if counter_doc else 1
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_Campaign).where(SQL_Campaign.id == campaign_id)
+                res = await db.execute(stmt)
+                source = res.scalar_one_or_none()
+                if not source:
+                    raise HTTPException(status_code=404, detail="Campaign not found.")
 
-    doc = {
-        "name": f"{source.get('name')} (copy)",
-        "description": source.get("description", ""),
-        "status": "draft",
-        "subject": source.get("subject", ""),
-        "body": source.get("body", ""),
-        "senderEmail": source.get("senderEmail", ""),
-        "senderName": source.get("senderName", ""),
-        "dailyLimit": source.get("dailyLimit", 200),
-        "timezone": source.get("timezone", "America/Chicago"),
-        "scheduleStart": None,
-        "campaignNumber": campaign_number,
-        "stats": {
-            "totalSent": 0,
-            "totalOpened": 0,
-            "totalClicked": 0,
-            "totalReplied": 0,
-            "totalBounced": 0,
-            "totalUnsubscribed": 0,
-            "totalResent": 0
-        },
-        "createdBy": current_user["_id"],
-        "createdAt": datetime.now(timezone.utc),
-        "updatedAt": datetime.now(timezone.utc),
-    }
+                # Campaign number
+                stmt_count = select(func.count()).select_from(SQL_Campaign).where(SQL_Campaign.user_id == user_id)
+                cnt = (await db.execute(stmt_count)).scalar() or 0
+                campaign_number = cnt + 1
 
-    result = await col.insert_one(doc)
-    copy = await col.find_one({"_id": result.inserted_id})
-    return {"campaign": _format_campaign(copy)}
+                dup_name = f"{source.name} (copy)"
+                stmt_insert = insert(SQL_Campaign).values(
+                    user_id=user_id,
+                    name=dup_name,
+                    description=source.description or "",
+                    status="draft",
+                    subject=source.subject or "",
+                    body=source.body or "",
+                    sender_email=source.sender_email or "",
+                    sender_name=source.sender_name or "",
+                    daily_limit=source.daily_limit or 200,
+                    timezone=source.timezone or "America/Chicago",
+                    working_hours_only=source.working_hours_only or False,
+                    schedule_start=None,
+                    attachment_path=getattr(source, "attachment_path", "") or "",
+                    attachment_filename=getattr(source, "attachment_filename", "") or "",
+                    campaign_number=campaign_number,
+                    stats={
+                        "totalSent": 0,
+                        "totalOpened": 0,
+                        "totalClicked": 0,
+                        "totalReplied": 0,
+                        "totalBounced": 0,
+                        "totalUnsubscribed": 0,
+                        "totalResent": 0
+                    },
+                    created_at=datetime.utcnow(),
+                    updated_at=datetime.utcnow()
+                )
+                await db.execute(stmt_insert)
+                await db.commit()
+
+                stmt_new = select(SQL_Campaign).where(SQL_Campaign.user_id == user_id, SQL_Campaign.name == dup_name)
+                copy = (await db.execute(stmt_new)).scalar_one()
+                return {"campaign": _format_campaign(copy)}
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Database error: {e}")
+    raise HTTPException(status_code=500, detail="MySQL database is unavailable.")
 
 
 @router.post("/{id}/pause")
 async def pause_campaign(id: str, current_user: dict = Depends(get_current_user)):
     try:
-        oid = ObjectId(id)
-    except InvalidId:
+        campaign_id = int(id)
+    except ValueError:
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
-    col = get_async_collection("campaigns")
-    await col.update_one(
-        {"_id": oid},
-        {"$set": {"status": "paused", "updatedAt": datetime.now(timezone.utc)}},
-    )
-    campaign = await col.find_one({"_id": oid})
-    if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found.")
-    return {"campaign": _format_campaign(campaign)}
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_Campaign).where(SQL_Campaign.id == campaign_id)
+                res = await db.execute(stmt)
+                campaign = res.scalar_one_or_none()
+                if not campaign:
+                    raise HTTPException(status_code=404, detail="Campaign not found.")
+
+                await db.execute(
+                    update(SQL_Campaign)
+                    .where(SQL_Campaign.id == campaign_id)
+                    .values(status="paused", updated_at=datetime.utcnow())
+                )
+                await db.commit()
+
+                # refetch
+                stmt_new = select(SQL_Campaign).where(SQL_Campaign.id == campaign_id)
+                campaign = (await db.execute(stmt_new)).scalar_one()
+                return {"campaign": _format_campaign(campaign)}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Database error: {e}")
+    raise HTTPException(status_code=500, detail="MySQL database is unavailable.")
 
 
 @router.post("/{id}/resume")
 async def resume_campaign(id: str, current_user: dict = Depends(get_current_user)):
     try:
-        oid = ObjectId(id)
-    except InvalidId:
+        campaign_id = int(id)
+    except ValueError:
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
-    col = get_async_collection("campaigns")
-    campaign = await col.find_one({"_id": oid})
-    if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found.")
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_Campaign).where(SQL_Campaign.id == campaign_id)
+                res = await db.execute(stmt)
+                campaign = res.scalar_one_or_none()
+                if not campaign:
+                    raise HTTPException(status_code=404, detail="Campaign not found.")
 
-    await col.update_one({"_id": oid}, {"$set": {"status": "running", "updatedAt": datetime.now(timezone.utc)}})
-    campaign = await col.find_one({"_id": oid})
-    daily_limit = (campaign or {}).get("dailyLimit", 200)
-    schedule_start = (campaign or {}).get("scheduleStart")
+                await db.execute(
+                    update(SQL_Campaign)
+                    .where(SQL_Campaign.id == campaign_id)
+                    .values(status="running", updated_at=datetime.utcnow())
+                )
+                await db.commit()
 
-    queued = await _queue_pending_leads_async(oid, daily_limit, base_time=schedule_start)
-    return {"campaign": _format_campaign(campaign), "queuedLeads": queued}
+                daily_limit = int(str(getattr(campaign, "daily_limit", 200) or 200))
+                schedule_start = getattr(campaign, "schedule_start", None)
+                base_time_val = schedule_start if isinstance(schedule_start, datetime) else None
+
+                queued = await _queue_pending_leads_async(campaign_id, daily_limit, base_time=base_time_val)
+                
+                # refetch
+                stmt_new = select(SQL_Campaign).where(SQL_Campaign.id == campaign_id)
+                refetched = (await db.execute(stmt_new)).scalar_one()
+                return {"campaign": _format_campaign(refetched), "queuedLeads": queued}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Database error: {e}")
+    raise HTTPException(status_code=500, detail="MySQL database is unavailable.")
 
 
 @router.post("/{id}/launch")
 async def launch_campaign(id: str, current_user: dict = Depends(get_current_user)):
     try:
-        oid = ObjectId(id)
-    except InvalidId:
+        campaign_id = int(id)
+    except ValueError:
         raise HTTPException(status_code=400, detail="Invalid campaign ID.")
 
-    col = get_async_collection("campaigns")
-    campaign = await col.find_one({"_id": oid})
-    if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found.")
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_Campaign).where(SQL_Campaign.id == campaign_id)
+                res = await db.execute(stmt)
+                campaign = res.scalar_one_or_none()
+                if not campaign:
+                    raise HTTPException(status_code=404, detail="Campaign not found.")
 
-    if campaign.get("status") == "running":
-        raise HTTPException(status_code=400, detail="Campaign already running.")
+                if getattr(campaign, "status", "") == "running":
+                    raise HTTPException(status_code=400, detail="Campaign already running.")
 
-    await col.update_one({"_id": oid}, {"$set": {"status": "running", "updatedAt": datetime.now(timezone.utc)}})
-    campaign = await col.find_one({"_id": oid})
-    daily_limit = (campaign or {}).get("dailyLimit", 200)
-    schedule_start = (campaign or {}).get("scheduleStart")
+                await db.execute(
+                    update(SQL_Campaign)
+                    .where(SQL_Campaign.id == campaign_id)
+                    .values(status="running", updated_at=datetime.utcnow())
+                )
+                await db.commit()
 
-    queued = await _queue_pending_leads_async(oid, daily_limit, base_time=schedule_start)
+                daily_limit = int(str(getattr(campaign, "daily_limit", 200) or 200))
+                schedule_start = getattr(campaign, "schedule_start", None)
+                base_time_val = schedule_start if isinstance(schedule_start, datetime) else None
 
-    audit_col = get_async_collection("audit_logs")
-    await audit_col.insert_one({
-        "action": "campaign.launch",
-        "entityType": "Campaign",
-        "entityId": oid,
-        "performedBy": current_user["_id"],
-        "details": {"queuedLeads": queued},
-        "createdAt": datetime.now(timezone.utc)
-    })
+                queued = await _queue_pending_leads_async(campaign_id, daily_limit, base_time=base_time_val)
 
-    return {"campaign": _format_campaign(campaign), "queuedLeads": queued}
+
+                # Audit Log
+                await db.execute(insert(SQL_AuditLog).values(
+                    action="campaign.launch",
+                    entity_type="Campaign",
+                    entity_id=str(campaign_id),
+                    performed_by=int(current_user["id"]),
+                    details={"queuedLeads": queued},
+                    created_at=datetime.utcnow()
+                ))
+                await db.commit()
+
+                # refetch
+                stmt_new = select(SQL_Campaign).where(SQL_Campaign.id == campaign_id)
+                refetched = (await db.execute(stmt_new)).scalar_one()
+                return {"campaign": _format_campaign(refetched), "queuedLeads": queued}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Database error: {e}")
+    raise HTTPException(status_code=500, detail="MySQL database is unavailable.")

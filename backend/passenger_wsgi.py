@@ -26,7 +26,8 @@ from server import app as fastapi_app
 # Try a2wsgi with explicit sync loop runner, fallback to native asyncio execution
 try:
     from a2wsgi import ASGIMiddleware
-    application = ASGIMiddleware(fastapi_app)
+    application = ASGIMiddleware(fastapi_app)  # type: ignore
+
 except Exception:
     def application(environ, start_response):
         """Native lightweight WSGI-to-ASGI converter for LiteSpeed pre-fork mode."""
