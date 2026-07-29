@@ -565,7 +565,7 @@ function LiveTerminal() {
 
         <div
           ref={containerRef}
-          className="h-[500px] overflow-y-auto p-3 font-mono text-[11px] leading-relaxed"
+          className="h-[70vh] max-h-[500px] overflow-y-auto p-3 font-mono text-[11px] leading-relaxed sm:h-[500px]"
           onScroll={(e) => {
             const el = e.currentTarget;
             const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
@@ -590,7 +590,7 @@ function LiveTerminal() {
             </p>
           ) : (
             visibleLines.map((l, i) => (
-              <div key={i} className={`hover:bg-white/5 px-1 py-0.5 rounded ${terminalLineColor(l.level)}`}>
+              <div key={i} className={`hover:bg-white/5 px-1 py-0.5 rounded break-words ${terminalLineColor(l.level)}`}>
                 {l.text}
               </div>
             ))
@@ -809,7 +809,7 @@ export default function ServerLogs() {
         title="Server Logs"
         subtitle="Live backend errors, warnings, and tracebacks — captured automatically from every request."
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {activeTab === 'errors' && (
               <>
                 <button

@@ -186,11 +186,11 @@ export default function Meetings() {
             const cancelled = m.status === 'cancelled';
             return (
               <Card key={m.id} className={cancelled ? 'opacity-60' : ''}>
-                <div className="flex items-start gap-4">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
                   <div className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl bg-brand-50 text-brand-600">
                     <Calendar size={18} />
                   </div>
-                  <div className="flex-1">
+                  <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-sm font-bold text-navy-900 dark:text-white">{m.title}</p>
                       {cancelled && <StatusBadge status="Cancelled" />}
@@ -218,7 +218,7 @@ export default function Meetings() {
                       </div>
                     )}
                   </div>
-                  <div className="flex flex-col items-end gap-2">
+                  <div className="flex flex-row flex-wrap gap-2 sm:flex-col sm:items-end">
                     {!cancelled && m.type === 'Video Call' && m.meetingLink ? (
                       <a
                         href={m.meetingLink}
@@ -252,10 +252,10 @@ export default function Meetings() {
       )}
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/50 p-4" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-navy-950/50 sm:items-center sm:p-4" onClick={() => setOpen(false)}>
           <form
             onSubmit={submit}
-            className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white dark:bg-navy-900 p-6 shadow-soft"
+            className="max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white dark:bg-navy-900 p-4 shadow-soft sm:max-h-[90vh] sm:rounded-2xl sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">

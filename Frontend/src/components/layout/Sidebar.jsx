@@ -30,7 +30,7 @@ const opsNav = [
   { to: '/tasks', label: 'Tasks', icon: CheckSquare },
 ];
 
-function NavSection({ title, items, collapsed }) {
+function NavSection({ title, items, collapsed, onNavigate }) {
   return (
     <div className="mt-6">
       {!collapsed && (
@@ -42,6 +42,7 @@ function NavSection({ title, items, collapsed }) {
             key={to}
             to={to}
             end={end}
+            onClick={onNavigate}
             className={({ isActive }) =>
               `group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
                 isActive
@@ -70,7 +71,7 @@ function NavSection({ title, items, collapsed }) {
   );
 }
 
-export default function Sidebar({ collapsed, onToggle, mobileOpen = false, onMobileClose }) {
+export default function Sidebar({ collapsed, onToggle, mobileOpen = false, onCloseMobile = () => {} }) {
   const { user } = useAuth();
   const { admin, summary } = useErrorLogs();
   const isAdmin = admin || (user?.role || '').toLowerCase() === 'admin' || (user?.role || '').toLowerCase() === 'owner';
@@ -89,64 +90,60 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen = false, onMob
     { to: '/settings', label: 'Settings', icon: Settings, end: true },
   ];
 
-  // On mobile the drawer always opens at full width with labels visible, even
-  // if the desktop rail happens to be collapsed - "collapsed" is a desktop-only
-  // concept, so we only apply it to the visual/label logic when not in the
-  // mobile drawer.
-  const isCollapsed = collapsed && !mobileOpen;
-
+  // On mobile the sidebar is always full-width and lives off-canvas (translate-x-full);
+  // `mobileOpen` slides it in. On lg+ screens it's always visible and simply
+  // shrinks to icon-width when `collapsed` is true. Using `transform` (not
+  // width/margin) keeps the open/close animation on the compositor thread,
+  // so it stays smooth instead of jittery on mobile.
   return (
     <>
-      {/* Mobile/tablet overlay - tapping it closes the drawer */}
-      {mobileOpen && (
-        <div
-          className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm lg:hidden"
-          onClick={onMobileClose}
-          aria-hidden="true"
-        />
-      )}
+      {/* Backdrop, mobile only */}
+      <div
+        onClick={onCloseMobile}
+        aria-hidden="true"
+        className={`fixed inset-0 z-30 bg-navy-950/60 backdrop-blur-[1px] transition-opacity duration-200 lg:hidden ${
+          mobileOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
+        }`}
+      />
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex flex-col bg-navy-900 transition-transform duration-200
-          w-[260px] ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
-          lg:translate-x-0 lg:transition-all ${collapsed ? 'lg:w-[76px]' : 'lg:w-[260px]'}`}
+        className={`fixed inset-y-0 left-0 z-40 flex w-[260px] flex-col bg-navy-900 will-change-transform transition-transform duration-200 ease-out
+          ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
+          lg:z-30 lg:translate-x-0 lg:transition-[width] lg:duration-200 ${collapsed ? 'lg:w-[76px]' : 'lg:w-[260px]'}`}
       >
-      {/* Logo */}
-      <div className={`flex items-center gap-3 px-5 py-6 ${isCollapsed ? 'justify-center px-0' : ''}`}>
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-500 to-accent-orange">
-          <Sparkles size={18} className="text-white" />
-        </div>
-        {!isCollapsed && (
-          <div className="leading-tight flex-1">
+        {/* Logo */}
+        <div className={`flex items-center gap-3 px-5 py-6 ${collapsed ? 'lg:justify-center lg:px-0' : ''}`}>
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-500 to-accent-orange">
+            <Sparkles size={18} className="text-white" />
+          </div>
+          <div className={`leading-tight ${collapsed ? 'lg:hidden' : ''}`}>
             <p className="text-sm font-extrabold tracking-wide text-white">ORBITAVANYA</p>
             <p className="text-[10px] font-semibold tracking-[0.2em] text-slate-400 dark:text-slate-500">TECH</p>
           </div>
-        )}
-        {/* Close button - mobile drawer only */}
+          <button
+            onClick={onCloseMobile}
+            className="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-white/5 hover:text-white lg:hidden"
+            aria-label="Close menu"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto scrollbar-none pb-4">
+          <NavSection title="Dashboard & Analytics" items={topNav} collapsed={collapsed} onNavigate={onCloseMobile} />
+          <NavSection title="Business Development" items={bizNav} collapsed={collapsed} onNavigate={onCloseMobile} />
+          <NavSection title="Operations & CRM" items={opsNav} collapsed={collapsed} onNavigate={onCloseMobile} />
+          <NavSection title="Settings" items={settingsNav} collapsed={collapsed} onNavigate={onCloseMobile} />
+        </div>
+
         <button
-          onClick={onMobileClose}
-          className="rounded-lg p-1.5 text-slate-400 hover:bg-white/5 hover:text-white lg:hidden"
-          aria-label="Close menu"
+          onClick={onToggle}
+          className="hidden items-center justify-center gap-2 border-t border-white/10 py-3 text-xs font-medium text-slate-400 dark:text-slate-500 hover:text-white lg:flex"
         >
-          <X size={18} />
+          <ChevronLeft size={16} className={`transition-transform ${collapsed ? 'rotate-180' : ''}`} />
+          {!collapsed && 'Collapse'}
         </button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto scrollbar-none pb-4">
-        <NavSection title="Dashboard & Analytics" items={topNav} collapsed={isCollapsed} />
-        <NavSection title="Business Development" items={bizNav} collapsed={isCollapsed} />
-        <NavSection title="Operations & CRM" items={opsNav} collapsed={isCollapsed} />
-        <NavSection title="Settings" items={settingsNav} collapsed={isCollapsed} />
-      </div>
-
-      <button
-        onClick={onToggle}
-        className="hidden lg:flex items-center justify-center gap-2 border-t border-white/10 py-3 text-xs font-medium text-slate-400 dark:text-slate-500 hover:text-white"
-      >
-        <ChevronLeft size={16} className={`transition-transform ${collapsed ? 'rotate-180' : ''}`} />
-        {!collapsed && 'Collapse'}
-      </button>
-    </aside>
+      </aside>
     </>
   );
 }

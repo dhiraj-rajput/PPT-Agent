@@ -10,12 +10,25 @@ html, body, #root {
   height: 100%;
 }
 
+html {
+  /* Prevents the whole page from rubber-banding sideways on mobile
+     (a common source of "jittery" feeling scroll on iOS/Android). */
+  overflow-x: hidden;
+  width: 100%;
+}
+
 body {
   font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
   background-color: #F6F5F7;
   color: #1c151e;
   -webkit-font-smoothing: antialiased;
   transition: background-color 0.2s ease, color 0.2s ease;
+  overflow-x: hidden;
+  width: 100%;
+  /* Smooth, native-feeling momentum scrolling on iOS Safari */
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html.dark body {
