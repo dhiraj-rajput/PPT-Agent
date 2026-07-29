@@ -477,7 +477,7 @@ export default function Tenders() {
           onClick={() => { setSyncOpen(false); setSyncResult(null); }}
         >
           <div
-            className="w-full max-w-lg rounded-2xl bg-white dark:bg-navy-800 shadow-2xl border border-slate-100 dark:border-navy-700 overflow-hidden"
+            className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white dark:bg-navy-800 shadow-2xl border border-slate-100 dark:border-navy-700"
             onClick={e => e.stopPropagation()}
           >
             {/* Modal header */}
@@ -517,7 +517,7 @@ export default function Tenders() {
 
             {/* Sync form */}
             <form onSubmit={handleSync} className="p-5 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">
                     NAICS Code
@@ -558,7 +558,7 @@ export default function Tenders() {
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">Status</label>
                   <select

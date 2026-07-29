@@ -71,18 +71,32 @@ def import_sam_entities_csv():
         col = get_collection("companies")
         if col.count_documents({}) > 0:
             return
-        
+
         csv_path = PROJECT_ROOT / "private" / "sam_entities.csv"
         if not csv_path.exists():
             csv_path = PROJECT_ROOT / "documents" / "sam_entities.csv"
         if not csv_path.exists():
             return
-            
+
         logger.info("Seeding initial company database from sam_entities.csv...")
+
+        # Pre-load the catalog ONCE before the loop — not on every row.
+        # Without this, compute_company_match_score() called the MongoDB catalog
+        # loader tens-of-thousands of times, freezing startup for minutes.
+        from app.core.company_catalog import load_services_catalog
+        load_services_catalog()  # warms the in-process cache
+
+        # Cap the initial seed at 5000 rows to prevent an extremely large CSV
+        # from blocking the background thread for an unreasonable amount of time.
+        MAX_SEED_ROWS = 5000
+
         with open(csv_path, "r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             batch = []
+            row_count = 0
             for row in reader:
+                if row_count >= MAX_SEED_ROWS:
+                    break
                 uei = (row.get("UEI") or row.get("uei", "")).strip()
                 if uei:
                     is_small = (row.get("Is_Small_Business") or row.get("is_small_business", "")).strip().upper() in ("Y", "YES", "TRUE")
@@ -102,12 +116,13 @@ def import_sam_entities_csv():
                         "contact": row.get("Gov_Contact_Name") or "N/A",
                         "email": row.get("Gov_Contact_Email") or "info@company.com"
                     })
+                    row_count += 1
                 if len(batch) >= 500:
                     col.insert_many(batch, ordered=False)
                     batch = []
             if batch:
                 col.insert_many(batch, ordered=False)
-        logger.info("SAM entities seeded successfully.")
+        logger.info(f"SAM entities seeded successfully ({row_count} records).")
     except Exception as e:
         logger.warning(f"Failed to seed SAM entities CSV: {e}")
 

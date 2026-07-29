@@ -6,9 +6,13 @@ import csv
 import io
 import os
 import re
+from pathlib import Path
 from utils.db_client import get_collection, get_async_collection
 from app.core.auth import get_current_user
 from pymongo import TEXT
+
+_BACKEND_ROOT = Path(__file__).resolve().parent.parent.parent
+
 
 router = APIRouter(prefix="/naics", tags=["naics"])
 
@@ -18,8 +22,9 @@ def ensure_naics_populated():
     if coll.count_documents({}) > 0:
         return
 
-    csv_path = "private/2022_NAICS_Descriptions.csv"
-    if not os.path.exists(csv_path):
+    # Use an absolute path so this works regardless of the process CWD.
+    csv_path = _BACKEND_ROOT / "private" / "2022_NAICS_Descriptions.csv"
+    if not csv_path.exists():
         print(f"[NAICS] CSV file not found at: {csv_path}. Skipping population.")
         return
 
@@ -49,8 +54,6 @@ def ensure_naics_populated():
 
 # Note: ensure_naics_populated is called asynchronously during server lifespan startup or on-demand
 # ensure_naics_populated()
-
-import re
 
 def extract_keywords(description: str) -> list[str]:
     if not description:

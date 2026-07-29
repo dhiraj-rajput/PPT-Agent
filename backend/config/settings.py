@@ -294,6 +294,7 @@ class AppSettings(BaseSettings):
     OTP_TTL_MINUTES: int = Field(default=10, description="OTP lifetime in minutes.")
     OTP_LENGTH: int = Field(default=6, description="Length of generated OTP.")
     DEBUG_OTP: bool = Field(default=False, description="Enable printing OTPs to console for development.")
+    LOGIN_MAX_ATTEMPTS: int = Field(default=10, description="Max failed login attempts before 15-minute lockout.")
     SMTP_HOST: str = Field(default="smtp.gmail.com", description="SMTP server hostname.")
     SMTP_PORT: int = Field(default=465, description="SMTP server port.")
     SMTP_USER: str = Field(default="", description="SMTP account username/email.")
@@ -482,18 +483,5 @@ class AppSettings(BaseSettings):
         return self.OLLAMA_API_KEY
 
 
-class ConfigurationError(RuntimeError):
-    """Raised when required configuration is missing."""
-
-
-# Type alias for external modules
-Settings = AppSettings
-
-
 # Module-level singleton — import this everywhere
 settings = AppSettings()
-
-
-def load_settings(env_path=None) -> AppSettings:
-    """Return the global Settings instance."""
-    return settings

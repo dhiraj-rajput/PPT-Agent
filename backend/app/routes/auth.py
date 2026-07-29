@@ -244,7 +244,8 @@ async def login(body: LoginBody):
         "email": normalized_email,
         "timestamp": {"$gte": cutoff}
     })
-    if failures_count >= 5:
+    max_attempts = getattr(settings, "LOGIN_MAX_ATTEMPTS", 10)
+    if failures_count >= max_attempts:
         raise HTTPException(429, "Too many failed login attempts. Please try again in 15 minutes.")
 
     users_col = get_async_collection("users")

@@ -510,10 +510,10 @@ export default function NaicsMuster() {
             </p>
 
             {/* Tabs */}
-            <div className="mt-4 flex border-b border-slate-100 dark:border-navy-800">
+            <div className="mt-4 flex gap-1 overflow-x-auto border-b border-slate-100 dark:border-navy-800">
               <button
                 onClick={() => setModalTab('manual')}
-                className={`pb-2.5 text-xs font-bold transition-all border-b-2 px-4 ${
+                className={`shrink-0 whitespace-nowrap pb-2.5 text-xs font-bold transition-all border-b-2 px-4 ${
                   modalTab === 'manual'
                     ? 'border-brand-500 text-brand-600 dark:text-brand-400'
                     : 'border-transparent text-slate-400 hover:text-slate-600'
@@ -523,7 +523,7 @@ export default function NaicsMuster() {
               </button>
               <button
                 onClick={() => setModalTab('upload')}
-                className={`pb-2.5 text-xs font-bold transition-all border-b-2 px-4 ${
+                className={`shrink-0 whitespace-nowrap pb-2.5 text-xs font-bold transition-all border-b-2 px-4 ${
                   modalTab === 'upload'
                     ? 'border-brand-500 text-brand-600 dark:text-brand-400'
                     : 'border-transparent text-slate-400 hover:text-slate-600'

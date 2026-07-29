@@ -68,7 +68,6 @@ except Exception:
             except Exception:
                 pass
 
-        response_started = False
         response_status = 200
         response_headers = []
         response_body = []
@@ -80,7 +79,7 @@ except Exception:
             return {'type': 'http.request', 'body': data, 'more_body': False}
 
         async def send(message):
-            nonlocal response_started, response_status, response_headers
+            nonlocal response_status, response_headers
             if message['type'] == 'http.response.start':
                 response_status = message['status']
                 response_headers = [

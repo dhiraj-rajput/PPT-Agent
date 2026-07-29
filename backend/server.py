@@ -26,7 +26,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from utils.db_client import (
     close_connection,
@@ -181,13 +181,49 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------------------------
+# Dev Diagnostic Middleware to debug login issues
+# ---------------------------------------------------------------------------
+@app.middleware("http")
+async def log_login_requests(request: Request, call_next):
+    if request.method == "POST" and request.url.path == "/api/auth/login":
+        # Read body safely without consuming it forever
+        body_bytes = await request.body()
+        # Restore request body so standard handlers can read it
+        async def receive():
+            return {"type": "http.request", "body": body_bytes, "more_body": False}
+        request._receive = receive
+
+        try:
+            import json
+            payload = json.loads(body_bytes.decode("utf-8"))
+            email = payload.get("email", "")
+            password = payload.get("password", "")
+            _log.info(f"[DIAGNOSTIC] Login request: email={email!r}, password_len={len(password)}")
+            
+            # Run the database verification to trace why it fails
+            from utils.db_client import get_database
+            import bcrypt
+            db = get_database()
+            user = db["users"].find_one({"email": email.lower().strip()})
+            if not user:
+                _log.info(f"[DIAGNOSTIC] DB check: User {email!r} NOT found in database!")
+            else:
+                hashed = user.get("passwordHash", "")
+                is_valid = bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
+                _log.info(f"[DIAGNOSTIC] DB check: User found, isVerified={user.get('isVerified')}, status={user.get('status')}, bcrypt_match={is_valid}")
+        except Exception as e:
+            _log.error(f"[DIAGNOSTIC] Failed to run login diagnostics: {e}")
+
+    return await call_next(request)
+
+
+# ---------------------------------------------------------------------------
 # Global error logging — every unhandled exception and every 5xx response is
 # captured in full detail (traceback, request path/method) and persisted to
 # MongoDB via utils.helpers.setup_logger()'s Mongo handler, powering the
 # in-app Server Logs admin page and its live alert banner.
 # ---------------------------------------------------------------------------
 import traceback as _traceback
-from fastapi import Request
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException

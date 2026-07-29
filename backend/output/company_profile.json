@@ -1,5 +1,0 @@
-{
-  "error": "No company data provided. The input JSON contains only empty template fields with no actual company information to process. Please provide real data from website crawler, LinkedIn scraper, and/or external search sources to generate a meaningful competitor profile.",
-  "last_updated": "2026-07-28T06:07:20.108254+00:00",
-  "sources_used": []
-}

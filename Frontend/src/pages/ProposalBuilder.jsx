@@ -486,12 +486,12 @@ export default function ProposalBuilder() {
       <div className="flex flex-col gap-8">
         {/* SECTION 1: Our Company Profile & Inventory */}
         <section>
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-bold text-navy-900 dark:text-white flex items-center gap-2">
               <Building2 className="text-brand-500" size={20} />
               Our Company Profile & Inventory
             </h2>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => {
                   setEditForm({
@@ -621,7 +621,7 @@ export default function ProposalBuilder() {
 
           {/* Sub-Companies Section */}
           <section className="mt-6 border-t border-slate-200 dark:border-navy-800 pt-6">
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-sm font-bold text-navy-900 dark:text-white flex items-center gap-2">
                 <Building2 className="text-brand-500" size={18} />
                 Sub-Companies / Subsidiaries
@@ -698,7 +698,7 @@ export default function ProposalBuilder() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3 text-xs text-slate-500 dark:text-slate-400">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-slate-500 dark:text-slate-400">
                         <div>
                           <span className="font-semibold text-slate-400 mr-1">UEI:</span> {sub.uei}
                         </div>
@@ -1011,9 +1011,9 @@ export default function ProposalBuilder() {
               </button>
             </div>
             <div className="p-5 overflow-y-auto flex-1">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {['name', 'description', 'uei', 'cage_code', 'primary_naics', 'primary_naics_desc', 'state', 'email', 'phone', 'size', 'certifications'].map(field => (
-                  <div key={field} className={field === 'certifications' || field === 'name' || field === 'description' || field === 'primary_naics_desc' ? 'col-span-2' : ''}>
+                  <div key={field} className={field === 'certifications' || field === 'name' || field === 'description' || field === 'primary_naics_desc' ? 'sm:col-span-2' : ''}>
                     <label className="mb-1 block text-[10px] uppercase tracking-wide text-slate-500 font-semibold">{field.replace('_', ' ')} {['name', 'uei'].includes(field) ? <span className="text-rose-500 font-extrabold ml-0.5">*</span> : <span className="text-[10px] text-slate-400 font-normal ml-1 flex-inline normal-case tracking-normal">(Optional)</span>}</label>
                     {field === 'description' ? (
                       <textarea
@@ -1103,7 +1103,7 @@ export default function ProposalBuilder() {
 
             <div className="p-5 overflow-y-auto flex-1">
               {inventoryMode === 'manual' && (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {['name', 'uei', 'cage_code', 'primary_naics', 'state', 'email', 'phone', 'size'].map(field => (
                     <div key={field}>
                       <label className="mb-1 block text-[10px] uppercase tracking-wide text-slate-500 font-semibold">{field.replace('_', ' ')} {['name', 'uei'].includes(field) ? <span className="text-rose-500 font-extrabold ml-0.5">*</span> : <span className="text-[10px] text-slate-400 font-normal ml-1 flex-inline normal-case tracking-normal">(Optional)</span>}</label>
@@ -1244,9 +1244,9 @@ export default function ProposalBuilder() {
               </button>
             </div>
             <div className="p-5 overflow-y-auto flex-1">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {['name', 'description', 'uei', 'cage_code', 'primary_naics', 'primary_naics_desc', 'state', 'email', 'phone', 'size', 'certifications'].map(field => (
-                  <div key={field} className={field === 'certifications' || field === 'name' || field === 'description' || field === 'primary_naics_desc' ? 'col-span-2' : ''}>
+                  <div key={field} className={field === 'certifications' || field === 'name' || field === 'description' || field === 'primary_naics_desc' ? 'sm:col-span-2' : ''}>
                     <label className="mb-1 block text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
                       {field.replace('_', ' ')} {['name', 'uei'].includes(field) ? <span className="text-rose-500 font-extrabold ml-0.5">*</span> : <span className="text-[10px] text-slate-400 font-normal ml-1 flex-inline normal-case tracking-normal">(Optional)</span>}
                     </label>

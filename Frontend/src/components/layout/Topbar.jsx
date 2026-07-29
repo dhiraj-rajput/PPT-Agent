@@ -132,7 +132,7 @@ function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-soft dark:border-navy-700 dark:bg-navy-800 z-50">
+        <div className="fixed inset-x-3 top-[64px] sm:absolute sm:inset-x-auto sm:top-full right-0 sm:right-0 mt-0 sm:mt-2 w-auto sm:w-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-soft dark:border-navy-700 dark:bg-navy-800 z-50">
           <div className="mb-3 flex items-center justify-between gap-2">
             <h4 className="text-sm font-bold text-navy-900 dark:text-white">Notifications</h4>
             <div className="flex items-center gap-3">
@@ -295,11 +295,12 @@ export default function Topbar({ onMenuClick }) {
   };
 
   return (
-    <header className="flex h-[72px] items-center justify-between gap-4 border-b border-slate-200 bg-white/90 px-6 backdrop-blur dark:border-navy-800 dark:bg-navy-900/90 dark:text-white">
-      <div className="flex items-center gap-3">
+    <header className="flex h-[64px] sm:h-[72px] items-center justify-between gap-2 sm:gap-4 border-b border-slate-200 bg-white/90 px-3 sm:px-6 backdrop-blur dark:border-navy-800 dark:bg-navy-900/90 dark:text-white">
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
         <button
           onClick={onMenuClick}
-          className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-navy-800 lg:hidden"
+          className="shrink-0 rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-navy-800 lg:hidden"
+          aria-label="Toggle navigation menu"
         >
           <Menu size={20} />
         </button>
@@ -404,28 +405,29 @@ export default function Topbar({ onMenuClick }) {
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1 sm:gap-2 shrink-0">
         {/* AI System vs Rule-Based Toggle Button */}
         <button
           onClick={toggleAiMode}
           disabled={loadingMode}
-          className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all ${
+          className={`flex items-center gap-2 rounded-xl border px-2 sm:px-3 py-1.5 text-xs font-semibold transition-all ${
             aiMode === 'rule_based'
               ? 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300'
               : 'border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100 dark:border-brand-900 dark:bg-brand-950/50 dark:text-brand-300'
           }`}
           title="Click to toggle between AI-first and Rule-based fallback systems"
         >
-          <span className="relative flex h-2 w-2">
+          <span className="relative flex h-2 w-2 shrink-0">
             <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${aiMode === 'rule_based' ? 'bg-amber-400' : 'bg-brand-400'}`}></span>
             <span className={`relative inline-flex h-2 w-2 rounded-full ${aiMode === 'rule_based' ? 'bg-amber-500' : 'bg-brand-500'}`}></span>
           </span>
-          <span>{aiMode === 'rule_based' ? 'System: Rule-Based' : 'System: AI-Enabled'}</span>
+          <span className="hidden md:inline">{aiMode === 'rule_based' ? 'System: Rule-Based' : 'System: AI-Enabled'}</span>
+          <span className="md:hidden">{aiMode === 'rule_based' ? 'Rule-Based' : 'AI'}</span>
         </button>
 
         <button
           onClick={toggleTheme}
-          className="rounded-lg p-2.5 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-navy-800"
+          className="shrink-0 rounded-lg p-2 sm:p-2.5 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-navy-800"
           title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
         >
           {theme === 'light' ? <Moon size={19} /> : <Sun size={19} />}

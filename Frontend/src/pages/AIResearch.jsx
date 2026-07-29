@@ -587,12 +587,12 @@ export default function AIResearch() {
                   </div>
 
                   {/* Tabs */}
-                  <div className="mt-6 flex border-b border-slate-200 dark:border-navy-800">
+                  <div className="mt-6 flex gap-1 overflow-x-auto border-b border-slate-200 dark:border-navy-800">
                     {['overview', 'swot', 'financials', 'techstack'].map((tab) => (
                       <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
-                        className={`border-b-2 px-4 py-2.5 text-xs font-bold capitalize transition-all ${
+                        className={`shrink-0 whitespace-nowrap border-b-2 px-4 py-2.5 text-xs font-bold capitalize transition-all ${
                           activeTab === tab
                             ? 'border-brand-500 text-brand-600 dark:text-white'
                             : 'border-transparent text-slate-400 hover:text-slate-600'

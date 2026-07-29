@@ -180,43 +180,46 @@ export default function PreGenerationWizard({ tenderId, solicitationNumber, prop
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/80 p-4 backdrop-blur-md" onClick={onCancel}>
-      <div className="w-full max-w-3xl rounded-2xl bg-white dark:bg-navy-800 shadow-2xl overflow-hidden border border-slate-100 dark:border-navy-700" onClick={(e) => e.stopPropagation()}>
+      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white dark:bg-navy-800 shadow-2xl border border-slate-100 dark:border-navy-700" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-100 dark:border-navy-700 p-5 bg-gradient-to-r from-brand-600 to-brand-700 text-white">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 backdrop-blur-md text-white">
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-100 dark:border-navy-700 p-5 bg-gradient-to-r from-brand-600 to-brand-700 text-white">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 backdrop-blur-md text-white">
               <Sparkles size={20} />
             </div>
-            <div>
-              <h3 className="text-base font-extrabold leading-tight">Proposal Generation Wizard</h3>
-              <p className="text-xs text-brand-100 mt-0.5">Customize strategy & structure before AI generation</p>
+            <div className="min-w-0">
+              <h3 className="text-base font-extrabold leading-tight truncate">Proposal Generation Wizard</h3>
+              <p className="text-xs text-brand-100 mt-0.5 truncate">Customize strategy & structure before AI generation</p>
             </div>
           </div>
-          <button onClick={onCancel} className="rounded-lg p-2 text-white/80 hover:text-white hover:bg-white/10 transition-colors">
+          <button onClick={onCancel} className="shrink-0 rounded-lg p-2 text-white/80 hover:text-white hover:bg-white/10 transition-colors">
             <X size={20} />
           </button>
         </div>
 
         {/* Step Indicator */}
-        <div className="flex items-center justify-between border-b border-slate-100 dark:border-navy-700 bg-slate-50 dark:bg-navy-900 px-6 py-3 text-xs font-semibold">
-          <div className={`flex items-center gap-2 ${step >= 1 ? 'text-brand-600 dark:text-brand-400' : 'text-slate-400'}`}>
-            <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${step >= 1 ? 'bg-brand-500 text-white' : 'bg-slate-200 text-slate-600'}`}>1</span>
-            Strategy Alignment
+        <div className="flex shrink-0 items-center justify-between gap-1 border-b border-slate-100 dark:border-navy-700 bg-slate-50 dark:bg-navy-900 px-3 sm:px-6 py-3 text-xs font-semibold overflow-x-auto">
+          <div className={`flex shrink-0 items-center gap-1.5 sm:gap-2 ${step >= 1 ? 'text-brand-600 dark:text-brand-400' : 'text-slate-400'}`}>
+            <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] ${step >= 1 ? 'bg-brand-500 text-white' : 'bg-slate-200 text-slate-600'}`}>1</span>
+            <span className="hidden sm:inline">Strategy Alignment</span>
+            <span className="sm:hidden">Strategy</span>
           </div>
-          <ChevronRight size={14} className="text-slate-300" />
-          <div className={`flex items-center gap-2 ${step >= 2 ? 'text-brand-600 dark:text-brand-400' : 'text-slate-400'}`}>
-            <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${step >= 2 ? 'bg-brand-500 text-white' : 'bg-slate-200 text-slate-600'}`}>2</span>
-            Outline Preview
+          <ChevronRight size={14} className="shrink-0 text-slate-300" />
+          <div className={`flex shrink-0 items-center gap-1.5 sm:gap-2 ${step >= 2 ? 'text-brand-600 dark:text-brand-400' : 'text-slate-400'}`}>
+            <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] ${step >= 2 ? 'bg-brand-500 text-white' : 'bg-slate-200 text-slate-600'}`}>2</span>
+            <span className="hidden sm:inline">Outline Preview</span>
+            <span className="sm:hidden">Outline</span>
           </div>
-          <ChevronRight size={14} className="text-slate-300" />
-          <div className={`flex items-center gap-2 ${step >= 3 ? 'text-brand-600 dark:text-brand-400' : 'text-slate-400'}`}>
-            <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${step >= 3 ? 'bg-brand-500 text-white' : 'bg-slate-200 text-slate-600'}`}>3</span>
-            Finalize
+          <ChevronRight size={14} className="shrink-0 text-slate-300" />
+          <div className={`flex shrink-0 items-center gap-1.5 sm:gap-2 ${step >= 3 ? 'text-brand-600 dark:text-brand-400' : 'text-slate-400'}`}>
+            <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] ${step >= 3 ? 'bg-brand-500 text-white' : 'bg-slate-200 text-slate-600'}`}>3</span>
+            <span className="hidden sm:inline">Finalize</span>
+            <span className="sm:hidden">Finalize</span>
           </div>
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 max-h-[60vh] overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-12">
               <Loader2 className="animate-spin text-brand-500" size={32} />
@@ -418,7 +421,7 @@ export default function PreGenerationWizard({ tenderId, solicitationNumber, prop
         </div>
 
         {/* Footer Controls */}
-        <div className="flex items-center justify-between border-t border-slate-100 dark:border-navy-700 p-4 bg-slate-50 dark:bg-navy-900">
+        <div className="flex shrink-0 items-center justify-between border-t border-slate-100 dark:border-navy-700 p-4 bg-slate-50 dark:bg-navy-900">
           {step > 1 ? (
             <button
               onClick={() => setStep((s) => s - 1)}

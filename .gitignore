@@ -81,7 +81,7 @@ ipython_config.py
 .env
 .env.*
 !.env.example
-.venv
+.venv/
 env/
 venv/
 ENV/
@@ -120,6 +120,32 @@ cython_debug/
 
 # Local data files
 /data/
+
+# ---------------------------------------------------------------------------
+# Frontend — Node / Vite / React (do NOT commit these)
+# ---------------------------------------------------------------------------
+Frontend/node_modules/
+Frontend/dist/
+Frontend/.vite/
+
+# ---------------------------------------------------------------------------
+# Backend — Generated runtime files (do NOT commit these)
+# ---------------------------------------------------------------------------
+
+# Generated output documents (PDFs, DOCXs produced by the pipeline)
 backend/output/
+
+# Private data: user uploads, template docs, large CSVs, avatars
 backend/private/
 
+# Downloaded tender documents (fetched from SAM.gov at runtime)
+backend/downloads/
+
+# Server log files
+backend/logs/
+
+# ---------------------------------------------------------------------------
+# OS / Editor artifacts
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db

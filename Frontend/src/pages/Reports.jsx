@@ -418,17 +418,17 @@ export default function Reports() {
       {emailModalReport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/70 p-4 backdrop-blur-sm" onClick={() => setEmailModalReport(null)}>
           <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-navy-800 p-6 shadow-2xl border border-slate-100 dark:border-navy-700" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-navy-700 mb-4">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+            <div className="flex items-center justify-between gap-3 pb-4 border-b border-slate-100 dark:border-navy-700 mb-4">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
                   <Mail size={18} />
                 </div>
-                <div>
-                  <h3 className="text-base font-extrabold text-navy-900 dark:text-white leading-tight">Send Proposal Email</h3>
-                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Logs outreach to Email Campaign & CRM pipeline</p>
+                <div className="min-w-0">
+                  <h3 className="text-base font-extrabold text-navy-900 dark:text-white leading-tight truncate">Send Proposal Email</h3>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 truncate">Logs outreach to Email Campaign & CRM pipeline</p>
                 </div>
               </div>
-              <button onClick={() => setEmailModalReport(null)} className="rounded-lg p-1.5 text-slate-400 hover:text-navy-900 dark:hover:text-white">
+              <button onClick={() => setEmailModalReport(null)} className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:text-navy-900 dark:hover:text-white">
                 <X size={18} />
               </button>
             </div>
@@ -510,13 +510,13 @@ export default function Reports() {
       {previewing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/80 p-4 md:p-6 backdrop-blur-md" onClick={() => setPreviewing(null)}>
           <div className="w-[94vw] md:w-[90vw] lg:w-[85vw] max-w-7xl h-[92vh] flex flex-col rounded-2xl bg-white dark:bg-navy-800 shadow-2xl overflow-hidden border border-slate-100 dark:border-navy-700" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-navy-700 p-5 shrink-0 bg-white dark:bg-navy-800">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-50 text-brand-600 dark:bg-navy-900 dark:text-brand-400">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-100 dark:border-navy-700 p-5 shrink-0 bg-white dark:bg-navy-800">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600 dark:bg-navy-900 dark:text-brand-400">
                   <FileBarChart size={20} />
                 </div>
-                <div>
-                  <h3 className="text-base font-extrabold text-navy-900 dark:text-white leading-tight">{previewing.company_name}</h3>
+                <div className="min-w-0">
+                  <h3 className="text-base font-extrabold text-navy-900 dark:text-white leading-tight truncate">{previewing.company_name}</h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${proposalTypeBadgeColor(previewing.proposal_type)}`}>{previewing.proposal_type}</span>
                     <span>•</span>
@@ -528,7 +528,7 @@ export default function Reports() {
                   </p>
                 </div>
               </div>
-              <button onClick={() => setPreviewing(null)} className="rounded-lg p-2 text-slate-400 hover:text-navy-950 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-navy-900 transition-colors">
+              <button onClick={() => setPreviewing(null)} className="shrink-0 rounded-lg p-2 text-slate-400 hover:text-navy-950 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-navy-900 transition-colors">
                 <X size={20} />
               </button>
             </div>
