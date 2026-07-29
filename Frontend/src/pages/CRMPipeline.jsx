@@ -68,12 +68,12 @@ export default function CRMPipeline() {
         subtitle="Visual workflow tracking leads, outbound campaigns, and award statuses"
       />
 
-      <div className="flex gap-4 overflow-x-auto pb-4">
+      <div className="flex gap-3 overflow-x-auto pb-4 -mx-4 px-4 sm:mx-0 sm:gap-4 sm:px-0 snap-x snap-mandatory scroll-smooth [-webkit-overflow-scrolling:touch]">
         {columns.map((col) => (
-          <div key={col.key} className="w-72 shrink-0">
+          <div key={col.key} className="w-[82vw] max-w-[280px] shrink-0 snap-start sm:w-72 sm:max-w-none">
             <div className="mb-3 flex items-center justify-between px-1">
-              <h3 className="text-sm font-bold text-navy-900 dark:text-white">{col.label}</h3>
-              <span className="rounded-full bg-slate-100 dark:bg-navy-800 px-2 py-0.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
+              <h3 className="truncate pr-2 text-sm font-bold text-navy-900 dark:text-white">{col.label}</h3>
+              <span className="shrink-0 rounded-full bg-slate-100 dark:bg-navy-800 px-2 py-0.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
                 {col.items.length}
               </span>
             </div>

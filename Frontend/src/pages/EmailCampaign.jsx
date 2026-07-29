@@ -784,7 +784,8 @@ export default function EmailCampaign() {
             <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">Which companies clicked through and how long they spent on the site</p>
           </div>
         </div>
-        <table className="mt-3 w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="mt-3 w-full min-w-[640px] text-sm">
           <thead>
             <tr className="border-b border-slate-100 dark:border-navy-800 text-left text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">
               <th className="px-5 py-3 font-semibold">Campaign</th>
@@ -815,24 +816,25 @@ export default function EmailCampaign() {
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
 
       {showNewCampaign && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/60 p-4 backdrop-blur-xs"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-navy-950/60 backdrop-blur-xs sm:items-center sm:p-4"
           onClick={() => !creating && setShowNewCampaign(false)}
         >
           <div
-            className="w-full max-w-lg rounded-2xl bg-white dark:bg-navy-800 shadow-soft overflow-hidden border border-slate-100 dark:border-navy-700"
+            className="max-h-[94dvh] w-full max-w-lg overflow-hidden rounded-t-2xl bg-white dark:bg-navy-800 shadow-soft border border-slate-100 dark:border-navy-700 sm:max-h-[90vh] sm:rounded-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-navy-700 p-5">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-navy-700 p-4 sm:p-5">
               <h3 className="text-sm font-bold text-navy-900 dark:text-white">New Campaign</h3>
               <button onClick={() => setShowNewCampaign(false)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-navy-900">
                 <X size={18} />
               </button>
             </div>
-            <form onSubmit={handleCreateCampaign} className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+            <form onSubmit={handleCreateCampaign} className="p-4 space-y-4 max-h-[calc(94dvh-64px)] overflow-y-auto sm:p-5 sm:max-h-[calc(90vh-68px)]">
               {formError && (
                 <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
                   {formError}
@@ -853,7 +855,7 @@ export default function EmailCampaign() {
               {/* Recipient Mode Selection */}
               <div>
                 <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400 font-bold">Recipient Mode</label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 gap-2 xs:grid-cols-3">
                   <button
                     type="button"
                     onClick={() => setSendMode('bulk')}
@@ -999,7 +1001,7 @@ export default function EmailCampaign() {
                       className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 gap-2 xs:grid-cols-2">
                     <div>
                       <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Recipient Name(s) <span className="font-normal text-slate-400">(Comma separated)</span></label>
                       <input
@@ -1025,7 +1027,7 @@ export default function EmailCampaign() {
               {/* Attachment Mode Selection */}
               <div>
                 <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400 font-bold">Campaign PDF Attachment (Optional)</label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 gap-2 xs:grid-cols-3">
                   <button
                     type="button"
                     onClick={() => { setAttachmentType('none'); setAttachedPath(''); setAttachedFilename(''); setSelectedReport(''); }}
@@ -1108,7 +1110,7 @@ export default function EmailCampaign() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 xs:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400 font-bold">Campaign Timezone</label>
                   <select
@@ -1180,7 +1182,7 @@ export default function EmailCampaign() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 xs:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Sender Name</label>
                   <input
@@ -1235,14 +1237,14 @@ export default function EmailCampaign() {
 
       {showAddLead && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/60 p-4 backdrop-blur-xs"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-navy-950/60 backdrop-blur-xs sm:items-center sm:p-4"
           onClick={() => !addingLead && setShowAddLead(null)}
         >
           <div
-            className="w-full max-w-md rounded-2xl bg-white dark:bg-navy-800 shadow-soft overflow-hidden border border-slate-100 dark:border-navy-700"
+            className="flex max-h-[94dvh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl bg-white dark:bg-navy-800 shadow-soft border border-slate-100 dark:border-navy-700 sm:max-h-[90vh] sm:rounded-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-navy-700 p-5">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-navy-700 p-4 sm:p-5">
               <div>
                 <h3 className="text-sm font-bold text-navy-900 dark:text-white">Add Lead Manually</h3>
                 <p className="text-xs text-slate-400 mt-0.5">Add a single recipient email to the campaign outreach list.</p>
@@ -1252,7 +1254,7 @@ export default function EmailCampaign() {
               </button>
             </div>
 
-            <form onSubmit={handleAddLead} className="p-5 space-y-4 text-left">
+            <form onSubmit={handleAddLead} className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4 text-left sm:p-5">
               {leadError && (
                 <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
                   {leadError}
@@ -1327,24 +1329,24 @@ export default function EmailCampaign() {
 
       {showAddCompanies !== null && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/60 p-4 backdrop-blur-xs"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-navy-950/60 backdrop-blur-xs sm:items-center sm:p-4"
           onClick={() => !addingCompanies && setShowAddCompanies(null)}
         >
           <div
-            className="w-full max-w-2xl rounded-2xl bg-white dark:bg-navy-800 shadow-soft overflow-hidden border border-slate-100 dark:border-navy-700"
+            className="flex max-h-[94dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-white dark:bg-navy-800 shadow-soft border border-slate-100 dark:border-navy-700 sm:max-h-[85vh] sm:rounded-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-navy-700 p-5">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-navy-700 p-4 sm:p-5">
               <div>
                 <h3 className="text-sm font-bold text-navy-900 dark:text-white">Select Companies</h3>
                 <p className="text-xs text-slate-400 mt-0.5">Pick one or more companies to enroll in this campaign. A company already running in another campaign can't be selected again.</p>
               </div>
-              <button onClick={() => setShowAddCompanies(null)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-navy-900">
+              <button onClick={() => setShowAddCompanies(null)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-navy-900 shrink-0">
                 <X size={18} />
               </button>
             </div>
 
-            <div className="p-5 space-y-3">
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 sm:p-5 min-h-0">
               {companiesError && (
                 <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
                   {companiesError}
@@ -1481,34 +1483,34 @@ export default function EmailCampaign() {
       {/* Incoming Reply Email Viewer Modal */}
       {viewingReplyLead && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/70 p-4 backdrop-blur-xs"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-navy-950/70 backdrop-blur-xs sm:items-center sm:p-4"
           onClick={() => setViewingReplyLead(null)}
         >
           <div
-            className="w-full max-w-xl rounded-2xl bg-white dark:bg-navy-800 shadow-2xl overflow-hidden border border-slate-100 dark:border-navy-700"
+            className="flex max-h-[94dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-2xl bg-white dark:bg-navy-800 shadow-2xl border border-slate-100 dark:border-navy-700 sm:max-h-[85vh] sm:rounded-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-navy-700 px-5 py-4">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 dark:border-navy-700 px-4 py-4 sm:px-5">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400">
                   <Mail size={18} />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <h3 className="text-sm font-bold text-navy-900 dark:text-white">Incoming Reply Email</h3>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-slate-400 truncate">
                     From {viewingReplyLead.contactName || viewingReplyLead.companyName} ({viewingReplyLead.email})
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setViewingReplyLead(null)}
-                className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-navy-900 dark:hover:bg-navy-700 dark:hover:text-white"
+                className="shrink-0 rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-navy-900 dark:hover:bg-navy-700 dark:hover:text-white"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="p-5 space-y-4">
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4 sm:p-5">
               <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3.5 dark:border-navy-700 dark:bg-navy-900/50 space-y-1">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Subject</p>
                 <p className="text-xs font-bold text-navy-900 dark:text-white">

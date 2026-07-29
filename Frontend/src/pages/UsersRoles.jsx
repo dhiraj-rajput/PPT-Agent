@@ -134,76 +134,139 @@ export default function UsersRoles() {
         ) : users.length === 0 ? (
           <div className="py-12 text-center text-sm text-slate-400 dark:text-slate-500">No users yet. Invite your first teammate.</div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 dark:border-navy-800 text-left text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">
-                <th className="px-5 py-3 font-semibold">User</th>
-                <th className="px-5 py-3 font-semibold">Role</th>
-                <th className="px-5 py-3 font-semibold">Status</th>
-                <th className="px-5 py-3 font-semibold text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((u) => (
-                <tr key={u.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 dark:border-navy-800/40 dark:hover:bg-navy-800/40">
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={api.getInitialsAvatar(u.name || u.email || 'User')}
-                        className="h-9 w-9 rounded-full"
-                        alt={u.name}
-                      />
-                      <div>
-                        <p className="font-semibold text-navy-900 dark:text-white">{u.name}</p>
-                        <p className="text-xs text-slate-400 dark:text-slate-500">{u.email}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{u.role}</td>
-                  <td className="px-5 py-3.5">
-                    <StatusBadge status={u.status} />
-                  </td>
-                  <td className="relative px-5 py-3.5 text-right">
-                    <button
-                      onClick={() => setMenuOpenId(menuOpenId === u.id ? null : u.id)}
-                      className="rounded-lg p-1.5 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-navy-700"
-                    >
-                      <MoreHorizontal size={15} />
-                    </button>
-                    {menuOpenId === u.id && (
-                      <div className="absolute right-5 z-10 mt-1 w-52 rounded-xl border border-slate-100 dark:border-navy-800 bg-white dark:bg-navy-900 p-1.5 text-left shadow-card">
-                        <p className="px-2.5 py-1.5 text-[11px] font-semibold uppercase text-slate-400 dark:text-slate-500">Change role</p>
-                        {ROLES.map((r) => (
-                          <button
-                            key={r}
-                            onClick={() => changeRole(u.id, r)}
-                            className={`block w-full rounded-lg px-2.5 py-1.5 text-left text-xs font-medium hover:bg-slate-50 dark:hover:bg-navy-800 ${
-                              r === u.role ? 'text-brand-600 font-bold' : 'text-navy-900 dark:text-slate-200'
-                            }`}
-                          >
-                            {r}
-                          </button>
-                        ))}
-                        <div className="my-1.5 border-t border-slate-100 dark:border-navy-800" />
-                        <button
-                          onClick={() => handleResendInvite(u)}
-                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30"
-                        >
-                          <RefreshCw size={13} /> Reset Temp Password
-                        </button>
-                        <button
-                          onClick={() => handleDeleteUser(u)}
-                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
-                        >
-                          <Trash2 size={13} /> Delete User
-                        </button>
-                      </div>
-                    )}
-                  </td>
+          <>
+          <div className="hidden overflow-x-auto sm:block">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 dark:border-navy-800 text-left text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                  <th className="px-5 py-3 font-semibold">User</th>
+                  <th className="px-5 py-3 font-semibold">Role</th>
+                  <th className="px-5 py-3 font-semibold">Status</th>
+                  <th className="px-5 py-3 font-semibold text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 dark:border-navy-800/40 dark:hover:bg-navy-800/40">
+                    <td className="px-5 py-3.5">
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={api.getInitialsAvatar(u.name || u.email || 'User')}
+                          className="h-9 w-9 rounded-full"
+                          alt={u.name}
+                        />
+                        <div>
+                          <p className="font-semibold text-navy-900 dark:text-white">{u.name}</p>
+                          <p className="text-xs text-slate-400 dark:text-slate-500">{u.email}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{u.role}</td>
+                    <td className="px-5 py-3.5">
+                      <StatusBadge status={u.status} />
+                    </td>
+                    <td className="relative px-5 py-3.5 text-right">
+                      <button
+                        onClick={() => setMenuOpenId(menuOpenId === u.id ? null : u.id)}
+                        className="rounded-lg p-1.5 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-navy-700"
+                      >
+                        <MoreHorizontal size={15} />
+                      </button>
+                      {menuOpenId === u.id && (
+                        <div className="absolute right-5 z-10 mt-1 w-52 rounded-xl border border-slate-100 dark:border-navy-800 bg-white dark:bg-navy-900 p-1.5 text-left shadow-card">
+                          <p className="px-2.5 py-1.5 text-[11px] font-semibold uppercase text-slate-400 dark:text-slate-500">Change role</p>
+                          {ROLES.map((r) => (
+                            <button
+                              key={r}
+                              onClick={() => changeRole(u.id, r)}
+                              className={`block w-full rounded-lg px-2.5 py-1.5 text-left text-xs font-medium hover:bg-slate-50 dark:hover:bg-navy-800 ${
+                                r === u.role ? 'text-brand-600 font-bold' : 'text-navy-900 dark:text-slate-200'
+                              }`}
+                            >
+                              {r}
+                            </button>
+                          ))}
+                          <div className="my-1.5 border-t border-slate-100 dark:border-navy-800" />
+                          <button
+                            onClick={() => handleResendInvite(u)}
+                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                          >
+                            <RefreshCw size={13} /> Reset Temp Password
+                          </button>
+                          <button
+                            onClick={() => handleDeleteUser(u)}
+                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                          >
+                            <Trash2 size={13} /> Delete User
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="divide-y divide-slate-50 dark:divide-navy-800/40 sm:hidden">
+            {users.map((u) => (
+              <div key={u.id} className="relative p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <img
+                      src={api.getInitialsAvatar(u.name || u.email || 'User')}
+                      className="h-9 w-9 shrink-0 rounded-full"
+                      alt={u.name}
+                    />
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-navy-900 dark:text-white">{u.name}</p>
+                      <p className="truncate text-xs text-slate-400 dark:text-slate-500">{u.email}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setMenuOpenId(menuOpenId === u.id ? null : u.id)}
+                    className="shrink-0 rounded-lg p-1.5 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-navy-700"
+                  >
+                    <MoreHorizontal size={15} />
+                  </button>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-navy-800 dark:text-slate-300">{u.role}</span>
+                  <StatusBadge status={u.status} />
+                </div>
+                {menuOpenId === u.id && (
+                  <div className="absolute right-4 top-12 z-10 w-48 rounded-xl border border-slate-100 dark:border-navy-800 bg-white dark:bg-navy-900 p-1.5 text-left shadow-card">
+                    <p className="px-2.5 py-1.5 text-[11px] font-semibold uppercase text-slate-400 dark:text-slate-500">Change role</p>
+                    {ROLES.map((r) => (
+                      <button
+                        key={r}
+                        onClick={() => changeRole(u.id, r)}
+                        className={`block w-full rounded-lg px-2.5 py-1.5 text-left text-xs font-medium hover:bg-slate-50 dark:hover:bg-navy-800 ${
+                          r === u.role ? 'text-brand-600 font-bold' : 'text-navy-900 dark:text-slate-200'
+                        }`}
+                      >
+                        {r}
+                      </button>
+                    ))}
+                    <div className="my-1.5 border-t border-slate-100 dark:border-navy-800" />
+                    <button
+                      onClick={() => handleResendInvite(u)}
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                    >
+                      <RefreshCw size={13} /> Reset Temp Password
+                    </button>
+                    <button
+                      onClick={() => handleDeleteUser(u)}
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                    >
+                      <Trash2 size={13} /> Delete User
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          </>
         )}
       </Card>
 
@@ -214,7 +277,7 @@ export default function UsersRoles() {
         >
           <form
             onSubmit={submitInvite}
-            className="w-full max-w-md rounded-2xl bg-white dark:bg-navy-900 p-6 shadow-soft"
+            className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white dark:bg-navy-900 p-5 shadow-soft sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
@@ -270,18 +333,18 @@ export default function UsersRoles() {
               <div className="mt-3 rounded-lg bg-emerald-50 px-3.5 py-2.5 text-sm text-emerald-700">{inviteSuccess}</div>
             )}
 
-            <div className="mt-5 flex justify-end gap-2">
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="rounded-lg border border-slate-200 dark:border-navy-700 px-3.5 py-2 text-xs font-semibold text-navy-900 dark:text-white hover:bg-slate-50 dark:hover:bg-navy-800"
+                className="w-full rounded-lg border border-slate-200 dark:border-navy-700 px-3.5 py-2.5 text-xs font-semibold text-navy-900 dark:text-white hover:bg-slate-50 dark:hover:bg-navy-800 sm:w-auto sm:py-2"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={inviting}
-                className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-3.5 py-2 text-xs font-bold text-white disabled:opacity-60"
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-brand-500 px-3.5 py-2.5 text-xs font-bold text-white disabled:opacity-60 sm:w-auto sm:py-2"
               >
                 {inviting && <Loader2 size={13} className="animate-spin" />}
                 Send Invite

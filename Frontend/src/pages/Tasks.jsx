@@ -115,38 +115,42 @@ export default function Tasks() {
           <div className="py-12 text-center text-sm text-slate-400 dark:text-slate-500">No tasks yet. Create the first one.</div>
         ) : (
           tasks.map((t) => (
-            <div key={t.id} className="flex items-center gap-4 border-b border-slate-50 px-5 py-4 last:border-0 dark:border-navy-800/40">
-              <input
-                type="checkbox"
-                checked={t.done}
-                onChange={() => toggle(t.id)}
-                className="h-4 w-4 rounded border-slate-300 dark:border-navy-600 text-brand-600"
-              />
-              <div className="flex-1">
-                <p className={`text-sm font-semibold ${t.done ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-navy-900 dark:text-white'}`}>{t.title}</p>
-                <p className="text-xs text-slate-400 dark:text-slate-500">Due {t.due || 'Not set'}</p>
+            <div key={t.id} className="flex flex-col gap-3 border-b border-slate-50 px-4 py-4 last:border-0 dark:border-navy-800/40 sm:flex-row sm:items-center sm:gap-4 sm:px-5">
+              <div className="flex items-start gap-3 sm:items-center">
+                <input
+                  type="checkbox"
+                  checked={t.done}
+                  onChange={() => toggle(t.id)}
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 dark:border-navy-600 text-brand-600 sm:mt-0"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className={`truncate text-sm font-semibold ${t.done ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-navy-900 dark:text-white'}`}>{t.title}</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500">Due {t.due || 'Not set'}</p>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                {t.assignee && (
-                  <img
-                    src={api.getInitialsAvatar(t.assignee.name || t.assignee.email || 'User')}
-                    className="h-6 w-6 rounded-full"
-                    alt={t.assignee.name}
-                    title={t.assignee.name}
-                  />
-                )}
-                <select
-                  value={t.assigneeId ?? ''}
-                  onChange={(e) => reassign(t.id, e.target.value)}
-                  className="rounded-lg border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-2 py-1.5 text-xs font-medium text-navy-900 dark:text-white outline-none focus:border-brand-500"
-                >
-                  <option value="">Unassigned</option>
-                  {users.map((u) => (
-                    <option key={u.id} value={u.id}>{u.name}</option>
-                  ))}
-                </select>
+              <div className="flex items-center justify-between gap-2 pl-7 sm:justify-end sm:gap-3 sm:pl-0">
+                <div className="flex items-center gap-2">
+                  {t.assignee && (
+                    <img
+                      src={api.getInitialsAvatar(t.assignee.name || t.assignee.email || 'User')}
+                      className="h-6 w-6 shrink-0 rounded-full"
+                      alt={t.assignee.name}
+                      title={t.assignee.name}
+                    />
+                  )}
+                  <select
+                    value={t.assigneeId ?? ''}
+                    onChange={(e) => reassign(t.id, e.target.value)}
+                    className="w-full max-w-[130px] rounded-lg border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-2 py-1.5 text-xs font-medium text-navy-900 dark:text-white outline-none focus:border-brand-500 sm:max-w-none"
+                  >
+                    <option value="">Unassigned</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>{u.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <StatusBadge status={t.priority} />
               </div>
-              <StatusBadge status={t.priority} />
             </div>
           ))
         )}
@@ -159,7 +163,7 @@ export default function Tasks() {
         >
           <form
             onSubmit={submitCreate}
-            className="w-full max-w-md rounded-2xl bg-white dark:bg-navy-900 p-6 shadow-soft"
+            className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white dark:bg-navy-900 p-5 shadow-soft sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
@@ -184,7 +188,7 @@ export default function Tasks() {
                   required
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Due</label>
                   <input
@@ -229,18 +233,18 @@ export default function Tasks() {
               <div className="mt-3 rounded-lg bg-emerald-50 px-3.5 py-2.5 text-sm text-emerald-700">{createNotice}</div>
             )}
 
-            <div className="mt-5 flex justify-end gap-2">
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="rounded-lg border border-slate-200 dark:border-navy-700 px-3.5 py-2 text-xs font-semibold text-navy-900 dark:text-white hover:bg-slate-50 dark:hover:bg-navy-800"
+                className="w-full rounded-lg border border-slate-200 dark:border-navy-700 px-3.5 py-2.5 text-xs font-semibold text-navy-900 dark:text-white hover:bg-slate-50 dark:hover:bg-navy-800 sm:w-auto sm:py-2"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={creating}
-                className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-3.5 py-2 text-xs font-bold text-white disabled:opacity-60"
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-brand-500 px-3.5 py-2.5 text-xs font-bold text-white disabled:opacity-60 sm:w-auto sm:py-2"
               >
                 {creating && <Loader2 size={13} className="animate-spin" />}
                 Create Task

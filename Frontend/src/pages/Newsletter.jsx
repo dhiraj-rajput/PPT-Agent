@@ -304,7 +304,7 @@ export default function Newsletter() {
         title="Newsletter Publications & Broadcasting"
         subtitle="Manage recurring publications, global subscriber lists, and broadcast issue distributions"
         action={
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={() => setShowCreateModal(true)}
               className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-navy-900 shadow-soft hover:bg-slate-50 dark:border-navy-700 dark:bg-navy-800 dark:text-white"
@@ -325,12 +325,12 @@ export default function Newsletter() {
 
       {/* Explanatory Guide Box: Publication vs Broadcasting */}
       <div className="rounded-2xl border border-brand-200 bg-gradient-to-r from-brand-50/80 via-white to-slate-50 p-5 dark:border-navy-700 dark:from-navy-800 dark:to-navy-900">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex gap-3">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-500 text-white shadow-soft">
               <Sparkles size={20} />
             </div>
-            <div>
+            <div className="min-w-0">
               <h3 className="text-sm font-bold text-navy-900 dark:text-white">Publication & Broadcasting Guide</h3>
               <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
                 <strong className="text-brand-600 dark:text-brand-400">Publication:</strong> A recurring newsletter series or thematic channel (e.g., <em>Federal Tech Digest</em>). Users & companies subscribe to publications to receive regular market news.<br/>
@@ -341,7 +341,7 @@ export default function Newsletter() {
           {selectedNewsletter && (
             <button
               onClick={() => setShowSelfSubscribeModal(true)}
-              className="shrink-0 flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-soft hover:bg-emerald-700 transition-colors"
+              className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-soft hover:bg-emerald-700 transition-colors sm:w-auto sm:shrink-0 sm:justify-start"
             >
               <Users size={14} /> Subscribe Contact / Company
             </button>
@@ -414,7 +414,7 @@ export default function Newsletter() {
             {selectedNewsletter && (
               <>
                 {/* Stats Header */}
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 gap-4 xs:grid-cols-3">
                   <Card className="flex items-center gap-4">
                     <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-600 dark:bg-violet-950/30 dark:text-violet-400">
                       <Users size={20} />
@@ -447,8 +447,8 @@ export default function Newsletter() {
                 </div>
 
                 {/* Tabs */}
-                <div className="flex items-center justify-between border-b border-slate-200 dark:border-navy-700 pb-2">
-                  <div className="flex gap-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-navy-700 pb-2">
+                  <div className="flex flex-wrap gap-4">
                     <button
                       onClick={() => setActiveTab('editions')}
                       className={`text-xs font-bold pb-2 border-b-2 transition-all ${
@@ -530,7 +530,8 @@ export default function Newsletter() {
                   </div>
                 ) : (
                   <Card className="!p-0 overflow-hidden">
-                    <table className="w-full text-left text-xs">
+                    <div className="overflow-x-auto">
+                    <table className="w-full min-w-[560px] text-left text-xs">
                       <thead className="bg-slate-50 dark:bg-navy-800 text-[11px] font-bold uppercase tracking-wider text-slate-400">
                         <tr>
                           <th className="p-3.5">Email</th>
@@ -562,6 +563,7 @@ export default function Newsletter() {
                         )}
                       </tbody>
                     </table>
+                    </div>
                   </Card>
                 )}
               </>
@@ -572,8 +574,8 @@ export default function Newsletter() {
 
       {/* Modal: Create Publication */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-900/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-navy-800">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-navy-900/60 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="max-h-[94dvh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-4 shadow-2xl dark:bg-navy-800 sm:max-h-[90vh] sm:rounded-2xl sm:p-6">
             <h3 className="text-base font-bold text-navy-900 dark:text-white">Create Publication Series</h3>
             <form onSubmit={handleCreateNewsletter} className="mt-4 space-y-4">
               <div>
@@ -607,8 +609,8 @@ export default function Newsletter() {
 
       {/* Modal: Broadcast Issue Edition */}
       {showComposeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-900/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl dark:bg-navy-800 max-h-[90vh] flex flex-col overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-navy-900/60 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="w-full max-w-xl rounded-t-2xl bg-white p-4 shadow-2xl dark:bg-navy-800 max-h-[94dvh] flex flex-col overflow-y-auto sm:rounded-2xl sm:p-6 sm:max-h-[90vh]">
             <h3 className="text-base font-bold text-navy-900 dark:text-white">
               {editingEditionId ? 'Edit Broadcast Edition' : 'Broadcast Newsletter Issue'}
             </h3>
@@ -623,7 +625,7 @@ export default function Newsletter() {
               {!editingEditionId && (
                 <div>
                   <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1">Target Recipients</label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 gap-2 xs:grid-cols-3">
                     <button
                       type="button"
                       onClick={() => setRecipientTargetMode('subscribers')}
@@ -890,11 +892,11 @@ export default function Newsletter() {
               {/* HTML Preview Modal */}
               {showBodyPreview && (
                 <div
-                  className="fixed inset-0 z-[60] flex items-center justify-center bg-navy-900/70 p-4 backdrop-blur-sm"
+                  className="fixed inset-0 z-[60] flex items-end justify-center bg-navy-900/70 backdrop-blur-sm sm:items-center sm:p-4"
                   onClick={() => setShowBodyPreview(false)}
                 >
                   <div
-                    className="w-full max-w-2xl rounded-2xl bg-white dark:bg-navy-800 shadow-2xl max-h-[85vh] flex flex-col overflow-hidden"
+                    className="w-full max-w-2xl rounded-t-2xl bg-white dark:bg-navy-800 shadow-2xl max-h-[94dvh] flex flex-col overflow-hidden sm:rounded-2xl sm:max-h-[85vh]"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 dark:border-navy-700">
@@ -993,8 +995,8 @@ export default function Newsletter() {
 
       {/* Modal: Subscribe Contact / Company */}
       {showSelfSubscribeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-900/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-navy-800">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-navy-900/60 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="max-h-[94dvh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-4 shadow-2xl dark:bg-navy-800 sm:max-h-[90vh] sm:rounded-2xl sm:p-6">
             <h3 className="text-base font-bold text-navy-900 dark:text-white">Add Contact to {selectedNewsletter?.name}</h3>
             <p className="mt-1 text-xs text-slate-400">Subscribe an external client contact or enterprise email to receive all broadcast issues.</p>
             <form onSubmit={handleSelfSubscribe} className="mt-4 space-y-4">
@@ -1028,8 +1030,8 @@ export default function Newsletter() {
 
       {/* Modal: Import from Companies */}
       {showCompanyImport && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-900/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl dark:bg-navy-800 max-h-[80vh] flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-navy-900/60 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="w-full max-w-lg rounded-t-2xl bg-white p-4 shadow-2xl dark:bg-navy-800 max-h-[94dvh] flex flex-col sm:rounded-2xl sm:p-6 sm:max-h-[80vh]">
             <h3 className="text-base font-bold text-navy-900 dark:text-white">Import Companies to Newsletter List</h3>
             <p className="mt-1 text-xs text-slate-500">Search and select registered prospect companies to add to {selectedNewsletter?.name}:</p>
             

@@ -464,11 +464,11 @@ function ChangePasswordCard() {
             )}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <button
               type="submit"
               disabled={submitting || otp.length !== 6 || !isStrong || !passwordsMatch}
-              className="flex items-center gap-2 rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-bold text-white shadow-soft transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-bold text-white shadow-soft transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
             >
               {submitting && <Loader2 size={15} className="animate-spin" />}
               {submitting ? 'Updating…' : 'Verify & Update Password'}
