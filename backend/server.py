@@ -68,11 +68,13 @@ from app.routes.newsletters import router as newsletters_router
 from app.routes.system_logs import router as system_logs_router
 
 
+import logging
+_log = logging.getLogger("server")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     import asyncio
-    import logging
-    _log = logging.getLogger("server")
 
     # ── Startup ────────────────────────────────────────────────────────────
 
