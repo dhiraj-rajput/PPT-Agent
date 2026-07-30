@@ -169,10 +169,11 @@ async def _send_otp_for_user(user_id: str, email: str, purpose: str) -> None:
                     created_at=datetime.now(timezone.utc)
                 ))
                 await db.commit()
-            if settings.DEBUG_OTP:
+            from app.core.mailer import _is_smtp_configured
+            if settings.DEBUG_OTP or not _is_smtp_configured():
                 import logging as _logging
-                _logging.getLogger("auth").debug(
-                    "[DEV] Generated MySQL OTP for %s (%s): %s", email, purpose, otp
+                _logging.getLogger("auth").info(
+                    "🔑 [DEV OTP] Generated OTP for %s (%s): %s", email, purpose, otp
                 )
             asyncio.create_task(send_otp_email(email, otp, purpose))
             return
@@ -191,10 +192,11 @@ async def _send_otp_for_user(user_id: str, email: str, purpose: str) -> None:
         "expiresAt": _otp_expiry(),
         "createdAt": datetime.now(tz=timezone.utc),
     })
-    if settings.DEBUG_OTP:
+    from app.core.mailer import _is_smtp_configured
+    if settings.DEBUG_OTP or not _is_smtp_configured():
         import logging as _logging
-        _logging.getLogger("auth").debug(
-            "[DEV] Generated Mongo OTP for %s (%s): %s", email, purpose, otp
+        _logging.getLogger("auth").info(
+            "🔑 [DEV OTP] Generated OTP for %s (%s): %s", email, purpose, otp
         )
     asyncio.create_task(send_otp_email(email, otp, purpose))
 
