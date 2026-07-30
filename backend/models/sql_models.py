@@ -222,6 +222,13 @@ class Campaign(Base):
     def created_by(self, val):
         self.user_id = val
 
+    @property
+    def attachment_filename(self):
+        return self.attachment_path or ""
+    @attachment_filename.setter
+    def attachment_filename(self, val):
+        self.attachment_path = str(val or "")
+
     creator = relationship("User", back_populates="campaigns", foreign_keys=[user_id])
     leads = relationship("Lead", back_populates="campaign")
 
