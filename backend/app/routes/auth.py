@@ -169,13 +169,9 @@ async def _send_otp_for_user(user_id: str, email: str, purpose: str) -> None:
                     created_at=datetime.now(timezone.utc)
                 ))
                 await db.commit()
-            from app.core.mailer import _is_smtp_configured
-            env_name = str(getattr(settings, "ENVIRONMENT", "dev")).lower()
-            if env_name in ("dev", "development", "local") or settings.DEBUG_OTP or not _is_smtp_configured():
-                import logging as _logging
-                _logging.getLogger("auth").info(
-                    "🔑 [DEV OTP] Generated OTP for %s (%s): %s", email, purpose, otp
-                )
+            import logging as _logging
+            _logging.getLogger("auth").info("🔑 [DEV OTP] Generated OTP for %s (%s): %s", email, purpose, otp)
+            print(f"\n🔑 [DEV OTP CODE] {email} ({purpose}): {otp}\n", flush=True)
             asyncio.create_task(send_otp_email(email, otp, purpose))
             return
         except Exception as e:
@@ -193,13 +189,9 @@ async def _send_otp_for_user(user_id: str, email: str, purpose: str) -> None:
         "expiresAt": _otp_expiry(),
         "createdAt": datetime.now(tz=timezone.utc),
     })
-    from app.core.mailer import _is_smtp_configured
-    env_name = str(getattr(settings, "ENVIRONMENT", "dev")).lower()
-    if env_name in ("dev", "development", "local") or settings.DEBUG_OTP or not _is_smtp_configured():
-        import logging as _logging
-        _logging.getLogger("auth").info(
-            "🔑 [DEV OTP] Generated OTP for %s (%s): %s", email, purpose, otp
-        )
+    import logging as _logging
+    _logging.getLogger("auth").info("🔑 [DEV OTP] Generated OTP for %s (%s): %s", email, purpose, otp)
+    print(f"\n🔑 [DEV OTP CODE] {email} ({purpose}): {otp}\n", flush=True)
     asyncio.create_task(send_otp_email(email, otp, purpose))
 
 
