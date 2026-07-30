@@ -205,13 +205,18 @@ def run_migration():
         logger.info("Migrating USERS...")
         users_col = db["users"]
         users_added = 0
+        seen_emails = set()
         for doc in users_col.find():
             m_id = doc["_id"]
             sql_id = get_int_id("users", m_id)
+            email = doc.get("email", "").lower().strip()
+            if not email or email in seen_emails:
+                continue
+            seen_emails.add(email)
             
             user = sql.User(
                 id=sql_id,
-                email=doc.get("email", "").lower().strip(),
+                email=email,
                 password_hash=doc.get("passwordHash") or doc.get("password_hash") or "",
                 name=doc.get("name") or doc.get("contact_name") or "",
                 role=doc.get("role", "Team Member"),
@@ -219,9 +224,14 @@ def run_migration():
                 created_at=clean_dt(doc.get("createdAt")) or get_now_utc(),
                 updated_at=clean_dt(doc.get("updatedAt")) or get_now_utc()
             )
-            session.add(user)
-            users_added += 1
-        session.commit()
+            try:
+                session.add(user)
+                session.commit()
+                users_added += 1
+            except Exception as ex:
+                session.rollback()
+                logger.warning(f"Skipping duplicate user '{email}': {ex}")
+
         logger.info(f"Successfully migrated {users_added} users.")
 
         # -------------------------------------------------------------------
@@ -244,7 +254,11 @@ def run_migration():
             )
             session.add(otp)
             otps_added += 1
-        session.commit()
+        try:
+            session.commit()
+        except Exception as ex:
+            session.rollback()
+            logger.warning(f"Error committing OTPs: {ex}")
         logger.info(f"Successfully migrated {otps_added} OTPs.")
 
         # -------------------------------------------------------------------
@@ -262,7 +276,11 @@ def run_migration():
             )
             session.add(failure)
             failures_added += 1
-        session.commit()
+        try:
+            session.commit()
+        except Exception as ex:
+            session.rollback()
+            logger.warning(f"Error committing login failures: {ex}")
         logger.info(f"Successfully migrated {failures_added} login failures.")
 
         # -------------------------------------------------------------------
@@ -286,7 +304,11 @@ def run_migration():
             )
             session.add(state)
             states_added += 1
-        session.commit()
+        try:
+            session.commit()
+        except Exception as ex:
+            session.rollback()
+            logger.warning(f"Error committing OAuth states: {ex}")
         logger.info(f"Successfully migrated {states_added} OAuth states.")
 
         # -------------------------------------------------------------------
@@ -327,13 +349,21 @@ def run_migration():
             companies_added += 1
 
             if len(comp_batch) >= 500:
-                session.execute(insert(sql.Company).values(comp_batch))
-                session.commit()
+                try:
+                    session.execute(insert(sql.Company).values(comp_batch))
+                    session.commit()
+                except Exception as ex:
+                    session.rollback()
+                    logger.warning(f"Error committing company batch: {ex}")
                 comp_batch = []
 
         if comp_batch:
-            session.execute(insert(sql.Company).values(comp_batch))
-            session.commit()
+            try:
+                session.execute(insert(sql.Company).values(comp_batch))
+                session.commit()
+            except Exception as ex:
+                session.rollback()
+                logger.warning(f"Error committing final company batch: {ex}")
 
         logger.info(f"Successfully migrated {companies_added} companies.")
 
@@ -363,7 +393,11 @@ def run_migration():
             )
             session.add(meet)
             meetings_added += 1
-        session.commit()
+        try:
+            session.commit()
+        except Exception as ex:
+            session.rollback()
+            logger.warning(f"Error committing meetings: {ex}")
         logger.info(f"Successfully migrated {meetings_added} meetings.")
 
         # -------------------------------------------------------------------
@@ -398,7 +432,11 @@ def run_migration():
             )
             session.add(task)
             tasks_added += 1
-        session.commit()
+        try:
+            session.commit()
+        except Exception as ex:
+            session.rollback()
+            logger.warning(f"Error committing tasks: {ex}")
         logger.info(f"Successfully migrated {tasks_added} tasks.")
 
         # -------------------------------------------------------------------
@@ -421,7 +459,11 @@ def run_migration():
             )
             session.add(notif)
             notifications_added += 1
-        session.commit()
+        try:
+            session.commit()
+        except Exception as ex:
+            session.rollback()
+            logger.warning(f"Error committing notifications: {ex}")
         logger.info(f"Successfully migrated {notifications_added} notifications.")
 
         # -------------------------------------------------------------------
@@ -441,7 +483,11 @@ def run_migration():
             )
             session.add(n)
             newsletters_added += 1
-        session.commit()
+        try:
+            session.commit()
+        except Exception as ex:
+            session.rollback()
+            logger.warning(f"Error committing newsletters: {ex}")
         logger.info(f"Successfully migrated {newsletters_added} newsletters.")
 
         # -------------------------------------------------------------------
@@ -470,7 +516,11 @@ def run_migration():
             )
             session.add(ed)
             editions_added += 1
-        session.commit()
+        try:
+            session.commit()
+        except Exception as ex:
+            session.rollback()
+            logger.warning(f"Error committing editions: {ex}")
         logger.info(f"Successfully migrated {editions_added} editions.")
 
         # -------------------------------------------------------------------
@@ -501,7 +551,11 @@ def run_migration():
             )
             session.add(sub)
             subs_added += 1
-        session.commit()
+        try:
+            session.commit()
+        except Exception as ex:
+            session.rollback()
+            logger.warning(f"Error committing subscribers: {ex}")
         logger.info(f"Successfully migrated {subs_added} subscribers.")
 
         # -------------------------------------------------------------------
@@ -510,6 +564,7 @@ def run_migration():
         logger.info("Migrating NEWSLETTER SENDS...")
         sends_col = db["newsletter_sends"]
         sends_added = 0
+        seen_sends = set()
         for doc in sends_col.find():
             ed_oid = doc.get("editionId") or doc.get("edition_id")
             ed_id = get_fk_id("editions", ed_oid)
@@ -520,6 +575,11 @@ def run_migration():
             if not ed_id or not sub_id:
                 continue
 
+            pair = (ed_id, sub_id)
+            if pair in seen_sends:
+                continue
+            seen_sends.add(pair)
+
             send = sql.NewsletterSend(
                 id=get_int_id("newsletter_sends", doc["_id"]),
                 edition_id=ed_id,
@@ -529,7 +589,11 @@ def run_migration():
             )
             session.add(send)
             sends_added += 1
-        session.commit()
+        try:
+            session.commit()
+        except Exception as ex:
+            session.rollback()
+            logger.warning(f"Error committing newsletter sends: {ex}")
         logger.info(f"Successfully migrated {sends_added} newsletter sends.")
 
         # -------------------------------------------------------------------
@@ -538,17 +602,24 @@ def run_migration():
         logger.info("Migrating INTEGRATIONS...")
         integrations_col = db["integrations"]
         integrations_added = 0
+        seen_integrations = set()
         for doc in integrations_col.find():
             user_oid = doc.get("userId") or doc.get("user_id")
             user_id = get_fk_id("users", user_oid, fallback=1)
+            service = str(doc.get("service") or doc.get("providerName") or "google").lower().strip()
 
-            if not user_id:
+            if not user_id or not service:
                 continue
+
+            pair = (user_id, service)
+            if pair in seen_integrations:
+                continue
+            seen_integrations.add(pair)
 
             integ = sql.Integration(
                 id=get_int_id("integrations", doc["_id"]),
                 user_id=user_id,
-                service=doc.get("service") or doc.get("providerName") or "google",
+                service=service,
                 connected=bool(doc.get("connected", True)),
                 access_token=doc.get("accessToken") or doc.get("access_token") or "",
                 refresh_token=doc.get("refreshToken") or doc.get("refresh_token") or "",
@@ -558,7 +629,11 @@ def run_migration():
             )
             session.add(integ)
             integrations_added += 1
-        session.commit()
+        try:
+            session.commit()
+        except Exception as ex:
+            session.rollback()
+            logger.warning(f"Error committing integrations: {ex}")
         logger.info(f"Successfully migrated {integrations_added} integrations.")
 
         # -------------------------------------------------------------------
@@ -587,7 +662,11 @@ def run_migration():
             )
             session.add(camp)
             campaigns_added += 1
-        session.commit()
+        try:
+            session.commit()
+        except Exception as ex:
+            session.rollback()
+            logger.warning(f"Error committing campaigns: {ex}")
         logger.info(f"Successfully migrated {campaigns_added} campaigns.")
 
         # -------------------------------------------------------------------
@@ -596,9 +675,19 @@ def run_migration():
         logger.info("Migrating LEADS...")
         leads_col = db["leads"]
         leads_added = 0
+        seen_leads = set()
         for doc in leads_col.find():
             camp_oid = doc.get("campaignId") or doc.get("campaign_id")
             camp_id = get_fk_id("campaigns", camp_oid)
+
+            email = doc.get("email", "").lower().strip()
+            if not email:
+                continue
+
+            pair = (camp_id, email)
+            if pair in seen_leads:
+                continue
+            seen_leads.add(pair)
 
             lead_status = str(doc.get("status", "pending")).lower()
             if lead_status not in ("pending", "sent", "opened", "clicked", "replied", "bounced", "unsubscribed"):
@@ -608,7 +697,7 @@ def run_migration():
             lead = sql.Lead(
                 id=get_int_id("leads", doc["_id"]),
                 campaign_id=camp_id,
-                email=doc.get("email", "").lower().strip(),
+                email=email,
                 contact_name=contact_name,
                 company_name=doc.get("companyName") or doc.get("company_name") or "",
                 status=lead_status,
@@ -618,7 +707,11 @@ def run_migration():
             )
             session.add(lead)
             leads_added += 1
-        session.commit()
+        try:
+            session.commit()
+        except Exception as ex:
+            session.rollback()
+            logger.warning(f"Error committing leads: {ex}")
         logger.info(f"Successfully migrated {leads_added} leads.")
 
         # -------------------------------------------------------------------
@@ -627,16 +720,26 @@ def run_migration():
         logger.info("Migrating SUPPRESSIONS...")
         suppress_col = db["suppressions"]
         suppress_added = 0
+        seen_suppressions = set()
         for doc in suppress_col.find():
+            email = doc.get("email", "").lower().strip()
+            if not email or email in seen_suppressions:
+                continue
+            seen_suppressions.add(email)
+
             sup = sql.Suppression(
                 id=get_int_id("suppressions", doc["_id"]),
-                email=doc.get("email", "").lower().strip(),
+                email=email,
                 reason=doc.get("reason", "unsubscribed"),
                 created_at=clean_dt(doc.get("createdAt")) or get_now_utc()
             )
             session.add(sup)
             suppress_added += 1
-        session.commit()
+        try:
+            session.commit()
+        except Exception as ex:
+            session.rollback()
+            logger.warning(f"Error committing suppressions: {ex}")
         logger.info(f"Successfully migrated {suppress_added} suppressions.")
 
         # -------------------------------------------------------------------
@@ -670,7 +773,11 @@ def run_migration():
             )
             session.add(tr)
             tracking_added += 1
-        session.commit()
+        try:
+            session.commit()
+        except Exception as ex:
+            session.rollback()
+            logger.warning(f"Error committing tracking events: {ex}")
         logger.info(f"Successfully migrated {tracking_added} tracking events.")
 
         # -------------------------------------------------------------------
@@ -703,7 +810,11 @@ def run_migration():
             )
             session.add(we)
             web_events_added += 1
-        session.commit()
+        try:
+            session.commit()
+        except Exception as ex:
+            session.rollback()
+            logger.warning(f"Error committing website events: {ex}")
         logger.info(f"Successfully migrated {web_events_added} website events.")
 
         # -------------------------------------------------------------------
@@ -713,14 +824,16 @@ def run_migration():
         tenders_col = db["tenders"]
         tenders_added = 0
         t_batch = []
+        seen_notices = set()
         for doc in tenders_col.find():
-            notice_id = doc.get("noticeId") or doc.get("id") or doc.get("_id") or ""
-            if not notice_id:
+            notice_id = str_val(doc.get("noticeId") or doc.get("id") or doc.get("_id") or "")[:255]
+            if not notice_id or notice_id in seen_notices:
                 continue
+            seen_notices.add(notice_id)
 
             t = sql.Tender(
-                id=str_val(notice_id)[:255],
-                notice_id=str_val(notice_id)[:255],
+                id=notice_id,
+                notice_id=notice_id,
                 title=str_val(doc.get("title", ""))[:500],
                 solicitation_number=str_val(doc.get("solicitationNumber") or doc.get("solicitation_number") or "")[:255],
                 agency=str_val(doc.get("agency") or doc.get("department") or "")[:500],
@@ -749,19 +862,25 @@ def run_migration():
                 updated_at=clean_dt(doc.get("updatedAt")) or get_now_utc()
             )
 
-
             t_batch.append(t)
             tenders_added += 1
 
             if len(t_batch) >= 200:
-                session.add_all(t_batch)
-                session.commit()
+                try:
+                    session.add_all(t_batch)
+                    session.commit()
+                except Exception as ex:
+                    session.rollback()
+                    logger.warning(f"Error committing tender batch: {ex}")
                 t_batch = []
 
         if t_batch:
-            session.add_all(t_batch)
-            session.commit()
-
+            try:
+                session.add_all(t_batch)
+                session.commit()
+            except Exception as ex:
+                session.rollback()
+                logger.warning(f"Error committing final tender batch: {ex}")
 
         logger.info(f"Successfully migrated {tenders_added} tenders.")
 
@@ -788,7 +907,11 @@ def run_migration():
             )
             session.add(dr)
             drafts_added += 1
-        session.commit()
+        try:
+            session.commit()
+        except Exception as ex:
+            session.rollback()
+            logger.warning(f"Error committing draft requests: {ex}")
         logger.info(f"Successfully migrated {drafts_added} draft requests.")
 
         # -------------------------------------------------------------------
@@ -823,7 +946,11 @@ def run_migration():
             )
             session.add(log)
             logs_added += 1
-        session.commit()
+        try:
+            session.commit()
+        except Exception as ex:
+            session.rollback()
+            logger.warning(f"Error committing error logs: {ex}")
         logger.info(f"Successfully migrated {logs_added} error logs.")
 
         # -------------------------------------------------------------------
@@ -848,13 +975,21 @@ def run_migration():
             naics_added += 1
 
             if len(naics_batch) >= 1000:
-                session.execute(insert(sql.NaicsCode).values(naics_batch))
-                session.commit()
+                try:
+                    session.execute(insert(sql.NaicsCode).values(naics_batch))
+                    session.commit()
+                except Exception as ex:
+                    session.rollback()
+                    logger.warning(f"Error committing NAICS batch: {ex}")
                 naics_batch = []
 
         if naics_batch:
-            session.execute(insert(sql.NaicsCode).values(naics_batch))
-            session.commit()
+            try:
+                session.execute(insert(sql.NaicsCode).values(naics_batch))
+                session.commit()
+            except Exception as ex:
+                session.rollback()
+                logger.warning(f"Error committing final NAICS batch: {ex}")
 
         logger.info(f"Successfully migrated {naics_added} NAICS codes.")
 
@@ -864,10 +999,12 @@ def run_migration():
         logger.info("Migrating TASK STATUSES...")
         status_col = db["task_statuses"]
         status_added = 0
+        seen_task_ids = set()
         for doc in status_col.find():
             t_id = doc.get("task_id") or doc.get("taskId")
-            if not t_id:
+            if not t_id or str(t_id) in seen_task_ids:
                 continue
+            seen_task_ids.add(str(t_id))
 
             ts = sql.TaskStatus(
                 id=get_int_id("task_statuses", doc["_id"]),
@@ -881,7 +1018,11 @@ def run_migration():
             )
             session.add(ts)
             status_added += 1
-        session.commit()
+        try:
+            session.commit()
+        except Exception as ex:
+            session.rollback()
+            logger.warning(f"Error committing task statuses: {ex}")
         logger.info(f"Successfully migrated {status_added} task statuses.")
 
         # -------------------------------------------------------------------
@@ -890,10 +1031,12 @@ def run_migration():
         logger.info("Migrating SYSTEM SETTINGS...")
         settings_col = db["system_settings"]
         settings_added = 0
+        seen_settings_keys = set()
         for doc in settings_col.find():
             key = doc.get("key") or doc.get("key_name")
-            if not key:
+            if not key or str(key) in seen_settings_keys:
                 continue
+            seen_settings_keys.add(str(key))
 
             sett = sql.SystemSettings(
                 key_name=str(key),
@@ -902,7 +1045,11 @@ def run_migration():
             )
             session.add(sett)
             settings_added += 1
-        session.commit()
+        try:
+            session.commit()
+        except Exception as ex:
+            session.rollback()
+            logger.warning(f"Error committing system settings: {ex}")
         logger.info(f"Successfully migrated {settings_added} system settings.")
 
         # -------------------------------------------------------------------
@@ -911,10 +1058,12 @@ def run_migration():
         logger.info("Migrating SYSTEM STATUS...")
         sys_status_col = db["system_status"]
         sys_status_added = 0
+        seen_status_keys = set()
         for doc in sys_status_col.find():
             key = doc.get("key") or doc.get("key_name")
-            if not key:
+            if not key or str(key) in seen_status_keys:
                 continue
+            seen_status_keys.add(str(key))
 
             ss = sql.SystemStatus(
                 key_name=str(key),
@@ -924,7 +1073,11 @@ def run_migration():
             )
             session.add(ss)
             sys_status_added += 1
-        session.commit()
+        try:
+            session.commit()
+        except Exception as ex:
+            session.rollback()
+            logger.warning(f"Error committing system status: {ex}")
         logger.info(f"Successfully migrated {sys_status_added} system status rows.")
 
         # -------------------------------------------------------------------
@@ -933,10 +1086,12 @@ def run_migration():
         logger.info("Migrating ACTIVE LEASES...")
         leases_col = db["active_leases"]
         leases_added = 0
+        seen_leases = set()
         for doc in leases_col.find():
             res = doc.get("name") or doc.get("resource")
-            if not res:
+            if not res or str(res) in seen_leases:
                 continue
+            seen_leases.add(str(res))
 
             al = sql.ActiveLease(
                 resource=str(res),
@@ -946,7 +1101,11 @@ def run_migration():
             )
             session.add(al)
             leases_added += 1
-        session.commit()
+        try:
+            session.commit()
+        except Exception as ex:
+            session.rollback()
+            logger.warning(f"Error committing active leases: {ex}")
         logger.info(f"Successfully migrated {leases_added} active leases.")
 
         # -------------------------------------------------------------------
@@ -955,10 +1114,12 @@ def run_migration():
         logger.info("Migrating REPORTS...")
         reports_col = db["reports"]
         reports_added = 0
+        seen_filenames = set()
         for doc in reports_col.find():
             filename = doc.get("filename")
-            if not filename:
+            if not filename or filename in seen_filenames:
                 continue
+            seen_filenames.add(filename)
 
             user_oid = doc.get("user_id") or doc.get("userId")
             user_id = get_fk_id("users", user_oid)
@@ -979,7 +1140,11 @@ def run_migration():
             session.add(rep)
             reports_added += 1
 
-        session.commit()
+        try:
+            session.commit()
+        except Exception as ex:
+            session.rollback()
+            logger.warning(f"Error committing reports: {ex}")
         logger.info(f"Successfully migrated {reports_added} reports.")
 
         # -------------------------------------------------------------------
