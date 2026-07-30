@@ -54,15 +54,16 @@ function AvatarCard() {
     setPreview(localUrl);
     setUploading(true);
     try {
-      const { user: updated } = await api.uploadAvatar(file);
+      const res = await api.uploadAvatar(file);
+      const updated = res.user || { ...user, avatarUrl: res.avatarUrl };
       updateUser(updated);
+      setPreview('');
       notify('Profile photo updated', 'Your new profile photo has been assigned to your account.', '/settings');
     } catch (err) {
       setError(err.message || 'Failed to upload photo.');
       setPreview('');
     } finally {
       setUploading(false);
-      URL.revokeObjectURL(localUrl);
     }
   }
 

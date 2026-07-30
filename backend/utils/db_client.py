@@ -27,8 +27,7 @@ Usage (sync — scripts / pipeline):
     from utils.mysql_client import get_sync_db_session   # MySQL
 """
 
-from __future__ import annotations
-
+import json
 import re
 from typing import Optional, Any
 import threading
@@ -390,7 +389,7 @@ def update_task_status(
                     ),
                     {
                         **result_dict,
-                        "result": str(extra or {}),
+                        "result": json.dumps(extra or {}, default=str),
                         "created_at": datetime.now(timezone.utc),
                     },
                 )
@@ -472,7 +471,7 @@ async def update_task_status_async(
                         "progress": progress,
                         "message": message,
                         "last_updated": datetime.now(timezone.utc),
-                        "result": str(extra or {}),
+                        "result": json.dumps(extra or {}, default=str),
                         "created_at": datetime.now(timezone.utc),
                     },
                 )

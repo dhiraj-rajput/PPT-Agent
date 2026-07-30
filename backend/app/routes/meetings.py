@@ -37,13 +37,18 @@ def _to_public_meeting(m: SQL_Meeting) -> dict:
     if not m:
         return {}
     attendees = []
-    for a in (m.attendees or []):
-        attendees.append({
-            "name": a.get("name", ""),
-            "email": a.get("email", ""),
-            "userId": str(a["userId"]) if a.get("userId") else None,
-            "inviteSent": a.get("inviteSent", False),
-        })
+    raw_att = m.attendees
+    if isinstance(raw_att, dict):
+        raw_att = raw_att.get("list") or raw_att.get("attendees") or []
+    if isinstance(raw_att, list):
+        for a in raw_att:
+            if isinstance(a, dict):
+                attendees.append({
+                    "name": a.get("name", ""),
+                    "email": a.get("email", ""),
+                    "userId": str(a["userId"]) if a.get("userId") else None,
+                    "inviteSent": a.get("inviteSent", False),
+                })
     return {
         "id": str(m.id),
         "title": m.title or "",
@@ -51,14 +56,13 @@ def _to_public_meeting(m: SQL_Meeting) -> dict:
         "date": m.date or "",
         "time": m.time or "",
         "type": "In Person" if getattr(m, "provider", "") == "in-person" else "Video Call",
-        "provider": m.provider or "jitsi",
+        "provider": getattr(m, "provider", "manual") or "manual",
         "location": m.description or "",
         "meetingLink": m.meeting_url or "",
         "attendees": attendees,
-        "status": m.status or "scheduled",
-        "cancelledAt": _iso(m.updated_at) if getattr(m, "status", "") == "cancelled" else None,
-
-        "createdAt": _iso(m.created_at),
+        "status": getattr(m, "status", "scheduled") or "scheduled",
+        "cancelledAt": _iso(getattr(m, "updated_at", None)) if getattr(m, "status", "") == "cancelled" else None,
+        "createdAt": _iso(getattr(m, "created_at", None)),
     }
 
 

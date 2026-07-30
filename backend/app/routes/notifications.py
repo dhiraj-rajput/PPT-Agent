@@ -30,14 +30,14 @@ def _to_public_notification(n: SQL_Notification) -> dict:
     if not n:
         return {}
     return {
-        "id": str(n.id),
-        "type": n.notification_type or "",
-        "title": n.title or "",
-        "message": n.message or "",
-        "link": n.link or "",
-        "relatedId": n.related_id or "",
-        "read": bool(n.is_read),
-        "createdAt": _iso(n.created_at),
+        "id": str(getattr(n, "id", "")),
+        "type": getattr(n, "notification_type", "") or "info",
+        "title": getattr(n, "title", "") or "",
+        "message": getattr(n, "message", "") or "",
+        "link": getattr(n, "link", "") or "",
+        "relatedId": getattr(n, "related_id", "") or "",
+        "read": bool(getattr(n, "is_read", False)),
+        "createdAt": _iso(getattr(n, "created_at", None)),
     }
 
 

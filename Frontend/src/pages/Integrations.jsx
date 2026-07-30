@@ -356,9 +356,6 @@ function LinkedInCard({ notify, onEdit }) {
       if (api.getLinkedinStatus) {
         const res = await api.getLinkedinStatus();
         setStatus(res);
-        if (res.expired || !res.connected) {
-          notify('LinkedIn Expired', 'Please update your session cookie (li_at) to continue automated research.', '/integrations');
-        }
       }
     } catch {
       // ignore
@@ -369,7 +366,7 @@ function LinkedInCard({ notify, onEdit }) {
 
   useEffect(() => {
     loadStatus();
-  }, [notify]);
+  }, []);
 
   return (
     <Card className="flex flex-col">

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Search, Filter, Hash, BookOpen, Copy, Check, ChevronLeft, ChevronRight, RefreshCw, Plus, X, Upload } from 'lucide-react';
 import { api } from '../lib/api.jsx';
 

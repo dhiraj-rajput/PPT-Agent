@@ -844,7 +844,7 @@ async def upload_avatar(
 
 
 @router.get("/avatar/{filename}")
-def serve_avatar(filename: str, current_user: dict = Depends(get_current_user)):
+def serve_avatar(filename: str):
     """Serve an uploaded profile photo by filename."""
     from pathlib import Path
 

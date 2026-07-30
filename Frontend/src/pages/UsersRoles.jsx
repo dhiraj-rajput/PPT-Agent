@@ -135,7 +135,7 @@ export default function UsersRoles() {
           <div className="py-12 text-center text-sm text-slate-400 dark:text-slate-500">No users yet. Invite your first teammate.</div>
         ) : (
           <>
-          <div className="hidden overflow-x-auto sm:block">
+          <div className="hidden overflow-visible min-h-[350px] sm:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 dark:border-navy-800 text-left text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">
@@ -168,19 +168,19 @@ export default function UsersRoles() {
                     <td className="relative px-5 py-3.5 text-right">
                       <button
                         onClick={() => setMenuOpenId(menuOpenId === u.id ? null : u.id)}
-                        className="rounded-lg p-1.5 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-navy-700"
+                        className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-navy-700 transition-colors"
                       >
-                        <MoreHorizontal size={15} />
+                        Actions <ChevronDown size={13} />
                       </button>
                       {menuOpenId === u.id && (
-                        <div className="absolute right-5 z-10 mt-1 w-52 rounded-xl border border-slate-100 dark:border-navy-800 bg-white dark:bg-navy-900 p-1.5 text-left shadow-card">
-                          <p className="px-2.5 py-1.5 text-[11px] font-semibold uppercase text-slate-400 dark:text-slate-500">Change role</p>
+                        <div className="absolute right-5 top-full z-50 mt-1 w-52 rounded-xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 p-1.5 text-left shadow-2xl">
+                          <p className="px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Change role</p>
                           {ROLES.map((r) => (
                             <button
                               key={r}
                               onClick={() => changeRole(u.id, r)}
                               className={`block w-full rounded-lg px-2.5 py-1.5 text-left text-xs font-medium hover:bg-slate-50 dark:hover:bg-navy-800 ${
-                                r === u.role ? 'text-brand-600 font-bold' : 'text-navy-900 dark:text-slate-200'
+                                r === u.role ? 'text-brand-600 font-bold dark:text-brand-400' : 'text-navy-900 dark:text-slate-200'
                               }`}
                             >
                               {r}

@@ -454,6 +454,14 @@ class Meeting(Base):
     def start_time(self):
         return self.time or ""
 
+    @property
+    def status(self):
+        return getattr(self, "_status", "scheduled") or "scheduled"
+
+    @status.setter
+    def status(self, val):
+        self._status = val or "scheduled"
+
     status = Column(String(50), default="scheduled")
     created_at = Column(DateTime, default=_now, nullable=False)
     updated_at = Column(DateTime, default=_now, onupdate=_now)

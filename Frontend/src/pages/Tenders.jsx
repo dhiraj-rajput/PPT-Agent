@@ -121,7 +121,7 @@ export default function Tenders() {
   };
 
   useEffect(() => { fetchTenders(); fetchMeta(); }, [fetchTenders]);
-  useEffect(() => { setCurrentPage(1); }, [sizeFilter, setAsideFilter, statusFilter, urgencyFilter]); // Removed query from here
+  useEffect(() => { setCurrentPage(1); }, [naicsFilter, setAsideFilter, statusFilter, urgencyFilter]);
 
   // ----- Trigger SAM.gov Sync -----
   const handleSync = (e) => {

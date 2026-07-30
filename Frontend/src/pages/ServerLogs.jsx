@@ -790,14 +790,17 @@ export default function ServerLogs() {
     }
   }
 
-  async function handleClearResolved() {
+  async function handleClearAll() {
+    if (!window.confirm('Are you sure you want to clear all server logs?')) {
+      return;
+    }
     setClearing(true);
     try {
-      await api.clearSystemLogs('resolved');
+      await api.clearSystemLogs('all');
       load();
       refreshSummary();
     } catch (err) {
-      setLoadError(err.message || 'Could not clear resolved logs.');
+      setLoadError(err.message || 'Could not clear all logs.');
     } finally {
       setClearing(false);
     }
@@ -943,12 +946,12 @@ export default function ServerLogs() {
               </div>
 
               <button
-                onClick={handleClearResolved}
+                onClick={handleClearAll}
                 disabled={clearing}
-                className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-500 hover:bg-slate-100 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-navy-800"
-                title="Delete all resolved entries"
+                className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50 dark:text-rose-400 dark:hover:bg-rose-950/40"
+                title="Delete all log entries"
               >
-                <Trash2 size={13} /> Clear resolved
+                <Trash2 size={13} /> Clear all
               </button>
             </div>
           </Card>
