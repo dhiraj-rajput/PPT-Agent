@@ -344,19 +344,19 @@ def run_migration():
         meetings_col = db["meetings"]
         meetings_added = 0
         for doc in meetings_col.find():
-            host_oid = doc.get("hostId") or doc.get("host_id")
+            host_oid = doc.get("hostId") or doc.get("host_id") or doc.get("userId") or doc.get("user_id")
             host_id = get_fk_id("users", host_oid)
             
             meet = sql.Meeting(
                 id=get_int_id("meetings", doc["_id"]),
-                host_id=host_id,
+                user_id=host_id,
                 title=doc.get("title", "No Title"),
-                agenda=doc.get("agenda") or "",
-                date=doc.get("date") or "",
-                time=doc.get("time") or "",
+                description=doc.get("agenda") or doc.get("description") or "",
+                date=str(doc.get("date") or ""),
+                time=str(doc.get("time") or ""),
                 duration=int(doc.get("duration") or 30),
-                meeting_link=doc.get("meetingLink") or doc.get("meeting_link") or "",
-                with_someone=doc.get("with_someone") or doc.get("withSomeone") or "",
+                meeting_url=str(doc.get("meetingLink") or doc.get("meeting_link") or doc.get("meeting_url") or ""),
+                with_someone=str(doc.get("with_someone") or doc.get("withSomeone") or ""),
                 attendees=clean_dict(doc.get("attendees") if isinstance(doc.get("attendees"), dict) else {"list": doc.get("attendees") or []}),
                 created_at=clean_dt(doc.get("createdAt")) or get_now_utc(),
                 updated_at=clean_dt(doc.get("updatedAt")) or get_now_utc()
@@ -373,20 +373,25 @@ def run_migration():
         tasks_col = db["tasks"]
         tasks_added = 0
         for doc in tasks_col.find():
-            assigned_oid = doc.get("assignedTo") or doc.get("assigned_to")
+            assigned_oid = doc.get("assignedTo") or doc.get("assigned_to") or doc.get("assignee")
             assigned_to = get_fk_id("users", assigned_oid)
             
             created_oid = doc.get("createdBy") or doc.get("created_by")
             created_by = get_fk_id("users", created_oid)
 
+            prio = str(doc.get("priority", "medium")).lower()
+            if prio not in ("low", "medium", "high"):
+                prio = "medium"
+            is_done = bool(str(doc.get("status", "")).lower() in ("completed", "done", "true", "1") or doc.get("done", False))
+
             task = sql.Task(
                 id=get_int_id("tasks", doc["_id"]),
                 title=doc.get("title", "No Title"),
                 description=doc.get("description") or "",
-                status=doc.get("status", "pending"),
-                priority=doc.get("priority", "normal"),
-                due_date=doc.get("dueDate") or doc.get("due_date") or "",
-                assigned_to=assigned_to,
+                done=is_done,
+                priority=prio,
+                due=str(doc.get("dueDate") or doc.get("due_date") or doc.get("due") or ""),
+                assignee=assigned_to,
                 created_by=created_by,
                 created_at=clean_dt(doc.get("createdAt")) or get_now_utc(),
                 updated_at=clean_dt(doc.get("updatedAt")) or get_now_utc()
@@ -566,13 +571,17 @@ def run_migration():
             user_oid = doc.get("createdBy") or doc.get("created_by")
             user_id = get_fk_id("users", user_oid)
 
+            camp_status = str(doc.get("status", "draft")).lower()
+            if camp_status not in ("draft", "running", "paused", "completed", "scheduled"):
+                camp_status = "draft"
+
             camp = sql.Campaign(
                 id=get_int_id("campaigns", doc["_id"]),
                 name=doc.get("name", "Unnamed Campaign"),
                 subject=doc.get("subject") or "",
-                body_template=doc.get("bodyTemplate") or doc.get("body_template") or "",
-                status=doc.get("status", "draft"),
-                created_by=user_id,
+                body=doc.get("bodyTemplate") or doc.get("body_template") or doc.get("body") or "",
+                status=camp_status,
+                user_id=user_id,
                 created_at=clean_dt(doc.get("createdAt")) or get_now_utc(),
                 updated_at=clean_dt(doc.get("updatedAt")) or get_now_utc()
             )
@@ -591,16 +600,19 @@ def run_migration():
             camp_oid = doc.get("campaignId") or doc.get("campaign_id")
             camp_id = get_fk_id("campaigns", camp_oid)
 
+            lead_status = str(doc.get("status", "pending")).lower()
+            if lead_status not in ("pending", "sent", "opened", "clicked", "replied", "bounced", "unsubscribed"):
+                lead_status = "pending"
+            contact_name = f"{doc.get('firstName') or doc.get('first_name') or ''} {doc.get('lastName') or doc.get('last_name') or ''}".strip() or doc.get("contact_name") or doc.get("name") or ""
+
             lead = sql.Lead(
                 id=get_int_id("leads", doc["_id"]),
                 campaign_id=camp_id,
                 email=doc.get("email", "").lower().strip(),
-                first_name=doc.get("firstName") or doc.get("first_name") or "",
-                last_name=doc.get("lastName") or doc.get("last_name") or "",
+                contact_name=contact_name,
                 company_name=doc.get("companyName") or doc.get("company_name") or "",
-                status=doc.get("status", "imported"),
+                status=lead_status,
                 score=int(doc.get("score") or doc.get("points") or 0),
-                last_contacted=clean_dt(doc.get("lastContacted")) or clean_dt(doc.get("last_contacted")),
                 created_at=clean_dt(doc.get("createdAt")) or get_now_utc(),
                 updated_at=clean_dt(doc.get("updatedAt")) or get_now_utc()
             )
