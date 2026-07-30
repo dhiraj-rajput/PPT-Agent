@@ -383,6 +383,18 @@ export const api = {
     formData.append('file', file);
     return _upload('/api/people/import/file', formData);
   },
+  /** Send client-parsed & reviewed rows directly as JSON (after CSV preview table edits). */
+  async importPeopleJSON(rows) {
+    return post('/api/people/import/json', { rows });
+  },
+  /** Update an existing person record by ID. */
+  async updatePerson(id, data) {
+    return patch(`/api/people/${id}`, data);
+  },
+  /** Permanently delete a person record by ID. */
+  async deletePerson(id) {
+    return del(`/api/people/${id}`);
+  },
 
   // ---------- Tenders ----------
   async getTenders(params = {}) {

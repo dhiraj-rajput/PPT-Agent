@@ -255,6 +255,90 @@ REQUIRED_COLUMNS: set[str] = {
 }
 
 
+# ---------------------------------------------------------------------------
+# JSON import  (client-parsed CSV rows after preview-table review)
+# ---------------------------------------------------------------------------
+
+@router.post("/import/json")
+async def import_people_json(
+    payload: dict,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Accept an array of person dicts (already validated client-side from the
+    CSV preview table) and bulk-insert them into MySQL.  Each row is validated
+    against PersonCreateBody before insertion; invalid rows are skipped.
+    """
+    if not _mysql_available:
+        raise HTTPException(status_code=500, detail="MySQL database is unavailable.")
+
+    rows = payload.get("rows") or []
+    if not isinstance(rows, list) or not rows:
+        raise HTTPException(status_code=400, detail="'rows' must be a non-empty list.")
+
+    imported_count = 0
+    skipped = 0
+    CHUNK = 500
+    chunk: List[dict] = []
+
+    try:
+        async for db in get_db_session():
+            for item in rows:
+                try:
+                    v = PersonCreateBody(**{k: (item.get(k) or "") for k in REQUIRED_COLUMNS})
+                except Exception:
+                    skipped += 1
+                    continue
+
+                full_name = (v.full_name or "").strip()
+                if not full_name:
+                    full_name = f"{(v.first_name or '').strip()} {(v.last_name or '').strip()}".strip()
+                if not full_name:
+                    skipped += 1
+                    continue
+
+                chunk.append({
+                    "source": v.source or "CSV Import",
+                    "status": v.status if v.status in VALID_STATUSES else "Pending",
+                    "organization_name": v.organization_name or "",
+                    "first_name": v.first_name or "",
+                    "last_name": v.last_name or "",
+                    "full_name": full_name,
+                    "title": v.title or "",
+                    "function_name": v.function_name or "",
+                    "seniority": v.seniority or "",
+                    "email": v.email or "",
+                    "email_status": v.email_status or "",
+                    "email_confidence": v.email_confidence,
+                    "phone": v.phone or "",
+                    "linkedin_url": v.linkedin_url or "",
+                    "city": v.city or "",
+                    "state": v.state or "",
+                    "country": v.country or "",
+                    "job_start_date": _parse_date(v.job_start_date),
+                    "created_at": datetime.utcnow(),
+                    "updated_at": datetime.utcnow(),
+                })
+
+                if len(chunk) >= CHUNK:
+                    await db.execute(insert(SQL_Person).values(chunk))
+                    await db.commit()
+                    imported_count += len(chunk)
+                    chunk = []
+
+            if chunk:
+                await db.execute(insert(SQL_Person).values(chunk))
+                await db.commit()
+                imported_count += len(chunk)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Import failed: {e}")
+
+    return {"status": "success", "count": imported_count, "skipped": skipped}
+
+
 def _get_field_strict(row: Dict[str, Any], field: str) -> str:
     """Read a value directly by its exact DB column name."""
     val = row.get(field)
@@ -428,3 +512,119 @@ async def get_person_detail(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Update (PATCH)
+# ---------------------------------------------------------------------------
+
+@router.patch("/{person_id}")
+async def update_person(
+    person_id: str,
+    updates: dict,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Partially update a person record. Only the fields present in the request
+    body are changed; unmentioned fields are left intact.
+    """
+    if not _mysql_available:
+        raise HTTPException(status_code=500, detail="MySQL database is unavailable.")
+
+    try:
+        pid = int(person_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid person id")
+
+    # Whitelist of updatable columns (no id / created_at)
+    ALLOWED = {
+        "source", "status", "organization_name",
+        "first_name", "last_name", "full_name",
+        "title", "function_name", "seniority",
+        "email", "email_status", "email_confidence",
+        "phone", "linkedin_url",
+        "city", "state", "country",
+        "job_start_date",
+    }
+
+    patch_values: dict = {}
+    for key, val in updates.items():
+        if key not in ALLOWED:
+            continue
+        if key == "job_start_date":
+            patch_values[key] = _parse_date(val)
+        elif key == "email_confidence":
+            try:
+                patch_values[key] = round(float(val), 2) if val not in (None, "", "None") else None
+            except (ValueError, TypeError):
+                patch_values[key] = None
+        else:
+            patch_values[key] = str(val).strip() if val is not None else ""
+
+    if not patch_values:
+        raise HTTPException(status_code=400, detail="No valid fields provided to update.")
+
+    patch_values["updated_at"] = datetime.utcnow()
+
+    # Auto-rebuild full_name if first/last changed but full_name not explicitly set
+    if ("first_name" in patch_values or "last_name" in patch_values) and "full_name" not in patch_values:
+        patch_values["full_name"] = None  # resolved after fetch below
+
+    try:
+        from sqlalchemy import update as sql_update
+        async for db in get_db_session():
+            res = await db.execute(select(SQL_Person).where(SQL_Person.id == pid))
+            person = res.scalar_one_or_none()
+            if not person:
+                raise HTTPException(status_code=404, detail="Person not found")
+
+            # Rebuild full_name from names if needed
+            if patch_values.get("full_name") is None and (
+                "first_name" in patch_values or "last_name" in patch_values
+            ):
+                fn = patch_values.get("first_name", person.first_name or "")
+                ln = patch_values.get("last_name", person.last_name or "")
+                patch_values["full_name"] = f"{fn} {ln}".strip() or person.full_name or ""
+
+            await db.execute(
+                sql_update(SQL_Person).where(SQL_Person.id == pid).values(**patch_values)
+            )
+            await db.commit()
+            return {"status": "success", "message": "Person updated successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Delete
+# ---------------------------------------------------------------------------
+
+@router.delete("/{person_id}")
+async def delete_person(
+    person_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Permanently delete a single person record from MySQL."""
+    if not _mysql_available:
+        raise HTTPException(status_code=500, detail="MySQL database is unavailable.")
+
+    try:
+        pid = int(person_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid person id")
+
+    try:
+        from sqlalchemy import delete as sql_delete
+        async for db in get_db_session():
+            res = await db.execute(select(SQL_Person).where(SQL_Person.id == pid))
+            if not res.scalar_one_or_none():
+                raise HTTPException(status_code=404, detail="Person not found")
+            await db.execute(sql_delete(SQL_Person).where(SQL_Person.id == pid))
+            await db.commit()
+            return {"status": "success", "message": "Person deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {e}")
