@@ -82,53 +82,30 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
     if _mysql_available:
         try:
             async for db in get_db_session():
-                results = await asyncio.gather(
-                    db.execute(select(func.count()).select_from(SQL_Company)),
-                    db.execute(select(func.count()).select_from(SQL_Lead).where(SQL_Lead.status.in_(["sent", "opened", "clicked", "replied"]))),
-                    db.execute(select(func.count()).select_from(SQL_Report)),
-                    db.execute(select(func.count()).select_from(SQL_Meeting)),
-                    db.execute(select(func.count()).select_from(SQL_Lead).where(SQL_Lead.status == "replied")),
-                    db.execute(select(func.count()).select_from(SQL_Tender).where(SQL_Tender.has_award == True)),
-                    db.execute(select(SQL_Campaign)),
-                    db.execute(select(func.count()).select_from(SQL_Company).where(SQL_Company.match_score >= 80)),
-                    db.execute(select(func.count()).select_from(SQL_Company).where(SQL_Company.match_score >= 50, SQL_Company.match_score < 80)),
-                    db.execute(select(func.count()).select_from(SQL_Company).where(SQL_Company.match_score < 50)),
-                    db.execute(select(SQL_Tender).where(
-                        SQL_Tender.is_active == True,
-                        SQL_Tender.closing_date != None,
-                        SQL_Tender.closing_date != ""
-                    ).order_by(SQL_Tender.closing_date.asc()).limit(3)),
-                    db.execute(select(SQL_Company).order_by(SQL_Company.id.desc()).limit(5)),
-                    db.execute(select(SQL_Tender).order_by(SQL_Tender.match_score.desc()).limit(5)),
-                    db.execute(select(func.count()).select_from(SQL_Company).where(SQL_Company.created_at >= seven_days_ago)),
-                    db.execute(select(func.count()).select_from(SQL_Tender).where(SQL_Tender.is_active == True)),
-                    db.execute(select(func.count()).select_from(SQL_Tender).where(SQL_Tender.is_active == True, SQL_Tender.created_at >= seven_days_ago)),
-                    db.execute(select(func.count()).select_from(SQL_Lead).where(SQL_Lead.status == "sent", SQL_Lead.created_at >= seven_days_ago)),
-                    db.execute(select(func.count()).select_from(SQL_Meeting).where(SQL_Meeting.created_at >= seven_days_ago)),
-                    db.execute(select(func.count()).select_from(SQL_Meeting).where(SQL_Meeting.created_at >= fourteen_days_ago, SQL_Meeting.created_at < seven_days_ago)),
-                    db.execute(select(func.count()).select_from(SQL_Lead).where(SQL_Lead.status.in_(["sent", "opened", "clicked", "replied"]), SQL_Lead.created_at >= seven_days_ago))
-                )
-
-                prospects_count = results[0].scalar() or 0
-                contacted_count = results[1].scalar() or 0
-                proposals_count = results[2].scalar() or 0
-                meetings_count = results[3].scalar() or 0
-                negotiation_count = results[4].scalar() or 0
-                won_count = results[5].scalar() or 0
-                campaigns = results[6].scalars().all()
-                high = results[7].scalar() or 0
-                medium = results[8].scalar() or 0
-                low = results[9].scalar() or 0
-                closing_soon = results[10].scalars().all()
-                recent_companies = results[11].scalars().all()
-                recent_tenders = results[12].scalars().all()
-                recent_companies_count = results[13].scalar() or 0
-                active_tenders_count = results[14].scalar() or 0
-                recent_tenders_count = results[15].scalar() or 0
-                recent_emails = results[16].scalar() or 0
-                current_meetings = results[17].scalar() or 0
-                prev_meetings = results[18].scalar() or 0
-                recent_contacted = results[19].scalar() or 0
+                prospects_count = (await db.execute(select(func.count()).select_from(SQL_Company))).scalar() or 0
+                contacted_count = (await db.execute(select(func.count()).select_from(SQL_Lead).where(SQL_Lead.status.in_(["sent", "opened", "clicked", "replied"])))).scalar() or 0
+                proposals_count = (await db.execute(select(func.count()).select_from(SQL_Report))).scalar() or 0
+                meetings_count = (await db.execute(select(func.count()).select_from(SQL_Meeting))).scalar() or 0
+                negotiation_count = (await db.execute(select(func.count()).select_from(SQL_Lead).where(SQL_Lead.status == "replied"))).scalar() or 0
+                won_count = (await db.execute(select(func.count()).select_from(SQL_Tender).where(SQL_Tender.has_award == True))).scalar() or 0
+                campaigns = (await db.execute(select(SQL_Campaign))).scalars().all()
+                high = (await db.execute(select(func.count()).select_from(SQL_Company).where(SQL_Company.match_score >= 80))).scalar() or 0
+                medium = (await db.execute(select(func.count()).select_from(SQL_Company).where(SQL_Company.match_score >= 50, SQL_Company.match_score < 80))).scalar() or 0
+                low = (await db.execute(select(func.count()).select_from(SQL_Company).where(SQL_Company.match_score < 50))).scalar() or 0
+                closing_soon = (await db.execute(select(SQL_Tender).where(
+                    SQL_Tender.is_active == True,
+                    SQL_Tender.closing_date != None,
+                    SQL_Tender.closing_date != ""
+                ).order_by(SQL_Tender.closing_date.asc()).limit(3))).scalars().all()
+                recent_companies = (await db.execute(select(SQL_Company).order_by(SQL_Company.id.desc()).limit(5))).scalars().all()
+                recent_tenders = (await db.execute(select(SQL_Tender).order_by(SQL_Tender.match_score.desc()).limit(5))).scalars().all()
+                recent_companies_count = (await db.execute(select(func.count()).select_from(SQL_Company).where(SQL_Company.created_at >= seven_days_ago))).scalar() or 0
+                active_tenders_count = (await db.execute(select(func.count()).select_from(SQL_Tender).where(SQL_Tender.is_active == True))).scalar() or 0
+                recent_tenders_count = (await db.execute(select(func.count()).select_from(SQL_Tender).where(SQL_Tender.is_active == True, SQL_Tender.created_at >= seven_days_ago))).scalar() or 0
+                recent_emails = (await db.execute(select(func.count()).select_from(SQL_Lead).where(SQL_Lead.status == "sent", SQL_Lead.created_at >= seven_days_ago))).scalar() or 0
+                current_meetings = (await db.execute(select(func.count()).select_from(SQL_Meeting).where(SQL_Meeting.created_at >= seven_days_ago))).scalar() or 0
+                prev_meetings = (await db.execute(select(func.count()).select_from(SQL_Meeting).where(SQL_Meeting.created_at >= fourteen_days_ago, SQL_Meeting.created_at < seven_days_ago))).scalar() or 0
+                recent_contacted = (await db.execute(select(func.count()).select_from(SQL_Lead).where(SQL_Lead.status.in_(["sent", "opened", "clicked", "replied"]), SQL_Lead.created_at >= seven_days_ago))).scalar() or 0
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Database error: {e}")
 
