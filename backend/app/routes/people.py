@@ -240,19 +240,47 @@ async def add_person(
 
 
 # ---------------------------------------------------------------------------
-# CSV file import (strict, CSV-only)
+# CSV file import (flexible alias mapping)
 # ---------------------------------------------------------------------------
 
-# The 18 columns that must appear in the CSV header — exact names, no aliases.
-REQUIRED_COLUMNS: set[str] = {
-    "source", "status", "organization_name",
-    "first_name", "last_name", "full_name",
-    "title", "function_name", "seniority",
-    "email", "email_status", "email_confidence",
-    "phone", "linkedin_url",
-    "city", "state", "country",
-    "job_start_date",
+# Alias map: db_field -> list of accepted CSV header variants (lowercase, stripped)
+COL_ALIASES: Dict[str, list] = {
+    "full_name":        ["full name", "full_name", "name"],
+    "first_name":       ["first name", "first_name", "firstname"],
+    "last_name":        ["last name", "last_name", "lastname", "surname"],
+    "organization_name":["organization", "organization name", "organization_name", "company", "company name", "company_name"],
+    "title":            ["title", "job title", "job_title", "position"],
+    "function_name":    ["function", "function_name", "department"],
+    "seniority":        ["seniority", "level"],
+    "email":            ["email", "email address", "email_address"],
+    "email_status":     ["email status", "email_status"],
+    "email_confidence": ["email confidence", "email_confidence", "confidence"],
+    "phone":            ["phone", "phone number", "phone_number", "mobile"],
+    "linkedin_url":     ["linkedin", "linkedin url", "linkedin_url"],
+    "city":             ["city"],
+    "state":            ["state", "province"],
+    "country":          ["country"],
+    "job_start_date":   ["job start date", "job_start_date", "start date", "start_date"],
+    "source":           ["source"],
+    "status":           ["status"],
 }
+
+
+def _build_header_map(fieldnames) -> Dict[str, str]:
+    """Map raw CSV header -> db field name using COL_ALIASES (case-insensitive)."""
+    mapping: Dict[str, str] = {}
+    for h in (fieldnames or []):
+        lower = h.strip().lower()
+        for field, aliases in COL_ALIASES.items():
+            if lower in aliases:
+                mapping[h] = field
+                break
+    return mapping
+
+
+def _get_field(row: Dict[str, Any], field: str) -> str:
+    val = row.get(field)
+    return str(val).strip() if val not in (None, "") else ""
 
 
 # ---------------------------------------------------------------------------
@@ -339,54 +367,50 @@ async def import_people_json(
     return {"status": "success", "count": imported_count, "skipped": skipped}
 
 
-def _get_field_strict(row: Dict[str, Any], field: str) -> str:
-    """Read a value directly by its exact DB column name."""
-    val = row.get(field)
-    return str(val).strip() if val not in (None, "") else ""
-
-
 def _row_to_person_dict(row: Dict[str, Any]) -> Optional[dict]:
-    """Map a strict CSV row (validated headers) to a Person insert dict."""
-    full_name = _get_field_strict(row, "full_name")
-    first_name = _get_field_strict(row, "first_name")
-    last_name = _get_field_strict(row, "last_name")
+    """Map a normalised CSV row (keys are DB field names) to a Person insert dict."""
+    full_name = _get_field(row, "full_name")
+    first_name = _get_field(row, "first_name")
+    last_name = _get_field(row, "last_name")
     if not full_name:
         full_name = f"{first_name} {last_name}".strip()
-    if not full_name:
-        return None  # skip rows with no name at all
+    if not full_name and not _get_field(row, "email"):
+        return None  # skip rows with no name and no email
 
-    status_val = _get_field_strict(row, "status") or "Pending"
+    status_val = _get_field(row, "status") or "Pending"
     if status_val not in VALID_STATUSES:
         status_val = "Pending"
 
-    conf_raw = _get_field_strict(row, "email_confidence")
+    conf_raw = _get_field(row, "email_confidence")
     try:
         confidence = round(float(conf_raw), 2) if conf_raw else None
     except ValueError:
         confidence = None
 
     return {
-        "source": _get_field_strict(row, "source") or "CSV Import",
+        "source": _get_field(row, "source") or "CSV Import",
         "status": status_val,
-        "organization_name": _get_field_strict(row, "organization_name"),
+        "organization_name": _get_field(row, "organization_name"),
         "first_name": first_name,
         "last_name": last_name,
         "full_name": full_name,
-        "title": _get_field_strict(row, "title"),
-        "function_name": _get_field_strict(row, "function_name"),
-        "seniority": _get_field_strict(row, "seniority"),
-        "email": _get_field_strict(row, "email"),
-        "email_status": _get_field_strict(row, "email_status"),
+        "title": _get_field(row, "title"),
+        "function_name": _get_field(row, "function_name"),
+        "seniority": _get_field(row, "seniority"),
+        "email": _get_field(row, "email"),
+        "email_status": _get_field(row, "email_status"),
         "email_confidence": confidence,
-        "phone": _get_field_strict(row, "phone"),
-        "linkedin_url": _get_field_strict(row, "linkedin_url"),
-        "city": _get_field_strict(row, "city"),
-        "state": _get_field_strict(row, "state"),
-        "country": _get_field_strict(row, "country"),
-        "job_start_date": _parse_date(_get_field_strict(row, "job_start_date")),
+        "phone": _get_field(row, "phone"),
+        "linkedin_url": _get_field(row, "linkedin_url"),
+        "city": _get_field(row, "city"),
+        "state": _get_field(row, "state"),
+        "country": _get_field(row, "country"),
+        "job_start_date": _parse_date(_get_field(row, "job_start_date")),
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow(),
     }
+
+
 
 
 async def _flush_chunk(chunk: List[dict]) -> int:
@@ -401,14 +425,14 @@ async def _flush_chunk(chunk: List[dict]) -> int:
 
 async def _process_csv_stream(text_stream) -> int:
     """
-    Parse and insert a CSV stream. Raises HTTPException 400 if the header
-    does not exactly match REQUIRED_COLUMNS (no aliases, no extras allowed).
+    Parse and insert a CSV stream using flexible alias-based column mapping.
+    Only requires that each row has at least a name (first/last/full) or an email.
+    Unrecognised columns are silently ignored.
     """
     reader = csv.DictReader(text_stream)
 
-    # Validate header on the first read
+    # Force header read
     if reader.fieldnames is None:
-        # Force header read
         try:
             next(reader)
         except StopIteration:
@@ -416,30 +440,33 @@ async def _process_csv_stream(text_stream) -> int:
         if reader.fieldnames is None:
             raise HTTPException(status_code=400, detail="CSV file is empty or has no header row.")
 
-    csv_columns = set(f.strip() for f in reader.fieldnames if f)
-    missing = REQUIRED_COLUMNS - csv_columns
-    extra = csv_columns - REQUIRED_COLUMNS
-
-    if missing or extra:
-        parts = []
-        if missing:
-            parts.append(f"Missing columns: {', '.join(sorted(missing))}")
-        if extra:
-            parts.append(f"Extra columns not allowed: {', '.join(sorted(extra))}")
+    header_map = _build_header_map(reader.fieldnames)  # raw header -> db field
+    mapped = set(header_map.values())
+    has_name = bool(mapped & {"full_name", "first_name", "last_name"})
+    has_email = "email" in mapped
+    if not has_name and not has_email:
         raise HTTPException(
             status_code=400,
-            detail=f"CSV column mismatch. {' | '.join(parts)}. "
-                   f"Required columns (exactly): {', '.join(sorted(REQUIRED_COLUMNS))}"
+            detail=(
+                'Could not recognise any name or email column. '
+                'Please include at least "First Name", "Last Name", "Full Name", or "Email".'
+            )
         )
 
     imported_count = 0
     chunk: List[dict] = []
     CHUNK = 500
 
-    for row in reader:
-        if not isinstance(row, dict):
+    for raw_row in reader:
+        if not isinstance(raw_row, dict):
             continue
-        doc = _row_to_person_dict(row)
+        # Normalise: map raw CSV headers to db field names
+        norm: Dict[str, Any] = {}
+        for raw_h, val in raw_row.items():
+            db_field = header_map.get(raw_h)
+            if db_field:
+                norm[db_field] = val
+        doc = _row_to_person_dict(norm)
         if not doc:
             continue
         chunk.append(doc)

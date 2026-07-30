@@ -16,7 +16,42 @@ const REQUIRED_COLS = [
   'job_start_date',
 ];
 
-const REQUIRED_COLS_SET = new Set(REQUIRED_COLS);
+/**
+ * Alias map: keys = DB field names, values = accepted CSV header variants
+ * (matched case-insensitively after trimming whitespace).
+ */
+const COL_ALIASES = {
+  full_name:        ['full name', 'full_name', 'name'],
+  first_name:       ['first name', 'first_name', 'firstname'],
+  last_name:        ['last name', 'last_name', 'lastname', 'surname'],
+  organization_name:['organization', 'organization name', 'organization_name', 'company', 'company name', 'company_name'],
+  title:            ['title', 'job title', 'job_title', 'position'],
+  function_name:    ['function', 'function_name', 'department'],
+  seniority:        ['seniority', 'level'],
+  email:            ['email', 'email address', 'email_address'],
+  email_status:     ['email status', 'email_status'],
+  email_confidence: ['email confidence', 'email_confidence', 'confidence'],
+  phone:            ['phone', 'phone number', 'phone_number', 'mobile'],
+  linkedin_url:     ['linkedin', 'linkedin url', 'linkedin_url'],
+  city:             ['city'],
+  state:            ['state', 'province'],
+  country:          ['country'],
+  job_start_date:   ['job start date', 'job_start_date', 'start date', 'start_date'],
+  source:           ['source'],
+  status:           ['status'],
+};
+
+/** Build a csvHeader -> dbField lookup from the CSV's actual header row */
+function buildHeaderMap(headers) {
+  const map = {};
+  headers.forEach(h => {
+    const lower = h.trim().toLowerCase();
+    for (const [field, aliases] of Object.entries(COL_ALIASES)) {
+      if (aliases.includes(lower)) { map[h] = field; break; }
+    }
+  });
+  return map;
+}
 
 const EMPTY_PERSON = Object.fromEntries(REQUIRED_COLS.map(c => [c, c === 'source' ? 'Manual Entry' : c === 'status' ? 'Pending' : '']));
 
@@ -233,22 +268,35 @@ export default function People() {
         const text = e.target.result;
         const allRows = parseCSVText(text);
         if (allRows.length < 2) { setParseError('CSV has no data rows.'); return; }
-        const header = allRows[0].map(h => h.trim());
-        const csvSet = new Set(header);
-        const missing = REQUIRED_COLS.filter(c => !csvSet.has(c));
-        const extra = header.filter(c => !REQUIRED_COLS_SET.has(c));
-        if (missing.length || extra.length) {
-          const parts = [];
-          if (missing.length) parts.push(`Missing: ${missing.join(', ')}`);
-          if (extra.length) parts.push(`Not allowed: ${extra.join(', ')}`);
-          setParseError(parts.join(' | '));
+        const rawHeaders = allRows[0];
+        const headerMap = buildHeaderMap(rawHeaders); // csvHeader → dbField
+
+        // Only require at least one name or email column to be recognisable
+        const mappedFields = new Set(Object.values(headerMap));
+        const hasName = mappedFields.has('full_name') || mappedFields.has('first_name') || mappedFields.has('last_name');
+        const hasEmail = mappedFields.has('email');
+        if (!hasName && !hasEmail) {
+          setParseError('Could not recognise any name or email column. Please include at least "First Name", "Last Name", "Full Name", or "Email".');
           return;
         }
+
         const data = allRows.slice(1).map(vals => {
-          const obj = {};
-          header.forEach((h, i) => { obj[h] = (vals[i] ?? '').trim(); });
+          const obj = Object.fromEntries(REQUIRED_COLS.map(c => [c, '']));
+          rawHeaders.forEach((h, i) => {
+            const field = headerMap[h];
+            if (field) obj[field] = (vals[i] ?? '').trim();
+          });
+          // Auto-build full_name from first+last if missing
+          if (!obj.full_name && (obj.first_name || obj.last_name)) {
+            obj.full_name = `${obj.first_name} ${obj.last_name}`.trim();
+          }
           return obj;
-        }).filter(r => REQUIRED_COLS.some(c => r[c]));
+        }).filter(r => r.full_name || r.first_name || r.last_name || r.email);
+
+        if (data.length === 0) {
+          setParseError('No valid rows found — every row is missing both a name and an email.');
+          return;
+        }
         setParsedRows(data);
       } catch {
         setParseError('Failed to parse the CSV file.');
@@ -256,6 +304,7 @@ export default function People() {
     };
     reader.readAsText(file);
   };
+
 
   // Cell editing helpers
   const updateCell = (rowIdx, col, val) => {
@@ -702,16 +751,13 @@ export default function People() {
                       onChange={(e) => { if (e.target.files?.[0]) handleFileSelect(e.target.files[0]); }} />
                   </div>
 
-                  {/* Column mismatch error */}
+                  {/* Parse error */}
                   {parseError && (
                     <div className="flex items-start gap-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/30 p-3">
                       <AlertTriangle size={15} className="text-rose-500 shrink-0 mt-0.5" />
                       <div className="text-xs">
-                        <p className="font-bold text-rose-600 dark:text-rose-400 mb-1">CSV column mismatch</p>
+                        <p className="font-bold text-rose-600 dark:text-rose-400 mb-1">Could not read CSV</p>
                         <p className="text-rose-500 dark:text-rose-400">{parseError}</p>
-                        <p className="mt-1.5 text-slate-500 dark:text-slate-400">
-                          Required (exact): <span className="font-mono">{REQUIRED_COLS.join(', ')}</span>
-                        </p>
                       </div>
                     </div>
                   )}
@@ -789,13 +835,17 @@ export default function People() {
 
                   {/* No-file placeholder */}
                   {!selectedFile && (
-                    <div className="rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-900 p-4">
-                      <p className="text-xs font-bold text-navy-900 dark:text-white mb-2">Required columns (18 exact)</p>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-1 font-mono text-[10px] text-slate-500 dark:text-slate-400">
-                        {REQUIRED_COLS.map(col => (
-                          <span key={col} className="bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded px-1.5 py-0.5">{col}</span>
-                        ))}
-                      </div>
+                    <div className="rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-900 p-4 space-y-2">
+                      <p className="text-xs font-bold text-navy-900 dark:text-white">Supported column headers</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Full Name, First Name, Last Name, Organization, Title, Function, Seniority,
+                        Email, Email Status, Email Confidence, Phone, LinkedIn, City, State, Country,
+                        Job Start Date, Source, Status
+                      </p>
+                      <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                        Common variants (e.g. "Company", "Department", "Mobile") are also recognised.
+                        Extra columns are ignored. Only a name or email is required per row.
+                      </p>
                     </div>
                   )}
 
