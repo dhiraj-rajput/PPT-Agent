@@ -15,6 +15,7 @@ const topNav = [
 
 const bizNav = [
   { to: '/companies', label: 'Companies', icon: Building2 },
+  { to: '/people', label: 'People', icon: Users },
   { to: '/tenders', label: 'Tenders', icon: FileStack },
   { to: '/naics', label: 'NAICS Muster', icon: Hash },
   { to: '/ai-research', label: 'AI Research', icon: BrainCircuit },

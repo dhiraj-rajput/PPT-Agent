@@ -181,6 +181,61 @@ class Company(Base):
 
 
 
+class Person(Base):
+    """
+    Replaces / implements: people (contact_management.person_master reference)
+    Flat CRM People record - mirrors the Company table's denormalized style
+    (organization/source/status stored as plain strings rather than separate
+    master-table foreign keys) so it plugs into the existing dual-DB pattern
+    with no extra joins required for list/search/import.
+    """
+    __tablename__ = "people"
+    __table_args__ = (
+        Index("ix_people_email", "email"),
+        Index("ix_people_organization", "organization_name"),
+        Index("ix_people_country", "country"),
+        Index("ix_people_status", "status"),
+        Index("ix_people_source", "source"),
+        Index("ft_people_name_title", "full_name", "title", mysql_prefix="FULLTEXT"),
+    )
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+
+    # Source / Status - free-text, matches source_master.source_name / status_master.status_name
+    source = Column(String(100), default="Manual Entry")
+    status = Column(String(50), default="Pending")
+
+    # Organization - free-text, matches organization_master.organization_name
+    organization_name = Column(String(255), default="")
+
+    # Identity
+    first_name = Column(String(100), default="")
+    last_name = Column(String(100), default="")
+    full_name = Column(String(255), nullable=False)
+
+    # Role
+    title = Column(String(255), default="")
+    function_name = Column(String(100), default="")
+    seniority = Column(String(100), default="")
+
+    # Contact
+    email = Column(String(255), default="", index=True)
+    email_status = Column(String(50), default="")
+    email_confidence = Column(Numeric(4, 2), nullable=True)
+    phone = Column(String(30), default="")
+    linkedin_url = Column(String(500), default="")
+
+    # Location
+    city = Column(String(100), default="")
+    state = Column(String(100), default="")
+    country = Column(String(100), default="")
+
+    job_start_date = Column(DateTime, nullable=True)
+
+    created_at = Column(DateTime, default=_now, nullable=False)
+    updated_at = Column(DateTime, default=_now, onupdate=_now)
+
+
 class Campaign(Base):
     """
     Replaces MongoDB: campaigns

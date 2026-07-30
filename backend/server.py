@@ -25,6 +25,7 @@ from utils.db_client import (
 
 # ---- Core feature routes ----
 from app.routes.companies import router as companies_router
+from app.routes.people import router as people_router
 from app.routes.reports import router as reports_router
 from app.routes.proposals import router as proposals_router
 from app.routes.tenders import router as tenders_router
@@ -333,6 +334,7 @@ app.include_router(meetings_router, prefix="/api")
 app.include_router(notifications_router, prefix="/api")
 app.include_router(integrations_router, prefix="/api")
 app.include_router(companies_router, prefix="/api")
+app.include_router(people_router, prefix="/api")
 app.include_router(reports_router, prefix="/api")
 app.include_router(proposals_router, prefix="/api")
 app.include_router(tenders_router, prefix="/api")

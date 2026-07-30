@@ -1,75 +1,70 @@
 {
   "company_name": "Pulse of Hope Foundation (NAF)",
   "website": "https://www.nabdalaamal.org",
-  "industry": "Non-profit Organizations",
-  "description": "Pulse of Hope Foundation (NAF) is an Iraqi civil society organization founded in 2017 and headquartered in Ramadi, Anbar. The foundation focuses on humanitarian relief, community development, sustainable development, and education programs, with a strong emphasis on building youth capacity and empowering young people to play active roles in their communities.",
-  "headquarters": "Ramadi, Anbar, Iraq",
+  "industry": "Non-profit Organizations / Humanitarian Aid",
+  "description": "Iraqi civil society organization focused on humanitarian work, community service, and advancement through relief, development, and education programs. Specializes in building youth capacities and enabling them to play active roles in advancing their societies both interim and strategically.",
+  "headquarters": "Ramadi, Anbar",
   "locations": [
-    "Ramadi, Anbar, Iraq"
+    "Ramadi, Anbar",
+    "Anbar 31001"
   ],
   "employee_count": "2-10 employees",
   "founded_year": 2017,
   "specialties": [
-    "NGO",
-    "Community Development",
-    "Sustainable Development",
-    "Capacity Building",
-    "Youth Empowerment"
+    "Humanitarian relief",
+    "Community development",
+    "Education programs",
+    "Youth capacity building",
+    "Youth empowerment"
   ],
   "products": [],
   "services": [
-    "Humanitarian Relief",
-    "Community Development Programs",
-    "Sustainable Development Initiatives",
-    "Youth Capacity Building",
-    "Educational Programs",
-    "Startup Project Support"
+    "Relief work",
+    "Development programs",
+    "Education programs",
+    "Youth capacity building",
+    "Youth empowerment"
   ],
   "technology_stack": [],
-  "business_model": "Non-profit / Grant and Donor-funded",
-  "pricing_model": "Not applicable (Grant-funded / Free community services)",
+  "business_model": "Grant-funded / Donation-based non-profit",
+  "pricing_model": "N/A (non-profit)",
   "financial_highlights": [],
   "leadership": [
     "Abdulqader Alshawwaf"
   ],
-  "competitors": [
-    "Iraqi Al-Amal Association",
-    "Local and international NGOs operating in Iraq"
-  ],
-  "value_proposition": "Empowering youth and fostering sustainable community development in the Anbar region through targeted capacity building and humanitarian relief.",
+  "competitors": [],
+  "value_proposition": "Local Iraqi NGO delivering humanitarian relief, development, and education with a strategic focus on youth empowerment and community advancement in Anbar region.",
   "rfp_strengths": [
-    "Established local presence in Ramadi, Anbar since 2017",
-    "Deep understanding of local community dynamics and youth needs in post-conflict Iraq",
-    "Bilingual capability (Arabic and English)"
+    "Local presence in Ramadi, Anbar",
+    "Focus on youth capacity building",
+    "Humanitarian and development program experience",
+    "Arabic/English bilingual operations"
   ],
   "rfp_weaknesses": [
-    "Small organizational scale (2-10 employees)",
-    "Geographically restricted operations primarily within Anbar province",
-    "High dependency on external donor funding"
+    "Very small team (2-10 employees)",
+    "Limited geographic reach beyond Anbar",
+    "No publicly documented certifications (ISO, etc.)",
+    "No disclosed major institutional donor track record"
   ],
   "opportunities": [
-    "Partnerships with international aid agencies (UN, USAID, EU)",
-    "Expansion of entrepreneurship and startup support programs in Iraq"
+    "Partnerships with international NGOs for localization",
+    "Youth-focused grant programs",
+    "Post-conflict reconstruction funding in Anbar"
   ],
   "challenges": [
-    "Regional security and political instability in Iraq",
-    "Securing long-term sustainable funding for community programs"
+    "Resource constraints due to small size",
+    "Dependence on external funding",
+    "Operating in fragile context",
+    "Limited organizational visibility"
   ],
-  "recent_news": [
-    "Launched an application portal to support and fund local startup projects"
-  ],
-  "clients": [
-    "Local youth",
-    "Emerging entrepreneurs in Anbar",
-    "Local community members"
-  ],
+  "recent_news": [],
+  "clients": [],
   "partners": [],
   "emails": [],
   "phone_numbers": [],
   "social_links": [],
   "sources_used": [
-    "Website",
     "LinkedIn"
   ],
-  "last_updated": "2026-07-15T09:17:04.764441+00:00"
+  "last_updated": "2026-07-29T07:10:38.080540+00:00"
 }

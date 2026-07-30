@@ -49,6 +49,9 @@ const statusStyles = {
   High: 'bg-rose-100 text-rose-700',
   Medium: 'bg-amber-100 text-amber-700',
   Low: 'bg-slate-100 text-slate-600',
+  Processing: 'bg-sky-100 text-sky-700',
+  Failed: 'bg-rose-100 text-rose-700',
+  Duplicate: 'bg-slate-100 text-slate-500',
 };
 
 export function StatusBadge({ status }) {

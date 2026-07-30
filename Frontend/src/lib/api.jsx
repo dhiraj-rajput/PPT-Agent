@@ -356,6 +356,34 @@ export const api = {
     return post('/api/companies/settings/ai-mode', { mode });
   },
 
+  // ---------- People ----------
+  async getPeople(params = {}) {
+    const qs = new URLSearchParams(params).toString();
+    return get(`/api/people${qs ? `?${qs}` : ''}`);
+  },
+  async getPerson(id) {
+    return get(`/api/people/${id}`);
+  },
+  async addPerson(personData) {
+    return post('/api/people', personData);
+  },
+  async importPeople({ format, data }) {
+    // If 'data' is a File object (CSV/Excel upload), use the streaming file
+    // endpoint so large files don't get sent as one giant JSON string.
+    if (data instanceof File) {
+      const formData = new FormData();
+      formData.append('file', data);
+      return _upload('/api/people/import/file', formData);
+    }
+    // JSON array (single record or bulk manual entry grid)
+    return post('/api/people/import', { format, data });
+  },
+  async importPeopleFile(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return _upload('/api/people/import/file', formData);
+  },
+
   // ---------- Tenders ----------
   async getTenders(params = {}) {
     const qs = new URLSearchParams(params).toString();
