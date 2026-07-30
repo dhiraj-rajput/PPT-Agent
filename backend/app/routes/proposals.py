@@ -79,10 +79,10 @@ class ConnectionManager:
     async def connect(self, websocket: WebSocket, user_id: str):
         try:
             from starlette.websockets import WebSocketState
-            if getattr(websocket, "client_state", None) == WebSocketState.UNCONNECTED:
+            if getattr(websocket, "client_state", None) != WebSocketState.CONNECTED:
                 await websocket.accept()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"[WebSocket] accept failed or already accepted: {e}")
         self.active_connections.append((websocket, user_id))
 
     def disconnect(self, websocket: WebSocket):
@@ -407,7 +407,7 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = None):
     
     if not token:
         try:
-            if getattr(websocket, "client_state", None) == WebSocketState.UNCONNECTED:
+            if getattr(websocket, "client_state", None) != WebSocketState.CONNECTED:
                 await websocket.accept()
             await websocket.close(code=1008, reason="Token missing")
         except Exception:
@@ -428,7 +428,7 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = None):
 
     if not user_id:
         try:
-            if getattr(websocket, "client_state", None) == WebSocketState.UNCONNECTED:
+            if getattr(websocket, "client_state", None) != WebSocketState.CONNECTED:
                 await websocket.accept()
             await websocket.close(code=1008, reason="Unauthorized")
         except Exception:

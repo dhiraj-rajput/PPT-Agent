@@ -370,27 +370,44 @@ def update_task_status(
     if _mysql_available:
         try:
             from sqlalchemy import text
+            merged_extra = extra.copy() if extra else {}
+            if filename:
+                merged_extra["filename"] = filename
+
             with get_sync_db_session() as db:
-                result_dict: dict[str, Any] = {
-                    "task_id": task_id,
-                    "task_type": task_type,
-                    "status": status,
-                    "progress": progress,
-                    "message": message,
-                    "last_updated": datetime.now(timezone.utc),
-                }
-                if extra:
-                    result_dict["result"] = extra
+                if not merged_extra:
+                    row = db.execute(
+                        text("SELECT result FROM task_statuses WHERE task_id = :tid"),
+                        {"tid": task_id}
+                    ).mappings().first()
+                    if row and row.get("result"):
+                        existing_res = row["result"]
+                        if isinstance(existing_res, dict):
+                            merged_extra = existing_res
+                        elif isinstance(existing_res, str):
+                            try:
+                                merged_extra = json.loads(existing_res)
+                            except Exception:
+                                pass
+
+                if filename and "filename" not in merged_extra:
+                    merged_extra["filename"] = filename
+
                 db.execute(
                     text(
                         "INSERT INTO task_statuses (task_id, task_type, status, progress, message, last_updated, result, created_at) "
-                        "VALUES (:task_id, :task_type, :status, :progress, :message, :last_updated, :result, :created_at) "
-                        "ON DUPLICATE KEY UPDATE task_type=VALUES(task_type), status=VALUES(status), progress=VALUES(progress), "
-                        "message=VALUES(message), last_updated=VALUES(last_updated), result=VALUES(result)"
+                        "VALUES (:task_id, :task_type, :status, :progress, :message, :last_updated, :result, :created_at) AS new_vals "
+                        "ON DUPLICATE KEY UPDATE task_type=new_vals.task_type, status=new_vals.status, progress=new_vals.progress, "
+                        "message=new_vals.message, last_updated=new_vals.last_updated, result=new_vals.result"
                     ),
                     {
-                        **result_dict,
-                        "result": json.dumps(extra or {}, default=str),
+                        "task_id": task_id,
+                        "task_type": task_type,
+                        "status": status,
+                        "progress": progress,
+                        "message": message,
+                        "last_updated": datetime.now(timezone.utc),
+                        "result": json.dumps(merged_extra or {}, default=str),
                         "created_at": datetime.now(timezone.utc),
                     },
                 )
@@ -458,13 +475,35 @@ async def update_task_status_async(
     if _mysql_available:
         try:
             from sqlalchemy import text
+            merged_extra = extra.copy() if extra else {}
+            if filename:
+                merged_extra["filename"] = filename
+
             async for db in get_db_session():
+                if not merged_extra:
+                    res_row = (await db.execute(
+                        text("SELECT result FROM task_statuses WHERE task_id = :tid"),
+                        {"tid": task_id}
+                    )).mappings().first()
+                    if res_row and res_row.get("result"):
+                        existing_res = res_row["result"]
+                        if isinstance(existing_res, dict):
+                            merged_extra = existing_res
+                        elif isinstance(existing_res, str):
+                            try:
+                                merged_extra = json.loads(existing_res)
+                            except Exception:
+                                pass
+
+                if filename and "filename" not in merged_extra:
+                    merged_extra["filename"] = filename
+
                 await db.execute(
                     text(
                         "INSERT INTO task_statuses (task_id, task_type, status, progress, message, last_updated, result, created_at) "
-                        "VALUES (:task_id, :task_type, :status, :progress, :message, :last_updated, :result, :created_at) "
-                        "ON DUPLICATE KEY UPDATE task_type=VALUES(task_type), status=VALUES(status), progress=VALUES(progress), "
-                        "message=VALUES(message), last_updated=VALUES(last_updated), result=VALUES(result)"
+                        "VALUES (:task_id, :task_type, :status, :progress, :message, :last_updated, :result, :created_at) AS new_vals "
+                        "ON DUPLICATE KEY UPDATE task_type=new_vals.task_type, status=new_vals.status, progress=new_vals.progress, "
+                        "message=new_vals.message, last_updated=new_vals.last_updated, result=new_vals.result"
                     ),
                     {
                         "task_id": task_id,
@@ -473,11 +512,12 @@ async def update_task_status_async(
                         "progress": progress,
                         "message": message,
                         "last_updated": datetime.now(timezone.utc),
-                        "result": json.dumps(extra or {}, default=str),
+                        "result": json.dumps(merged_extra or {}, default=str),
                         "created_at": datetime.now(timezone.utc),
                     },
                 )
         except Exception as e:
+            logger.error(f"[mysql] update_task_status_async MySQL failed: {e}")
             logger.error(f"[mysql] update_task_status_async MySQL failed: {e}")
 
 

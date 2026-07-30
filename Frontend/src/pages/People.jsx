@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Plus, Eye, X, Upload, Check, Loader2, Trash2, PlusCircle, Mail, Phone, Linkedin } from 'lucide-react';
+import { Search, Plus, Eye, X, Upload, Check, Loader2 } from 'lucide-react';
 import { PageHeader, Card, StatusBadge, renderSafeText } from '../components/ui/Common.jsx';
 import { api } from '../lib/api.jsx';
 import { useNotifications } from '../context/NotificationContext.jsx';
@@ -49,9 +49,8 @@ export default function People() {
 
   // Add/Import Modal States
   const [showAddModal, setShowAddModal] = useState(false);
-  const [activeTab, setActiveTab] = useState('manual'); // 'manual' | 'bulk' | 'import'
+  const [activeTab, setActiveTab] = useState('manual'); // 'manual' | 'import'
   const [manualForm, setManualForm] = useState({ ...EMPTY_PERSON });
-  const [bulkRows, setBulkRows] = useState([{ ...EMPTY_PERSON }, { ...EMPTY_PERSON }, { ...EMPTY_PERSON }]);
   const [selectedFile, setSelectedFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
@@ -116,31 +115,7 @@ export default function People() {
       });
   };
 
-  // ---------------- Bulk manual entry submit ----------------
-  const updateBulkRow = (idx, field, value) => {
-    setBulkRows((rows) => rows.map((r, i) => (i === idx ? { ...r, [field]: value } : r)));
-  };
-  const addBulkRow = () => setBulkRows((rows) => [...rows, { ...EMPTY_PERSON }]);
-  const removeBulkRow = (idx) => setBulkRows((rows) => rows.filter((_, i) => i !== idx));
 
-  const handleBulkSubmit = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setSubmitError(null);
-    try {
-      const validRows = bulkRows.filter((r) => (r.first_name || r.last_name || r.email || '').trim() !== '');
-      if (validRows.length === 0) throw new Error('Add at least one contact with a name or email');
-      const res = await api.importPeople({ format: 'json', data: JSON.stringify(validRows) });
-      setIsSubmitting(false);
-      setShowAddModal(false);
-      setBulkRows([{ ...EMPTY_PERSON }, { ...EMPTY_PERSON }, { ...EMPTY_PERSON }]);
-      fetchPeople();
-      notify('Contacts added', `${res.count ?? validRows.length} contacts were added in bulk.`, '/people');
-    } catch (err) {
-      setIsSubmitting(false);
-      setSubmitError(err.message || 'Bulk entry failed');
-    }
-  };
 
   // ---------------- CSV/Excel import submit ----------------
   const handleImportSubmit = async (e) => {
@@ -402,7 +377,7 @@ export default function People() {
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-navy-700 p-5 shrink-0 bg-white dark:bg-navy-800">
               <div>
                 <h3 className="text-base font-extrabold text-navy-900 dark:text-white">Add People</h3>
-                <p className="text-xs text-slate-400 mt-1">Add one contact, enter several at once, or import a CSV/Excel file</p>
+                <p className="text-xs text-slate-400 mt-1">Add a single contact manually or import a CSV file</p>
               </div>
               <button onClick={() => setShowAddModal(false)} className="rounded-lg p-2 text-slate-400 hover:text-navy-950 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-navy-900 transition-colors">
                 <X size={18} />
@@ -413,8 +388,7 @@ export default function People() {
             <div className="flex border-b border-slate-100 dark:border-navy-700 bg-slate-50 dark:bg-navy-900 shrink-0">
               {[
                 { key: 'manual', label: 'Manual Entry' },
-                { key: 'bulk', label: 'Bulk Manual Entry' },
-                { key: 'import', label: 'Import CSV / Excel' },
+                { key: 'import', label: 'Import CSV' },
               ].map((t) => (
                 <button
                   key={t.key}
@@ -525,44 +499,8 @@ export default function People() {
                 </form>
               )}
 
-              {/* ---------- Bulk Manual Entry ---------- */}
-              {activeTab === 'bulk' && (
-                <form onSubmit={handleBulkSubmit} className="space-y-4">
-                  <p className="text-xs text-slate-400">Fill in as many rows as you need — blank rows are skipped automatically.</p>
-                  <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
-                    {bulkRows.map((row, idx) => (
-                      <div key={idx} className="rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-900 p-3 grid grid-cols-2 md:grid-cols-6 gap-2 relative">
-                        <input value={row.first_name} onChange={(e) => updateBulkRow(idx, 'first_name', e.target.value)} placeholder="First Name" className={`${inputClass} !bg-white dark:!bg-navy-800 col-span-1`} />
-                        <input value={row.last_name} onChange={(e) => updateBulkRow(idx, 'last_name', e.target.value)} placeholder="Last Name" className={`${inputClass} !bg-white dark:!bg-navy-800 col-span-1`} />
-                        <input value={row.organization_name} onChange={(e) => updateBulkRow(idx, 'organization_name', e.target.value)} placeholder="Organization" className={`${inputClass} !bg-white dark:!bg-navy-800 col-span-2 md:col-span-1`} />
-                        <input value={row.title} onChange={(e) => updateBulkRow(idx, 'title', e.target.value)} placeholder="Title" className={`${inputClass} !bg-white dark:!bg-navy-800 col-span-2 md:col-span-1`} />
-                        <input type="email" value={row.email} onChange={(e) => updateBulkRow(idx, 'email', e.target.value)} placeholder="Email" className={`${inputClass} !bg-white dark:!bg-navy-800 col-span-2 md:col-span-1`} />
-                        <div className="flex items-center gap-1 col-span-2 md:col-span-1">
-                          <input value={row.phone} onChange={(e) => updateBulkRow(idx, 'phone', e.target.value)} placeholder="Phone" className={`${inputClass} !bg-white dark:!bg-navy-800`} />
-                          <button type="button" onClick={() => removeBulkRow(idx)} className="shrink-0 rounded-lg p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors" title="Remove row">
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <button type="button" onClick={addBulkRow} className="flex items-center gap-1.5 text-xs font-bold text-brand-600 dark:text-brand-400 hover:text-brand-700">
-                    <PlusCircle size={14} /> Add another row
-                  </button>
 
-                  <div className="flex justify-end gap-3 border-t border-slate-100 dark:border-navy-700 pt-5 mt-5">
-                    <button type="button" onClick={() => setShowAddModal(false)} className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-semibold text-navy-900 hover:bg-slate-50 dark:border-navy-700 dark:bg-navy-800 dark:text-white dark:hover:bg-navy-700 transition-colors">
-                      Cancel
-                    </button>
-                    <button type="submit" disabled={isSubmitting} className="flex items-center justify-center gap-1.5 rounded-xl bg-brand-500 px-5 py-2.5 text-xs font-bold text-white shadow-soft hover:bg-brand-600 transition-colors disabled:opacity-75">
-                      {isSubmitting ? <Loader2 className="animate-spin" size={14} /> : <Check size={14} />}
-                      Save All Contacts
-                    </button>
-                  </div>
-                </form>
-              )}
-
-              {/* ---------- Import CSV / Excel ---------- */}
+              {/* ---------- Import CSV ---------- */}
               {activeTab === 'import' && (
                 <form onSubmit={handleImportSubmit} className="space-y-4">
                   <div
@@ -571,13 +509,13 @@ export default function People() {
                   >
                     <Upload className="text-slate-300 dark:text-slate-600 mb-2" size={32} />
                     <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
-                      {selectedFile ? selectedFile.name : 'Click to upload a CSV or Excel file'}
+                      {selectedFile ? selectedFile.name : 'Click to upload a CSV file'}
                     </p>
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Supports .csv, .xlsx, .xls — clean it up in the database later, this is just for getting data in</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Only .csv files are accepted — columns must match the database exactly</p>
                     <input
                       id="people-file-input"
                       type="file"
-                      accept=".csv,.xlsx,.xls"
+                      accept=".csv"
                       className="hidden"
                       onChange={(e) => {
                         if (e.target.files && e.target.files[0]) setSelectedFile(e.target.files[0]);
@@ -586,8 +524,13 @@ export default function People() {
                   </div>
 
                   <div className="rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-50 dark:bg-navy-900 p-4 text-xs text-slate-500 dark:text-slate-400">
-                    <p className="font-bold text-navy-900 dark:text-white mb-1.5">Recognised column headers</p>
-                    <p>Full Name / First Name / Last Name, Organization, Title, Email, Phone, LinkedIn, City, State, Country, Seniority, Source, Status, Job Start Date — any casing or common variant works, unmatched columns are simply ignored.</p>
+                    <p className="font-bold text-navy-900 dark:text-white mb-2">Required CSV columns (exact names, no extras allowed)</p>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-1 font-mono text-[10px] text-slate-600 dark:text-slate-400">
+                      {['source','status','organization_name','first_name','last_name','full_name','title','function_name','seniority','email','email_status','email_confidence','phone','linkedin_url','city','state','country','job_start_date'].map(col => (
+                        <span key={col} className="bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-600 rounded px-1.5 py-0.5">{col}</span>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-rose-500 dark:text-rose-400 font-semibold">⚠ The CSV must have all 18 columns above — no more, no fewer.</p>
                   </div>
 
                   {submitError && (
@@ -602,7 +545,7 @@ export default function People() {
                     </button>
                     <button type="submit" disabled={isSubmitting} className="flex items-center justify-center gap-1.5 rounded-xl bg-brand-500 px-5 py-2.5 text-xs font-bold text-white shadow-soft hover:bg-brand-600 transition-colors disabled:opacity-75">
                       {isSubmitting ? <Loader2 className="animate-spin" size={14} /> : <Upload size={14} />}
-                      Import File
+                      Import CSV
                     </button>
                   </div>
                 </form>

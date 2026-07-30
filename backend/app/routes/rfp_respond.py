@@ -50,7 +50,7 @@ def _safe_name(name: str) -> str:
 
 
 def _get_task_user_id(task: dict) -> str:
-    res_val = task.get("result") or {}
+    res_val = task.get("result") or task.get("extra_data") or {}
     if isinstance(res_val, str):
         try:
             res_val = json.loads(res_val)
@@ -225,7 +225,8 @@ async def get_status(task_id: str, current_user: dict = Depends(get_current_user
         raise HTTPException(404, "Unknown task_id")
 
     user_id = str(current_user["id"])
-    if _get_task_user_id(task) != user_id:
+    task_owner = _get_task_user_id(task)
+    if task_owner and task_owner != user_id:
         raise HTTPException(403, "Access denied: You do not own this task.")
     return task
 

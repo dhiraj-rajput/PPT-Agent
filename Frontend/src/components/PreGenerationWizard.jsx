@@ -28,30 +28,53 @@ export default function PreGenerationWizard({ tenderId, solicitationNumber, prop
   const [sections, setSections] = useState([]);
   const [generatingOutline, setGeneratingOutline] = useState(false);
 
-  // Restore saved wizard progress on mount
+  const handleClose = () => {
+    try {
+      sessionStorage.removeItem('orbit_wizard_progress');
+    } catch (e) {}
+    onCancel();
+  };
+
+  // Restore saved wizard progress on mount ONLY if matching tenderId or solicitationNumber
   useEffect(() => {
     try {
       const savedProgress = sessionStorage.getItem('orbit_wizard_progress');
       if (savedProgress) {
         const parsed = JSON.parse(savedProgress);
-        if (parsed.step) setStep(parsed.step);
-        if (parsed.answers) setAnswers(parsed.answers);
+        const matchSol = solicitationNumber && parsed.solicitationNumber === solicitationNumber;
+        const matchTender = tenderId && parsed.tenderId === tenderId;
+        if (matchSol || matchTender) {
+          if (parsed.step) setStep(parsed.step);
+          if (parsed.answers) setAnswers(parsed.answers);
+        } else {
+          sessionStorage.removeItem('orbit_wizard_progress');
+          setStep(1);
+        }
+      } else {
+        setStep(1);
       }
     } catch (err) {
       console.warn('Could not restore wizard progress:', err);
+      setStep(1);
     }
-  }, []);
+  }, [tenderId, solicitationNumber]);
 
   // Save wizard progress whenever step or answers change
   useEffect(() => {
     try {
       if (step && Object.keys(answers).length > 0) {
-        sessionStorage.setItem('orbit_wizard_progress', JSON.stringify({ step, answers }));
+        sessionStorage.setItem('orbit_wizard_progress', JSON.stringify({
+          tenderId,
+          solicitationNumber,
+          proposalType,
+          step,
+          answers
+        }));
       }
     } catch (err) {
       console.warn('Could not save wizard progress:', err);
     }
-  }, [step, answers]);
+  }, [step, answers, tenderId, solicitationNumber, proposalType]);
 
   // Fetch wizard questions on mount
   useEffect(() => {
@@ -181,6 +204,9 @@ export default function PreGenerationWizard({ tenderId, solicitationNumber, prop
   };
 
   const handleStartGeneration = () => {
+    try {
+      sessionStorage.removeItem('orbit_wizard_progress');
+    } catch (e) {}
     const selectedProfile = selectedCompanyId === 'parent'
       ? {
           name: ownCompany?.name,
@@ -207,7 +233,7 @@ export default function PreGenerationWizard({ tenderId, solicitationNumber, prop
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/80 p-4 backdrop-blur-md" onClick={onCancel}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/80 p-4 backdrop-blur-md" onClick={handleClose}>
       <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white dark:bg-navy-800 shadow-2xl border border-slate-100 dark:border-navy-700" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-slate-100 dark:border-navy-700 p-5 bg-gradient-to-r from-brand-600 to-brand-700 text-white">
@@ -220,7 +246,7 @@ export default function PreGenerationWizard({ tenderId, solicitationNumber, prop
               <p className="text-xs text-brand-100 mt-0.5 truncate">Customize strategy & structure before AI generation</p>
             </div>
           </div>
-          <button onClick={onCancel} className="shrink-0 rounded-lg p-2 text-white/80 hover:text-white hover:bg-white/10 transition-colors">
+          <button onClick={handleClose} className="shrink-0 rounded-lg p-2 text-white/80 hover:text-white hover:bg-white/10 transition-colors">
             <X size={20} />
           </button>
         </div>
@@ -459,7 +485,7 @@ export default function PreGenerationWizard({ tenderId, solicitationNumber, prop
             </button>
           ) : (
             <button
-              onClick={onCancel}
+              onClick={handleClose}
               className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-navy-700 dark:bg-navy-800 dark:text-slate-200"
             >
               Cancel

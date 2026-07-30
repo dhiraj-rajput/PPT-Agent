@@ -1,11 +1,11 @@
 """
 app/routes/people.py
 -------------------------
-People / Contacts CRM endpoints: search, filtering, manual entry, bulk manual
-entry, and CSV / Excel import. Uses MySQL (people table) — see models.sql_models.Person.
+People / Contacts CRM endpoints: search, filtering, manual entry, and
+strict CSV import. Uses MySQL (people table) — see models.sql_models.Person.
 
-Mirrors the structure of app/routes/companies.py so it plugs into the same
-FastAPI app, auth, and DB-session patterns with no surprises.
+CSV import enforces exact column matching: the file must contain all 18 DB
+columns (no aliases, no extras, no missing columns).
 """
 
 from __future__ import annotations
@@ -240,140 +240,66 @@ async def add_person(
 
 
 # ---------------------------------------------------------------------------
-# Bulk manual entry / small JSON import
+# CSV file import (strict, CSV-only)
 # ---------------------------------------------------------------------------
 
-@router.post("/import")
-async def import_people(payload: dict, current_user: dict = Depends(get_current_user)):
-    """
-    Bulk import people from a JSON array of records (used by both the
-    "bulk manual entry" grid and small programmatic imports). For large
-    CSV/Excel files use /import/file instead.
-    """
-    items = payload.get("data") or []
-    if isinstance(items, str):
-        import json
-        items = json.loads(items)
-
-    imported_count = 0
-    skipped = 0
-    try:
-        async for db in get_db_session():
-            for item in items:
-                try:
-                    validated = PersonCreateBody(**item)
-                except Exception:
-                    skipped += 1
-                    continue
-
-                full_name = (validated.full_name or "").strip()
-                if not full_name:
-                    full_name = f"{(validated.first_name or '').strip()} {(validated.last_name or '').strip()}".strip()
-                if not full_name:
-                    skipped += 1
-                    continue
-
-                await db.execute(insert(SQL_Person).values(
-                    source=validated.source or "Manual Entry",
-                    status=validated.status or "Pending",
-                    organization_name=validated.organization_name or "",
-                    first_name=validated.first_name or "",
-                    last_name=validated.last_name or "",
-                    full_name=full_name,
-                    title=validated.title or "",
-                    function_name=validated.function_name or "",
-                    seniority=validated.seniority or "",
-                    email=validated.email or "",
-                    email_status=validated.email_status or "",
-                    email_confidence=validated.email_confidence,
-                    phone=validated.phone or "",
-                    linkedin_url=validated.linkedin_url or "",
-                    city=validated.city or "",
-                    state=validated.state or "",
-                    country=validated.country or "",
-                    job_start_date=_parse_date(validated.job_start_date),
-                    created_at=datetime.utcnow(),
-                    updated_at=datetime.utcnow(),
-                ))
-                imported_count += 1
-            await db.commit()
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Import failed: {e}")
-
-    return {"status": "success", "count": imported_count, "skipped": skipped}
-
-
-# ---------------------------------------------------------------------------
-# CSV / Excel file import (streamed, chunked)
-# ---------------------------------------------------------------------------
-
-_ROW_ALIASES = {
-    "full_name": ["full_name", "Full Name", "Full_Name", "name", "Name"],
-    "first_name": ["first_name", "First Name", "First_Name"],
-    "last_name": ["last_name", "Last Name", "Last_Name"],
-    "organization_name": ["organization_name", "Organization", "Company", "organization", "company_name", "Organization Name"],
-    "title": ["title", "Title", "Job Title"],
-    "function_name": ["function_name", "Function", "Department"],
-    "seniority": ["seniority", "Seniority"],
-    "email": ["email", "Email", "Email Address"],
-    "email_status": ["email_status", "Email Status"],
-    "email_confidence": ["email_confidence", "Email Confidence"],
-    "phone": ["phone", "Phone", "Phone Number"],
-    "linkedin_url": ["linkedin_url", "LinkedIn", "LinkedIn URL", "Linkedin Url"],
-    "city": ["city", "City"],
-    "state": ["state", "State"],
-    "country": ["country", "Country"],
-    "job_start_date": ["job_start_date", "Job Start Date", "Start Date"],
-    "source": ["source", "Source"],
-    "status": ["status", "Status"],
+# The 18 columns that must appear in the CSV header — exact names, no aliases.
+REQUIRED_COLUMNS: set[str] = {
+    "source", "status", "organization_name",
+    "first_name", "last_name", "full_name",
+    "title", "function_name", "seniority",
+    "email", "email_status", "email_confidence",
+    "phone", "linkedin_url",
+    "city", "state", "country",
+    "job_start_date",
 }
 
 
-def _get_field(row: Dict[str, Any], field: str) -> str:
-    for alias in _ROW_ALIASES.get(field, [field]):
-        if alias in row and row[alias] not in (None, ""):
-            return str(row[alias]).strip()
-    return ""
+def _get_field_strict(row: Dict[str, Any], field: str) -> str:
+    """Read a value directly by its exact DB column name."""
+    val = row.get(field)
+    return str(val).strip() if val not in (None, "") else ""
 
 
-def _row_to_person_dict(row: Dict[str, Any], default_source: str) -> Optional[dict]:
-    full_name = _get_field(row, "full_name")
-    first_name = _get_field(row, "first_name")
-    last_name = _get_field(row, "last_name")
+def _row_to_person_dict(row: Dict[str, Any]) -> Optional[dict]:
+    """Map a strict CSV row (validated headers) to a Person insert dict."""
+    full_name = _get_field_strict(row, "full_name")
+    first_name = _get_field_strict(row, "first_name")
+    last_name = _get_field_strict(row, "last_name")
     if not full_name:
         full_name = f"{first_name} {last_name}".strip()
     if not full_name:
-        return None
+        return None  # skip rows with no name at all
 
-    status_val = _get_field(row, "status") or "Pending"
+    status_val = _get_field_strict(row, "status") or "Pending"
     if status_val not in VALID_STATUSES:
         status_val = "Pending"
 
-    conf_raw = _get_field(row, "email_confidence")
+    conf_raw = _get_field_strict(row, "email_confidence")
     try:
         confidence = round(float(conf_raw), 2) if conf_raw else None
     except ValueError:
         confidence = None
 
     return {
-        "source": _get_field(row, "source") or default_source,
+        "source": _get_field_strict(row, "source") or "CSV Import",
         "status": status_val,
-        "organization_name": _get_field(row, "organization_name"),
+        "organization_name": _get_field_strict(row, "organization_name"),
         "first_name": first_name,
         "last_name": last_name,
         "full_name": full_name,
-        "title": _get_field(row, "title"),
-        "function_name": _get_field(row, "function_name"),
-        "seniority": _get_field(row, "seniority"),
-        "email": _get_field(row, "email"),
-        "email_status": _get_field(row, "email_status"),
+        "title": _get_field_strict(row, "title"),
+        "function_name": _get_field_strict(row, "function_name"),
+        "seniority": _get_field_strict(row, "seniority"),
+        "email": _get_field_strict(row, "email"),
+        "email_status": _get_field_strict(row, "email_status"),
         "email_confidence": confidence,
-        "phone": _get_field(row, "phone"),
-        "linkedin_url": _get_field(row, "linkedin_url"),
-        "city": _get_field(row, "city"),
-        "state": _get_field(row, "state"),
-        "country": _get_field(row, "country"),
-        "job_start_date": _parse_date(_get_field(row, "job_start_date")),
+        "phone": _get_field_strict(row, "phone"),
+        "linkedin_url": _get_field_strict(row, "linkedin_url"),
+        "city": _get_field_strict(row, "city"),
+        "state": _get_field_strict(row, "state"),
+        "country": _get_field_strict(row, "country"),
+        "job_start_date": _parse_date(_get_field_strict(row, "job_start_date")),
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow(),
     }
@@ -389,8 +315,39 @@ async def _flush_chunk(chunk: List[dict]) -> int:
     return 0
 
 
-async def _process_csv_stream(text_stream, default_source: str = "CSV Import") -> int:
+async def _process_csv_stream(text_stream) -> int:
+    """
+    Parse and insert a CSV stream. Raises HTTPException 400 if the header
+    does not exactly match REQUIRED_COLUMNS (no aliases, no extras allowed).
+    """
     reader = csv.DictReader(text_stream)
+
+    # Validate header on the first read
+    if reader.fieldnames is None:
+        # Force header read
+        try:
+            next(reader)
+        except StopIteration:
+            return 0
+        if reader.fieldnames is None:
+            raise HTTPException(status_code=400, detail="CSV file is empty or has no header row.")
+
+    csv_columns = set(f.strip() for f in reader.fieldnames if f)
+    missing = REQUIRED_COLUMNS - csv_columns
+    extra = csv_columns - REQUIRED_COLUMNS
+
+    if missing or extra:
+        parts = []
+        if missing:
+            parts.append(f"Missing columns: {', '.join(sorted(missing))}")
+        if extra:
+            parts.append(f"Extra columns not allowed: {', '.join(sorted(extra))}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"CSV column mismatch. {' | '.join(parts)}. "
+                   f"Required columns (exactly): {', '.join(sorted(REQUIRED_COLUMNS))}"
+        )
+
     imported_count = 0
     chunk: List[dict] = []
     CHUNK = 500
@@ -398,45 +355,7 @@ async def _process_csv_stream(text_stream, default_source: str = "CSV Import") -
     for row in reader:
         if not isinstance(row, dict):
             continue
-        doc = _row_to_person_dict(row, default_source)
-        if not doc:
-            continue
-        chunk.append(doc)
-        if len(chunk) >= CHUNK:
-            imported_count += await _flush_chunk(chunk)
-            chunk = []
-
-    if chunk:
-        imported_count += await _flush_chunk(chunk)
-
-    return imported_count
-
-
-async def _process_xlsx_bytes(file_bytes: bytes, default_source: str = "Excel Import") -> int:
-    """Read the first worksheet of an .xlsx/.xls workbook and bulk-insert rows."""
-    try:
-        from openpyxl import load_workbook
-    except ImportError:
-        raise HTTPException(status_code=500, detail="openpyxl is required to import Excel files.")
-
-    wb = load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
-    ws = wb.active
-
-    rows_iter = ws.iter_rows(values_only=True)
-    try:
-        header = [str(h).strip() if h is not None else "" for h in next(rows_iter)]
-    except StopIteration:
-        return 0
-
-    imported_count = 0
-    chunk: List[dict] = []
-    CHUNK = 500
-
-    for values in rows_iter:
-        if values is None or all(v is None for v in values):
-            continue
-        row = {header[i]: values[i] for i in range(min(len(header), len(values)))}
-        doc = _row_to_person_dict(row, default_source)
+        doc = _row_to_person_dict(row)
         if not doc:
             continue
         chunk.append(doc)
@@ -456,22 +375,18 @@ async def import_people_file(
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Stream-import people from a CSV, XLS, or XLSX file upload into MySQL.
-    Recognised header aliases are listed in _ROW_ALIASES above — anything
-    else is ignored, so exports from Apollo/LinkedIn/HubSpot etc. work
-    without pre-cleaning the file first.
+    Import people from a CSV file upload into MySQL.
+    The CSV must contain exactly the 18 DB columns listed in REQUIRED_COLUMNS —
+    no aliases, no extra columns, no missing columns. Returns a clear 400 error
+    describing any mismatch before touching the database.
     """
     filename = (file.filename or "").lower()
-    if not (filename.endswith(".csv") or filename.endswith(".xlsx") or filename.endswith(".xls")):
-        raise HTTPException(status_code=400, detail="Please upload a .csv, .xlsx, or .xls file.")
+    if not filename.endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Only .csv files are accepted. Please upload a .csv file.")
 
     try:
-        if filename.endswith(".csv"):
-            text_stream = codecs.iterdecode(file.file, "utf-8", errors="replace")
-            imported_count = await _process_csv_stream(text_stream)
-        else:
-            file_bytes = await file.read()
-            imported_count = await _process_xlsx_bytes(file_bytes)
+        text_stream = codecs.iterdecode(file.file, "utf-8", errors="replace")
+        imported_count = await _process_csv_stream(text_stream)
     except HTTPException:
         raise
     except Exception as e:
