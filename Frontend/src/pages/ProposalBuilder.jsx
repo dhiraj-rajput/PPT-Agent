@@ -305,9 +305,30 @@ export default function ProposalBuilder() {
     };
   }, [fetchData]);
 
+  const openWizard = (item) => {
+    setActiveWizardItem(item);
+    try {
+      if (item) {
+        sessionStorage.setItem('orbit_active_wizard_item', JSON.stringify(item));
+      } else {
+        sessionStorage.removeItem('orbit_active_wizard_item');
+        sessionStorage.removeItem('orbit_wizard_progress');
+      }
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem('orbit_active_wizard_item');
+      if (saved) {
+        setActiveWizardItem(JSON.parse(saved));
+      }
+    } catch (e) {}
+  }, []);
+
   // ----- Start building a pending draft manually -----
   const handleOpenWizard = (d, idKey) => {
-    setActiveWizardItem({
+    openWizard({
       ...d,
       idKey: idKey,
       solicitation: d.solicitation_number || d.notice_id,
@@ -1037,10 +1058,10 @@ export default function ProposalBuilder() {
           tenderId={activeWizardItem.noticeId || activeWizardItem.notice_id}
           solicitationNumber={activeWizardItem.solicitation || activeWizardItem.title}
           proposalType={activeWizardItem.mode || 'prime'}
-          onCancel={() => setActiveWizardItem(null)}
+          onCancel={() => openWizard(null)}
           onConfirmGenerate={(wizardData) => {
             const item = activeWizardItem;
-            setActiveWizardItem(null);
+            openWizard(null);
             startProposalGeneration(item, wizardData);
           }}
         />

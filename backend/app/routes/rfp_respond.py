@@ -160,18 +160,12 @@ async def upload_rfp(
     rfp_dests = []
     for file in rfp_files:
         if file.filename:
-            # Read with a hard cap — reject before fully loading into RAM (prevents OOM)
-            _chunks: list[bytes] = []
-            _total = 0
-            async for _chunk in file:
-                _total += len(_chunk)
-                if _total > MAX_FILE_SIZE:
-                    raise HTTPException(
-                        status_code=413,
-                        detail=f"File '{file.filename}' exceeds the 10MB size limit."
-                    )
-                _chunks.append(_chunk)
-            content = b"".join(_chunks)
+            content = await file.read()
+            if len(content) > MAX_FILE_SIZE:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"File '{file.filename}' exceeds the 10MB size limit."
+                )
             dest = task_dir / _safe_name(file.filename)
 
             def write_rfp_file(path_target, file_content):
@@ -190,15 +184,9 @@ async def upload_rfp(
     if template_file is not None and template_file.filename:
         if not template_file.filename.lower().endswith(".docx"):
             raise HTTPException(400, "Template must be a .docx file.")
-        # Read template with the same cap to prevent OOM
-        _chunks = []
-        _total = 0
-        async for _chunk in template_file:
-            _total += len(_chunk)
-            if _total > MAX_FILE_SIZE:
-                raise HTTPException(status_code=413, detail="Template file exceeds the 10MB size limit.")
-            _chunks.append(_chunk)
-        content = b"".join(_chunks)
+        content = await template_file.read()
+        if len(content) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=413, detail="Template file exceeds the 10MB size limit.")
         template_dest = task_dir / _safe_name(template_file.filename)
 
         def write_tmpl_file(path_target, file_content):

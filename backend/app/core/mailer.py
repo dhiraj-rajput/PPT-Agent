@@ -25,7 +25,7 @@ def _is_smtp_configured() -> bool:
 
 
 async def _send(to_email: str, subject: str, html: str) -> None:
-    """Send an email. Silently logs if SMTP is not configured."""
+    """Send an email. Tries configured port first, then falls back to alternate SMTP port if blocked/timed out."""
     if not _is_smtp_configured():
         logger.warning(
             f"[Mailer] SMTP not configured — skipping email to {to_email}: {subject}"
@@ -43,19 +43,39 @@ async def _send(to_email: str, subject: str, html: str) -> None:
         msg.attach(MIMEText(html, "html"))
 
         env_name = str(getattr(settings, "ENVIRONMENT", "dev")).lower()
-        timeout_secs = 3.0 if env_name in ("dev", "development", "local") else 10.0
+        timeout_secs = 5.0 if env_name in ("dev", "development", "local") else 10.0
 
-        await aiosmtplib.send(
-            msg,
-            hostname=settings.SMTP_HOST,
-            port=settings.SMTP_PORT,
-            username=settings.SMTP_USER,
-            password=settings.SMTP_PASS,
-            use_tls=(settings.SMTP_PORT == 465),
-            start_tls=(settings.SMTP_PORT == 587),
-            timeout=timeout_secs,
-        )
-        logger.info(f"[Mailer] Sent '{subject}' to {to_email}")
+        primary_port = settings.SMTP_PORT or 465
+        try:
+            await aiosmtplib.send(
+                msg,
+                hostname=settings.SMTP_HOST,
+                port=primary_port,
+                username=settings.SMTP_USER,
+                password=settings.SMTP_PASS,
+                use_tls=(primary_port == 465),
+                start_tls=(primary_port == 587),
+                timeout=timeout_secs,
+            )
+            logger.info(f"[Mailer] Sent '{subject}' to {to_email} (port {primary_port})")
+            return
+        except Exception as primary_err:
+            fallback_port = 587 if primary_port == 465 else 465
+            logger.warning(
+                f"[Mailer] Primary SMTP attempt failed ({settings.SMTP_HOST}:{primary_port}): {primary_err}. "
+                f"Attempting fallback to port {fallback_port}..."
+            )
+            await aiosmtplib.send(
+                msg,
+                hostname=settings.SMTP_HOST,
+                port=fallback_port,
+                username=settings.SMTP_USER,
+                password=settings.SMTP_PASS,
+                use_tls=(fallback_port == 465),
+                start_tls=(fallback_port == 587),
+                timeout=timeout_secs,
+            )
+            logger.info(f"[Mailer] Sent '{subject}' to {to_email} via fallback port {fallback_port}")
     except Exception as exc:
         logger.error(f"[Mailer] Failed to send email to {to_email}: {exc}")
 

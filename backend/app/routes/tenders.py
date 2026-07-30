@@ -684,6 +684,21 @@ async def _upsert_tenders_async(opportunities: list, sync_params: dict, is_mock:
 
                 # Refresh statuses
                 await _refresh_expired_statuses_async()
+
+                # Trigger background document download worker for all synced opportunities (PDF, XLSX, CSV, Images, Word)
+                def _download_all_tender_docs():
+                    try:
+                        from app.sam_gov.opportunities import SAMOpportunitiesClient
+                        opp_client = SAMOpportunitiesClient(api_key=settings.SAM_GOV_API_KEY)
+                        for opp in opportunities:
+                            try:
+                                opp_client.structure_rfp_profile(opp)
+                            except Exception as err:
+                                logger.warning(f"[Tenders] Document download worker notice error: {err}")
+                    except Exception as e:
+                        logger.error(f"[Tenders] Document download worker initialization failed: {e}")
+
+                asyncio.create_task(asyncio.to_thread(_download_all_tender_docs))
         except Exception as e:
             logger.error(f"Failed to upsert opportunities: {e}")
             raise HTTPException(500, f"Upsert failed: {e}")
@@ -692,7 +707,7 @@ async def _upsert_tenders_async(opportunities: list, sync_params: dict, is_mock:
         "status": "ok",
         "fetched": len(opportunities),
         "upserted": upserted,
-        "message": f"Successfully cached {upserted} tenders from SAM.gov.",
+        "message": f"Successfully cached {upserted} tenders and initiated background document downloads.",
     }
 
 
@@ -838,6 +853,8 @@ async def get_tender_detail(
                         status_code=404,
                         detail=f"Tender '{notice_id}' not found in cache. Sync from SAM.gov first.",
                     )
+                sol_num = tender.solicitation_number or tender.notice_id
+                asyncio.create_task(asyncio.to_thread(ensure_rfp_downloaded, notice_id, sol_num))
                 return _format_tender(tender)
         except HTTPException:
             raise

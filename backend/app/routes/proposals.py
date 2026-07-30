@@ -77,7 +77,12 @@ class ConnectionManager:
         self.active_connections: list[tuple[WebSocket, str]] = []
 
     async def connect(self, websocket: WebSocket, user_id: str):
-        await websocket.accept()
+        try:
+            from starlette.websockets import WebSocketState
+            if getattr(websocket, "client_state", None) == WebSocketState.UNCONNECTED:
+                await websocket.accept()
+        except Exception:
+            pass
         self.active_connections.append((websocket, user_id))
 
     def disconnect(self, websocket: WebSocket):
@@ -398,9 +403,15 @@ async def get_task_status(
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = None):
+    from starlette.websockets import WebSocketState
+    
     if not token:
-        await websocket.accept()
-        await websocket.close(code=1008, reason="Token missing")
+        try:
+            if getattr(websocket, "client_state", None) == WebSocketState.UNCONNECTED:
+                await websocket.accept()
+            await websocket.close(code=1008, reason="Token missing")
+        except Exception:
+            pass
         return
     
     user_id = None
@@ -416,8 +427,12 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = None):
             pass
 
     if not user_id:
-        await websocket.accept()
-        await websocket.close(code=1008, reason="Unauthorized")
+        try:
+            if getattr(websocket, "client_state", None) == WebSocketState.UNCONNECTED:
+                await websocket.accept()
+            await websocket.close(code=1008, reason="Unauthorized")
+        except Exception:
+            pass
         return
 
     await manager.connect(websocket, user_id)

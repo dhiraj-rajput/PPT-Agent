@@ -28,6 +28,31 @@ export default function PreGenerationWizard({ tenderId, solicitationNumber, prop
   const [sections, setSections] = useState([]);
   const [generatingOutline, setGeneratingOutline] = useState(false);
 
+  // Restore saved wizard progress on mount
+  useEffect(() => {
+    try {
+      const savedProgress = sessionStorage.getItem('orbit_wizard_progress');
+      if (savedProgress) {
+        const parsed = JSON.parse(savedProgress);
+        if (parsed.step) setStep(parsed.step);
+        if (parsed.answers) setAnswers(parsed.answers);
+      }
+    } catch (err) {
+      console.warn('Could not restore wizard progress:', err);
+    }
+  }, []);
+
+  // Save wizard progress whenever step or answers change
+  useEffect(() => {
+    try {
+      if (step && Object.keys(answers).length > 0) {
+        sessionStorage.setItem('orbit_wizard_progress', JSON.stringify({ step, answers }));
+      }
+    } catch (err) {
+      console.warn('Could not save wizard progress:', err);
+    }
+  }, [step, answers]);
+
   // Fetch wizard questions on mount
   useEffect(() => {
     setLoading(true);
@@ -38,15 +63,18 @@ export default function PreGenerationWizard({ tenderId, solicitationNumber, prop
     api.getPreviewQuestions(params)
       .then((data) => {
         setQuestions(data.questions || []);
-        const initialAnswers = {};
-        (data.questions || []).forEach((q) => {
-          if (q.recommended_option_id) {
-            initialAnswers[q.id] = [q.recommended_option_id];
-          } else if (q.options?.length > 0) {
-            initialAnswers[q.id] = [q.options[0].id];
-          }
-        });
-        setAnswers(initialAnswers);
+        const savedProgress = sessionStorage.getItem('orbit_wizard_progress');
+        if (!savedProgress) {
+          const initialAnswers = {};
+          (data.questions || []).forEach((q) => {
+            if (q.recommended_option_id) {
+              initialAnswers[q.id] = [q.recommended_option_id];
+            } else if (q.options?.length > 0) {
+              initialAnswers[q.id] = [q.options[0].id];
+            }
+          });
+          setAnswers(initialAnswers);
+        }
         setLoading(false);
       })
       .catch((err) => {

@@ -373,6 +373,7 @@ def update_task_status(
             with get_sync_db_session() as db:
                 result_dict: dict[str, Any] = {
                     "task_id": task_id,
+                    "task_type": task_type,
                     "status": status,
                     "progress": progress,
                     "message": message,
@@ -382,9 +383,9 @@ def update_task_status(
                     result_dict["result"] = extra
                 db.execute(
                     text(
-                        "INSERT INTO task_statuses (task_id, status, progress, message, last_updated, result, created_at) "
-                        "VALUES (:task_id, :status, :progress, :message, :last_updated, :result, :created_at) "
-                        "ON DUPLICATE KEY UPDATE status=VALUES(status), progress=VALUES(progress), "
+                        "INSERT INTO task_statuses (task_id, task_type, status, progress, message, last_updated, result, created_at) "
+                        "VALUES (:task_id, :task_type, :status, :progress, :message, :last_updated, :result, :created_at) "
+                        "ON DUPLICATE KEY UPDATE task_type=VALUES(task_type), status=VALUES(status), progress=VALUES(progress), "
                         "message=VALUES(message), last_updated=VALUES(last_updated), result=VALUES(result)"
                     ),
                     {
@@ -407,7 +408,7 @@ def get_task_status_db(task_id: str) -> Optional[dict]:
             from sqlalchemy import text
             with get_sync_db_session() as db:
                 row = db.execute(
-                    text("SELECT task_id, status, progress, message, result FROM task_statuses WHERE task_id = :tid"),
+                    text("SELECT task_id, task_type, status, progress, message, result FROM task_statuses WHERE task_id = :tid"),
                     {"tid": task_id},
                 ).mappings().first()
                 if row:
@@ -427,7 +428,7 @@ def get_all_task_statuses_db() -> list[dict]:
             from sqlalchemy import text
             with get_sync_db_session() as db:
                 rows = db.execute(
-                    text("SELECT task_id, status, progress, message, result, created_at FROM task_statuses ORDER BY created_at DESC")
+                    text("SELECT task_id, task_type, status, progress, message, result, created_at FROM task_statuses ORDER BY created_at DESC")
                 ).mappings().all()
                 return [dict(r) for r in rows]
         except Exception as e:
@@ -460,13 +461,14 @@ async def update_task_status_async(
             async for db in get_db_session():
                 await db.execute(
                     text(
-                        "INSERT INTO task_statuses (task_id, status, progress, message, last_updated, result, created_at) "
-                        "VALUES (:task_id, :status, :progress, :message, :last_updated, :result, :created_at) "
-                        "ON DUPLICATE KEY UPDATE status=VALUES(status), progress=VALUES(progress), "
+                        "INSERT INTO task_statuses (task_id, task_type, status, progress, message, last_updated, result, created_at) "
+                        "VALUES (:task_id, :task_type, :status, :progress, :message, :last_updated, :result, :created_at) "
+                        "ON DUPLICATE KEY UPDATE task_type=VALUES(task_type), status=VALUES(status), progress=VALUES(progress), "
                         "message=VALUES(message), last_updated=VALUES(last_updated), result=VALUES(result)"
                     ),
                     {
                         "task_id": task_id,
+                        "task_type": task_type,
                         "status": status,
                         "progress": progress,
                         "message": message,

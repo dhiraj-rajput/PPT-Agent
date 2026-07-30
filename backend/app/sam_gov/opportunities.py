@@ -487,17 +487,17 @@ class SAMOpportunitiesClient:
             except Exception as e:
                 logger.warning(f"Failed to query related notices for {sol_num}: {e}")
 
-        # Prioritize key documents (e.g. PWS, solicitation, award contract) and cap at 3 files max
+        # Prioritize key documents (e.g. PWS, solicitation, spreadsheets, attachments) and cap at 20 files max
         def prioritize_and_cap_links(links: List[str]) -> List[str]:
             primary = []
             secondary = []
             for link in links:
                 filename = link.split("/")[-1].lower()
-                if any(kw in filename for kw in ["solicitation", "rfp", "pws", "statement", "performance", "award", "contract"]):
+                if any(kw in filename for kw in ["solicitation", "rfp", "pws", "statement", "performance", "award", "contract", "attachment", "appendix", "schedule", "excel", "xlsx", "csv", "image", "spec"]):
                     primary.append(link)
                 else:
                     secondary.append(link)
-            return (primary + secondary)[:3]
+            return (primary + secondary)[:20]
 
         rfp_links = prioritize_and_cap_links(rfp_links)
         proposal_links = prioritize_and_cap_links(proposal_links)

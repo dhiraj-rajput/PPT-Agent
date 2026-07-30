@@ -338,16 +338,28 @@ class DocumentParser:
                 ext = ".png"
             elif "image/jpeg" in ct or content_bytes[:2] == b"\xff\xd8":
                 ext = ".jpg"
-            elif "text/html" in ct or content_bytes[:15].lower().startswith((b"<html", b"<!doctype")):
-                ext = ".html"
+            elif "image/gif" in ct or content_bytes[:6] in (b"GIF87a", b"GIF89a"):
+                ext = ".gif"
+            elif "image/webp" in ct or content_bytes[8:12] == b"WEBP":
+                ext = ".webp"
+            elif "spreadsheet" in ct or "excel" in ct or "vnd.openxmlformats-officedocument.spreadsheetml" in ct:
+                ext = ".xlsx"
+            elif "ms-excel" in ct:
+                ext = ".xls"
+            elif "text/csv" in ct or "comma-separated" in ct:
+                ext = ".csv"
+            elif "text/plain" in ct:
+                ext = ".txt"
             elif "vnd.openxmlformats-officedocument.wordprocessingml" in ct:
                 ext = ".docx"
-            elif "application/msword" in ct:
+            elif "application/msword" in ct or "word" in ct:
                 ext = ".doc"
-            elif "application/zip" in ct:
+            elif "application/zip" in ct or content_bytes[:4] == b"PK\x03\x04":
                 ext = ".zip"
-            else:
+            elif "text/html" in ct or content_bytes[:15].lower().startswith((b"<html", b"<!doctype")):
                 ext = ".html"
+            else:
+                ext = ".pdf"
 
             if base in ("download", "document", ""):
                 url_hash = hashlib.md5(url.encode()).hexdigest()[:8]

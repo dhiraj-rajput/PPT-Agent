@@ -942,10 +942,24 @@ async def get_research_status(current_user: dict = Depends(get_current_user)):
     if _mysql_available:
         try:
             async for db in get_db_session():
-                stmt = select(SQL_TaskStatus).where(SQL_TaskStatus.task_type == "company_research")
+                stmt = select(SQL_TaskStatus).where(
+                    or_(
+                        SQL_TaskStatus.task_type == "company_research",
+                        SQL_TaskStatus.task_type == "",
+                        SQL_TaskStatus.task_type.is_(None)
+                    )
+                )
                 res = await db.execute(stmt)
                 for t in res.scalars().all():
-                    extra = t.extra_data or {}
+                    extra = t.extra_data if isinstance(t.extra_data, dict) else {}
+                    if not extra and t.result:
+                        if isinstance(t.result, dict):
+                            extra = t.result
+                        elif isinstance(t.result, str):
+                            try:
+                                extra = json.loads(t.result)
+                            except Exception:
+                                pass
                     result[t.task_id] = {
                         "progress": t.progress,
                         "status": t.status,
@@ -954,6 +968,7 @@ async def get_research_status(current_user: dict = Depends(get_current_user)):
                         "resolved_slug": extra.get("resolved_slug")
                     }
         except Exception as e:
+            logger.error(f"Failed to fetch research status: {e}")
             raise HTTPException(status_code=500, detail=str(e))
     return result
 
