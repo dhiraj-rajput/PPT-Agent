@@ -42,6 +42,9 @@ async def _send(to_email: str, subject: str, html: str) -> None:
         msg["To"] = to_email
         msg.attach(MIMEText(html, "html"))
 
+        env_name = str(getattr(settings, "ENVIRONMENT", "dev")).lower()
+        timeout_secs = 3.0 if env_name in ("dev", "development", "local") else 10.0
+
         await aiosmtplib.send(
             msg,
             hostname=settings.SMTP_HOST,
@@ -50,7 +53,7 @@ async def _send(to_email: str, subject: str, html: str) -> None:
             password=settings.SMTP_PASS,
             use_tls=(settings.SMTP_PORT == 465),
             start_tls=(settings.SMTP_PORT == 587),
-            timeout=10.0,
+            timeout=timeout_secs,
         )
         logger.info(f"[Mailer] Sent '{subject}' to {to_email}")
     except Exception as exc:
@@ -114,7 +117,10 @@ async def send_otp_email(to_email: str, otp: str, purpose: str) -> None:
       </p>
     </div>
     """
-    await _send(to_email, copy["subject"], html)
+    try:
+        await _send(to_email, copy["subject"], html)
+    except Exception as exc:
+        logger.warning("🔑 [FALLBACK OTP] Delivery to %s failed: %s. Use OTP code: %s", to_email, exc, otp)
 
 
 # ---------------------------------------------------------------------------

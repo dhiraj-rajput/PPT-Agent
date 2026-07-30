@@ -170,7 +170,8 @@ async def _send_otp_for_user(user_id: str, email: str, purpose: str) -> None:
                 ))
                 await db.commit()
             from app.core.mailer import _is_smtp_configured
-            if settings.DEBUG_OTP or not _is_smtp_configured():
+            env_name = str(getattr(settings, "ENVIRONMENT", "dev")).lower()
+            if env_name in ("dev", "development", "local") or settings.DEBUG_OTP or not _is_smtp_configured():
                 import logging as _logging
                 _logging.getLogger("auth").info(
                     "🔑 [DEV OTP] Generated OTP for %s (%s): %s", email, purpose, otp
@@ -193,7 +194,8 @@ async def _send_otp_for_user(user_id: str, email: str, purpose: str) -> None:
         "createdAt": datetime.now(tz=timezone.utc),
     })
     from app.core.mailer import _is_smtp_configured
-    if settings.DEBUG_OTP or not _is_smtp_configured():
+    env_name = str(getattr(settings, "ENVIRONMENT", "dev")).lower()
+    if env_name in ("dev", "development", "local") or settings.DEBUG_OTP or not _is_smtp_configured():
         import logging as _logging
         _logging.getLogger("auth").info(
             "🔑 [DEV OTP] Generated OTP for %s (%s): %s", email, purpose, otp
