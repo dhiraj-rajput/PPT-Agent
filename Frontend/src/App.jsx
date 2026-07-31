@@ -73,13 +73,12 @@ const DocumentViewer      = lazy(() => import('./pages/DocumentViewer.jsx'));
 
 // Core app pages
 const Dashboard           = lazy(() => import('./pages/Dashboard.jsx'));
-const Companies           = lazy(() => import('./pages/Companies.jsx'));
 const CompanyDetail       = lazy(() => import('./pages/CompanyDetail.jsx'));
-const People              = lazy(() => import('./pages/People.jsx'));
 const PersonDetail        = lazy(() => import('./pages/PersonDetail.jsx'));
 const Tenders             = lazy(() => import('./pages/Tenders.jsx'));
 const TenderDetail        = lazy(() => import('./pages/TenderDetail.jsx'));
 const NaicsMuster         = lazy(() => import('./pages/NaicsMuster.jsx'));
+const ContactsDB          = lazy(() => import('./pages/ContactsDB.jsx'));
 
 // AI / Research pages (heaviest — benefit most from splitting)
 const AIResearch          = lazy(() => import('./pages/AIResearch.jsx'));
@@ -138,10 +137,9 @@ export default function App() {
             <Route path="/force-change-password" element={<ForceChangePassword />} />
             <Route element={<DashboardLayout />}>
               <Route path="/" element={<Dashboard />} />
-              <Route path="/companies" element={<Companies />} />
               <Route path="/companies/:id" element={<CompanyDetail />} />
-              <Route path="/people" element={<People />} />
               <Route path="/people/:id" element={<PersonDetail />} />
+              <Route path="/database" element={<ContactsDB />} />
               <Route path="/tenders" element={<Tenders />} />
               <Route path="/tenders/:id" element={<TenderDetail />} />
               <Route path="/naics" element={<NaicsMuster />} />

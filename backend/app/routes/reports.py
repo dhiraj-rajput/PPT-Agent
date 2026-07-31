@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/reports", tags=["reports"])
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+OUTPUT_DIR_RFP = PROJECT_ROOT / "output" / "rfp_respond"
 LAST_SYNC_TIME = 0.0
 SYNC_COOLDOWN = 60.0
 
@@ -49,7 +50,8 @@ def sync_reports_with_db():
 
     pdf_dir = PROJECT_ROOT / "output" / "pdf"
     proposals_dir = PROJECT_ROOT / "output" / "proposals"
-    
+    rfp_respond_dir = PROJECT_ROOT / "output" / "rfp_respond"
+
     if not pdf_dir.exists():
         return
         
@@ -194,6 +196,47 @@ def sync_reports_with_db():
                     )
 
         db.commit()
+
+        # Also sync RFP Auto-Respond outputs (DOCX/PDF)
+        if rfp_respond_dir.exists():
+            for rfp_path in list(rfp_respond_dir.glob("rfp_respond_*")):
+                filename = rfp_path.name
+                if filename in synced_filenames:
+                    continue
+                synced_filenames.append(filename)
+                mtime = rfp_path.stat().st_mtime
+                file_size_bytes = rfp_path.stat().st_size
+                file_ext = rfp_path.suffix.upper().lstrip('.')
+                file_size = f"{round(file_size_bytes / 1024)} KB"
+                extra = {
+                    "company_name": "RFP Auto-Respond",
+                    "companyName": "RFP Auto-Respond",
+                    "proposal_type": "RFP Auto-Response",
+                    "proposalType": "RFP Auto-Response",
+                    "solicitation_number": "",
+                    "title": filename,
+                    "subtitle": "AI-generated RFP proposal",
+                    "date": datetime.fromtimestamp(mtime).strftime("%b %d, %Y"),
+                    "size": file_size,
+                    "ref": "",
+                    "type": file_ext,
+                    "source": "RFP Auto-Respond",
+                    "mtime": mtime,
+                    "rfp_respond": True,
+                }
+                stmt_r = select(SQL_Report).where(SQL_Report.filename == filename)
+                existing_r = db.execute(stmt_r).scalar_one_or_none()
+                if not existing_r:
+                    db.execute(insert(SQL_Report).values(
+                        filename=filename,
+                        file_path=str(rfp_path),
+                        file_size=file_size_bytes,
+                        report_type="RFP Auto-Response",
+                        status="Generated",
+                        extra_data=extra,
+                        created_at=datetime.fromtimestamp(mtime),
+                    ))
+            db.commit()
     except Exception as e:
         logger.warning(f"Error in sync_reports_with_db: {e}")
 
@@ -402,10 +445,22 @@ async def view_report(filename: str, current_user: dict = Depends(get_current_us
         except Exception:
             pass
 
+    # Try pdf dir first, then rfp_respond dir
     pdf_path = Path("output/pdf") / safe_filename
     if not pdf_path.exists():
-        raise HTTPException(status_code=404, detail="Report file not found")
-    return FileResponse(pdf_path, media_type="application/pdf")
+        rfp_path = OUTPUT_DIR_RFP / safe_filename
+        if rfp_path.exists():
+            pdf_path = rfp_path
+        else:
+            raise HTTPException(status_code=404, detail="Report file not found")
+
+    suffix = pdf_path.suffix.lower()
+    media_type = (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        if suffix == ".docx"
+        else "application/pdf" if suffix == ".pdf" else "application/octet-stream"
+    )
+    return FileResponse(pdf_path, media_type=media_type)
 
 
 @router.get("/download/{filename}")
@@ -441,6 +496,16 @@ async def download_report(filename: str, current_user: dict = Depends(get_curren
 
     pdf_path = Path("output/pdf") / safe_filename
     if not pdf_path.exists():
-        raise HTTPException(status_code=404, detail="Report file not found")
+        rfp_path = OUTPUT_DIR_RFP / safe_filename
+        if rfp_path.exists():
+            pdf_path = rfp_path
+        else:
+            raise HTTPException(status_code=404, detail="Report file not found")
 
-    return FileResponse(pdf_path, media_type="application/pdf", filename=safe_filename)
+    suffix = pdf_path.suffix.lower()
+    media_type = (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        if suffix == ".docx"
+        else "application/pdf" if suffix == ".pdf" else "application/octet-stream"
+    )
+    return FileResponse(pdf_path, media_type=media_type, filename=safe_filename)

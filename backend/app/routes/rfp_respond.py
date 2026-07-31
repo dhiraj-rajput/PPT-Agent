@@ -62,6 +62,61 @@ def _get_task_user_id(task: dict) -> str:
     return str(res_val.get("userId") or "")
 
 
+def _register_rfp_report(task_id: str, filename: str) -> None:
+    """Insert or update a Report row in MySQL for a completed RFP Auto-Respond document."""
+    try:
+        from utils.db_client import get_sync_db_session
+        from models.sql_models import Report as SQL_Report
+        from sqlalchemy import select, insert, update as sql_update
+        from datetime import datetime
+
+        file_path = OUTPUT_DIR / filename
+        if not file_path.exists():
+            return
+
+        file_size = file_path.stat().st_size
+        mtime = file_path.stat().st_mtime
+        file_ext = file_path.suffix.upper().lstrip('.')
+
+        extra = {
+            "company_name": "RFP Auto-Respond",
+            "companyName": "RFP Auto-Respond",
+            "proposal_type": "RFP Auto-Response",
+            "proposalType": "RFP Auto-Response",
+            "solicitation_number": task_id,
+            "title": filename,
+            "subtitle": "AI-generated RFP proposal",
+            "date": datetime.fromtimestamp(mtime).strftime("%b %d, %Y"),
+            "size": f"{round(file_size / 1024)} KB",
+            "ref": task_id,
+            "type": file_ext,
+            "source": "RFP Auto-Respond",
+            "mtime": mtime,
+            "rfp_respond": True,
+        }
+
+        with get_sync_db_session() as db:
+            stmt = select(SQL_Report).where(SQL_Report.filename == filename)
+            existing = db.execute(stmt).scalar_one_or_none()
+            if not existing:
+                db.execute(insert(SQL_Report).values(
+                    filename=filename,
+                    file_path=str(file_path),
+                    file_size=file_size,
+                    report_type="RFP Auto-Response",
+                    status="Generated",
+                    extra_data=extra,
+                    created_at=datetime.fromtimestamp(mtime),
+                ))
+            else:
+                db.execute(sql_update(SQL_Report).where(SQL_Report.id == existing.id).values(
+                    extra_data=extra, report_type="RFP Auto-Response", status="Generated"
+                ))
+            db.commit()
+    except Exception as exc:
+        logger.warning(f"[RFP] Failed to register report in DB: {exc}")
+
+
 def _run_pipeline_sync(
     task_id: str,
     rfp_paths: str,
@@ -132,6 +187,7 @@ def _run_pipeline_sync(
 
             filename = Path(final_path).name
             update(100, "Proposal document generated successfully!", "completed", filename)
+            _register_rfp_report(task_id, filename)
     except Exception as exc:
         update(0, f"Pipeline failed: {exc}", "failed")
 

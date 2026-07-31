@@ -7,6 +7,7 @@ const DOCUMENT_TYPES = [
   { value: 'all', label: 'All Types' },
   { value: 'Prime RFP Response', label: 'Prime Contract' },
   { value: 'Subcontract Response', label: 'Subcontract' },
+  { value: 'RFP Auto-Response', label: 'RFP Auto-Response' },
   { value: 'other', label: 'Other' },
 ];
 

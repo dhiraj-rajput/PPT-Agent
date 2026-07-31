@@ -643,6 +643,9 @@ export const api = {
   async addNewsletterSubscribersFromCompanies(id, companyIds = [], manualEmail = '') {
     return post(`/api/newsletters/${id}/subscribers/companies`, { companyIds, manualEmail });
   },
+  async addNewsletterSubscribersFromPeople(id, peopleIds = [], manualEmail = '') {
+    return post(`/api/newsletters/${id}/subscribers/people`, { peopleIds, manualEmail });
+  },
   async createNewsletterEdition(id, data) {
     return post(`/api/newsletters/${id}/editions`, data);
   },
@@ -787,6 +790,42 @@ export const api = {
       cleanBase = cleanBase.slice(0, -4);
     }
     return cleanBase;
+  },
+
+  // ── AI Email Beautifier ─────────────────────────────────────────────────
+  beautifyEmail({ subject = '', body, style = 'professional' }) {
+    return _request('POST', '/api/campaigns/beautify-email', { subject, body, style });
+  },
+
+  async uploadEmailImage(file) {
+    const token = localStorage.getItem(TOKEN_KEY);
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(_buildUrl('/api/campaigns/upload-image'), {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    });
+    if (!res.ok) throw new Error(`Image upload failed (${res.status})`);
+    return res.json();
+  },
+
+  // ── People Leads ────────────────────────────────────────────────────────
+  importPeopleToLeads({ campaignId, peopleIds, segmentTag = '' }) {
+    return _request('POST', '/api/leads/import/people', { campaignId, peopleIds, segmentTag });
+  },
+
+  getPeopleFilters() {
+    return _request('GET', '/api/leads/people-filters');
+  },
+
+  // ── Database Analytics ──────────────────────────────────────────────────
+  getCompaniesSummary() {
+    return _request('GET', '/api/analytics/companies-summary');
+  },
+
+  getPeopleSummary() {
+    return _request('GET', '/api/analytics/people-summary');
   },
 };
 

@@ -34,6 +34,7 @@ from models.sql_models import (
     NewsletterSend as SQL_NewsletterSend,
     TrackingEvent as SQL_TrackingEvent,
     Company as SQL_Company,
+    Person as SQL_Person,
 )
 from sqlalchemy import select, insert, update, delete, func, or_, and_
 
@@ -354,6 +355,90 @@ async def add_company_subscribers_to_newsletter(
                     stats = {str(k): v for k, v in dict(raw_stats).items()} if isinstance(raw_stats, dict) else {}
                     stats["totalSubscribers"] = int(str(stats.get("totalSubscribers", 0) or 0)) + len(to_insert)
 
+
+                    await db.execute(
+                        update(SQL_Newsletter)
+                        .where(SQL_Newsletter.id == n_id)
+                        .values(stats=stats, updated_at=datetime.utcnow())
+                    )
+                    await db.commit()
+                    return {"added": len(to_insert)}
+                return {"added": 0}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, f"Database error: {e}")
+    raise HTTPException(500, "Database is unavailable.")
+
+
+class AddPeopleSubscribersBody(BaseModel):
+    peopleIds: List[str] = []
+    manualEmail: Optional[str] = None
+
+
+@router.post("/{id}/subscribers/people", status_code=201)
+async def add_people_subscribers_to_newsletter(
+    id: str,
+    body: AddPeopleSubscribersBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Add subscribers from people records or manual email entry to a newsletter."""
+    try:
+        n_id = int(id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid newsletter ID")
+
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                newsletter = (await db.execute(select(SQL_Newsletter).where(SQL_Newsletter.id == n_id))).scalar_one_or_none()
+                if not newsletter:
+                    raise HTTPException(status_code=404, detail="Newsletter not found")
+
+                emails_to_add = set()
+                if body.manualEmail and "@" in body.manualEmail:
+                    emails_to_add.add(body.manualEmail.lower().strip())
+
+                if body.peopleIds:
+                    p_ids = []
+                    for pid in body.peopleIds:
+                        try:
+                            p_ids.append(int(pid))
+                        except ValueError:
+                            pass
+                    if p_ids:
+                        stmt_people = select(SQL_Person.email).where(SQL_Person.id.in_(p_ids))
+                        res_people = await db.execute(stmt_people)
+                        for em in res_people.scalars().all():
+                            if em and "@" in em:
+                                emails_to_add.add(em.lower().strip())
+
+                if not emails_to_add:
+                    return {"added": 0}
+
+                stmt_existing = select(SQL_NewsletterSubscriber.email).where(
+                    SQL_NewsletterSubscriber.newsletter_id == n_id,
+                    SQL_NewsletterSubscriber.email.in_(list(emails_to_add))
+                )
+                existing_emails = set((await db.execute(stmt_existing)).scalars().all())
+
+                to_insert = []
+                for em in emails_to_add:
+                    if em not in existing_emails:
+                        to_insert.append({
+                            "newsletter_id": n_id,
+                            "email": em,
+                            "name": "",
+                            "status": "subscribed",
+                            "subscribed_at": datetime.utcnow()
+                        })
+
+                if to_insert:
+                    await db.execute(insert(SQL_NewsletterSubscriber).values(to_insert))
+                    
+                    raw_stats = getattr(newsletter, "stats", {})
+                    stats = {str(k): v for k, v in dict(raw_stats).items()} if isinstance(raw_stats, dict) else {}
+                    stats["totalSubscribers"] = int(str(stats.get("totalSubscribers", 0) or 0)) + len(to_insert)
 
                     await db.execute(
                         update(SQL_Newsletter)

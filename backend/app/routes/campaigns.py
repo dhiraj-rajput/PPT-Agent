@@ -639,3 +639,127 @@ async def launch_campaign(id: str, current_user: dict = Depends(get_current_user
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Database error: {e}")
     raise HTTPException(status_code=500, detail="MySQL database is unavailable.")
+
+
+# ---------------------------------------------------------------------------
+# AI Email Beautifier
+# ---------------------------------------------------------------------------
+
+class BeautifyRequest(BaseModel):
+    subject: str = ""
+    body: str
+    style: str = "professional"  # professional | friendly | bold
+
+
+@router.post("/beautify-email")
+async def beautify_email(
+    payload: BeautifyRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Use LLM to convert a plain-text email draft into a beautiful responsive HTML email."""
+    from pipeline.ai.client import get_ai_client
+
+    style_map = {
+        "professional": "Clean, corporate, navy and white tones, formal language",
+        "friendly": "Warm, approachable, light blues and greens, conversational tone",
+        "bold": "High-impact, dark background with bright accents, confident language",
+    }
+    style_desc = style_map.get(payload.style, style_map["professional"])
+
+    prompt = f"""You are an expert HTML email designer. Convert this plain-text email draft into a beautiful, responsive HTML email.
+
+Return ONLY valid HTML — no markdown, no code fences, no explanation.
+
+Design rules:
+- Use ONLY inline CSS (required for email client compatibility)
+- Max-width: 600px, centered with margin: 0 auto
+- Clean card layout: white body (#ffffff), light grey background (#f4f4f4)
+- Colored header banner with the subject as headline (large, bold, white text)
+- Body text: Arial/Helvetica, 15px, #333333, line-height 1.6
+- Section padding: 30px 40px
+- Professional footer with unsubscribe placeholder text
+- Style theme: {style_desc}
+- Subject/Headline: "{payload.subject}"
+
+Plain text draft:
+{payload.body}
+"""
+
+    try:
+        client = get_ai_client()
+        html = await asyncio.to_thread(client.chat, [{"role": "user", "content": prompt}])
+        # Strip any accidental markdown fences
+        html = html.strip()
+        if html.startswith("```"):
+            html = html.split("\n", 1)[1] if "\n" in html else html[3:]
+        if html.endswith("```"):
+            html = html.rsplit("\n", 1)[0] if "\n" in html else html[:-3]
+        html = html.strip()
+        return {"html": html}
+    except Exception as e:
+        # Fallback: return a basic styled template
+        fallback_html = f"""<!DOCTYPE html>
+<html><body style='margin:0;padding:0;background:#f4f4f4;font-family:Arial,sans-serif;'>
+<table width='100%' cellpadding='0' cellspacing='0'><tr><td align='center' style='padding:30px 0;'>
+<table width='600' cellpadding='0' cellspacing='0' style='background:#ffffff;border-radius:8px;overflow:hidden;'>
+<tr><td style='background:#1a237e;padding:30px 40px;'>
+  <h1 style='color:#ffffff;margin:0;font-size:24px;'>{payload.subject or 'Important Message'}</h1>
+</td></tr>
+<tr><td style='padding:30px 40px;color:#333333;font-size:15px;line-height:1.6;'>
+  {payload.body.replace(chr(10), '<br>')}
+</td></tr>
+<tr><td style='background:#f8f8f8;padding:20px 40px;color:#999999;font-size:12px;'>
+  <p>You received this email because you opted in. <a href='#' style='color:#1a237e;'>Unsubscribe</a></p>
+</td></tr>
+</table></td></tr></table>
+</body></html>"""
+        return {"html": fallback_html}
+
+
+# ---------------------------------------------------------------------------
+# Email Image Upload / Serve
+# ---------------------------------------------------------------------------
+
+from fastapi.responses import FileResponse as _FileResponse
+
+IMAGE_UPLOAD_DIR = PROJECT_ROOT / "private" / "uploads" / "images"
+IMAGE_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+
+
+@router.post("/upload-image")
+async def upload_email_image(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+):
+    """Upload an image for use in HTML email bodies."""
+    import uuid
+
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status_code=400, detail="Only JPEG, PNG, GIF, or WebP images are allowed.")
+
+    MAX_SIZE = 5 * 1024 * 1024  # 5MB
+    content = await file.read()
+    if len(content) > MAX_SIZE:
+        raise HTTPException(status_code=413, detail="Image exceeds 5MB limit.")
+
+    safe_ext = Path(file.filename or "image.jpg").suffix.lower() or ".jpg"
+    unique_name = f"{uuid.uuid4().hex[:12]}{safe_ext}"
+    dest = IMAGE_UPLOAD_DIR / unique_name
+
+    await asyncio.to_thread(dest.write_bytes, content)
+
+    return {"filename": unique_name, "url": f"/api/campaigns/view-image/{unique_name}"}
+
+
+@router.get("/view-image/{filename}")
+async def view_email_image(filename: str, current_user: dict = Depends(get_current_user)):
+    """Serve an uploaded email image."""
+    safe_name = Path(filename).name
+    path = IMAGE_UPLOAD_DIR / safe_name
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Image not found.")
+    suffix = path.suffix.lower()
+    mt = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".gif": "image/gif", ".webp": "image/webp"}
+    return _FileResponse(path, media_type=mt.get(suffix, "image/jpeg"))

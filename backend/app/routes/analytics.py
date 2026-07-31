@@ -15,6 +15,7 @@ from app.core.auth import get_current_user
 from utils.db_client import get_db_session, _mysql_available
 from models.sql_models import (
     Company as SQL_Company,
+    Person as SQL_Person,
     Lead as SQL_Lead,
     Report as SQL_Report,
     Meeting as SQL_Meeting,
@@ -462,3 +463,156 @@ async def get_website_engagement(current_user: dict = Depends(get_current_user))
             logger.error(f"Error querying website engagement: {e}")
 
     return results
+
+
+@router.get("/people-summary")
+async def get_people_summary(current_user: dict = Depends(get_current_user)):
+    """Summary analytics for the People (contacts) table."""
+    total = 0
+    by_status: dict = {}
+    top_country: str = ""
+    top_seniority: str = ""
+    by_country: List[Dict[str, Any]] = []
+    by_seniority: List[Dict[str, Any]] = []
+    by_source: List[Dict[str, Any]] = []
+
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                # Total
+                total = (await db.execute(select(func.count()).select_from(SQL_Person))).scalar() or 0
+
+                # By status
+                rows = (await db.execute(
+                    select(SQL_Person.status, func.count().label("c"))
+                    .group_by(SQL_Person.status)
+                )).all()
+                by_status = {r[0] or "Unknown": r[1] for r in rows}
+
+                # By country (top 5)
+                rows_country = (await db.execute(
+                    select(SQL_Person.country, func.count().label("c"))
+                    .where(SQL_Person.country != None, SQL_Person.country != "")
+                    .group_by(SQL_Person.country)
+                    .order_by(func.count().desc())
+                    .limit(5)
+                )).all()
+                by_country = [{"name": r[0], "value": r[1]} for r in rows_country]
+                top_country = by_country[0]["name"] if by_country else ""
+
+                # By seniority (top 8)
+                rows_seniority = (await db.execute(
+                    select(SQL_Person.seniority, func.count().label("c"))
+                    .where(SQL_Person.seniority != None, SQL_Person.seniority != "")
+                    .group_by(SQL_Person.seniority)
+                    .order_by(func.count().desc())
+                    .limit(8)
+                )).all()
+                by_seniority = [{"name": r[0], "value": r[1]} for r in rows_seniority]
+                top_seniority = by_seniority[0]["name"] if by_seniority else ""
+
+                # By source
+                rows_source = (await db.execute(
+                    select(SQL_Person.source, func.count().label("c"))
+                    .where(SQL_Person.source != None, SQL_Person.source != "")
+                    .group_by(SQL_Person.source)
+                    .order_by(func.count().desc())
+                )).all()
+                by_source = [{"name": r[0], "value": r[1]} for r in rows_source]
+        except Exception as e:
+            logger.error(f"Error in people-summary: {e}")
+
+    return {
+        "total": total,
+        "byStatus": by_status,
+        "topCountry": top_country,
+        "topSeniority": top_seniority,
+        "byCountry": by_country,
+        "bySeniority": by_seniority,
+        "bySource": by_source,
+    }
+
+
+@router.get("/companies-summary")
+async def get_companies_summary(current_user: dict = Depends(get_current_user)):
+    """Summary analytics for the Companies table."""
+    total = 0
+    by_status: dict = {}
+    top_country: str = ""
+    top_naics: str = ""
+    by_country: List[Dict[str, Any]] = []
+    by_naics: List[Dict[str, Any]] = []
+    by_size: List[Dict[str, Any]] = []
+
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                # Total
+                total = (await db.execute(select(func.count()).select_from(SQL_Company))).scalar() or 0
+
+                # By status
+                rows = (await db.execute(
+                    select(SQL_Company.status, func.count().label("c"))
+                    .group_by(SQL_Company.status)
+                )).all()
+                by_status = {r[0] or "Unknown": r[1] for r in rows}
+
+                # By country (top 5) - extracted from end of address field
+                rows_country = (await db.execute(
+                    select(
+                        func.trim(func.substring_index(SQL_Company.address, ",", -1)).label("country"),
+                        func.count().label("c")
+                    )
+                    .where(SQL_Company.address != None, SQL_Company.address != "")
+                    .group_by(func.trim(func.substring_index(SQL_Company.address, ",", -1)))
+                    .order_by(func.count().desc())
+                    .limit(5)
+                )).all()
+                by_country = [{"name": r[0], "value": r[1]} for r in rows_country]
+                top_country = by_country[0]["name"] if by_country else ""
+
+                # By naics (top 5) - uses SQL_Company.industry as that is where primary_naics_desc is stored
+                rows_naics = (await db.execute(
+                    select(SQL_Company.industry, func.count().label("c"))
+                    .where(SQL_Company.industry != None, SQL_Company.industry != "", SQL_Company.industry != "Other")
+                    .group_by(SQL_Company.industry)
+                    .order_by(func.count().desc())
+                    .limit(5)
+                )).all()
+                by_naics = [{"name": r[0], "value": r[1]} for r in rows_naics]
+
+                # Top NAICS
+                row_n = (await db.execute(
+                    select(SQL_Company.industry, func.count().label("c"))
+                    .where(SQL_Company.industry != None, SQL_Company.industry != "")
+                    .group_by(SQL_Company.industry)
+                    .order_by(func.count().desc())
+                    .limit(1)
+                )).first()
+                top_naics = row_n[0] if row_n else ""
+
+                # By size - mapping 'S' or 'Small' to 'Small', others to 'Large'
+                rows_size = (await db.execute(
+                    select(SQL_Company.size, func.count().label("c"))
+                    .group_by(SQL_Company.size)
+                )).all()
+                size_map = {"Small": 0, "Large": 0}
+                for r in rows_size:
+                    s_val = (r[0] or "").strip().lower()
+                    if s_val in ("s", "small"):
+                        size_map["Small"] += r[1]
+                    else:
+                        size_map["Large"] += r[1]
+                by_size = [{"name": k, "value": v} for k, v in size_map.items()]
+        except Exception as e:
+            logger.error(f"Error in companies-summary: {e}")
+
+    return {
+        "total": total,
+        "byStatus": by_status,
+        "topCountry": top_country,
+        "topNaics": top_naics,
+        "byCountry": by_country,
+        "byNaics": by_naics,
+        "bySize": by_size,
+    }

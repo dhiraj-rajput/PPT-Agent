@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Mail, Plus, Users, Send, Check, Loader2, Sparkles, Building2, Search, AlertCircle, Trash2, Image, Edit2, Clock, Code, Eye, Type } from 'lucide-react';
+import { Mail, Plus, Users, Send, Check, Loader2, Sparkles, Building2, Search, AlertCircle, Trash2, Image, Edit2, Clock, Code, Eye, Type, Wand2 } from 'lucide-react';
 import { PageHeader, Card, StatusBadge } from '../components/ui/Common.jsx';
 import { api, BASE_URL } from '../lib/api.jsx';
 import { useNotifications } from '../context/NotificationContext.jsx';
+import EmailBeautifyModal from '../components/EmailBeautifyModal.jsx';
 
 export default function Newsletter() {
   const { createAlert } = useNotifications();
@@ -24,12 +25,22 @@ export default function Newsletter() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [bodyContentMode, setBodyContentMode] = useState('write'); // 'write' | 'html'
   const [showBodyPreview, setShowBodyPreview] = useState(false);
+  const [showNewsletterBeautify, setShowNewsletterBeautify] = useState(false);
 
-  // Company import modal
+  // Company & People import modal
   const [showCompanyImport, setShowCompanyImport] = useState(false);
   const [companies, setCompanies] = useState([]);
   const [selectedCompanyIds, setSelectedCompanyIds] = useState({});
   const [importingCompanies, setImportingCompanies] = useState(false);
+
+  const [peopleSearchQuery, setPeopleSearchQuery] = useState('');
+  const [peoplePage, setPeoplePage] = useState(1);
+  const [peopleTotalCount, setPeopleTotalCount] = useState(0);
+  const [dbPeople, setDbPeople] = useState([]);
+  const [selectedPeopleIds, setSelectedPeopleIds] = useState({});
+  const [selectedBroadcastPeopleIds, setSelectedBroadcastPeopleIds] = useState({});
+  const [importingPeople, setImportingPeople] = useState(false);
+  const [importTab, setImportTab] = useState('companies'); // 'companies' | 'people'
 
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
@@ -53,6 +64,20 @@ export default function Newsletter() {
 
   useEffect(() => {
     fetchNewsletters();
+    
+    // Fetch filter values
+    api.getPeopleFilters()
+      .then(res => {
+        setPeopleCountries(res?.countries || []);
+        setPeopleSeniorities(res?.seniorities || []);
+      })
+      .catch(err => console.error(err));
+
+    api.getCompanies({ limit: 1 })
+      .then(res => {
+        if (res?.naics_codes) setCompNaicsCodes(res.naics_codes);
+      })
+      .catch(err => console.error(err));
   }, []);
 
   const fetchNewsletterDetails = (nl) => {
@@ -131,6 +156,11 @@ export default function Newsletter() {
           if (companyIds.length > 0) {
             await api.addNewsletterSubscribersFromCompanies(selectedNewsletter.id, companyIds);
           }
+        } else if (recipientTargetMode === 'people') {
+          const peopleIds = Object.keys(selectedBroadcastPeopleIds).filter(k => selectedBroadcastPeopleIds[k]);
+          if (peopleIds.length > 0) {
+            await api.addNewsletterSubscribersFromPeople(selectedNewsletter.id, peopleIds);
+          }
         } else if (recipientTargetMode === 'manual' && manualRecipientEmails.trim()) {
           await api.addNewsletterSubscribersFromCompanies(selectedNewsletter.id, [], manualRecipientEmails.trim());
         }
@@ -148,6 +178,7 @@ export default function Newsletter() {
       setEditionForm({ subject: '', body: '', imageUrl: '', sendNow: true, scheduledAt: '' });
       setSendTiming('now');
       setSelectedBroadcastCompanyIds({});
+      setSelectedBroadcastPeopleIds({});
       setManualRecipientEmails('');
       fetchNewsletterDetails(selectedNewsletter);
       notify(
@@ -186,6 +217,24 @@ export default function Newsletter() {
       });
   };
 
+  const handleImportSelectedPeople = () => {
+    if (!selectedNewsletter) return;
+    const ids = Object.keys(selectedPeopleIds).filter((k) => selectedPeopleIds[k]);
+    if (ids.length === 0) return;
+    setImportingPeople(true);
+    api.addNewsletterSubscribersFromPeople(selectedNewsletter.id, ids)
+      .then((res) => {
+        setImportingPeople(false);
+        setShowCompanyImport(false);
+        setSelectedPeopleIds({});
+        fetchNewsletterDetails(selectedNewsletter);
+      })
+      .catch((err) => {
+        setImportingPeople(false);
+        console.error(err);
+      });
+  };
+
   // Manual & company email selection for broadcast
   const [recipientTargetMode, setRecipientTargetMode] = useState('subscribers'); // 'subscribers' | 'companies' | 'manual'
   const [manualRecipientEmails, setManualRecipientEmails] = useState('');
@@ -198,12 +247,42 @@ export default function Newsletter() {
   const [userEmailInput, setUserEmailInput] = useState('');
   const [showSelfSubscribeModal, setShowSelfSubscribeModal] = useState(false);
 
+  // Filters for database selectors
+  const [compSizeFilter, setCompSizeFilter] = useState('All');
+  const [compNaicsFilter, setCompNaicsFilter] = useState('All');
+  const [compNaicsCodes, setCompNaicsCodes] = useState([]);
+  const [peopleCountryFilter, setPeopleCountryFilter] = useState('All');
+  const [peopleSeniorityFilter, setPeopleSeniorityFilter] = useState('All');
+  const [peopleCountries, setPeopleCountries] = useState([]);
+  const [peopleSeniorities, setPeopleSeniorities] = useState([]);
+
   const fetchDbCompanies = (q = '', pageNum = 1) => {
-    api.getCompanies({ query: q, page: pageNum, limit: 20 })
+    const params = { query: q, page: pageNum, limit: 20 };
+    if (compSizeFilter && compSizeFilter !== 'All') params.size = compSizeFilter;
+    if (compNaicsFilter && compNaicsFilter !== 'All') params.naics = compNaicsFilter;
+
+    api.getCompanies(params)
       .then((res) => {
         setDbCompanies(res?.companies || []);
         setCompanyTotalCount(res?.total || 0);
         setCompanyPage(pageNum);
+        if (res?.naics_codes && compNaicsCodes.length === 0) {
+          setCompNaicsCodes(res.naics_codes);
+        }
+      })
+      .catch((err) => console.error(err));
+  };
+
+  const fetchDbPeople = (q = '', pageNum = 1) => {
+    const params = { query: q, page: pageNum, limit: 20 };
+    if (peopleCountryFilter && peopleCountryFilter !== 'All') params.country = peopleCountryFilter;
+    if (peopleSeniorityFilter && peopleSeniorityFilter !== 'All') params.seniority = peopleSeniorityFilter;
+
+    api.getPeople(params)
+      .then((res) => {
+        setDbPeople(res?.people || []);
+        setPeopleTotalCount(res?.total || 0);
+        setPeoplePage(pageNum);
       })
       .catch((err) => console.error(err));
   };
@@ -227,10 +306,16 @@ export default function Newsletter() {
 
   useEffect(() => {
     if (showComposeModal || showCompanyImport) {
-      const timer = setTimeout(() => fetchDbCompanies(companySearchQuery, 1), 250);
+      const timer = setTimeout(() => {
+        fetchDbCompanies(companySearchQuery, 1);
+        fetchDbPeople(peopleSearchQuery, 1);
+      }, 250);
       return () => clearTimeout(timer);
     }
-  }, [companySearchQuery, showComposeModal, showCompanyImport]);
+  }, [
+    companySearchQuery, peopleSearchQuery, showComposeModal, showCompanyImport,
+    compSizeFilter, compNaicsFilter, peopleCountryFilter, peopleSeniorityFilter
+  ]);
 
   const openBroadcastModal = () => {
     setEditingEditionId(null);
@@ -472,7 +557,7 @@ export default function Newsletter() {
                       onClick={openCompanyImport}
                       className="flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-navy-900 hover:bg-slate-200 dark:bg-navy-800 dark:text-white"
                     >
-                      <Building2 size={14} /> Import from Companies
+                      <Plus size={14} /> Import Subscribers
                     </button>
                   )}
                 </div>
@@ -625,7 +710,7 @@ export default function Newsletter() {
               {!editingEditionId && (
                 <div>
                   <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1">Target Recipients</label>
-                  <div className="grid grid-cols-1 gap-2 xs:grid-cols-3">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                     <button
                       type="button"
                       onClick={() => setRecipientTargetMode('subscribers')}
@@ -647,6 +732,17 @@ export default function Newsletter() {
                       }`}
                     >
                       Select Company Emails
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRecipientTargetMode('people')}
+                      className={`rounded-xl border px-3 py-2 text-xs font-semibold transition-all ${
+                        recipientTargetMode === 'people'
+                          ? 'border-brand-500 bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400'
+                          : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-400 dark:hover:bg-navy-700'
+                      }`}
+                    >
+                      Select People Emails
                     </button>
                     <button
                       type="button"
@@ -678,6 +774,26 @@ export default function Newsletter() {
                       placeholder="Search company by name or email..."
                       className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-1.5 text-xs text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
                     />
+                  </div>
+
+                  <div className="flex gap-2">
+                    <select
+                      value={compSizeFilter}
+                      onChange={(e) => setCompSizeFilter(e.target.value)}
+                      className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 dark:border-navy-700 dark:bg-navy-900 dark:text-slate-300 outline-none cursor-pointer flex-1"
+                    >
+                      <option value="All">All Sizes</option>
+                      <option value="Small">Small Business</option>
+                      <option value="Large">Large Business</option>
+                    </select>
+                    <select
+                      value={compNaicsFilter}
+                      onChange={(e) => setCompNaicsFilter(e.target.value)}
+                      className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 dark:border-navy-700 dark:bg-navy-900 dark:text-slate-300 outline-none cursor-pointer flex-1 max-w-[50%]"
+                    >
+                      <option value="All">All NAICS</option>
+                      {compNaicsCodes.map(code => <option key={code} value={code}>{code}</option>)}
+                    </select>
                   </div>
                   <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 bg-white dark:border-navy-700 dark:bg-navy-900 divide-y divide-slate-50 dark:divide-navy-800">
                     {dbCompanies
@@ -733,6 +849,92 @@ export default function Newsletter() {
                         type="button"
                         disabled={companyPage >= Math.ceil(companyTotalCount / 20)}
                         onClick={() => fetchDbCompanies(companySearchQuery, companyPage + 1)}
+                        className="rounded-lg border border-slate-200 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-300 dark:hover:bg-navy-800 disabled:opacity-40 text-[11px]"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {!editingEditionId && recipientTargetMode === 'people' && (
+                <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3 space-y-2 dark:border-navy-700 dark:bg-navy-900/50">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-navy-900 dark:text-white">Multi-Select Contacts</label>
+                    <span className="text-[11px] font-bold text-brand-600">{Object.values(selectedBroadcastPeopleIds).filter(Boolean).length} Selected</span>
+                  </div>
+                  <div className="relative">
+                    <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      value={peopleSearchQuery}
+                      onChange={(e) => setPeopleSearchQuery(e.target.value)}
+                      placeholder="Search people by name or email..."
+                      className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-1.5 text-xs text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                    />
+                  </div>
+
+                  <div className="flex gap-2">
+                    <select
+                      value={peopleCountryFilter}
+                      onChange={(e) => setPeopleCountryFilter(e.target.value)}
+                      className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 dark:border-navy-700 dark:bg-navy-900 dark:text-slate-300 outline-none cursor-pointer flex-1 max-w-[50%]"
+                    >
+                      <option value="All">All Countries</option>
+                      {peopleCountries.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <select
+                      value={peopleSeniorityFilter}
+                      onChange={(e) => setPeopleSeniorityFilter(e.target.value)}
+                      className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 dark:border-navy-700 dark:bg-navy-900 dark:text-slate-300 outline-none cursor-pointer flex-1"
+                    >
+                      <option value="All">All Seniorities</option>
+                      {peopleSeniorities.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 bg-white dark:border-navy-700 dark:bg-navy-900 divide-y divide-slate-50 dark:divide-navy-800">
+                    {dbPeople
+                      .filter(p => !peopleSearchQuery || (p.full_name || '').toLowerCase().includes(peopleSearchQuery.toLowerCase()) || (p.email || '').toLowerCase().includes(peopleSearchQuery.toLowerCase()))
+                      .map((p) => {
+                        const hasEmail = !!p.email;
+                        return (
+                          <label key={p.id} className="flex items-center justify-between p-2.5 hover:bg-slate-50 dark:hover:bg-navy-800 cursor-pointer">
+                            <div>
+                              <p className="text-xs font-bold text-navy-900 dark:text-white">{p.full_name}</p>
+                              <p className="text-[11px] text-slate-400">
+                                {p.email || '❌ No email'}
+                                {p.organization_name && ` • ${p.organization_name}`}
+                              </p>
+                            </div>
+                            {hasEmail && (
+                              <input
+                                type="checkbox"
+                                checked={!!selectedBroadcastPeopleIds[p.id]}
+                                onChange={(e) => setSelectedBroadcastPeopleIds({ ...selectedBroadcastPeopleIds, [p.id]: e.target.checked })}
+                                className="rounded border-slate-300 text-brand-500 focus:ring-brand-500"
+                              />
+                            )}
+                          </label>
+                        );
+                      })}
+                  </div>
+                  <div className="flex items-center justify-between pt-1 text-xs">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={peoplePage <= 1}
+                        onClick={() => fetchDbPeople(peopleSearchQuery, peoplePage - 1)}
+                        className="rounded-lg border border-slate-200 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-300 dark:hover:bg-navy-800 disabled:opacity-40 text-[11px]"
+                      >
+                        Prev
+                      </button>
+                      <span className="text-[11px] text-slate-500">
+                        Pg {peoplePage}/{Math.max(1, Math.ceil(peopleTotalCount / 20))} ({peopleTotalCount.toLocaleString()} total)
+                      </span>
+                      <button
+                        type="button"
+                        disabled={peoplePage >= Math.ceil(peopleTotalCount / 20)}
+                        onClick={() => fetchDbPeople(peopleSearchQuery, peoplePage + 1)}
                         className="rounded-lg border border-slate-200 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-300 dark:hover:bg-navy-800 disabled:opacity-40 text-[11px]"
                       >
                         Next
@@ -817,22 +1019,6 @@ export default function Newsletter() {
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => {
-                        const banner = `<div style="background:linear-gradient(135deg,#1c151e 0%,#533f5a 45%,#236576 100%);border-radius:14px;padding:28px 24px;margin-bottom:20px;text-align:center;">
-  <div style="display:inline-block;width:40px;height:4px;background:#f7b708;border-radius:2px;margin-bottom:12px;"></div>
-  <p style="margin:0;color:#f9c639;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;">${selectedNewsletter?.name || 'Newsletter'}</p>
-  <h1 style="margin:8px 0 0;color:#ffffff;font-size:22px;font-weight:800;line-height:1.3;">${editionForm.subject || 'Your Headline Here'}</h1>
-</div>
-
-`;
-                        setEditionForm(prev => ({ ...prev, body: banner + prev.body }));
-                      }}
-                      className="flex items-center gap-1 text-[10px] font-bold text-brand-600 hover:text-brand-700 dark:text-brand-400"
-                    >
-                      <Sparkles size={11} /> Insert Beautiful Banner
-                    </button>
-                    <button
-                      type="button"
                       onClick={() => setShowBodyPreview(true)}
                       className="flex items-center gap-1 text-[10px] font-bold text-slate-500 hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400"
                       title="Preview how this HTML will render in the email"
@@ -843,7 +1029,7 @@ export default function Newsletter() {
                 </div>
 
                 {/* Write vs raw HTML code mode toggle */}
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
                   <button
                     type="button"
                     onClick={() => setBodyContentMode('write')}
@@ -865,6 +1051,13 @@ export default function Newsletter() {
                     }`}
                   >
                     <Code size={12} /> HTML Code
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowNewsletterBeautify(true)}
+                    className="ml-auto flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-violet-500 to-brand-500 px-3 py-1.5 text-[11px] font-bold text-white shadow hover:opacity-90 transition-opacity"
+                  >
+                    <Wand2 size={11} /> ✨ Beautify
                   </button>
                 </div>
 
@@ -1028,94 +1221,228 @@ export default function Newsletter() {
         </div>
       )}
 
-      {/* Modal: Import from Companies */}
+      {/* Modal: Import Subscribers */}
       {showCompanyImport && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-navy-900/60 backdrop-blur-sm sm:items-center sm:p-4">
           <div className="w-full max-w-lg rounded-t-2xl bg-white p-4 shadow-2xl dark:bg-navy-800 max-h-[94dvh] flex flex-col sm:rounded-2xl sm:p-6 sm:max-h-[80vh]">
-            <h3 className="text-base font-bold text-navy-900 dark:text-white">Import Companies to Newsletter List</h3>
-            <p className="mt-1 text-xs text-slate-500">Search and select registered prospect companies to add to {selectedNewsletter?.name}:</p>
-            
-            <div className="relative mt-3">
-              <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                value={companySearchQuery}
-                onChange={(e) => setCompanySearchQuery(e.target.value)}
-                placeholder="Search registered companies by name or email..."
-                className="w-full rounded-xl border border-slate-200 pl-9 pr-3 py-2 text-xs outline-none focus:border-brand-500 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
-              />
+            <h3 className="text-base font-bold text-navy-900 dark:text-white">Import Subscribers</h3>
+            <p className="mt-1 text-xs text-slate-500">Search and select contacts/companies to add to {selectedNewsletter?.name}:</p>
+
+            {/* Tabs Selector */}
+            <div className="mt-3 flex gap-2 border-b border-slate-100 dark:border-navy-700 pb-2">
+              <button
+                type="button"
+                onClick={() => setImportTab('companies')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                  importTab === 'companies'
+                    ? 'bg-brand-500 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-navy-700 dark:text-slate-300'
+                }`}
+              >
+                Companies
+              </button>
+              <button
+                type="button"
+                onClick={() => setImportTab('people')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                  importTab === 'people'
+                    ? 'bg-brand-500 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-navy-700 dark:text-slate-300'
+                }`}
+              >
+                People
+              </button>
             </div>
 
-            <div className="mt-3 flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-navy-700 pr-2">
-              {dbCompanies.map((c) => {
-                const key = c.uei || c.name;
-                const hasEmail = !!c.email;
-                const isResearching = c.isResearching;
-                return (
-                  <label key={key} className="flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-navy-700/50 cursor-pointer">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="text-xs font-bold text-navy-900 dark:text-white">{c.name}</p>
-                        {(c.hasResearchedProfile || c.is_researched) && (
-                          <span className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 px-1.5 py-0.2 text-[9px] font-extrabold">
-                            Researched
-                          </span>
+            {importTab === 'companies' ? (
+              <>
+                <div className="relative mt-3">
+                  <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    value={companySearchQuery}
+                    onChange={(e) => setCompanySearchQuery(e.target.value)}
+                    placeholder="Search registered companies by name or email..."
+                    className="w-full rounded-xl border border-slate-200 pl-9 pr-3 py-2 text-xs outline-none focus:border-brand-500 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                  />
+                </div>
+
+                <div className="flex gap-2 mt-2">
+                  <select
+                    value={compSizeFilter}
+                    onChange={(e) => setCompSizeFilter(e.target.value)}
+                    className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 dark:border-navy-700 dark:bg-navy-900 dark:text-slate-300 outline-none cursor-pointer flex-1"
+                  >
+                    <option value="All">All Sizes</option>
+                    <option value="Small">Small Business</option>
+                    <option value="Large">Large Business</option>
+                  </select>
+                  <select
+                    value={compNaicsFilter}
+                    onChange={(e) => setCompNaicsFilter(e.target.value)}
+                    className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 dark:border-navy-700 dark:bg-navy-900 dark:text-slate-300 outline-none cursor-pointer flex-1 max-w-[50%]"
+                  >
+                    <option value="All">All NAICS</option>
+                    {compNaicsCodes.map(code => <option key={code} value={code}>{code}</option>)}
+                  </select>
+                </div>
+
+                <div className="mt-3 flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-navy-700 pr-2">
+                  {dbCompanies.map((c) => {
+                    const key = c.uei || c.name;
+                    const hasEmail = !!c.email;
+                    const isResearching = c.isResearching;
+                    return (
+                      <label key={key} className="flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-navy-700/50 cursor-pointer">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs font-bold text-navy-900 dark:text-white">{c.name}</p>
+                            {(c.hasResearchedProfile || c.is_researched) && (
+                              <span className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 px-1.5 py-0.2 text-[9px] font-extrabold">
+                                Researched
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-slate-400">
+                            {c.email || (isResearching ? '⏳ Research in progress...' : '❌ No email (requires research)')}
+                          </p>
+                        </div>
+                        {hasEmail ? (
+                          <input
+                            type="checkbox"
+                            checked={!!selectedCompanyIds[key]}
+                            onChange={(e) => setSelectedCompanyIds({ ...selectedCompanyIds, [key]: e.target.checked })}
+                            className="rounded border-slate-300 text-brand-500 focus:ring-brand-500"
+                          />
+                        ) : isResearching ? (
+                          <Loader2 className="animate-spin text-brand-500 animate-duration-1000" size={14} />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); triggerCompanyResearch(c.name); }}
+                            className="rounded bg-brand-500 hover:bg-brand-600 px-2 py-1 text-[10px] font-bold text-white shadow-soft transition-colors"
+                          >
+                            Research
+                          </button>
                         )}
-                      </div>
-                      <p className="text-[11px] text-slate-400">
-                        {c.email || (isResearching ? '⏳ Research in progress...' : '❌ No email (requires research)')}
-                      </p>
-                    </div>
-                    {hasEmail ? (
-                      <input
-                        type="checkbox"
-                        checked={!!selectedCompanyIds[key]}
-                        onChange={(e) => setSelectedCompanyIds({ ...selectedCompanyIds, [key]: e.target.checked })}
-                        className="rounded border-slate-300 text-brand-500 focus:ring-brand-500"
-                      />
-                    ) : isResearching ? (
-                      <Loader2 className="animate-spin text-brand-500 animate-duration-1000" size={14} />
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); triggerCompanyResearch(c.name); }}
-                        className="rounded bg-brand-500 hover:bg-brand-600 px-2 py-1 text-[10px] font-bold text-white shadow-soft transition-colors"
-                      >
-                        Research
-                      </button>
-                    )}
-                  </label>
-                );
-              })}
-            </div>
+                      </label>
+                    );
+                  })}
+                </div>
 
-            <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-navy-700 text-xs">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  disabled={companyPage <= 1}
-                  onClick={() => fetchDbCompanies(companySearchQuery, companyPage - 1)}
-                  className="rounded-lg border border-slate-200 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-300 dark:hover:bg-navy-800 disabled:opacity-40 text-[11px]"
-                >
-                  Prev
-                </button>
-                <span className="text-[11px] text-slate-500 font-medium">
-                  Page {companyPage} of {Math.max(1, Math.ceil(companyTotalCount / 20))} ({companyTotalCount.toLocaleString()} total)
-                </span>
-                <button
-                  type="button"
-                  disabled={companyPage >= Math.ceil(companyTotalCount / 20)}
-                  onClick={() => fetchDbCompanies(companySearchQuery, companyPage + 1)}
-                  className="rounded-lg border border-slate-200 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-300 dark:hover:bg-navy-800 disabled:opacity-40 text-[11px]"
-                >
-                  Next
-                </button>
-              </div>
-              <span className="font-bold text-brand-600 dark:text-brand-400">
-                {Object.values(selectedCompanyIds).filter(Boolean).length} Selected
-              </span>
-            </div>
+                <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-navy-700 text-xs">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={companyPage <= 1}
+                      onClick={() => fetchDbCompanies(companySearchQuery, companyPage - 1)}
+                      className="rounded-lg border border-slate-200 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-300 dark:hover:bg-navy-800 disabled:opacity-40 text-[11px]"
+                    >
+                      Prev
+                    </button>
+                    <span className="text-[11px] text-slate-500 font-medium">
+                      Page {companyPage} of {Math.max(1, Math.ceil(companyTotalCount / 20))} ({companyTotalCount.toLocaleString()} total)
+                    </span>
+                    <button
+                      type="button"
+                      disabled={companyPage >= Math.ceil(companyTotalCount / 20)}
+                      onClick={() => fetchDbCompanies(companySearchQuery, companyPage + 1)}
+                      className="rounded-lg border border-slate-200 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-300 dark:hover:bg-navy-800 disabled:opacity-40 text-[11px]"
+                    >
+                      Next
+                    </button>
+                  </div>
+                  <span className="font-bold text-brand-600 dark:text-brand-400">
+                    {Object.values(selectedCompanyIds).filter(Boolean).length} Selected
+                  </span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="relative mt-3">
+                  <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    value={peopleSearchQuery}
+                    onChange={(e) => setPeopleSearchQuery(e.target.value)}
+                    placeholder="Search people by name or email..."
+                    className="w-full rounded-xl border border-slate-200 pl-9 pr-3 py-2 text-xs outline-none focus:border-brand-500 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                  />
+                </div>
 
-            <div className="flex justify-end gap-3 pt-3">
+                <div className="flex gap-2 mt-2">
+                  <select
+                    value={peopleCountryFilter}
+                    onChange={(e) => setPeopleCountryFilter(e.target.value)}
+                    className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 dark:border-navy-700 dark:bg-navy-900 dark:text-slate-300 outline-none cursor-pointer flex-1 max-w-[50%]"
+                  >
+                    <option value="All">All Countries</option>
+                    {peopleCountries.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <select
+                    value={peopleSeniorityFilter}
+                    onChange={(e) => setPeopleSeniorityFilter(e.target.value)}
+                    className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 dark:border-navy-700 dark:bg-navy-900 dark:text-slate-300 outline-none cursor-pointer flex-1"
+                  >
+                    <option value="All">All Seniorities</option>
+                    {peopleSeniorities.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+
+                <div className="mt-3 flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-navy-700 pr-2">
+                  {dbPeople.map((p) => {
+                    const hasEmail = !!p.email;
+                    return (
+                      <label key={p.id} className="flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-navy-700/50 cursor-pointer">
+                        <div>
+                          <p className="text-xs font-bold text-navy-900 dark:text-white">{p.full_name}</p>
+                          <p className="text-[11px] text-slate-400">
+                            {p.email || '❌ No email'}
+                            {p.organization_name && ` • ${p.organization_name}`}
+                            {p.title && ` (${p.title})`}
+                          </p>
+                        </div>
+                        {hasEmail && (
+                          <input
+                            type="checkbox"
+                            checked={!!selectedPeopleIds[p.id]}
+                            onChange={(e) => setSelectedPeopleIds({ ...selectedPeopleIds, [p.id]: e.target.checked })}
+                            className="rounded border-slate-300 text-brand-500 focus:ring-brand-500"
+                          />
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+
+                <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-navy-700 text-xs">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={peoplePage <= 1}
+                      onClick={() => fetchDbPeople(peopleSearchQuery, peoplePage - 1)}
+                      className="rounded-lg border border-slate-200 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-300 dark:hover:bg-navy-800 disabled:opacity-40 text-[11px]"
+                    >
+                      Prev
+                    </button>
+                    <span className="text-[11px] text-slate-500 font-medium">
+                      Page {peoplePage} of {Math.max(1, Math.ceil(peopleTotalCount / 20))} ({peopleTotalCount.toLocaleString()} total)
+                    </span>
+                    <button
+                      type="button"
+                      disabled={peoplePage >= Math.ceil(peopleTotalCount / 20)}
+                      onClick={() => fetchDbPeople(peopleSearchQuery, peoplePage + 1)}
+                      className="rounded-lg border border-slate-200 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-300 dark:hover:bg-navy-800 disabled:opacity-40 text-[11px]"
+                    >
+                      Next
+                    </button>
+                  </div>
+                  <span className="font-bold text-brand-600 dark:text-brand-400">
+                    {Object.values(selectedPeopleIds).filter(Boolean).length} Selected
+                  </span>
+                </div>
+              </>
+            )}
+
+            <div className="flex justify-end gap-3 pt-3 border-t border-slate-100 dark:border-navy-700 mt-3">
               <button
                 type="button"
                 onClick={() => setShowCompanyImport(false)}
@@ -1125,15 +1452,24 @@ export default function Newsletter() {
               </button>
               <button
                 type="button"
-                onClick={handleImportSelectedCompanies}
-                disabled={importingCompanies}
+                onClick={importTab === 'companies' ? handleImportSelectedCompanies : handleImportSelectedPeople}
+                disabled={importTab === 'companies' ? importingCompanies : importingPeople}
                 className="rounded-xl bg-brand-500 px-5 py-2 text-xs font-bold text-white shadow-soft hover:bg-brand-600 disabled:opacity-60"
               >
-                {importingCompanies ? <Loader2 className="animate-spin" size={14} /> : 'Import Selected'}
+                {importingCompanies || importingPeople ? <Loader2 className="animate-spin" size={14} /> : 'Import Selected'}
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {showNewsletterBeautify && (
+        <EmailBeautifyModal
+          subject={editionForm.subject}
+          body={editionForm.body}
+          onConfirm={(html) => { setEditionForm(f => ({ ...f, body: html })); setShowNewsletterBeautify(false); }}
+          onClose={() => setShowNewsletterBeautify(false)}
+        />
       )}
     </div>
   );

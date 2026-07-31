@@ -21,6 +21,7 @@ from models.sql_models import (
     Lead as SQL_Lead,
     Suppression as SQL_Suppression,
     AuditLog as SQL_AuditLog,
+    Person as SQL_Person,
 )
 from sqlalchemy import select, insert, update, delete, func
 
@@ -706,3 +707,156 @@ async def unsuppress_email(
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Database error: {e}")
     raise HTTPException(status_code=500, detail="MySQL database is unavailable.")
+
+
+# ---------------------------------------------------------------------------
+# People leads import
+# ---------------------------------------------------------------------------
+
+class PeopleImportBody(BaseModel):
+    campaignId: str
+    peopleIds: List[int]
+    segmentTag: Optional[str] = ""
+
+
+@router.post("/import/people")
+async def import_people_to_campaign(
+    body: PeopleImportBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Import People records as leads into a campaign."""
+    try:
+        camp_id = int(body.campaignId)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid campaign ID.")
+
+    if not await _assert_campaign_ownership(camp_id, int(current_user["id"])):
+        raise HTTPException(status_code=404, detail="Campaign not found.")
+
+    imported = duplicates = invalid_email = 0
+    user_id = int(current_user["id"])
+
+    if not _mysql_available:
+        raise HTTPException(status_code=500, detail="Database unavailable.")
+
+    try:
+        async for db in get_db_session():
+            # Get suppressed emails
+            supp_rows = (await db.execute(select(SQL_Suppression.email))).scalars().all()
+            suppressed_set = set(supp_rows)
+
+            # Get existing lead emails for this campaign
+            existing_rows = (await db.execute(
+                select(SQL_Lead.email).where(SQL_Lead.campaign_id == camp_id)
+            )).scalars().all()
+            existing_set = set(existing_rows)
+
+            # Fetch people
+            people_rows = (await db.execute(
+                select(SQL_Person).where(SQL_Person.id.in_(body.peopleIds))
+            )).scalars().all()
+
+            for person in people_rows:
+                raw_email = normalize_email(person.email or "")
+                if not raw_email or not is_valid_email(raw_email):
+                    invalid_email += 1
+                    continue
+                if raw_email in suppressed_set:
+                    invalid_email += 1
+                    continue
+                if raw_email in existing_set:
+                    duplicates += 1
+                    continue
+
+                full_name = person.full_name or f"{person.first_name or ''} {person.last_name or ''}".strip() or raw_email
+                company = person.organization_name or ""
+
+                await db.execute(insert(SQL_Lead).values(
+                    campaign_id=camp_id,
+                    people_id=person.id if hasattr(SQL_Lead, 'people_id') else None,
+                    people_name=full_name if hasattr(SQL_Lead, 'people_name') else None,
+                    company_name=company,
+                    company_key=_normalize_company_key(company),
+                    company_uei="",
+                    contact_name=full_name,
+                    email=raw_email,
+                    title=person.title or "",
+                    website="",
+                    linkedin=person.linkedin_url or "",
+                    status="pending",
+                    score=0,
+                    grade="cold",
+                    send_attempts=0,
+                    resend_count=0,
+                    segment_tag=body.segmentTag if hasattr(SQL_Lead, 'segment_tag') else None,
+                    created_by=user_id,
+                    created_at=datetime.now(timezone.utc),
+                    updated_at=datetime.now(timezone.utc),
+                ))
+                existing_set.add(raw_email)
+                imported += 1
+
+            await db.commit()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {e}")
+
+    return {"imported": imported, "duplicates": duplicates, "invalidEmail": invalid_email}
+
+
+@router.get("/people-filters")
+async def get_people_filters(current_user: dict = Depends(get_current_user)):
+    """Return filter options for People segmentation in campaigns."""
+    countries = []
+    seniorities = []
+    has_email_count = 0
+    has_phone_count = 0
+    has_linkedin_count = 0
+
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                # Countries
+                c_rows = (await db.execute(
+                    select(SQL_Person.country).where(
+                        SQL_Person.country != None, SQL_Person.country != ""
+                    ).distinct().order_by(SQL_Person.country).limit(100)
+                )).scalars().all()
+                countries = list(c_rows)
+
+                # Seniorities
+                s_rows = (await db.execute(
+                    select(SQL_Person.seniority).where(
+                        SQL_Person.seniority != None, SQL_Person.seniority != ""
+                    ).distinct().order_by(SQL_Person.seniority).limit(50)
+                )).scalars().all()
+                seniorities = list(s_rows)
+
+                # Counts
+                has_email_count = (await db.execute(
+                    select(func.count()).select_from(SQL_Person).where(
+                        SQL_Person.email != None, SQL_Person.email != ""
+                    )
+                )).scalar() or 0
+
+                has_phone_count = (await db.execute(
+                    select(func.count()).select_from(SQL_Person).where(
+                        SQL_Person.phone != None, SQL_Person.phone != ""
+                    )
+                )).scalar() or 0
+
+                has_linkedin_count = (await db.execute(
+                    select(func.count()).select_from(SQL_Person).where(
+                        SQL_Person.linkedin_url != None, SQL_Person.linkedin_url != ""
+                    )
+                )).scalar() or 0
+        except Exception as e:
+            pass
+
+    return {
+        "countries": countries,
+        "seniorities": seniorities,
+        "hasEmailCount": has_email_count,
+        "hasPhoneCount": has_phone_count,
+        "hasLinkedinCount": has_linkedin_count,
+    }
+

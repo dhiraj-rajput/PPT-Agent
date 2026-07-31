@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Building2, FileStack, BrainCircuit, FileEdit, Mail,
   Kanban, Calendar, CheckSquare, BarChart3, FileBarChart, Users,
-  Plug, Settings, ChevronLeft, Sparkles, Zap, Hash, ScrollText, X
+  Plug, Settings, ChevronLeft, Sparkles, Zap, Hash, ScrollText, X, Database
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useErrorLogs } from '../../context/ErrorLogContext.jsx';
@@ -14,8 +14,7 @@ const topNav = [
 ];
 
 const bizNav = [
-  { to: '/companies', label: 'Companies', icon: Building2 },
-  { to: '/people', label: 'People', icon: Users },
+  { to: '/database', label: 'Database', icon: Database },
   { to: '/tenders', label: 'Tenders', icon: FileStack },
   { to: '/naics', label: 'NAICS Muster', icon: Hash },
   { to: '/ai-research', label: 'AI Research', icon: BrainCircuit },

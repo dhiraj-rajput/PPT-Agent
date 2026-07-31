@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback, Fragment } from 'react';
-import { Plus, Send, MousePointerClick, MailOpen, Reply, Clock, Globe, X, Play, Pause, Copy, Trash2, Upload, Rocket, RefreshCw, Building2, AlertTriangle, ChevronDown, ChevronUp, RotateCw, Hash, Search, Check, Loader2, Mail } from 'lucide-react';
+import { Plus, Send, MousePointerClick, MailOpen, Reply, Clock, Globe, X, Play, Pause, Copy, Trash2, Upload, Rocket, RefreshCw, Building2, AlertTriangle, ChevronDown, ChevronUp, RotateCw, Hash, Search, Check, Loader2, Mail, Wand2, Users } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { PageHeader, Card, StatusBadge } from '../components/ui/Common.jsx';
 import { api } from '../lib/api.jsx';
 import { useNotifications } from '../context/NotificationContext.jsx';
+import EmailBeautifyModal from '../components/EmailBeautifyModal.jsx';
 
 const SUMMARY_CARDS = [
   { key: 'totalSent', label: 'Total Sent', icon: Send, bg: 'bg-sky-50', fg: 'text-sky-600', format: (v) => (v || 0).toLocaleString() },
@@ -72,6 +73,14 @@ export default function EmailCampaign() {
   const [importingFor, setImportingFor] = useState(null); // campaignId currently importing a CSV
   const [actionError, setActionError] = useState('');
   const [workerStatus, setWorkerStatus] = useState(null);
+  const [showBeautify, setShowBeautify] = useState(false);
+
+  // Filters for database selectors
+  const [compSizeFilter, setCompSizeFilter] = useState('All');
+  const [compNaicsFilter, setCompNaicsFilter] = useState('All');
+  const [compNaicsCodes, setCompNaicsCodes] = useState([]);
+  const [peopleCountryFilter, setPeopleCountryFilter] = useState('All');
+  const [peopleSeniorityFilter, setPeopleSeniorityFilter] = useState('All');
 
   // Manual Lead Entry States
   const [showAddLead, setShowAddLead] = useState(null); // campaignId
@@ -84,7 +93,7 @@ export default function EmailCampaign() {
   const [addingLead, setAddingLead] = useState(false);
   const [leadError, setLeadError] = useState('');
 
-  // Multi-company selection for a campaign
+  // Multi-company/people selection for a campaign
   const [showAddCompanies, setShowAddCompanies] = useState(null); // campaignId
   const [companyQuery, setCompanyQuery] = useState('');
   const [companyResults, setCompanyResults] = useState([]);
@@ -95,6 +104,25 @@ export default function EmailCampaign() {
   const [searchingCompanies, setSearchingCompanies] = useState(false);
   const [addingCompanies, setAddingCompanies] = useState(false);
   const [companiesError, setCompaniesError] = useState('');
+
+  // People tab states
+  const [activeModalTab, setActiveModalTab] = useState('companies');
+  const [peopleQuery, setPeopleQuery] = useState('');
+  const [peopleResults, setPeopleResults] = useState([]);
+  const [peoplePage, setPeoplePage] = useState(1);
+  const [totalPeopleCount, setTotalPeopleCount] = useState(0);
+  const [selectedPeople, setSelectedPeople] = useState({}); // id -> person obj
+  const [searchingPeople, setSearchingPeople] = useState(false);
+  const [addingPeople, setAddingPeople] = useState(false);
+  const [peopleFilters, setPeopleFilters] = useState({ countries: [], seniorities: [] });
+  const [segmentTag, setSegmentTag] = useState('');
+  const [segmentFilters, setSegmentFilters] = useState({
+    hasEmail: true,
+    hasPhone: false,
+    hasLinkedin: false,
+    country: 'All',
+    seniority: 'All'
+  });
 
   // Per-campaign company breakdown (expand/collapse)
   const [expandedCampaign, setExpandedCampaign] = useState(null);
@@ -182,6 +210,17 @@ export default function EmailCampaign() {
 
   useEffect(() => {
     loadAll();
+    
+    // Load filters on mount
+    api.getPeopleFilters()
+      .then(res => setPeopleFilters(res || { countries: [], seniorities: [] }))
+      .catch(err => console.error("Failed to load people filters:", err));
+
+    api.getCompanies({ limit: 1 })
+      .then(res => {
+        if (res?.naics_codes) setCompNaicsCodes(res.naics_codes);
+      })
+      .catch(err => console.error("Failed to load companies NAICS:", err));
   }, [loadAll]);
 
   const handleDeviceFileUpload = async (e) => {
@@ -271,15 +310,26 @@ export default function EmailCampaign() {
         }
         // Launch immediately
         await api.launchCampaign(campaign.id);
-      } else if (sendMode === 'database' && campaign && Object.keys(selectedCompanies).length > 0) {
-        const companyList = Object.values(selectedCompanies).map((c) => ({
-          companyName: c.name || '',
-          uei: c.uei || '',
-          contactName: c.contact || '',
-          email: c.email || '',
-          title: c.contact_role || c.industry || 'Lead',
-        }));
-        await api.addCompaniesToCampaign(campaign.id, companyList);
+      } else if (sendMode === 'database' && campaign) {
+        if (Object.keys(selectedCompanies).length > 0) {
+          const companyList = Object.values(selectedCompanies).map((c) => ({
+            companyName: c.name || '',
+            uei: c.uei || '',
+            contactName: c.contact || '',
+            email: c.email || '',
+            title: c.contact_role || c.industry || 'Lead',
+          }));
+          await api.addCompaniesToCampaign(campaign.id, companyList);
+        }
+        
+        const peopleList = Object.keys(selectedPeople).map((id) => parseInt(id));
+        if (peopleList.length > 0) {
+          await api.importPeopleToLeads({
+            campaignId: campaign.id,
+            peopleIds: peopleList,
+            segmentTag: "Initial Campaign Import"
+          });
+        }
       }
 
       setShowNewCampaign(false);
@@ -292,6 +342,8 @@ export default function EmailCampaign() {
       setAttachmentType('none');
       setAttachedPath('');
       setAttachedFilename('');
+      setSelectedCompanies({});
+      setSelectedPeople({});
       await loadAll();
       notify('Campaign created', `"${campaignData.name}" was created${sendMode === 'single' ? ' and launched' : ''}.`, '/email-campaign');
     } catch (err) {
@@ -356,13 +408,35 @@ export default function EmailCampaign() {
     setCompanyResults([]);
     setSelectedCompanies({});
     setCompaniesError('');
+    setActiveModalTab('companies');
+    setPeopleQuery('');
+    setPeopleResults([]);
+    setSelectedPeople({});
+    setSegmentTag('');
+    setSegmentFilters({
+      hasEmail: true,
+      hasPhone: false,
+      hasLinkedin: false,
+      country: 'All',
+      seniority: 'All'
+    });
     await loadCompaniesInUse();
+    try {
+      const res = await api.getPeopleFilters();
+      setPeopleFilters(res || { countries: [], seniorities: [] });
+    } catch (err) {
+      console.error("Failed to load people filters:", err);
+    }
   };
 
   const searchCompanies = useCallback(async (q, pageNum = 1) => {
     setSearchingCompanies(true);
     try {
-      const res = await api.getCompanies({ query: q, page: pageNum, limit: 20 });
+      const params = { query: q, page: pageNum, limit: 20 };
+      if (compSizeFilter && compSizeFilter !== 'All') params.size = compSizeFilter;
+      if (compNaicsFilter && compNaicsFilter !== 'All') params.naics = compNaicsFilter;
+
+      const res = await api.getCompanies(params);
       setCompanyResults(res?.companies || []);
       setTotalCompaniesCount(res?.total || 0);
       setCompanyPage(pageNum);
@@ -371,13 +445,52 @@ export default function EmailCampaign() {
     } finally {
       setSearchingCompanies(false);
     }
-  }, []);
+  }, [compSizeFilter, compNaicsFilter]);
 
+  const searchPeople = useCallback(async (q, pageNum = 1) => {
+    setSearchingPeople(true);
+    try {
+      const params = { page: String(pageNum), limit: '20' };
+      if (q) params.query = q;
+      if (peopleCountryFilter && peopleCountryFilter !== 'All') params.country = peopleCountryFilter;
+      if (peopleSeniorityFilter && peopleSeniorityFilter !== 'All') params.seniority = peopleSeniorityFilter;
+
+      const res = await api.getPeople(params);
+      setPeopleResults(res?.people || []);
+      setTotalPeopleCount(res?.total || 0);
+      setPeoplePage(pageNum);
+    } catch (err) {
+      setCompaniesError(err.message || 'Could not search people.');
+    } finally {
+      setSearchingPeople(false);
+    }
+  }, [peopleCountryFilter, peopleSeniorityFilter]);
+
+  // Debounced search trigger
   useEffect(() => {
-    if (showAddCompanies === null) return;
-    const t = setTimeout(() => searchCompanies(companyQuery), 300);
-    return () => clearTimeout(t);
-  }, [companyQuery, showAddCompanies, searchCompanies]);
+    const isModalOpen = showAddCompanies !== null || (showNewCampaign && sendMode === 'database');
+    if (!isModalOpen) return;
+
+    if (activeModalTab === 'companies') {
+      const t = setTimeout(() => searchCompanies(companyQuery, 1), 300);
+      return () => clearTimeout(t);
+    } else {
+      const t = setTimeout(() => searchPeople(peopleQuery, 1), 300);
+      return () => clearTimeout(t);
+    }
+  }, [companyQuery, peopleQuery, showAddCompanies, showNewCampaign, sendMode, activeModalTab, searchCompanies, searchPeople]);
+
+  // Immediate filter trigger
+  useEffect(() => {
+    const isModalOpen = showAddCompanies !== null || (showNewCampaign && sendMode === 'database');
+    if (!isModalOpen) return;
+
+    if (activeModalTab === 'companies') {
+      searchCompanies(companyQuery, 1);
+    } else {
+      searchPeople(peopleQuery, 1);
+    }
+  }, [compSizeFilter, compNaicsFilter, peopleCountryFilter, peopleSeniorityFilter]);
 
   const conflictFor = (company) => {
     const key = normalizeCompanyKey(company.name, company.uei);
@@ -390,6 +503,15 @@ export default function EmailCampaign() {
       const next = { ...prev };
       if (next[key]) delete next[key];
       else next[key] = company;
+      return next;
+    });
+  };
+
+  const togglePersonSelection = (person) => {
+    setSelectedPeople((prev) => {
+      const next = { ...prev };
+      if (next[person.id]) delete next[person.id];
+      else next[person.id] = person;
       return next;
     });
   };
@@ -445,6 +567,54 @@ export default function EmailCampaign() {
       setCompaniesError(err.message || 'Could not add companies to campaign.');
     } finally {
       setAddingCompanies(false);
+    }
+  };
+
+  const handleAddPeople = async () => {
+    const chosen = Object.values(selectedPeople);
+    if (chosen.length === 0) {
+      setCompaniesError('Select at least one person.');
+      return;
+    }
+
+    // Apply Segment Builder client-side filtering on the selected set
+    const filtered = chosen.filter(p => {
+      if (segmentFilters.hasEmail && !p.email) return false;
+      if (segmentFilters.hasPhone && !p.phone) return false;
+      if (segmentFilters.hasLinkedin && !p.linkedin_url) return false;
+      if (segmentFilters.country !== 'All' && p.country !== segmentFilters.country) return false;
+      if (segmentFilters.seniority !== 'All' && p.seniority !== segmentFilters.seniority) return false;
+      return true;
+    });
+
+    if (filtered.length === 0) {
+      setCompaniesError('No selected people match the current segment filters.');
+      return;
+    }
+
+    setAddingPeople(true);
+    setCompaniesError('');
+    try {
+      const res = await api.importPeopleToLeads({
+        campaignId: showAddCompanies,
+        peopleIds: filtered.map(p => p.id),
+        segmentTag: segmentTag.trim()
+      });
+
+      window.alert(
+        `Added ${res.imported} contact${res.imported === 1 ? '' : 's'} to the campaign` +
+        (res.duplicates ? ` (${res.duplicates} duplicates skipped)` : '') +
+        (res.invalidEmail ? ` (${res.invalidEmail} missing/invalid email skipped)` : '')
+      );
+
+      setShowAddCompanies(null);
+      setSelectedPeople({});
+      setSegmentTag('');
+      await loadAll();
+    } catch (err) {
+      setCompaniesError(err.message || 'Could not add people to campaign.');
+    } finally {
+      setAddingPeople(false);
     }
   };
 
@@ -871,7 +1041,8 @@ export default function EmailCampaign() {
                     type="button"
                     onClick={() => {
                       setSendMode('database');
-                      if (companyResults.length === 0) searchCompanies('');
+                      if (activeModalTab === 'companies' && companyResults.length === 0) searchCompanies('');
+                      if (activeModalTab === 'people' && peopleResults.length === 0) searchPeople('');
                     }}
                     className={`rounded-lg border px-2.5 py-2 text-xs font-semibold transition-all ${
                       sendMode === 'database'
@@ -879,7 +1050,7 @@ export default function EmailCampaign() {
                         : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-navy-700 dark:text-slate-400 dark:hover:bg-navy-900'
                     }`}
                   >
-                    Select DB Companies
+                    Select from Database
                   </button>
                   <button
                     type="button"
@@ -900,89 +1071,215 @@ export default function EmailCampaign() {
                 </p>
               </div>
 
-              {/* Database Company Multi-Select Details */}
+              {/* Database Company/People Multi-Select Details */}
               {sendMode === 'database' && (
                 <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3 space-y-3 dark:border-navy-700 dark:bg-navy-900/50">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold text-navy-900 dark:text-white uppercase tracking-wider">Select Companies from Database</h4>
-                    <span className="text-[11px] font-bold text-brand-600">{Object.keys(selectedCompanies).length} Selected</span>
+                  {/* Selector Tabs */}
+                  <div className="flex border-b border-slate-200 dark:border-navy-700 pb-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveModalTab('companies')}
+                      className={`flex-1 py-1.5 text-xs font-bold border-b-2 text-center transition-all ${
+                        activeModalTab === 'companies'
+                          ? 'border-brand-500 text-brand-600 dark:text-brand-400 font-extrabold'
+                          : 'border-transparent text-slate-500'
+                      }`}
+                    >
+                      Companies ({Object.keys(selectedCompanies).length} Selected)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveModalTab('people')}
+                      className={`flex-1 py-1.5 text-xs font-bold border-b-2 text-center transition-all ${
+                        activeModalTab === 'people'
+                          ? 'border-brand-500 text-brand-600 dark:text-brand-400 font-extrabold'
+                          : 'border-transparent text-slate-500'
+                      }`}
+                    >
+                      People ({Object.keys(selectedPeople).length} Selected)
+                    </button>
                   </div>
-                  <div className="relative">
-                    <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                      value={companyQuery}
-                      onChange={(e) => setCompanyQuery(e.target.value)}
-                      placeholder="Search registered companies by name or contact…"
-                      className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-1.5 text-xs text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
-                    />
-                  </div>
-                  <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-white dark:border-navy-700 dark:bg-navy-900">
-                    {searchingCompanies ? (
-                      <div className="p-4 text-center text-xs text-slate-400">Searching database…</div>
-                    ) : companyResults.length === 0 ? (
-                      <div className="p-4 text-center text-xs text-slate-400">No companies found.</div>
-                    ) : (
-                      companyResults.map((c) => {
-                        if (!c) return null;
-                        const key = normalizeCompanyKey(c.name, c.uei);
-                        const selected = !!selectedCompanies[key];
-                        const hasEmail = !!c.email;
-                        const isResearching = c.isResearching;
-                        return (
-                          <label key={c.id || key} className="flex items-center justify-between p-2.5 hover:bg-slate-50 dark:hover:bg-navy-800 cursor-pointer border-b border-slate-50 last:border-0">
-                            <div>
-                              <p className="text-xs font-bold text-navy-900 dark:text-white">{c.name}</p>
-                              <p className="text-[11px] text-slate-400">
-                                {c.email || (isResearching ? '⏳ Research in progress...' : '❌ No email (requires research)')}
-                                {c.contact ? ` · ${c.contact}` : ''}
-                              </p>
-                            </div>
-                            {hasEmail ? (
-                              <input
-                                type="checkbox"
-                                checked={selected}
-                                onChange={() => toggleCompanySelection(c)}
-                                className="rounded border-slate-300 text-brand-500 focus:ring-brand-500"
-                              />
-                            ) : isResearching ? (
-                              <Loader2 className="animate-spin text-brand-500 animate-duration-1000" size={14} />
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); triggerCompanyResearch(c.name); }}
-                                className="rounded bg-brand-500 hover:bg-brand-600 px-2 py-1 text-[10px] font-bold text-white shadow-soft transition-colors"
-                              >
-                                Research
-                              </button>
-                            )}
-                          </label>
-                        );
-                      })
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between pt-1 text-xs">
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        disabled={companyPage <= 1 || searchingCompanies}
-                        onClick={() => searchCompanies(companyQuery, companyPage - 1)}
-                        className="rounded-lg border border-slate-200 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 dark:border-navy-700 dark:text-slate-300 text-[11px]"
-                      >
-                        Prev
-                      </button>
-                      <span className="text-[11px] text-slate-500">
-                        Pg {companyPage}/{Math.max(1, Math.ceil(totalCompaniesCount / 20))} ({totalCompaniesCount.toLocaleString()} total)
-                      </span>
-                      <button
-                        type="button"
-                        disabled={companyPage >= Math.ceil(totalCompaniesCount / 20) || searchingCompanies}
-                        onClick={() => searchCompanies(companyQuery, companyPage + 1)}
-                        className="rounded-lg border border-slate-200 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 dark:border-navy-700 dark:text-slate-300 text-[11px]"
-                      >
-                        Next
-                      </button>
-                    </div>
-                  </div>
+
+                  {activeModalTab === 'companies' ? (
+                    <>
+                      <div className="relative">
+                        <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          value={companyQuery}
+                          onChange={(e) => setCompanyQuery(e.target.value)}
+                          placeholder="Search registered companies by name or contact…"
+                          className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-1.5 text-xs text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <select
+                          value={compSizeFilter}
+                          onChange={(e) => setCompSizeFilter(e.target.value)}
+                          className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-semibold text-slate-600 dark:border-navy-700 dark:bg-navy-900 dark:text-slate-300 outline-none cursor-pointer flex-1"
+                        >
+                          <option value="All">All Sizes</option>
+                          <option value="Small">Small Business</option>
+                          <option value="Large">Large Business</option>
+                        </select>
+                        <select
+                          value={compNaicsFilter}
+                          onChange={(e) => setCompNaicsFilter(e.target.value)}
+                          className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-semibold text-slate-600 dark:border-navy-700 dark:bg-navy-900 dark:text-slate-300 outline-none cursor-pointer flex-1 max-w-[50%]"
+                        >
+                          <option value="All">All NAICS</option>
+                          {compNaicsCodes.map(code => <option key={code} value={code}>{code}</option>)}
+                        </select>
+                      </div>
+                      <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-white dark:border-navy-700 dark:bg-navy-900">
+                        {searchingCompanies ? (
+                          <div className="p-4 text-center text-xs text-slate-400">Searching database…</div>
+                        ) : companyResults.length === 0 ? (
+                          <div className="p-4 text-center text-xs text-slate-400">No companies found.</div>
+                        ) : (
+                          companyResults.map((c) => {
+                            if (!c) return null;
+                            const key = normalizeCompanyKey(c.name, c.uei);
+                            const selected = !!selectedCompanies[key];
+                            const hasEmail = !!c.email;
+                            const isResearching = c.isResearching;
+                            return (
+                              <label key={c.id || key} className="flex items-center justify-between p-2.5 hover:bg-slate-50 dark:hover:bg-navy-800 cursor-pointer border-b border-slate-50 last:border-0">
+                                <div>
+                                  <p className="text-xs font-bold text-navy-900 dark:text-white">{c.name}</p>
+                                  <p className="text-[11px] text-slate-400">
+                                    {c.email || (isResearching ? '⏳ Research in progress...' : '❌ No email (requires research)')}
+                                    {c.contact ? ` · ${c.contact}` : ''}
+                                  </p>
+                                </div>
+                                {hasEmail ? (
+                                  <input
+                                    type="checkbox"
+                                    checked={selected}
+                                    onChange={() => toggleCompanySelection(c)}
+                                    className="rounded border-slate-300 text-brand-500 focus:ring-brand-500"
+                                  />
+                                ) : isResearching ? (
+                                  <Loader2 className="animate-spin text-brand-500 animate-duration-1000" size={14} />
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); triggerCompanyResearch(c.name); }}
+                                    className="rounded bg-brand-500 hover:bg-brand-600 px-2 py-1 text-[10px] font-bold text-white shadow-soft transition-colors"
+                                  >
+                                    Research
+                                  </button>
+                                )}
+                              </label>
+                            );
+                          })
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between pt-1 text-xs">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={companyPage <= 1 || searchingCompanies}
+                            onClick={() => searchCompanies(companyQuery, companyPage - 1)}
+                            className="rounded-lg border border-slate-200 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 dark:border-navy-700 dark:text-slate-300 text-[11px]"
+                          >
+                            Prev
+                          </button>
+                          <span className="text-[11px] text-slate-500">
+                            Pg {companyPage}/{Math.max(1, Math.ceil(totalCompaniesCount / 20))} ({totalCompaniesCount.toLocaleString()} total)
+                          </span>
+                          <button
+                            type="button"
+                            disabled={companyPage >= Math.ceil(totalCompaniesCount / 20) || searchingCompanies}
+                            onClick={() => searchCompanies(companyQuery, companyPage + 1)}
+                            className="rounded-lg border border-slate-200 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 dark:border-navy-700 dark:text-slate-300 text-[11px]"
+                          >
+                            Next
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="relative">
+                        <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          value={peopleQuery}
+                          onChange={(e) => setPeopleQuery(e.target.value)}
+                          placeholder="Search registered people by name or company…"
+                          className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-1.5 text-xs text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <select
+                          value={peopleCountryFilter}
+                          onChange={(e) => setPeopleCountryFilter(e.target.value)}
+                          className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-semibold text-slate-600 dark:border-navy-700 dark:bg-navy-900 dark:text-slate-300 outline-none cursor-pointer flex-1 max-w-[50%]"
+                        >
+                          <option value="All">All Countries</option>
+                          {peopleFilters.countries.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                        <select
+                          value={peopleSeniorityFilter}
+                          onChange={(e) => setPeopleSeniorityFilter(e.target.value)}
+                          className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-semibold text-slate-600 dark:border-navy-700 dark:bg-navy-900 dark:text-slate-300 outline-none cursor-pointer flex-1"
+                        >
+                          <option value="All">All Seniorities</option>
+                          {peopleFilters.seniorities.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </div>
+                      <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-white dark:border-navy-700 dark:bg-navy-900">
+                        {searchingPeople ? (
+                          <div className="p-4 text-center text-xs text-slate-400">Searching database…</div>
+                        ) : peopleResults.length === 0 ? (
+                          <div className="p-4 text-center text-xs text-slate-400">No people found.</div>
+                        ) : (
+                          peopleResults.map((p) => {
+                            if (!p) return null;
+                            const selected = !!selectedPeople[p.id];
+                            return (
+                              <label key={p.id} className="flex items-center justify-between p-2.5 hover:bg-slate-50 dark:hover:bg-navy-800 cursor-pointer border-b border-slate-50 last:border-0">
+                                <div>
+                                  <p className="text-xs font-bold text-navy-900 dark:text-white">{p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim()}</p>
+                                  <p className="text-[11px] text-slate-400">
+                                    {p.email || '❌ No email'} {p.organization_name ? ` · ${p.organization_name}` : ''}
+                                  </p>
+                                </div>
+                                <input
+                                  type="checkbox"
+                                  checked={selected}
+                                  onChange={() => togglePersonSelection(p)}
+                                  className="rounded border-slate-300 text-brand-500 focus:ring-brand-500"
+                                />
+                              </label>
+                            );
+                          })
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between pt-1 text-xs">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={peoplePage <= 1 || searchingPeople}
+                            onClick={() => searchPeople(peopleQuery, peoplePage - 1)}
+                            className="rounded-lg border border-slate-200 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 dark:border-navy-700 dark:text-slate-300 text-[11px]"
+                          >
+                            Prev
+                          </button>
+                          <span className="text-[11px] text-slate-500">
+                            Pg {peoplePage}/{Math.max(1, Math.ceil(totalPeopleCount / 20))} ({totalPeopleCount.toLocaleString()} total)
+                          </span>
+                          <button
+                            type="button"
+                            disabled={peoplePage >= Math.ceil(totalPeopleCount / 20) || searchingPeople}
+                            onClick={() => searchPeople(peopleQuery, peoplePage + 1)}
+                            className="rounded-lg border border-slate-200 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 dark:border-navy-700 dark:text-slate-300 text-[11px]"
+                          >
+                            Next
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -1204,7 +1501,16 @@ export default function EmailCampaign() {
               </div>
 
               <div>
-                <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400 font-bold">Email HTML Body</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-slate-500 dark:text-slate-400 font-bold">Email HTML Body</label>
+                  <button
+                    type="button"
+                    onClick={() => setShowBeautify(true)}
+                    className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-violet-500 to-brand-500 px-3 py-1.5 text-[11px] font-bold text-white shadow hover:opacity-90 transition-opacity"
+                  >
+                    <Wand2 size={12} /> ✨ Beautify
+                  </button>
+                </div>
                 <textarea
                   value={form.body}
                   onChange={(e) => setForm({ ...form, body: e.target.value })}
@@ -1330,22 +1636,50 @@ export default function EmailCampaign() {
       {showAddCompanies !== null && (
         <div
           className="fixed inset-0 z-50 flex items-end justify-center bg-navy-950/60 backdrop-blur-xs sm:items-center sm:p-4"
-          onClick={() => !addingCompanies && setShowAddCompanies(null)}
+          onClick={() => !addingCompanies && !addingPeople && setShowAddCompanies(null)}
         >
           <div
             className="flex max-h-[94dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-white dark:bg-navy-800 shadow-soft border border-slate-100 dark:border-navy-700 sm:max-h-[85vh] sm:rounded-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-navy-700 p-4 sm:p-5">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-navy-700 p-4 sm:p-5 shrink-0">
               <div>
-                <h3 className="text-sm font-bold text-navy-900 dark:text-white">Select Companies</h3>
-                <p className="text-xs text-slate-400 mt-0.5">Pick one or more companies to enroll in this campaign. A company already running in another campaign can't be selected again.</p>
+                <h3 className="text-sm font-bold text-navy-900 dark:text-white">Add Leads to Campaign</h3>
+                <p className="text-xs text-slate-400 mt-0.5">Enrolls targeted Companies or Contacts/People to this outreach campaign.</p>
               </div>
               <button onClick={() => setShowAddCompanies(null)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-navy-900 shrink-0">
                 <X size={18} />
               </button>
             </div>
 
+            {/* Tabs */}
+            <div className="flex border-b border-slate-100 dark:border-navy-700 px-4 sm:px-5 shrink-0 bg-slate-50/50 dark:bg-navy-900/30">
+              <button
+                type="button"
+                onClick={() => { setActiveModalTab('companies'); setCompaniesError(''); }}
+                className={`flex items-center gap-2 border-b-2 px-4 py-3 text-xs font-bold transition-all ${
+                  activeModalTab === 'companies'
+                    ? 'border-brand-500 text-brand-600 dark:text-brand-400 font-extrabold'
+                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <Building2 size={14} /> Companies
+              </button>
+              <button
+                type="button"
+                onClick={() => { setActiveModalTab('people'); setCompaniesError(''); }}
+                className={`flex items-center gap-2 border-b-2 px-4 py-3 text-xs font-bold transition-all ${
+                  activeModalTab === 'people'
+                    ? 'border-brand-500 text-brand-600 dark:text-brand-400 font-extrabold'
+                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <Users size={14} /> People
+              </button>
+            </div>
+
+            {/* Content Body */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3 sm:p-5 min-h-0">
               {companiesError && (
                 <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
@@ -1353,128 +1687,402 @@ export default function EmailCampaign() {
                 </div>
               )}
 
-              <div className="relative">
-                <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  value={companyQuery}
-                  onChange={(e) => setCompanyQuery(e.target.value)}
-                  placeholder="Search companies by name, UEI, or contact…"
-                  className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
-                />
-              </div>
+              {/* ────────────────────────────────────────────────────────── */}
+              {/* COMPANIES TAB */}
+              {/* ────────────────────────────────────────────────────────── */}
+              {activeModalTab === 'companies' && (
+                <>
+                  <div className="relative">
+                    <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      value={companyQuery}
+                      onChange={(e) => setCompanyQuery(e.target.value)}
+                      placeholder="Search companies by name, UEI, or contact…"
+                      className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                    />
+                  </div>
 
-              <div className="max-h-80 overflow-y-auto rounded-xl border border-slate-100 dark:border-navy-700">
-                {searchingCompanies ? (
-                  <div className="px-4 py-6 text-center text-xs text-slate-400">Searching…</div>
-                ) : companyResults.length === 0 ? (
-                  <div className="px-4 py-6 text-center text-xs text-slate-400">No companies found.</div>
-                ) : (
-                  companyResults.map((company) => {
-                    if (!company) return null;
-                    const key = normalizeCompanyKey(company.name, company.uei);
-                    const conflict = conflictFor(company);
-                    const selected = !!selectedCompanies[key];
-                    const hasEmail = !!company.email;
-                    const isResearching = company.isResearching;
-                    return (
-                      <div
-                        key={company.uei || key}
-                        className={`flex w-full items-center justify-between gap-3 border-b border-slate-50 px-4 py-2.5 text-left last:border-0 dark:border-navy-800/40 ${
-                          selected
-                            ? 'bg-brand-50 dark:bg-brand-500/10'
-                            : 'hover:bg-slate-50 dark:hover:bg-navy-900/60'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          {hasEmail ? (
-                            <button
-                              type="button"
-                              onClick={() => toggleCompanySelection(company)}
-                              className={`flex h-5 w-5 items-center justify-center rounded-md border ${selected ? 'border-brand-500 bg-brand-500' : 'border-slate-300 dark:border-navy-600'}`}
-                            >
-                              {selected && <Check size={12} className="text-white" />}
-                            </button>
-                          ) : isResearching ? (
-                            <Loader2 className="animate-spin text-brand-500 animate-duration-1000" size={14} />
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => triggerCompanyResearch(company.name)}
-                              className="rounded bg-brand-500 hover:bg-brand-600 px-2 py-1 text-[10px] font-bold text-white shadow-soft transition-colors"
-                            >
-                              Research
-                            </button>
-                          )}
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <p className="text-xs font-semibold text-navy-900 dark:text-white">{company.name}</p>
-                              {(company.hasResearchedProfile || company.is_researched) && (
-                                <span className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 px-1.5 py-0.2 text-[9px] font-extrabold">
-                                  Researched
-                                </span>
+                  <div className="flex gap-2">
+                    <select
+                      value={compSizeFilter}
+                      onChange={(e) => setCompSizeFilter(e.target.value)}
+                      className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-semibold text-slate-600 dark:border-navy-700 dark:bg-navy-900 dark:text-slate-300 outline-none cursor-pointer flex-1"
+                    >
+                      <option value="All">All Sizes</option>
+                      <option value="Small">Small Business</option>
+                      <option value="Large">Large Business</option>
+                    </select>
+                    <select
+                      value={compNaicsFilter}
+                      onChange={(e) => setCompNaicsFilter(e.target.value)}
+                      className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-semibold text-slate-600 dark:border-navy-700 dark:bg-navy-900 dark:text-slate-300 outline-none cursor-pointer flex-1 max-w-[50%]"
+                    >
+                      <option value="All">All NAICS</option>
+                      {compNaicsCodes.map(code => <option key={code} value={code}>{code}</option>)}
+                    </select>
+                  </div>
+
+                  <div className="max-h-60 overflow-y-auto rounded-xl border border-slate-100 dark:border-navy-700">
+                    {searchingCompanies ? (
+                      <div className="px-4 py-6 text-center text-xs text-slate-400">Searching…</div>
+                    ) : companyResults.length === 0 ? (
+                      <div className="px-4 py-6 text-center text-xs text-slate-400">No companies found.</div>
+                    ) : (
+                      companyResults.map((company) => {
+                        if (!company) return null;
+                        const key = normalizeCompanyKey(company.name, company.uei);
+                        const conflict = conflictFor(company);
+                        const selected = !!selectedCompanies[key];
+                        const hasEmail = !!company.email;
+                        const isResearching = company.isResearching;
+                        return (
+                          <div
+                            key={company.uei || key}
+                            className={`flex w-full items-center justify-between gap-3 border-b border-slate-50 px-4 py-2.5 text-left last:border-0 dark:border-navy-800/40 ${
+                              selected
+                                ? 'bg-brand-50 dark:bg-brand-500/10'
+                                : 'hover:bg-slate-50 dark:hover:bg-navy-900/60'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              {hasEmail ? (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleCompanySelection(company)}
+                                  className={`flex h-5 w-5 items-center justify-center rounded-md border ${selected ? 'border-brand-500 bg-brand-500' : 'border-slate-300 dark:border-navy-600'}`}
+                                >
+                                  {selected && <Check size={12} className="text-white" />}
+                                </button>
+                              ) : isResearching ? (
+                                <Loader2 className="animate-spin text-brand-500 animate-duration-1000" size={14} />
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => triggerCompanyResearch(company.name)}
+                                  className="rounded bg-brand-500 hover:bg-brand-600 px-2 py-1 text-[10px] font-bold text-white shadow-soft transition-colors"
+                                >
+                                  Research
+                                </button>
                               )}
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-xs font-semibold text-navy-900 dark:text-white">{company.name}</p>
+                                  {(company.hasResearchedProfile || company.is_researched) && (
+                                    <span className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 px-1.5 py-0.2 text-[9px] font-extrabold">
+                                      Researched
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[11px] text-slate-400">
+                                  {company.email || (isResearching ? '⏳ Research in progress...' : '❌ No contact data found')}
+                                  {company.contact ? ` · ${company.contact}` : ''}
+                                </p>
+                              </div>
                             </div>
-                            <p className="text-[11px] text-slate-400">
-                              {company.email || (isResearching ? '⏳ Research in progress...' : '❌ No contact data found')}
-                              {company.contact ? ` · ${company.contact}` : ''}
-                            </p>
+                            {conflict && (
+                              <span className="flex items-center gap-1 rounded-full bg-rose-50 px-2 py-1 text-[10px] font-semibold text-rose-600 dark:bg-rose-950/30 dark:text-rose-400">
+                                <AlertTriangle size={11} /> In "{conflict.campaignName}"
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-slate-100 dark:border-navy-700 pt-3 text-xs shrink-0">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={companyPage <= 1 || searchingCompanies}
+                        onClick={() => searchCompanies(companyQuery, companyPage - 1)}
+                        className="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 dark:border-navy-700 dark:text-slate-300"
+                      >
+                        Previous
+                      </button>
+                      <span className="text-slate-500 font-medium">
+                        Page {companyPage} of {Math.max(1, Math.ceil(totalCompaniesCount / 20))} ({totalCompaniesCount.toLocaleString()} total)
+                      </span>
+                      <button
+                        type="button"
+                        disabled={companyPage >= Math.ceil(totalCompaniesCount / 20) || searchingCompanies}
+                        onClick={() => searchCompanies(companyQuery, companyPage + 1)}
+                        className="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 dark:border-navy-700 dark:text-slate-300"
+                      >
+                        Next
+                      </button>
+                    </div>
+                    <span className="font-bold text-brand-600 dark:text-brand-400">
+                      {Object.keys(selectedCompanies).length} Selected
+                    </span>
+                  </div>
+
+                  <div className="flex justify-end gap-2 border-t border-slate-100 dark:border-navy-700 pt-4 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddCompanies(null)}
+                      className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-navy-900 hover:bg-slate-50 dark:border-navy-700 dark:bg-navy-800 dark:text-white dark:hover:bg-navy-700"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAddCompanies}
+                      disabled={addingCompanies || Object.keys(selectedCompanies).length === 0}
+                      className="rounded-lg bg-brand-500 px-4 py-2 text-xs font-bold text-white shadow-soft hover:bg-brand-600 disabled:opacity-60"
+                    >
+                      {addingCompanies ? 'Adding…' : `Add ${Object.keys(selectedCompanies).length || ''} Companies`}
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {/* ────────────────────────────────────────────────────────── */}
+              {/* PEOPLE / CONTACTS TAB */}
+              {/* ────────────────────────────────────────────────────────── */}
+              {activeModalTab === 'people' && (
+                <>
+                  <div className="relative">
+                    <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      value={peopleQuery}
+                      onChange={(e) => setPeopleQuery(e.target.value)}
+                      placeholder="Search people by name, title, or organization…"
+                      className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white"
+                    />
+                  </div>
+
+                  <div className="flex gap-2">
+                    <select
+                      value={peopleCountryFilter}
+                      onChange={(e) => setPeopleCountryFilter(e.target.value)}
+                      className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-semibold text-slate-600 dark:border-navy-700 dark:bg-navy-900 dark:text-slate-300 outline-none cursor-pointer flex-1 max-w-[50%]"
+                    >
+                      <option value="All">All Countries</option>
+                      {peopleFilters.countries.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <select
+                      value={peopleSeniorityFilter}
+                      onChange={(e) => setPeopleSeniorityFilter(e.target.value)}
+                      className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-semibold text-slate-600 dark:border-navy-700 dark:bg-navy-900 dark:text-slate-300 outline-none cursor-pointer flex-1"
+                    >
+                      <option value="All">All Seniorities</option>
+                      {peopleFilters.seniorities.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+
+                  {/* List of People */}
+                  <div className="max-h-48 overflow-y-auto rounded-xl border border-slate-100 dark:border-navy-700">
+                    {searchingPeople ? (
+                      <div className="px-4 py-6 text-center text-xs text-slate-400">Searching…</div>
+                    ) : peopleResults.length === 0 ? (
+                      <div className="px-4 py-6 text-center text-xs text-slate-400">No contacts found.</div>
+                    ) : (
+                      peopleResults.map((person) => {
+                        const selected = !!selectedPeople[person.id];
+                        return (
+                          <div
+                            key={person.id}
+                            className={`flex w-full items-center justify-between gap-3 border-b border-slate-50 px-4 py-2.5 text-left last:border-0 dark:border-navy-800/40 ${
+                              selected
+                                ? 'bg-brand-50 dark:bg-brand-500/10'
+                                : 'hover:bg-slate-50 dark:hover:bg-navy-900/60'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <button
+                                type="button"
+                                onClick={() => togglePersonSelection(person)}
+                                className={`flex h-5 w-5 items-center justify-center rounded-md border ${selected ? 'border-brand-500 bg-brand-500' : 'border-slate-300 dark:border-navy-600'}`}
+                              >
+                                {selected && <Check size={12} className="text-white" />}
+                              </button>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-xs font-semibold text-navy-900 dark:text-white">{person.full_name || `${person.first_name || ''} ${person.last_name || ''}`.trim()}</p>
+                                  {person.seniority && (
+                                    <span className="inline-flex items-center rounded-full bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300 px-1.5 py-0.2 text-[9px] font-extrabold">
+                                      {person.seniority}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[11px] text-slate-400">
+                                  {person.email || '❌ No email'} {person.organization_name ? ` · ${person.organization_name}` : ''}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Pagination footer */}
+                  <div className="flex items-center justify-between border-t border-slate-100 dark:border-navy-700 pt-3 text-xs shrink-0">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={peoplePage <= 1 || searchingPeople}
+                        onClick={() => searchPeople(peopleQuery, peoplePage - 1)}
+                        className="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 dark:border-navy-700 dark:text-slate-300"
+                      >
+                        Previous
+                      </button>
+                      <span className="text-slate-500 font-medium">
+                        Page {peoplePage} of {Math.max(1, Math.ceil(totalPeopleCount / 20))} ({totalPeopleCount.toLocaleString()} total)
+                      </span>
+                      <button
+                        type="button"
+                        disabled={peoplePage >= Math.ceil(totalPeopleCount / 20) || searchingPeople}
+                        onClick={() => searchPeople(peopleQuery, peoplePage + 1)}
+                        className="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 dark:border-navy-700 dark:text-slate-300"
+                      >
+                        Next
+                      </button>
+                    </div>
+                    <span className="font-bold text-brand-600 dark:text-brand-400">
+                      {Object.keys(selectedPeople).length} Selected
+                    </span>
+                  </div>
+
+                  {/* Segment Builder (Only shown when people are selected) */}
+                  {Object.keys(selectedPeople).length > 0 && (
+                    <div className="rounded-xl border border-brand-100 bg-brand-50/20 dark:border-navy-700 dark:bg-navy-900/50 p-4 space-y-3 mt-3">
+                      <div className="flex items-center gap-1.5 text-brand-600 dark:text-brand-400">
+                        <Wand2 size={13} />
+                        <h4 className="text-xs font-bold uppercase tracking-wider">✦ Contacts Segment Builder</h4>
+                      </div>
+
+                      {/* Filter criteria */}
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 mb-1">Details Available</label>
+                          <div className="space-y-1.5">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={segmentFilters.hasEmail}
+                                onChange={(e) => setSegmentFilters(f => ({ ...f, hasEmail: e.target.checked }))}
+                                className="rounded border-slate-300 text-brand-500 focus:ring-brand-400 h-3.5 w-3.5"
+                              />
+                              <span>Has Email address</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={segmentFilters.hasPhone}
+                                onChange={(e) => setSegmentFilters(f => ({ ...f, hasPhone: e.target.checked }))}
+                                className="rounded border-slate-300 text-brand-500 focus:ring-brand-400 h-3.5 w-3.5"
+                              />
+                              <span>Has Phone number</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={segmentFilters.hasLinkedin}
+                                onChange={(e) => setSegmentFilters(f => ({ ...f, hasLinkedin: e.target.checked }))}
+                                className="rounded border-slate-300 text-brand-500 focus:ring-brand-400 h-3.5 w-3.5"
+                              />
+                              <span>Has LinkedIn Profile</span>
+                            </label>
                           </div>
                         </div>
-                        {conflict && (
-                          <span className="flex items-center gap-1 rounded-full bg-rose-50 px-2 py-1 text-[10px] font-semibold text-rose-600 dark:bg-rose-950/30 dark:text-rose-400">
-                            <AlertTriangle size={11} /> In "{conflict.campaignName}"
-                          </span>
-                        )}
+
+                        <div className="space-y-2">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-400 mb-1">Country</label>
+                            <select
+                              value={segmentFilters.country}
+                              onChange={(e) => setSegmentFilters(f => ({ ...f, country: e.target.value }))}
+                              className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs dark:border-navy-700 dark:bg-navy-900"
+                            >
+                              <option value="All">All Countries</option>
+                              {peopleFilters.countries?.map(c => (
+                                <option key={c} value={c}>{c}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-400 mb-1">Seniority</label>
+                            <select
+                              value={segmentFilters.seniority}
+                              onChange={(e) => setSegmentFilters(f => ({ ...f, seniority: e.target.value }))}
+                              className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs dark:border-navy-700 dark:bg-navy-900"
+                            >
+                              <option value="All">All Seniorities</option>
+                              {peopleFilters.seniorities?.map(s => (
+                                <option key={s} value={s}>{s}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
                       </div>
-                    );
-                  })
-                )}
-              </div>
 
-              <div className="flex items-center justify-between border-t border-slate-100 dark:border-navy-700 pt-3 text-xs">
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={companyPage <= 1 || searchingCompanies}
-                    onClick={() => searchCompanies(companyQuery, companyPage - 1)}
-                    className="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 dark:border-navy-700 dark:text-slate-300"
-                  >
-                    Previous
-                  </button>
-                  <span className="text-slate-500 font-medium">
-                    Page {companyPage} of {Math.max(1, Math.ceil(totalCompaniesCount / 20))} ({totalCompaniesCount.toLocaleString()} total)
-                  </span>
-                  <button
-                    type="button"
-                    disabled={companyPage >= Math.ceil(totalCompaniesCount / 20) || searchingCompanies}
-                    onClick={() => searchCompanies(companyQuery, companyPage + 1)}
-                    className="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 dark:border-navy-700 dark:text-slate-300"
-                  >
-                    Next
-                  </button>
-                </div>
-                <span className="font-bold text-brand-600 dark:text-brand-400">
-                  {Object.keys(selectedCompanies).length} Selected
-                </span>
-              </div>
+                      {/* Segment Tag */}
+                      <div className="pt-2 border-t border-slate-100 dark:border-navy-800">
+                        <label className="block text-[10px] font-bold text-slate-400 mb-1">Group Tag / Label (optional)</label>
+                        <input
+                          type="text"
+                          value={segmentTag}
+                          onChange={(e) => setSegmentTag(e.target.value)}
+                          placeholder="e.g. Apollo-Senior-IT-June"
+                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-navy-900 dark:border-navy-700 dark:bg-navy-900 dark:text-white outline-none focus:border-brand-500"
+                        />
+                      </div>
 
-              <div className="flex justify-end gap-2 border-t border-slate-100 dark:border-navy-700 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowAddCompanies(null)}
-                  className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-navy-900 hover:bg-slate-50 dark:border-navy-700 dark:bg-navy-800 dark:text-white dark:hover:bg-navy-700"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleAddCompanies}
-                  disabled={addingCompanies || Object.keys(selectedCompanies).length === 0}
-                  className="rounded-lg bg-brand-500 px-4 py-2 text-xs font-bold text-white shadow-soft hover:bg-brand-600 disabled:opacity-60"
-                >
-                  {addingCompanies ? 'Adding…' : `Add ${Object.keys(selectedCompanies).length || ''} to Campaign`}
-                </button>
-              </div>
+                      {/* Matching info */}
+                      <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
+                        <span>
+                          Matching Segment:{' '}
+                          <strong className="text-brand-600 dark:text-brand-400">
+                            {
+                              Object.values(selectedPeople).filter(p => {
+                                if (segmentFilters.hasEmail && !p.email) return false;
+                                if (segmentFilters.hasPhone && !p.phone) return false;
+                                if (segmentFilters.hasLinkedin && !p.linkedin_url) return false;
+                                if (segmentFilters.country !== 'All' && p.country !== segmentFilters.country) return false;
+                                if (segmentFilters.seniority !== 'All' && p.seniority !== segmentFilters.seniority) return false;
+                                return true;
+                              }).length
+                            }
+                          </strong>{' '}
+                          contacts
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  <div className="flex justify-end gap-2 border-t border-slate-100 dark:border-navy-700 pt-4 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddCompanies(null)}
+                      className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-navy-900 hover:bg-slate-50 dark:border-navy-700 dark:bg-navy-800 dark:text-white dark:hover:bg-navy-700"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAddPeople}
+                      disabled={addingPeople || Object.keys(selectedPeople).length === 0}
+                      className="rounded-lg bg-brand-500 px-4 py-2 text-xs font-bold text-white shadow-soft hover:bg-brand-600 disabled:opacity-60 flex items-center gap-2"
+                    >
+                      {addingPeople && <Loader2 size={12} className="animate-spin" />}
+                      {addingPeople ? 'Importing…' : `Import Segment (${
+                        Object.values(selectedPeople).filter(p => {
+                          if (segmentFilters.hasEmail && !p.email) return false;
+                          if (segmentFilters.hasPhone && !p.phone) return false;
+                          if (segmentFilters.hasLinkedin && !p.linkedin_url) return false;
+                          if (segmentFilters.country !== 'All' && p.country !== segmentFilters.country) return false;
+                          if (segmentFilters.seniority !== 'All' && p.seniority !== segmentFilters.seniority) return false;
+                          return true;
+                        }).length
+                      })`}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -1536,6 +2144,15 @@ export default function EmailCampaign() {
             </div>
           </div>
         </div>
+      )}
+
+      {showBeautify && (
+        <EmailBeautifyModal
+          subject={form.subject}
+          body={form.body}
+          onConfirm={(html) => { setForm(f => ({ ...f, body: html })); setShowBeautify(false); }}
+          onClose={() => setShowBeautify(false)}
+        />
       )}
     </div>
   );
