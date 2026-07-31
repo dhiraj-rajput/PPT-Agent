@@ -1,22 +1,19 @@
 #!/bin/bash
 # ============================================================
-# make_backend_zip.sh — Clean backend zip for cPanel upload
+# zip.sh — Clean deployment zip generator for cPanel upload
 # ============================================================
-# Zips PPT-Agent/backend/ while excluding everything that
-# shouldn't go to the server: caches, venvs, secrets, logs,
-# and runtime-generated files.
+# Zips the target directory (backend or entire project root)
+# while excluding all server/dev trash: caches, venvs, secrets,
+# logs, node_modules, frontend build trash (dist, .vite, etc.).
 #
 # Usage:
-#   ./make_backend_zip.sh                     # run from repo root, uses ./backend
-#   ./make_backend_zip.sh /path/to/backend     # explicit backend path
-#   ./make_backend_zip.sh /path/to/backend /path/to/output.zip
+#   ./zip.sh                          # run from repo root, uses ./backend
+#   ./zip.sh ./                       # zip entire project root cleanly
+#   ./zip.sh /path/to/project         # explicit project path
+#   ./zip.sh /path/to/project output.zip
 #
-# By default, ALL .env* files are excluded — this is intentional.
-# You don't want a fresh zip silently overwriting the carefully
-# configured .env already sitting on the server. Edit .env on the
-# server directly, or upload it separately if you really need to.
-# Pass --include-env to keep .env.example / .env.production in the
-# zip (the live .env itself is still always excluded).
+# Pass --include-env to include example/production env templates
+# (live .env itself is always excluded).
 # ============================================================
 
 set -euo pipefail
@@ -36,12 +33,12 @@ done
 set -- "${POSITIONAL[@]:-}"
 
 SRC_DIR="${1:-./backend}"
-OUT_ZIP="${2:-./backend-deploy-$(date +%Y%m%d-%H%M%S).zip}"
+OUT_ZIP="${2:-./deploy-$(date +%Y%m%d-%H%M%S).zip}"
 
 if [ ! -d "$SRC_DIR" ]; then
-    echo "Error: backend directory not found at '$SRC_DIR'" >&2
+    echo "Error: Directory not found at '$SRC_DIR'" >&2
     echo "Run this from your repo root, or pass the path explicitly:" >&2
-    echo "  ./make_backend_zip.sh /path/to/PPT-Agent/backend" >&2
+    echo "  ./zip.sh ./" >&2
     exit 1
 fi
 
@@ -64,40 +61,93 @@ EXCLUDES=(
     # Python bytecode / caches
     "$BASE_NAME/*/__pycache__/*"
     "$BASE_NAME/__pycache__/*"
-    "$BASE_NAME/*.pyc"
-    "$BASE_NAME/*.pyo"
-    "$BASE_NAME/*/.pytest_cache/*"
-    "$BASE_NAME/*/.mypy_cache/*"
-    "$BASE_NAME/*.egg-info/*"
+    "*/__pycache__/*"
+    "__pycache__/*"
+    "*.pyc"
+    "*.pyo"
+    "*/.pytest_cache/*"
+    "*/.mypy_cache/*"
+    "*.egg-info/*"
 
-    # Virtual environments (never ship these — recreated on server via
-    # cPanel Setup Python App + pip install)
+    # Virtual environments
     "$BASE_NAME/.venv/*"
     "$BASE_NAME/venv/*"
     "$BASE_NAME/env/*"
     "$BASE_NAME/ENV/*"
+    "*/.venv/*"
+    "*/venv/*"
+    "*/env/*"
+
+    # Frontend / Node trash & build artifacts
+    "$BASE_NAME/node_modules/*"
+    "$BASE_NAME/*/node_modules/*"
+    "*/node_modules/*"
+    "node_modules/*"
+
+    "$BASE_NAME/dist/*"
+    "$BASE_NAME/*/dist/*"
+    "*/dist/*"
+    "dist/*"
+
+    "$BASE_NAME/build/*"
+    "$BASE_NAME/*/build/*"
+    "*/build/*"
+
+    "$BASE_NAME/.vite/*"
+    "$BASE_NAME/*/.vite/*"
+    "*/.vite/*"
+
+    "$BASE_NAME/.cache/*"
+    "$BASE_NAME/*/.cache/*"
+    "*/.cache/*"
+
+    "$BASE_NAME/coverage/*"
+    "$BASE_NAME/*/coverage/*"
+
+    "$BASE_NAME/npm-debug.log*"
+    "$BASE_NAME/yarn-debug.log*"
+    "$BASE_NAME/yarn-error.log*"
+    "$BASE_NAME/.eslintcache"
+    "*.log"
+    "*/*.log"
 
     # Version control / editor / OS junk
     "$BASE_NAME/.git/*"
+    "*/.git/*"
+    ".git/*"
     "$BASE_NAME/.idea/*"
+    "*/.idea/*"
     "$BASE_NAME/.vscode/*"
-    "$BASE_NAME/*.DS_Store"
-    "$BASE_NAME/*Thumbs.db"
+    "*/.vscode/*"
+    "*.DS_Store"
+    "*DS_Store"
+    "*Thumbs.db"
 
-    # Runtime-generated data — recreated automatically on the server,
-    # don't ship stale copies over the live ones
+    # Runtime-generated data / secrets
     "$BASE_NAME/logs/*"
+    "*/logs/*"
     "$BASE_NAME/output/*"
+    "*/output/*"
     "$BASE_NAME/private/*"
+    "*/private/*"
     "$BASE_NAME/downloads/*"
-    "$BASE_NAME/*.log"
+    "*/downloads/*"
 
-    # Secrets — see --include-env flag above
+    # Secrets
     "$BASE_NAME/.env"
+    "*/.env"
+    ".env"
 )
 
 if [ "$INCLUDE_ENV" = false ]; then
-    EXCLUDES+=("$BASE_NAME/.env.production" "$BASE_NAME/.env.localhost" "$BASE_NAME/.env.example")
+    EXCLUDES+=(
+        "$BASE_NAME/.env.production"
+        "$BASE_NAME/.env.localhost"
+        "$BASE_NAME/.env.example"
+        "*/.env.production"
+        "*/.env.localhost"
+        "*/.env.example"
+    )
 fi
 
 rm -f "$OUT_ZIP"
@@ -114,18 +164,10 @@ echo "Size:"
 du -h "$OUT_ZIP"
 echo ""
 echo "Sanity check — confirming nothing unwanted got in:"
-BAD=$(unzip -l "$OUT_ZIP" | grep -E "__pycache__|\.pyc$|/\.env$|/logs/|/output/|/private/|/downloads/|\.git/" || true)
+BAD=$(unzip -l "$OUT_ZIP" | grep -E "__pycache__|\.pyc$|/\.env$|/logs/|/output/|/private/|/downloads/|\.git/|node_modules/|/dist/|/\.vite/" || true)
 if [ -n "$BAD" ]; then
     echo "WARNING: found unexpected files in the zip:"
     echo "$BAD"
 else
-    echo "Clean — no caches, envs, logs, or venvs included."
+    echo "Clean — no caches, envs, logs, node_modules, dist, or venvs included."
 fi
-
-echo ""
-echo "Upload $OUT_ZIP via cPanel File Manager into"
-echo "  /home/<user>/winbid.avanyaedge.com/"
-echo "then use File Manager's 'Extract' on it (faster than uploading"
-echo "thousands of individual files), and it will unpack to"
-echo "  /home/<user>/winbid.avanyaedge.com/backend/"
-echo "overwriting code files but leaving out .env, logs, and venv."

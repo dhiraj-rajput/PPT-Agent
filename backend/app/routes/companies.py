@@ -535,9 +535,12 @@ async def add_company(
     if not _mysql_available:
         raise HTTPException(status_code=500, detail="MySQL database is unavailable.")
 
-    uei = company_data.uei.strip()
+    uei = (company_data.uei or "").strip()
     if not uei:
-        raise HTTPException(status_code=400, detail="UEI is required")
+        import hashlib
+        c_name = (company_data.name or "Company").strip()
+        c_loc = (company_data.location or company_data.city or "USA").strip()
+        uei = f"GEN-{hashlib.md5(f'{c_name}_{c_loc}'.encode('utf-8')).hexdigest()[:12].upper()}"
 
     try:
         async for db in get_db_session():
@@ -604,10 +607,16 @@ async def import_companies(payload: dict, current_user: dict = Depends(get_curre
                     except Exception:
                         continue
 
-                    uei = validated_item.uei.strip().upper()
+                    uei = (validated_item.uei or "").strip().upper()
+                    if not uei:
+                        import hashlib
+                        c_name = (validated_item.name or "Company").strip()
+                        c_loc = (validated_item.location or "").strip()
+                        uei = f"GEN-{hashlib.md5(f'{c_name}_{c_loc}'.encode('utf-8')).hexdigest()[:12].upper()}"
+
                     stmt = select(SQL_Company).where(SQL_Company.uei == uei)
                     existing = (await db.execute(stmt)).scalar_one_or_none()
-                    if uei and not existing:
+                    if not existing:
                         try:
                             match_score = validated_item.matchScore or compute_company_match_score(
                                 primary_naics=validated_item.primary_naics or "",
@@ -722,14 +731,22 @@ async def _process_csv_stream(text_stream) -> int:
         if not isinstance(uei, str):
             uei = str(uei or "")
         uei = uei.strip().upper()
-        if not uei or uei in seen_ueis_in_file:
-            continue
-
         name = (
             row.get("Legal_Business_Name") or row.get("DBA_Name") or
-            row.get("name") or ""
+            row.get("name") or row.get("Company Name") or row.get("company_name") or ""
         ).strip()
         if not name:
+            continue
+
+        if not uei:
+            import hashlib
+            city = (row.get("Phys_City") or row.get("city") or "").strip().title()
+            state = (row.get("Phys_State_Province") or row.get("state") or "").strip().upper()
+            country = (row.get("Phys_Country") or row.get("country") or "").strip().upper()
+            loc_str = f"{city}, {state}" if city and state else (city or state or country or "USA")
+            uei = f"GEN-{hashlib.md5(f'{name}_{loc_str}'.encode('utf-8')).hexdigest()[:12].upper()}"
+
+        if uei in seen_ueis_in_file:
             continue
 
         seen_ueis_in_file.add(uei)

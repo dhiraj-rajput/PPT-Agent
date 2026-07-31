@@ -31,6 +31,16 @@ router = APIRouter(prefix="/people", tags=["people"])
 VALID_STATUSES = {"Pending", "Processing", "Completed", "Failed", "Duplicate"}
 VALID_SOURCES = {"Apollo", "LinkedIn", "CSV Import", "Excel Import", "Manual Entry"}
 
+REQUIRED_COLUMNS = [
+    "source", "status", "organization_name",
+    "first_name", "last_name", "full_name",
+    "title", "function_name", "seniority",
+    "email", "email_status", "email_confidence",
+    "phone", "linkedin_url",
+    "city", "state", "country",
+    "job_start_date",
+]
+
 
 # ---------------------------------------------------------------------------
 # Helpers
