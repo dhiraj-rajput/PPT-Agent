@@ -229,15 +229,9 @@ async def import_naics_file(
     MAX_NAICS_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
     filename = file.filename or ""
 
-    # Read with a hard size cap to prevent OOM on oversized uploads
-    chunks: list[bytes] = []
-    total_bytes = 0
-    async for chunk in file:
-        total_bytes += len(chunk)
-        if total_bytes > MAX_NAICS_FILE_SIZE:
-            raise HTTPException(status_code=413, detail="File too large. Maximum allowed size is 5MB.")
-        chunks.append(chunk)
-    contents = b"".join(chunks)
+    contents = await file.read()
+    if len(contents) > MAX_NAICS_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="File too large. Maximum allowed size is 5MB.")
     
     imported_count = 0
     

@@ -396,9 +396,9 @@ def update_task_status(
                 db.execute(
                     text(
                         "INSERT INTO task_statuses (task_id, task_type, status, progress, message, last_updated, result, created_at) "
-                        "VALUES (:task_id, :task_type, :status, :progress, :message, :last_updated, :result, :created_at) AS new_vals "
-                        "ON DUPLICATE KEY UPDATE task_type=new_vals.task_type, status=new_vals.status, progress=new_vals.progress, "
-                        "message=new_vals.message, last_updated=new_vals.last_updated, result=new_vals.result"
+                        "VALUES (:task_id, :task_type, :status, :progress, :message, :last_updated, :result, :created_at) "
+                        "ON DUPLICATE KEY UPDATE task_type=VALUES(task_type), status=VALUES(status), progress=VALUES(progress), "
+                        "message=VALUES(message), last_updated=VALUES(last_updated), result=VALUES(result)"
                     ),
                     {
                         "task_id": task_id,
@@ -501,9 +501,9 @@ async def update_task_status_async(
                 await db.execute(
                     text(
                         "INSERT INTO task_statuses (task_id, task_type, status, progress, message, last_updated, result, created_at) "
-                        "VALUES (:task_id, :task_type, :status, :progress, :message, :last_updated, :result, :created_at) AS new_vals "
-                        "ON DUPLICATE KEY UPDATE task_type=new_vals.task_type, status=new_vals.status, progress=new_vals.progress, "
-                        "message=new_vals.message, last_updated=new_vals.last_updated, result=new_vals.result"
+                        "VALUES (:task_id, :task_type, :status, :progress, :message, :last_updated, :result, :created_at) "
+                        "ON DUPLICATE KEY UPDATE task_type=VALUES(task_type), status=VALUES(status), progress=VALUES(progress), "
+                        "message=VALUES(message), last_updated=VALUES(last_updated), result=VALUES(result)"
                     ),
                     {
                         "task_id": task_id,
@@ -517,7 +517,6 @@ async def update_task_status_async(
                     },
                 )
         except Exception as e:
-            logger.error(f"[mysql] update_task_status_async MySQL failed: {e}")
             logger.error(f"[mysql] update_task_status_async MySQL failed: {e}")
 
 

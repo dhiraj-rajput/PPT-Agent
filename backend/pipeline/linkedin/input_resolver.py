@@ -221,16 +221,19 @@ class InputResolver:
             company_name=company_name
         )
 
-        tavily_client = TavilyClient(api_key=settings.TAVILY_API_KEY)
-        logger.info(f"Tavily search query: '{search_query}'")
+        try:
+            tavily_client = TavilyClient(api_key=settings.TAVILY_API_KEY)
+            logger.info(f"Tavily search query: '{search_query}'")
 
-        search_response = tavily_client.search(
-            query=search_query,
-            max_results=TAVILY_MAX_SEARCH_RESULTS,
-            search_depth="basic",
-        )
-
-        search_results = search_response.get("results", [])
+            search_response = tavily_client.search(
+                query=search_query,
+                max_results=TAVILY_MAX_SEARCH_RESULTS,
+                search_depth="basic",
+            )
+            search_results = search_response.get("results", [])
+        except Exception as e:
+            logger.warning(f"Tavily search failed for '{company_name}': {e}")
+            search_results = []
 
         # Look for a LinkedIn company URL in the search results
         for result in search_results:
