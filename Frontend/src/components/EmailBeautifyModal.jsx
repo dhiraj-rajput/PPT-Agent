@@ -55,7 +55,8 @@ export default function EmailBeautifyModal({ subject = '', body = '', onConfirm,
   const handleGenerate = useCallback(async (customBody) => {
     setGenerating(true);
     setGenError('');
-    const targetBody = customBody || (html.includes('<') ? body || html : html);
+    const bodyStr = typeof customBody === 'string' ? customBody : '';
+    const targetBody = bodyStr || (html.includes('<') ? body || html : html);
     try {
       const res = await api.beautifyEmail({ subject, body: targetBody, style });
       setHtml(res.html || html);
@@ -175,7 +176,7 @@ export default function EmailBeautifyModal({ subject = '', body = '', onConfirm,
                   </button>
                 ))}
               </div>
-              <button type="button" onClick={handleGenerate} disabled={generating}
+              <button type="button" onClick={() => handleGenerate()} disabled={generating}
                 className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-brand-500 py-2.5 text-xs font-bold text-white shadow hover:opacity-90 disabled:opacity-70 transition-opacity">
                 {generating ? <><Loader2 size={14} className="animate-spin" /> Generating…</> : <><Sparkles size={14} /> Generate with AI</>}
               </button>
