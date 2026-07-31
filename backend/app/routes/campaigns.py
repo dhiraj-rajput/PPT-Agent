@@ -7,6 +7,7 @@ Campaign management & execution endpoints using MySQL.
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Any
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File
@@ -23,6 +24,7 @@ from models.sql_models import (
 from sqlalchemy import select, insert, update, delete, func
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"])
+logger = logging.getLogger(__name__)
 
 from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -657,7 +659,7 @@ async def beautify_email(
     current_user: dict = Depends(get_current_user),
 ):
     """Use LLM to convert a plain-text email draft into a beautiful responsive HTML email."""
-    from pipeline.ai.client import get_ai_client
+    from pipeline.ai.client import get_ai_client, AIUnavailableError, RateLimitError
 
     style_map = {
         "professional": "Clean, corporate, navy and white tones, formal language",
@@ -687,7 +689,22 @@ Plain text draft:
 
     try:
         client = get_ai_client()
-        html = await asyncio.to_thread(client.chat, [{"role": "user", "content": prompt}])
+        html = await asyncio.to_thread(
+            client.chat_text,
+            [
+                {
+                    "role": "system",
+                    "content": "You are an expert HTML email designer. You respond with ONLY raw HTML — no markdown, no code fences, no commentary before or after the HTML.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            None,   # model (use default/fallback chain)
+            3,      # max_retries
+            False,  # json_mode — we want raw HTML, not JSON
+            4096,   # max_tokens — plenty for a single email template
+        )
+        if not html or not html.strip():
+            raise AIUnavailableError("AI returned an empty response.")
         # Strip any accidental markdown fences
         html = html.strip()
         if html.startswith("```"):
@@ -695,8 +712,15 @@ Plain text draft:
         if html.endswith("```"):
             html = html.rsplit("\n", 1)[0] if "\n" in html else html[:-3]
         html = html.strip()
-        return {"html": html}
+        return {"html": html, "usedFallback": False}
     except Exception as e:
+        # Log the real reason the AI call failed — this used to be swallowed
+        # entirely, so a broken AI client (e.g. a bad method name, missing
+        # API key, or every provider being rate-limited) looked identical to
+        # a working call that happened to render a plain template.
+        reason = "rate-limited" if isinstance(e, RateLimitError) else str(e)
+        logger.warning("[beautify-email] AI generation failed, using fallback template: %s", reason)
+
         # Fallback: return a basic styled template
         fallback_html = f"""<!DOCTYPE html>
 <html><body style='margin:0;padding:0;background:#f4f4f4;font-family:Arial,sans-serif;'>
@@ -713,7 +737,7 @@ Plain text draft:
 </td></tr>
 </table></td></tr></table>
 </body></html>"""
-        return {"html": fallback_html}
+        return {"html": fallback_html, "usedFallback": True, "error": reason}
 
 
 # ---------------------------------------------------------------------------

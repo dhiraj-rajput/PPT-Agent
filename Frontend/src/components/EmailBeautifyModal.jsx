@@ -60,6 +60,11 @@ export default function EmailBeautifyModal({ subject = '', body = '', onConfirm,
     try {
       const res = await api.beautifyEmail({ subject, body: targetBody, style });
       setHtml(res.html || html);
+      if (res.usedFallback) {
+        setGenError(`AI generation unavailable, showing a basic template instead${res.error ? ` (${res.error})` : ''}.`);
+      } else {
+        setGenError('');
+      }
     } catch (err) {
       setGenError(err?.message || 'AI generation failed — check your API key.');
       // still show fallback
