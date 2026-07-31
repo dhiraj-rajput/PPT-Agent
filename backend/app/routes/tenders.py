@@ -441,16 +441,72 @@ async def get_tenders(
     }
 
 
+import os
+from utils.db_client import get_db_session, get_sync_db_session, _mysql_available
+from config.settings import settings
+from app.core.auth import get_current_user
+from models.sql_models import (
+    Tender as SQL_Tender,
+    DraftRequest as SQL_DraftRequest,
+    SystemSettings as SQL_SystemSettings,
+    User as SQLUser,
+    Integration as SQL_Integration,
+)
+from sqlalchemy import select, update, insert, delete, func, or_, and_
+
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/tenders", tags=["tenders"])
+
+SAM_OPPORTUNITIES_BASE = getattr(settings, "SAM_GOV_API_URL", "https://api.sam.gov/opportunities/v2/search")
+
+
+def _sanitize_path_component(val: str) -> str:
+    return re.sub(r'[\\/*?:"<>|]', "_", str(val or "")).strip()
+
+
+async def _get_sam_api_key(user_id: Optional[int] = None) -> str:
+    """Retrieve SAM.gov API key from user integration, env, or settings."""
+    if user_id and _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_Integration).where(SQL_Integration.service == "sam", SQL_Integration.user_id == user_id)
+                doc = (await db.execute(stmt)).scalar_one_or_none()
+                if doc and getattr(doc, "connected", False) and getattr(doc, "access_token", None):
+                    val = str(doc.access_token).strip()
+                    if val and not val.startswith("your_"):
+                        return val
+        except Exception:
+            pass
+
+    env_val = (os.environ.get("SAM_GOV_API_KEY") or "").strip()
+    if env_val and not env_val.startswith("your_"):
+        return env_val
+
+    settings_val = (getattr(settings, "SAM_GOV_API_KEY", "") or "").strip()
+    if settings_val and not settings_val.startswith("your_"):
+        return settings_val
+
+    return ""
+
+
 @router.post("/sync")
 async def sync_tenders_from_sam(
     payload: dict = {},
     current_user: dict = Depends(get_current_user),
 ):
-    api_key = settings.SAM_GOV_API_KEY
-    force_mock = settings.FORCE_MOCK_SAM_GOV
+    uid = None
+    if current_user and "id" in current_user:
+        try:
+            uid = int(current_user["id"])
+        except ValueError:
+            pass
 
-    if not force_mock:
-        # Check cooldown
+    api_key = await _get_sam_api_key(uid)
+    force_mock = settings.FORCE_MOCK_SAM_GOV
+    is_force = bool(payload.get("force"))
+
+    if not force_mock and not is_force:
+        # Check cooldown only if not forced
         if _mysql_available:
             async for db in get_db_session():
                 stmt = select(SQL_SystemSettings).where(SQL_SystemSettings.key_name == "tenders_meta")
@@ -484,7 +540,7 @@ async def sync_tenders_from_sam(
     if not api_key and not force_mock:
         raise HTTPException(
             status_code=503,
-            detail="SAM_GOV_API_KEY is not set. Add it to your .env file.",
+            detail="SAM_GOV_API_KEY is not configured. Connect your SAM.gov API Key in Integrations or set it in your environment.",
         )
 
     params: dict = {

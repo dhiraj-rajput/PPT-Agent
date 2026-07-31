@@ -151,8 +151,11 @@ def _to_public_user(u: Optional[dict]) -> dict:
     }
 
 
+_DUMMY_BCRYPT_HASH = b"$2b$12$eImiTXuWVxfMjpqq89.8AOjP64.D1234567890123456789012"
+
+
 async def _send_otp_for_user(user_id: str, email: str, purpose: str) -> None:
-    """Generate, store, and email an OTP for the given purpose using MySQL primary or Mongo fallback."""
+    """Generate, store, and email an OTP for the given purpose using MySQL."""
     otp = _generate_otp()
     if _mysql_available:
         try:
@@ -176,24 +179,9 @@ async def _send_otp_for_user(user_id: str, email: str, purpose: str) -> None:
             return
         except Exception as e:
             import logging
-            logging.getLogger("auth").warning(f"MySQL OTP save failed, trying Mongo fallback: {e}")
-
-    # Fallback to MongoDB
-    otps_col = get_async_collection("otps")
-    await otps_col.delete_many({"userId": str(user_id), "purpose": purpose})
-    await otps_col.insert_one({
-        "userId": str(user_id),
-        "purpose": purpose,
-        "otpHash": _hash_otp(otp),
-        "attempts": 0,
-        "expiresAt": _otp_expiry(),
-        "createdAt": datetime.now(tz=timezone.utc),
-    })
-    import logging as _logging
-    _logging.getLogger("auth").info("🔑 [DEV OTP] Generated OTP for %s (%s): %s", email, purpose, otp)
-    print(f"\n🔑 [DEV OTP CODE] {email} ({purpose}): {otp}\n", flush=True)
-    asyncio.create_task(send_otp_email(email, otp, purpose))
-
+            logging.getLogger("auth").error(f"MySQL OTP save failed: {e}")
+            raise HTTPException(500, "Failed to generate security OTP.")
+    raise HTTPException(500, "Database unavailable.")
 
 
 # ---------------------------------------------------------------------------
@@ -257,7 +245,6 @@ async def register(body: RegisterBody):
 
     normalized = body.email.lower().strip()
     existing_sql = None
-    existing_mongo = None
 
     if _mysql_available:
         try:
@@ -267,22 +254,19 @@ async def register(body: RegisterBody):
                 existing_sql = res.scalar_one_or_none()
         except Exception as e:
             import logging
-            logging.getLogger("auth").warning(f"MySQL check in register failed: {e}")
+            logging.getLogger("auth").error(f"MySQL check in register failed: {e}")
+            raise HTTPException(500, "Database check failed.")
+    else:
+        raise HTTPException(500, "Database unavailable.")
 
-    # Check MongoDB
-    users_col = get_async_collection("users")
-    existing_mongo = await users_col.find_one({"email": normalized})
-
-    is_v = getattr(existing_sql, "is_verified", False) if existing_sql else False
-    if is_v or (existing_mongo and existing_mongo.get("isVerified")):
+    if existing_sql and getattr(existing_sql, "is_verified", False):
         raise HTTPException(409, "An account with this email already exists.")
-
 
     pw_hash = await asyncio.to_thread(_hash_password, body.password)
     user_id = None
 
     if existing_sql:
-        # Update MySQL
+        # Update existing unverified MySQL user
         async for db in get_db_session():
             await db.execute(
                 update(SQLUser)
@@ -297,58 +281,31 @@ async def register(body: RegisterBody):
             )
             await db.commit()
         user_id = str(existing_sql.id)
-    elif existing_mongo:
-        # Update MongoDB
-        await users_col.update_one(
-            {"_id": existing_mongo["_id"]},
-            {"$set": {
-                "name": body.name.strip(),
-                "phone": body.phone.strip(),
-                "passwordHash": pw_hash,
-                "isVerified": False,
-                "updatedAt": datetime.now(tz=timezone.utc),
-            }},
-        )
-        user_id = str(existing_mongo["_id"])
     else:
-        # Insert new
-        if _mysql_available:
-            try:
-                async for db in get_db_session():
-                    stmt = insert(SQLUser).values(
-                        name=body.name.strip(),
-                        email=normalized,
-                        phone=body.phone.strip(),
-                        password_hash=pw_hash,
-                        is_verified=False,
-                        role="Team Member",
-                        must_change_password=False,
-                        created_at=datetime.now(timezone.utc).replace(tzinfo=None),
-                        updated_at=datetime.now(timezone.utc).replace(tzinfo=None)
-                    )
-                    await db.execute(stmt)
-                    await db.commit()
+        # Insert new MySQL user
+        try:
+            async for db in get_db_session():
+                stmt = insert(SQLUser).values(
+                    name=body.name.strip(),
+                    email=normalized,
+                    phone=body.phone.strip(),
+                    password_hash=pw_hash,
+                    is_verified=False,
+                    role="Team Member",
+                    must_change_password=False,
+                    created_at=datetime.now(timezone.utc).replace(tzinfo=None),
+                    updated_at=datetime.now(timezone.utc).replace(tzinfo=None)
+                )
+                await db.execute(stmt)
+                await db.commit()
 
-                    new_u = (await db.execute(select(SQLUser).where(SQLUser.email == normalized))).scalar_one()
-                    user_id = str(new_u.id)
+                new_u = (await db.execute(select(SQLUser).where(SQLUser.email == normalized))).scalar_one()
+                user_id = str(new_u.id)
 
-            except Exception as e:
-                import logging
-                logging.getLogger("auth").warning(f"MySQL insert in register failed, falling back to Mongo: {e}")
-
-        if not user_id:
-            # Fallback to MongoDB
-            result = await users_col.insert_one({
-                "name": body.name.strip(),
-                "email": normalized,
-                "phone": body.phone.strip(),
-                "passwordHash": pw_hash,
-                "isVerified": False,
-                "role": "Team Member",
-                "mustChangePassword": False,
-                "createdAt": datetime.now(tz=timezone.utc),
-            })
-            user_id = str(result.inserted_id)
+        except Exception as e:
+            import logging
+            logging.getLogger("auth").error(f"MySQL insert in register failed: {e}")
+            raise HTTPException(500, f"Registration failed: {e}")
 
     await _send_otp_for_user(user_id, normalized, "register")
     return {"message": "OTP sent to your email. Please verify to complete registration."}
@@ -398,7 +355,7 @@ async def login(body: LoginBody):
         await asyncio.to_thread(
             bcrypt.checkpw,
             body.password.encode('utf-8'),
-            b'$2b$12$notavalidhashXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+            _DUMMY_BCRYPT_HASH
         )
         # Record failure and raise unauthorized
         if _mysql_available:

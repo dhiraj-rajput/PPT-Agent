@@ -137,6 +137,8 @@ export default function App() {
             <Route path="/force-change-password" element={<ForceChangePassword />} />
             <Route element={<DashboardLayout />}>
               <Route path="/" element={<Dashboard />} />
+              <Route path="/companies" element={<ContactsDB />} />
+              <Route path="/contactdb" element={<ContactsDB />} />
               <Route path="/companies/:id" element={<CompanyDetail />} />
               <Route path="/people/:id" element={<PersonDetail />} />
               <Route path="/database" element={<ContactsDB />} />

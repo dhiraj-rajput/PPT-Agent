@@ -142,7 +142,6 @@ class Company(Base):
     """
     __tablename__ = "companies"
     __table_args__ = (
-        Index("ix_companies_user_id", "user_id"),
         Index("ft_companies_name_desc", "name", "description", mysql_prefix="FULLTEXT"),
     )
 
@@ -508,14 +507,6 @@ class Meeting(Base):
     @property
     def start_time(self):
         return self.time or ""
-
-    @property
-    def status(self):
-        return getattr(self, "_status", "scheduled") or "scheduled"
-
-    @status.setter
-    def status(self, val):
-        self._status = val or "scheduled"
 
     status = Column(String(50), default="scheduled")
     created_at = Column(DateTime, default=_now, nullable=False)
