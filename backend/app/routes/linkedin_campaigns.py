@@ -427,6 +427,33 @@ async def get_campaign_targets(
     return {"targets": targets_list}
 
 
+@router.delete("/{campaign_id}/targets/{target_id}")
+async def remove_campaign_target(
+    campaign_id: int,
+    target_id: int,
+    current_user: dict = Depends(get_current_user),
+):
+    """Remove a target from a campaign."""
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_LinkedInTarget).where(
+                    SQL_LinkedInTarget.id == target_id,
+                    SQL_LinkedInTarget.campaign_id == campaign_id
+                )
+                t = (await db.execute(stmt)).scalar_one_or_none()
+                if not t:
+                    raise HTTPException(status_code=404, detail="Target not found in this campaign")
+                
+                await db.delete(t)
+                await db.commit()
+                return {"status": "success", "message": "Target removed successfully."}
+        except Exception as e:
+            logger.error(f"Error removing target {target_id} from campaign {campaign_id}: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Database error: {e}")
+    return {"error": "Database not available"}
+
+
 @router.get("/{id}/queue")
 async def get_campaign_queue(
     id: int,

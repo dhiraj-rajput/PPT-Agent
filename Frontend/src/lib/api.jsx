@@ -862,6 +862,9 @@ export const api = {
     const query = scrapeStatus ? `?scrape_status=${scrapeStatus}` : '';
     return get(`/api/linkedin/campaigns/${id}/targets${query}`);
   },
+  async deleteLinkedInTarget(campaignId, targetId) {
+    return del(`/api/linkedin/campaigns/${campaignId}/targets/${targetId}`);
+  },
   async getLinkedInQueue(id) {
     return get(`/api/linkedin/campaigns/${id}/queue`);
   },

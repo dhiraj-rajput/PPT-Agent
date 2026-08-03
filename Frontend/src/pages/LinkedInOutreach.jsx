@@ -3,7 +3,7 @@ import {
   Plus, X, Trash2, Upload, Search, Check, AlertCircle, RefreshCw, Layers, 
   User, Users, ClipboardList, MessageSquare, ChevronRight, Edit2, Play, 
   Pause, Globe, Shield, Activity, CheckCircle2, Loader2, Keyboard, MousePointer,
-  Send, Inbox, HelpCircle, Smile, Linkedin, Circle
+  Send, Inbox, HelpCircle, Smile, Linkedin, Circle, ExternalLink
 } from 'lucide-react';
 import { PageHeader, Card, StatusBadge } from '../components/ui/Common.jsx';
 import { api, BASE_URL } from '../lib/api.jsx';
@@ -38,8 +38,28 @@ export default function LinkedInOutreach() {
     require_approval: true,
     linkedin_account_id: ''
   });
+  const [newCampaignImportMethod, setNewCampaignImportMethod] = useState('none'); // 'none' | 'csv' | 'manual'
+  const [newCampaignCsvFile, setNewCampaignCsvFile] = useState(null);
+  const [newCampaignManualRows, setNewCampaignManualRows] = useState([
+    { name: '', linkedin_url: '', title: '', company: '' }
+  ]);
   const [csvFile, setCsvFile] = useState(null);
+  const [detailImportMethod, setDetailImportMethod] = useState('csv'); // 'csv' | 'manual'
+  const [detailManualTarget, setDetailManualTarget] = useState({ name: '', linkedin_url: '', title: '', company: '' });
+  const [targetsSearchQuery, setTargetsSearchQuery] = useState('');
   const [uploadingTargets, setUploadingTargets] = useState(false);
+  const [isEditingCampaign, setIsEditingCampaign] = useState(false);
+  const [editCampaignForm, setEditCampaignForm] = useState({
+    name: '',
+    mode: 'manual',
+    role_filter: '',
+    message_generation_mode: 'llm',
+    connection_note_prompt: '',
+    followup_prompt: '',
+    require_approval: true,
+    linkedin_account_id: '',
+    status: 'draft'
+  });
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editingContent, setEditingContent] = useState('');
 
@@ -140,8 +160,32 @@ export default function LinkedInOutreach() {
     if (!newCampaignForm.name.trim()) return;
     
     try {
-      await api.createLinkedInCampaign(newCampaignForm);
-      notify('Success', 'LinkedIn campaign created successfully.');
+      const res = await api.createLinkedInCampaign(newCampaignForm);
+      let importMsg = '';
+
+      if (newCampaignImportMethod === 'csv' && newCampaignCsvFile) {
+        await api.importLinkedInTargets(res.id, { file: newCampaignCsvFile });
+        importMsg = ' and target CSV imported';
+      } else if (newCampaignImportMethod === 'manual') {
+        const validRows = newCampaignManualRows.filter(r => r.name.trim() && r.linkedin_url.trim());
+        if (validRows.length > 0) {
+          const csvHeaders = "name,linkedin_url,title,company";
+          const csvRows = validRows.map(r => {
+            const escapedName = r.name.replace(/"/g, '""');
+            const escapedUrl = r.linkedin_url.replace(/"/g, '""');
+            const escapedTitle = (r.title || '').replace(/"/g, '""');
+            const escapedCompany = (r.company || '').replace(/"/g, '""');
+            return `"${escapedName}","${escapedUrl}","${escapedTitle}","${escapedCompany}"`;
+          });
+          const csvText = [csvHeaders, ...csvRows].join("\n");
+          const blob = new Blob([csvText], { type: 'text/csv' });
+          const file = new File([blob], "manual_upload.csv", { type: 'text/csv' });
+          await api.importLinkedInTargets(res.id, { file });
+          importMsg = ` and ${validRows.length} targets imported`;
+        }
+      }
+
+      notify('Success', `LinkedIn campaign created successfully${importMsg}.`);
       setShowNewCampaign(false);
       setNewCampaignForm({
         name: '',
@@ -153,9 +197,40 @@ export default function LinkedInOutreach() {
         require_approval: true,
         linkedin_account_id: ''
       });
+      setNewCampaignImportMethod('none');
+      setNewCampaignCsvFile(null);
+      setNewCampaignManualRows([{ name: '', linkedin_url: '', title: '', company: '' }]);
       fetchCampaigns();
     } catch (err) {
       notify('Error', `Failed to create campaign: ${err.message}`);
+    }
+  };
+
+  const handleUpdateCampaign = async (e) => {
+    e.preventDefault();
+    if (!selectedCampaign) return;
+    try {
+      const payload = {
+        name: editCampaignForm.name,
+        mode: editCampaignForm.mode,
+        role_filter: editCampaignForm.role_filter,
+        message_generation_mode: editCampaignForm.message_generation_mode,
+        connection_note_prompt: editCampaignForm.connection_note_prompt,
+        followup_prompt: editCampaignForm.followup_prompt,
+        require_approval: editCampaignForm.require_approval,
+        linkedin_account_id: editCampaignForm.linkedin_account_id ? Number(editCampaignForm.linkedin_account_id) : null,
+        status: editCampaignForm.status
+      };
+      await api.updateLinkedInCampaign(selectedCampaign.id, payload);
+      notify('Success', 'Campaign updated successfully.');
+      setIsEditingCampaign(false);
+      
+      // Reload current selected campaign details
+      const updatedCamp = { ...selectedCampaign, ...payload };
+      setSelectedCampaign(updatedCamp);
+      fetchCampaigns();
+    } catch (err) {
+      notify('Error', `Failed to update campaign: ${err.message}`);
     }
   };
 
@@ -175,18 +250,54 @@ export default function LinkedInOutreach() {
 
   const handleImportTargets = async (e) => {
     e.preventDefault();
-    if (!csvFile || !selectedCampaign) return;
+    if (!selectedCampaign) return;
     
     setUploadingTargets(true);
     try {
-      const res = await api.importLinkedInTargets(selectedCampaign.id, { file: csvFile });
+      let fileToUpload = null;
+      if (detailImportMethod === 'csv') {
+        if (!csvFile) {
+          notify('Warning', 'Please select a CSV file.');
+          setUploadingTargets(false);
+          return;
+        }
+        fileToUpload = csvFile;
+      } else {
+        if (!detailManualTarget.name.trim() || !detailManualTarget.linkedin_url.trim()) {
+          notify('Warning', 'Prospect Name and LinkedIn URL are required.');
+          setUploadingTargets(false);
+          return;
+        }
+        const csvHeaders = "name,linkedin_url,title,company";
+        const escapedName = detailManualTarget.name.replace(/"/g, '""');
+        const escapedUrl = detailManualTarget.linkedin_url.replace(/"/g, '""');
+        const escapedTitle = (detailManualTarget.title || '').replace(/"/g, '""');
+        const escapedCompany = (detailManualTarget.company || '').replace(/"/g, '""');
+        const csvRow = `"${escapedName}","${escapedUrl}","${escapedTitle}","${escapedCompany}"`;
+        const blob = new Blob([[csvHeaders, csvRow].join("\n")], { type: 'text/csv' });
+        fileToUpload = new File([blob], "manual_detail.csv", { type: 'text/csv' });
+      }
+
+      const res = await api.importLinkedInTargets(selectedCampaign.id, { file: fileToUpload });
       notify('Import Complete', res.message || `Imported targets successfully.`);
       setCsvFile(null);
+      setDetailManualTarget({ name: '', linkedin_url: '', title: '', company: '' });
       loadCampaignData(selectedCampaign);
     } catch (err) {
       notify('Error', `Failed to import targets: ${err.message}`);
     } finally {
       setUploadingTargets(false);
+    }
+  };
+
+  const handleDeleteTarget = async (targetId) => {
+    if (!confirm('Are you sure you want to remove this prospect from the campaign?')) return;
+    try {
+      await api.deleteLinkedInTarget(selectedCampaign.id, targetId);
+      notify('Success', 'Target removed from campaign.');
+      loadCampaignData(selectedCampaign);
+    } catch (err) {
+      notify('Error', `Failed to remove target: ${err.message}`);
     }
   };
 
@@ -448,13 +559,37 @@ export default function LinkedInOutreach() {
                   {/* Summary & Controls */}
                   <div className="border-b border-slate-100 pb-4 dark:border-navy-800 flex justify-between items-start">
                     <div>
-                      <h3 className="text-base font-bold text-navy-900 dark:text-white">{selectedCampaign.name}</h3>
+                      <h3 className="text-base font-bold text-navy-900 dark:text-white flex items-center gap-2">
+                        {selectedCampaign.name}
+                        <button
+                          onClick={() => {
+                            setEditCampaignForm({
+                              name: selectedCampaign.name,
+                              mode: selectedCampaign.mode,
+                              role_filter: selectedCampaign.role_filter || '',
+                              message_generation_mode: selectedCampaign.message_generation_mode || 'llm',
+                              connection_note_prompt: selectedCampaign.connection_note_prompt || '',
+                              followup_prompt: selectedCampaign.followup_prompt || '',
+                              require_approval: selectedCampaign.require_approval,
+                              linkedin_account_id: selectedCampaign.linkedin_account_id || '',
+                              status: selectedCampaign.status || 'draft'
+                            });
+                            setIsEditingCampaign(true);
+                          }}
+                          className="text-slate-400 hover:text-brand-500 transition-colors"
+                          title="Edit Campaign Settings"
+                        >
+                          <Edit2 size={13} />
+                        </button>
+                      </h3>
                       <div className="mt-1 flex items-center gap-3 text-xs text-slate-500 flex-wrap">
                         <span className="capitalize">Mode: {selectedCampaign.mode}</span>
                         <span>•</span>
                         <span>Role Filter: {selectedCampaign.role_filter || 'None'}</span>
                         <span>•</span>
                         <span>Approval: {selectedCampaign.require_approval ? 'Required' : 'Disabled'}</span>
+                        <span>•</span>
+                        <span className="capitalize text-brand-600 dark:text-brand-400">Status: {selectedCampaign.status}</span>
                         {selectedCampaign.linkedin_account_id && (
                           <>
                             <span>•</span>
@@ -467,31 +602,117 @@ export default function LinkedInOutreach() {
                     </div>
                   </div>
 
-                  {/* CSV Target Uploader */}
-                  <form onSubmit={handleImportTargets} className="my-4 p-4 rounded-xl bg-slate-50 dark:bg-navy-950/40 border border-slate-100 dark:border-navy-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="flex items-center gap-2 text-xs">
-                      <Upload size={16} className="text-brand-500 shrink-0" />
-                      <div>
-                        <p className="font-bold text-navy-900 dark:text-white">Import Targets via CSV</p>
-                        <p className="text-[10px] text-slate-500">Upload list of contacts (headers: url, name, email)</p>
+                  {/* Targets Importer block */}
+                  <div className="my-4 p-4 rounded-xl bg-slate-50 dark:bg-navy-950/40 border border-slate-100 dark:border-navy-800 space-y-3 text-xs">
+                    <div className="flex justify-between items-center border-b pb-2 dark:border-navy-800">
+                      <div className="flex items-center gap-1.5 font-bold text-navy-900 dark:text-white">
+                        <Upload size={16} className="text-brand-500 shrink-0" />
+                        <span>Add Target Prospects</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setDetailImportMethod('csv')}
+                          className={`px-3 py-1 rounded-lg text-[10px] font-bold border transition-all ${
+                            detailImportMethod === 'csv'
+                              ? 'bg-white border-brand-200 text-brand-700 dark:bg-navy-900 shadow-sm'
+                              : 'border-slate-200 text-slate-500 hover:bg-slate-100'
+                          }`}
+                        >
+                          CSV File Upload
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDetailImportMethod('manual')}
+                          className={`px-3 py-1 rounded-lg text-[10px] font-bold border transition-all ${
+                            detailImportMethod === 'manual'
+                              ? 'bg-white border-brand-200 text-brand-700 dark:bg-navy-900 shadow-sm'
+                              : 'border-slate-200 text-slate-500 hover:bg-slate-100'
+                          }`}
+                        >
+                          Add Manually
+                        </button>
                       </div>
                     </div>
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full md:w-auto">
-                      <input 
-                        type="file" 
-                        accept=".csv" 
-                        onChange={(e) => setCsvFile(e.target.files[0])}
-                        className="text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 w-full"
-                      />
-                      <button
-                        type="submit"
-                        disabled={uploadingTargets || !csvFile}
-                        className="rounded-lg bg-brand-500 hover:bg-brand-600 px-3 py-1.5 text-xs font-bold text-white disabled:bg-slate-200 disabled:text-slate-400 w-full sm:w-auto shrink-0"
-                      >
-                        {uploadingTargets ? 'Uploading...' : 'Import'}
-                      </button>
-                    </div>
-                  </form>
+
+                    {detailImportMethod === 'csv' ? (
+                      <form onSubmit={handleImportTargets} className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                          <p className="font-semibold text-slate-600 dark:text-slate-400">Select Contacts CSV file</p>
+                          <p className="text-[10px] text-slate-400">headers: name, linkedin_url, title, company</p>
+                        </div>
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full md:w-auto">
+                          <input 
+                            type="file" 
+                            accept=".csv" 
+                            onChange={(e) => setCsvFile(e.target.files[0])}
+                            className="text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 w-full"
+                          />
+                          <button
+                            type="submit"
+                            disabled={uploadingTargets || !csvFile}
+                            className="rounded-lg bg-brand-500 hover:bg-brand-600 px-3.5 py-1.5 text-xs font-bold text-white disabled:bg-slate-200 w-full sm:w-auto shrink-0"
+                          >
+                            {uploadingTargets ? 'Uploading...' : 'Import'}
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <form onSubmit={handleImportTargets} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 items-end">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 mb-0.5">FULL NAME *</label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g. John Doe"
+                            value={detailManualTarget.name}
+                            onChange={(e) => setDetailManualTarget({...detailManualTarget, name: e.target.value})}
+                            className="w-full rounded-lg border border-slate-200 p-2 text-xs bg-white dark:border-navy-800 dark:bg-navy-950 dark:text-white focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 mb-0.5">LINKEDIN URL *</label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="https://linkedin.com/in/..."
+                            value={detailManualTarget.linkedin_url}
+                            onChange={(e) => setDetailManualTarget({...detailManualTarget, linkedin_url: e.target.value})}
+                            className="w-full rounded-lg border border-slate-200 p-2 text-xs bg-white dark:border-navy-800 dark:bg-navy-950 dark:text-white focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 mb-0.5">TITLE (ROLE)</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Senior Architect"
+                            value={detailManualTarget.title}
+                            onChange={(e) => setDetailManualTarget({...detailManualTarget, title: e.target.value})}
+                            className="w-full rounded-lg border border-slate-200 p-2 text-xs bg-white dark:border-navy-800 dark:bg-navy-950 dark:text-white focus:outline-none"
+                          />
+                        </div>
+                        <div className="flex gap-2 items-center">
+                          <div className="w-full">
+                            <label className="block text-[10px] font-bold text-slate-500 mb-0.5">COMPANY</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. Stripe"
+                              value={detailManualTarget.company}
+                              onChange={(e) => setDetailManualTarget({...detailManualTarget, company: e.target.value})}
+                              className="w-full rounded-lg border border-slate-200 p-2 text-xs bg-white dark:border-navy-800 dark:bg-navy-950 dark:text-white focus:outline-none"
+                            />
+                          </div>
+                          <button
+                            type="submit"
+                            disabled={uploadingTargets}
+                            className="rounded-lg bg-brand-500 hover:bg-brand-600 px-4 py-2 text-xs font-bold text-white disabled:bg-slate-200 shrink-0 self-end"
+                          >
+                            Add
+                          </button>
+                        </div>
+                      </form>
+                    )}
+                  </div>
 
                   {/* Tab switches for Details */}
                   <div className="border-b border-slate-100 dark:border-navy-800 mb-4 flex gap-4">
@@ -515,7 +736,18 @@ export default function LinkedInOutreach() {
 
                   {/* Targets Sub-panel */}
                   {campaignActiveTab === 'targets' && (
-                    <div className="space-y-3">
+                    <div className="space-y-3 text-xs">
+                      {/* Local Targets Search Bar */}
+                      <div className="flex items-center gap-2 mb-2">
+                        <input
+                          type="text"
+                          placeholder="Search target prospects by name, title, or company..."
+                          value={targetsSearchQuery}
+                          onChange={(e) => setTargetsSearchQuery(e.target.value)}
+                          className="w-full rounded-xl border border-slate-200 p-2 text-xs bg-white dark:border-navy-800 dark:bg-navy-950 dark:text-white focus:outline-none"
+                        />
+                      </div>
+
                       {targetsLoading ? (
                         <div className="flex justify-center py-6">
                           <RefreshCw className="animate-spin text-slate-300" />
@@ -523,40 +755,105 @@ export default function LinkedInOutreach() {
                       ) : targets.length === 0 ? (
                         <p className="text-xs py-4 text-slate-400 text-center">No targets imported yet.</p>
                       ) : (
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left text-xs border-collapse">
-                            <thead>
-                              <tr className="border-b border-slate-100 dark:border-navy-800 text-slate-400">
-                                <th className="py-2">Name</th>
-                                <th className="py-2">Title</th>
-                                <th className="py-2">Scrape Status</th>
-                                <th className="py-2">Outreach Status</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-50 dark:divide-navy-900">
-                              {targets.map((t) => (
-                                <tr key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-navy-800/10">
-                                  <td className="py-2 font-semibold text-navy-900 dark:text-white">
-                                    {t.person?.full_name || 'Prospect'}
-                                  </td>
-                                  <td className="py-2 text-slate-500 truncate max-w-[150px]">
-                                    {t.person?.title || 'Unknown'} at {t.person?.organization_name || 'Unknown'}
-                                  </td>
-                                  <td className="py-2 capitalize">
-                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                      t.scrape_status === 'scraped' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'
-                                    }`}>
-                                      {t.scrape_status}
-                                    </span>
-                                  </td>
-                                  <td className="py-2 capitalize">
-                                    <span className="text-[10px] text-slate-600">{t.connection_status.replace('_', ' ')}</span>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
+                        (() => {
+                          const getAvatarBg = (name) => {
+                            if (!name) return 'bg-slate-100 text-slate-500';
+                            const sum = name.toUpperCase().split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+                            const colors = [
+                              'bg-brand-50 text-brand-700 dark:bg-brand-950/40 dark:text-brand-300',
+                              'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
+                              'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
+                              'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300',
+                              'bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300',
+                            ];
+                            return colors[sum % colors.length];
+                          };
+
+                          const filteredTargets = targets.filter(t => {
+                            if (!targetsSearchQuery.trim()) return true;
+                            const q = targetsSearchQuery.toLowerCase();
+                            const name = (t.person?.full_name || '').toLowerCase();
+                            const title = (t.person?.title || '').toLowerCase();
+                            const org = (t.person?.organization_name || '').toLowerCase();
+                            return name.includes(q) || title.includes(q) || org.includes(q);
+                          });
+
+                          if (filteredTargets.length === 0) {
+                            return <p className="text-xs py-4 text-slate-400 text-center">No prospects matching search filter.</p>;
+                          }
+
+                          return (
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-left text-xs border-collapse">
+                                <thead>
+                                  <tr className="border-b border-slate-100 dark:border-navy-800 text-slate-400">
+                                    <th className="py-2">Name</th>
+                                    <th className="py-2">Title</th>
+                                    <th className="py-2">Scrape Status</th>
+                                    <th className="py-2">Outreach Status</th>
+                                    <th className="py-2 text-right">Actions</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-50 dark:divide-navy-900">
+                                  {filteredTargets.map((t) => (
+                                    <tr key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-navy-800/10">
+                                      <td className="py-2.5 font-semibold text-navy-900 dark:text-white">
+                                        <div className="flex items-center gap-2">
+                                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${getAvatarBg(t.person?.full_name)}`}>
+                                            {t.person?.full_name ? t.person.full_name.charAt(0).toUpperCase() : '?'}
+                                          </div>
+                                          <div>
+                                            <p className="font-semibold text-navy-900 dark:text-white flex items-center gap-1">
+                                              {t.person?.full_name || 'Prospect'}
+                                              {t.person?.linkedin_url && (
+                                                <a href={t.person.linkedin_url} target="_blank" rel="noreferrer" className="text-slate-400 hover:text-brand-500 transition-colors">
+                                                  <ExternalLink size={11} />
+                                                </a>
+                                              )}
+                                            </p>
+                                          </div>
+                                        </div>
+                                      </td>
+                                      <td className="py-2.5 text-slate-500 truncate max-w-[200px]">
+                                        <div className="font-medium text-slate-700 dark:text-slate-300">{t.person?.title || 'Unknown Role'}</div>
+                                        {t.person?.organization_name && <div className="text-slate-400 text-[10px]">{t.person.organization_name}</div>}
+                                      </td>
+                                      <td className="py-2.5 capitalize">
+                                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
+                                          t.scrape_status === 'scraped'
+                                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                                            : 'bg-slate-100 text-slate-600 dark:bg-navy-800 dark:text-slate-400'
+                                        }`}>
+                                          {t.scrape_status}
+                                        </span>
+                                      </td>
+                                      <td className="py-2.5 capitalize">
+                                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
+                                          t.connection_status === 'accepted'
+                                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                                            : t.connection_status === 'connection_sent' || t.connection_status === 'sent'
+                                            ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
+                                            : 'bg-slate-100 text-slate-600 dark:bg-navy-800 dark:text-slate-400'
+                                        }`}>
+                                          {t.connection_status.replace('_', ' ')}
+                                        </span>
+                                      </td>
+                                      <td className="py-2.5 text-right">
+                                        <button
+                                          onClick={() => handleDeleteTarget(t.id)}
+                                          className="text-rose-600 hover:text-rose-700 p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-colors"
+                                          title="Remove Target"
+                                        >
+                                          <Trash2 size={13} />
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          );
+                        })()
                       )}
                     </div>
                   )}
@@ -1123,6 +1420,135 @@ export default function LinkedInOutreach() {
                 />
               </div>
 
+              {/* Target Import Options inside Modal */}
+              <div className="border-t pt-3 dark:border-navy-800 space-y-2">
+                <label className="block font-bold text-navy-900 dark:text-white mb-1">Import Target Contacts</label>
+                <div className="flex gap-2 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setNewCampaignImportMethod('none')}
+                    className={`px-3 py-1.5 rounded-lg border text-[11px] font-bold ${
+                      newCampaignImportMethod === 'none'
+                        ? 'bg-brand-50 border-brand-200 text-brand-700 dark:bg-navy-800'
+                        : 'border-slate-200 text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >
+                    No Targets (Draft)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewCampaignImportMethod('csv')}
+                    className={`px-3 py-1.5 rounded-lg border text-[11px] font-bold ${
+                      newCampaignImportMethod === 'csv'
+                        ? 'bg-brand-50 border-brand-200 text-brand-700 dark:bg-navy-800'
+                        : 'border-slate-200 text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >
+                    Upload CSV File
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewCampaignImportMethod('manual')}
+                    className={`px-3 py-1.5 rounded-lg border text-[11px] font-bold ${
+                      newCampaignImportMethod === 'manual'
+                        ? 'bg-brand-50 border-brand-200 text-brand-700 dark:bg-navy-800'
+                        : 'border-slate-200 text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >
+                    Add Targets Manually
+                  </button>
+                </div>
+
+                {newCampaignImportMethod === 'csv' && (
+                  <div className="p-3 bg-slate-50 dark:bg-navy-950/40 rounded-xl border border-dashed border-slate-200 dark:border-navy-800">
+                    <label className="block font-semibold text-slate-600 mb-1">Select Targets CSV file</label>
+                    <input 
+                      type="file" 
+                      accept=".csv" 
+                      required
+                      onChange={(e) => setNewCampaignCsvFile(e.target.files[0])}
+                      className="w-full text-slate-500 file:mr-3 file:py-1 file:px-2 file:rounded-lg file:border-0 file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100"
+                    />
+                  </div>
+                )}
+
+                {newCampaignImportMethod === 'manual' && (
+                  <div className="space-y-2 p-3 bg-slate-50 dark:bg-navy-950/40 rounded-xl border max-h-[160px] overflow-y-auto">
+                    <div className="flex justify-between items-center border-b pb-1 mb-2 dark:border-navy-800">
+                      <span className="font-bold text-slate-600">Manual Prospects list</span>
+                      <button
+                        type="button"
+                        onClick={() => setNewCampaignManualRows([...newCampaignManualRows, { name: '', linkedin_url: '', title: '', company: '' }])}
+                        className="text-brand-500 font-bold hover:underline text-[10px]"
+                      >
+                        + Add Row
+                      </button>
+                    </div>
+                    {newCampaignManualRows.map((row, idx) => (
+                      <div key={idx} className="grid grid-cols-2 gap-2 border-b border-slate-100 dark:border-navy-900 pb-2">
+                        <input
+                          type="text"
+                          required
+                          placeholder="Full Name"
+                          value={row.name}
+                          onChange={(e) => {
+                            const newRows = [...newCampaignManualRows];
+                            newRows[idx].name = e.target.value;
+                            setNewCampaignManualRows(newRows);
+                          }}
+                          className="rounded border p-1 text-[10px] bg-white dark:border-navy-800 dark:bg-navy-950"
+                        />
+                        <input
+                          type="text"
+                          required
+                          placeholder="LinkedIn URL"
+                          value={row.linkedin_url}
+                          onChange={(e) => {
+                            const newRows = [...newCampaignManualRows];
+                            newRows[idx].linkedin_url = e.target.value;
+                            setNewCampaignManualRows(newRows);
+                          }}
+                          className="rounded border p-1 text-[10px] bg-white dark:border-navy-800 dark:bg-navy-950"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Title (Optional)"
+                          value={row.title}
+                          onChange={(e) => {
+                            const newRows = [...newCampaignManualRows];
+                            newRows[idx].title = e.target.value;
+                            setNewCampaignManualRows(newRows);
+                          }}
+                          className="rounded border p-1 text-[10px] bg-white dark:border-navy-800 dark:bg-navy-950"
+                        />
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="text"
+                            placeholder="Company (Optional)"
+                            value={row.company}
+                            onChange={(e) => {
+                              const newRows = [...newCampaignManualRows];
+                              newRows[idx].company = e.target.value;
+                              setNewCampaignManualRows(newRows);
+                            }}
+                            className="w-full rounded border p-1 text-[10px] bg-white dark:border-navy-800 dark:bg-navy-950"
+                          />
+                          {newCampaignManualRows.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => setNewCampaignManualRows(newCampaignManualRows.filter((_, i) => i !== idx))}
+                              className="text-rose-600 hover:text-rose-700 font-bold p-1 text-[11px]"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="flex justify-between items-center pt-2">
                 <div className="flex items-center gap-2">
                   <input 
@@ -1351,6 +1777,139 @@ export default function LinkedInOutreach() {
               </div>
             )}
 
+          </div>
+        </div>
+      )}
+      {/* =========================================================================
+          EDIT CAMPAIGN SETTINGS MODAL
+          ========================================================================= */}
+      {isEditingCampaign && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/40 backdrop-blur-sm p-4 text-xs">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl dark:bg-navy-900 border border-slate-100 dark:border-navy-800">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-navy-800">
+              <h3 className="text-sm font-bold text-navy-900 dark:text-white">Edit Campaign Settings</h3>
+              <button onClick={() => setIsEditingCampaign(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-white">
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateCampaign} className="mt-4 space-y-3">
+              <div>
+                <label className="block font-bold text-navy-900 dark:text-white mb-1">Campaign Name</label>
+                <input 
+                  type="text" 
+                  required
+                  value={editCampaignForm.name}
+                  onChange={(e) => setEditCampaignForm({...editCampaignForm, name: e.target.value})}
+                  className="w-full rounded-xl border border-slate-200 p-2.5 bg-white dark:border-navy-800 dark:bg-navy-950 dark:text-white focus:border-brand-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-navy-900 dark:text-white mb-1">LinkedIn Profile (Sender)</label>
+                  <select 
+                    required
+                    value={editCampaignForm.linkedin_account_id}
+                    onChange={(e) => setEditCampaignForm({...editCampaignForm, linkedin_account_id: e.target.value})}
+                    className="w-full rounded-xl border border-slate-200 p-2.5 bg-white dark:border-navy-800 dark:bg-navy-950 dark:text-white focus:outline-none"
+                  >
+                    <option value="">Select profile account...</option>
+                    {accounts.map(acc => (
+                      <option key={acc.id} value={acc.id}>{acc.label} ({acc.region.toUpperCase()})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-navy-900 dark:text-white mb-1">Campaign Status</label>
+                  <select 
+                    value={editCampaignForm.status}
+                    onChange={(e) => setEditCampaignForm({...editCampaignForm, status: e.target.value})}
+                    className="w-full rounded-xl border border-slate-200 p-2.5 bg-white dark:border-navy-800 dark:bg-navy-950 dark:text-white focus:outline-none"
+                  >
+                    <option value="draft">Draft</option>
+                    <option value="running">Running</option>
+                    <option value="paused">Paused</option>
+                    <option value="completed">Completed</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-navy-900 dark:text-white mb-1">Outreach Mode</label>
+                  <select 
+                    value={editCampaignForm.mode}
+                    onChange={(e) => setEditCampaignForm({...editCampaignForm, mode: e.target.value})}
+                    className="w-full rounded-xl border border-slate-200 p-2.5 bg-white dark:border-navy-800 dark:bg-navy-950 dark:text-white focus:outline-none"
+                  >
+                    <option value="manual">Manual (Human review)</option>
+                    <option value="auto">Auto (Full Autopilot)</option>
+                    <option value="hybrid">Hybrid (Note auto, follow-ups review)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-navy-900 dark:text-white mb-1">Target Role (Filter)</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. CTO, VP of Eng"
+                    value={editCampaignForm.role_filter}
+                    onChange={(e) => setEditCampaignForm({...editCampaignForm, role_filter: e.target.value})}
+                    className="w-full rounded-xl border border-slate-200 p-2.5 bg-white dark:border-navy-800 dark:bg-navy-950 dark:text-white focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-navy-900 dark:text-white mb-1">Connection Note Prompt</label>
+                <textarea 
+                  rows={2}
+                  value={editCampaignForm.connection_note_prompt}
+                  onChange={(e) => setEditCampaignForm({...editCampaignForm, connection_note_prompt: e.target.value})}
+                  className="w-full rounded-xl border border-slate-200 p-2.5 bg-white dark:border-navy-800 dark:bg-navy-950 dark:text-white focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-navy-900 dark:text-white mb-1">Follow-up Message Prompt</label>
+                <textarea 
+                  rows={2}
+                  value={editCampaignForm.followup_prompt}
+                  onChange={(e) => setEditCampaignForm({...editCampaignForm, followup_prompt: e.target.value})}
+                  className="w-full rounded-xl border border-slate-200 p-2.5 bg-white dark:border-navy-800 dark:bg-navy-950 dark:text-white focus:outline-none"
+                />
+              </div>
+
+              <div className="flex justify-between items-center pt-2">
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="checkbox" 
+                    id="edit_require_approval"
+                    checked={editCampaignForm.require_approval}
+                    onChange={(e) => setEditCampaignForm({...editCampaignForm, require_approval: e.target.checked})}
+                    className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                  />
+                  <label htmlFor="edit_require_approval" className="font-semibold text-slate-700 dark:text-slate-300">
+                    Require approval before sending notes
+                  </label>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingCampaign(false)}
+                    className="rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-4 py-2 font-bold text-slate-600 dark:border-navy-800 dark:bg-navy-950 dark:text-slate-400"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="rounded-xl bg-brand-500 hover:bg-brand-600 px-4 py-2 text-white font-bold"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </div>
+            </form>
           </div>
         </div>
       )}
