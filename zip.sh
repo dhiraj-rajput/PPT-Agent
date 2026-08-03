@@ -2,21 +2,32 @@
 # ============================================================
 # zip.sh — Clean deployment zip generator for cPanel upload
 # ============================================================
-# Zips the target directory (backend or entire project root)
-# while excluding all server/dev trash: caches, venvs, secrets,
-# logs, node_modules, frontend build trash (dist, .vite, etc.).
+# Zips the target directory. With NO arguments, zips the ENTIRE
+# project root (backend + Frontend + docs + everything else next
+# to this script) while excluding all server/dev trash: caches,
+# venvs, secrets, logs, node_modules, frontend build trash
+# (dist, .vite, etc.), and previously generated zips.
+#
+# The output zip is named after the folder being zipped, e.g.:
+#   ./zip.sh            -> PPT-Agent-20260803-120000.zip
+#   ./zip.sh ./backend  -> backend-20260803-120000.zip
 #
 # Usage:
-#   ./zip.sh                          # run from repo root, uses ./backend
-#   ./zip.sh ./                       # zip entire project root cleanly
+#   ./zip.sh                          # zip the WHOLE project (backend + Frontend + docs)
+#   ./zip.sh ./backend                # zip only backend -> backend-<timestamp>.zip
 #   ./zip.sh /path/to/project         # explicit project path
-#   ./zip.sh /path/to/project output.zip
+#   ./zip.sh /path/to/project output.zip   # explicit output name/path
 #
 # Pass --include-env to include example/production env templates
 # (live .env itself is always excluded).
 # ============================================================
 
 set -euo pipefail
+
+# Directory this script lives in — used as the default (whole-project) target
+# so a blank run always zips backend + Frontend + docs together, regardless
+# of the directory it's invoked from.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 INCLUDE_ENV=false
 POSITIONAL=()
@@ -32,8 +43,7 @@ for arg in "$@"; do
 done
 set -- "${POSITIONAL[@]:-}"
 
-SRC_DIR="${1:-./backend}"
-OUT_ZIP="${2:-./deploy-$(date +%Y%m%d-%H%M%S).zip}"
+SRC_DIR="${1:-$SCRIPT_DIR}"
 
 if [ ! -d "$SRC_DIR" ]; then
     echo "Error: Directory not found at '$SRC_DIR'" >&2
@@ -47,6 +57,10 @@ command -v zip >/dev/null 2>&1 || { echo "Error: 'zip' is not installed." >&2; e
 SRC_DIR="$(cd "$SRC_DIR" && pwd)"
 PARENT_DIR="$(dirname "$SRC_DIR")"
 BASE_NAME="$(basename "$SRC_DIR")"
+
+# Output zip is named after the folder being zipped (e.g. "backend" -> backend-<timestamp>.zip,
+# whole project "PPT-Agent" -> PPT-Agent-<timestamp>.zip), dropped next to this script.
+OUT_ZIP="${2:-$SCRIPT_DIR/${BASE_NAME}-$(date +%Y%m%d-%H%M%S).zip}"
 OUT_ZIP="$(cd "$(dirname "$OUT_ZIP")" && pwd)/$(basename "$OUT_ZIP")"
 
 echo "Source:  $SRC_DIR"
@@ -137,6 +151,9 @@ EXCLUDES=(
     "$BASE_NAME/.env"
     "*/.env"
     ".env"
+
+    # Previously generated zips (never zip the zips)
+    "*.zip"
 )
 
 if [ "$INCLUDE_ENV" = false ]; then

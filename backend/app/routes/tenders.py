@@ -18,6 +18,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from fastapi.responses import FileResponse
 
+import os
 from utils.db_client import get_db_session, get_sync_db_session, _mysql_available
 from config.settings import settings
 from app.core.auth import get_current_user
@@ -26,6 +27,7 @@ from models.sql_models import (
     DraftRequest as SQL_DraftRequest,
     SystemSettings as SQL_SystemSettings,
     User as SQLUser,
+    Integration as SQL_Integration,
 )
 from sqlalchemy import select, update, insert, delete, func, or_, and_
 
@@ -439,29 +441,6 @@ async def get_tenders(
         "set_aside_options": set_aside_opts,
         "status_counts": status_counts,
     }
-
-
-import os
-from utils.db_client import get_db_session, get_sync_db_session, _mysql_available
-from config.settings import settings
-from app.core.auth import get_current_user
-from models.sql_models import (
-    Tender as SQL_Tender,
-    DraftRequest as SQL_DraftRequest,
-    SystemSettings as SQL_SystemSettings,
-    User as SQLUser,
-    Integration as SQL_Integration,
-)
-from sqlalchemy import select, update, insert, delete, func, or_, and_
-
-logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/tenders", tags=["tenders"])
-
-SAM_OPPORTUNITIES_BASE = getattr(settings, "SAM_GOV_API_URL", "https://api.sam.gov/opportunities/v2/search")
-
-
-def _sanitize_path_component(val: str) -> str:
-    return re.sub(r'[\\/*?:"<>|]', "_", str(val or "")).strip()
 
 
 async def _get_sam_api_key(user_id: Optional[int] = None) -> str:
