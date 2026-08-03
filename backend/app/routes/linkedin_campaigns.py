@@ -403,6 +403,13 @@ async def get_campaign_targets(
                     stmt_p = select(SQL_Person).where(SQL_Person.id == t.person_id)
                     p = (await db.execute(stmt_p)).scalar_one_or_none()
                     
+                    # Fetch target's outgoing message log
+                    stmt_msg = select(SQL_LinkedInMessageLog).where(
+                        SQL_LinkedInMessageLog.target_id == t.id,
+                        SQL_LinkedInMessageLog.direction == "out"
+                    ).order_by(SQL_LinkedInMessageLog.created_at.desc()).limit(1)
+                    m = (await db.execute(stmt_msg)).scalar_one_or_none()
+
                     targets_list.append({
                         "id": t.id,
                         "person_id": t.person_id,
@@ -419,7 +426,13 @@ async def get_campaign_targets(
                             "title": p.title,
                             "organization_name": p.organization_name,
                             "linkedin_url": p.linkedin_url,
-                        } if p else None
+                        } if p else None,
+                        "message_log": {
+                            "id": m.id,
+                            "content": m.content,
+                            "status": m.status,
+                            "scheduled_send_at": m.scheduled_send_at.isoformat() if m.scheduled_send_at else None
+                        } if m else None
                     })
         except Exception as e:
             logger.error(f"Error getting targets for campaign {id}: {e}", exc_info=True)

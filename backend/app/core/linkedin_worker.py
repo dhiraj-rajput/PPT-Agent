@@ -283,6 +283,62 @@ async def start_linkedin_worker_loop():
 
                 # Poll for approved outreach messages to process
                 async for db in get_db_session():
+                    # 1. Scrape pending targets for running campaigns
+                    stmt_camps = select(LinkedInCampaign).where(LinkedInCampaign.status == "running")
+                    res_camps = await db.execute(stmt_camps)
+                    running_campaigns = res_camps.scalars().all()
+
+                    for camp in running_campaigns:
+                        stmt_tg = select(LinkedInTarget).where(
+                            LinkedInTarget.campaign_id == camp.id,
+                            LinkedInTarget.scrape_status == "pending"
+                        )
+                        res_tg = await db.execute(stmt_tg)
+                        pending_targets = res_tg.scalars().all()
+
+                        for target in pending_targets:
+                            try:
+                                target.scrape_status = "scraped"
+                                target.updated_at = datetime.utcnow()
+
+                                from models.sql_models import Person
+                                stmt_p = select(Person).where(Person.id == target.person_id)
+                                p_res = await db.execute(stmt_p)
+                                person = p_res.scalar_one_or_none()
+
+                                if person:
+                                    profile_dict = {
+                                        "full_name": person.full_name,
+                                        "title": person.title,
+                                        "organization_name": person.organization_name,
+                                        "linkedin_url": person.linkedin_url
+                                    }
+                                    from pipeline.ai.outreach_prompts import generate_connection_note
+                                    our_company_desc = "Orbitavanya Tech - AI-driven B2B lead generation and outreach automation platform."
+                                    note_content = generate_connection_note(
+                                        target_profile=profile_dict,
+                                        our_company=our_company_desc,
+                                        custom_prompt=camp.connection_note_prompt or ""
+                                    )
+
+                                    new_log = LinkedInMessageLog(
+                                        campaign_id=camp.id,
+                                        target_id=target.id,
+                                        account_id_used=camp.linkedin_account_id,
+                                        direction="out",
+                                        content=note_content,
+                                        status="needs_review" if camp.require_approval else "approved",
+                                        created_at=datetime.utcnow(),
+                                        updated_at=datetime.utcnow()
+                                    )
+                                    db.add(new_log)
+                            except Exception as ex:
+                                logger.error(f"Error auto-scraping/generating note for target {target.id}: {ex}")
+
+                    await db.commit()
+
+                # 2. Process approved outreach messages
+                async for db in get_db_session():
                     stmt = select(LinkedInMessageLog).where(
                         LinkedInMessageLog.status == "approved",
                         LinkedInMessageLog.direction == "out",
@@ -292,7 +348,6 @@ async def start_linkedin_worker_loop():
                     approved_messages = res.scalars().all()
 
                     for msg in approved_messages:
-                        # Process message
                         await process_approved_message(db, msg)
                     
                     await db.commit()

@@ -62,6 +62,7 @@ export default function LinkedInOutreach() {
   });
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editingContent, setEditingContent] = useState('');
+  const [reviewTargetMessage, setReviewTargetMessage] = useState(null);
 
   // =========================================================================
   // INBOX TAB STATE
@@ -839,13 +840,35 @@ export default function LinkedInOutreach() {
                                         </span>
                                       </td>
                                       <td className="py-2.5 text-right">
-                                        <button
-                                          onClick={() => handleDeleteTarget(t.id)}
-                                          className="text-rose-600 hover:text-rose-700 p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-colors"
-                                          title="Remove Target"
-                                        >
-                                          <Trash2 size={13} />
-                                        </button>
+                                        <div className="flex justify-end gap-1.5 items-center">
+                                          {t.message_log && t.message_log.status === 'needs_review' && (
+                                            <button
+                                              onClick={() => {
+                                                setReviewTargetMessage({
+                                                  targetId: t.id,
+                                                  targetName: t.person?.full_name || 'Prospect',
+                                                  targetTitle: t.person?.title || 'Prospect Title',
+                                                  targetCompany: t.person?.organization_name || 'Prospect Company',
+                                                  messageId: t.message_log.id,
+                                                  content: t.message_log.content,
+                                                  scheduledTime: ''
+                                                });
+                                                setEditingContent(t.message_log.content);
+                                              }}
+                                              className="bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 px-2 py-1 rounded text-[10px] font-bold transition-all shrink-0"
+                                              title="Review draft note"
+                                            >
+                                              Review & Send
+                                            </button>
+                                          )}
+                                          <button
+                                            onClick={() => handleDeleteTarget(t.id)}
+                                            className="text-rose-600 hover:text-rose-700 p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-colors"
+                                            title="Remove Target"
+                                          >
+                                            <Trash2 size={13} />
+                                          </button>
+                                        </div>
                                       </td>
                                     </tr>
                                   ))}
@@ -1910,6 +1933,120 @@ export default function LinkedInOutreach() {
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* =========================================================================
+          DIRECT TARGET MESSAGE REVIEW MODAL
+          ========================================================================= */}
+      {reviewTargetMessage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/40 backdrop-blur-sm p-4 text-xs">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl dark:bg-navy-900 border border-slate-100 dark:border-navy-800">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-navy-800">
+              <h3 className="text-sm font-bold text-navy-900 dark:text-white">Review Connection Note</h3>
+              <button onClick={() => setReviewTargetMessage(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-white">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="mt-3 space-y-2 text-left">
+              <p className="font-bold text-navy-900 dark:text-white">To: {reviewTargetMessage.targetName}</p>
+              <p className="text-[10px] text-slate-500">{reviewTargetMessage.targetTitle} at {reviewTargetMessage.targetCompany}</p>
+              
+              <div className="mt-2 text-xs">
+                <label className="block text-[10px] font-bold text-slate-500 mb-1">EDIT NOTE CONTENT</label>
+                <textarea
+                  className="w-full border rounded-lg p-2.5 text-xs bg-white dark:bg-navy-950 dark:text-white focus:outline-none"
+                  rows={4}
+                  value={editingContent}
+                  onChange={(e) => setEditingContent(e.target.value)}
+                />
+              </div>
+
+              {selectedCampaign.mode === 'manual' && (
+                <div className="p-3 rounded-xl border border-brand-100 bg-brand-50/20 dark:border-navy-800 dark:bg-navy-950/40 mb-3 space-y-2">
+                  <p className="font-bold text-[9px] text-brand-600 dark:text-brand-400 uppercase tracking-wider">Manual Dispatch Scheduler Presets</p>
+                  <select
+                    value={reviewTargetMessage.scheduledTimePreset || 'immediate'}
+                    onChange={(e) => {
+                      const preset = e.target.value;
+                      let scheduledTime = '';
+                      if (preset === '5m') {
+                        scheduledTime = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+                      } else if (preset === '1h') {
+                        scheduledTime = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+                      } else if (preset === '4h') {
+                        scheduledTime = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
+                      } else if (preset === 'custom') {
+                        scheduledTime = 'custom';
+                      }
+                      setReviewTargetMessage({
+                        ...reviewTargetMessage,
+                        scheduledTimePreset: preset,
+                        scheduledTime: scheduledTime
+                      });
+                    }}
+                    className="w-full rounded-lg border border-slate-200 p-1.5 text-[11px] bg-white dark:border-navy-800 dark:bg-navy-950 dark:text-white focus:outline-none"
+                  >
+                    <option value="immediate">Send ASAP (Immediate)</option>
+                    <option value="5m">Wait 5 minutes</option>
+                    <option value="1h">Wait 1 hour</option>
+                    <option value="4h">Wait 4 hours</option>
+                    <option value="custom">Custom Date & Time</option>
+                  </select>
+
+                  {reviewTargetMessage.scheduledTimePreset === 'custom' && (
+                    <div className="mt-2">
+                      <label className="block text-[8px] text-slate-400 font-bold mb-0.5">DATE & TIME</label>
+                      <input
+                        type="datetime-local"
+                        value={reviewTargetMessage.customDatetime || ''}
+                        onChange={(e) => {
+                          const dateval = e.target.value;
+                          setReviewTargetMessage({
+                            ...reviewTargetMessage,
+                            customDatetime: dateval,
+                            scheduledTime: dateval ? new Date(dateval).toISOString() : ''
+                          });
+                        }}
+                        className="w-full rounded-lg border border-slate-200 p-1 text-[11px] bg-white dark:border-navy-800 dark:bg-navy-950 dark:text-white focus:outline-none"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex gap-2 justify-end pt-3 border-t dark:border-navy-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleReviewMessage(reviewTargetMessage.messageId, 'reject');
+                    setReviewTargetMessage(null);
+                  }}
+                  className="rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 px-3 py-2 text-[11px] font-bold"
+                >
+                  Reject Note
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReviewTargetMessage(null)}
+                  className="rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 dark:border-navy-800 dark:bg-navy-950 dark:text-slate-400 px-3 py-2 text-[11px]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const finalTime = reviewTargetMessage.scheduledTime === 'custom' ? null : reviewTargetMessage.scheduledTime;
+                    handleReviewMessage(reviewTargetMessage.messageId, 'approve', editingContent, finalTime);
+                    setReviewTargetMessage(null);
+                  }}
+                  className="rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white px-3.5 py-2 text-[11px] font-bold"
+                >
+                  Approve & Send Note
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
