@@ -876,6 +876,20 @@ export const api = {
   async sendLinkedInReply(targetId, content) {
     return post('/api/linkedin/inbox/reply', { target_id: targetId, content });
   },
+
+  // ── LinkedIn Accounts ───────────────────────────────────────────────────
+  getLinkedInAccounts() {
+    return _request('GET', '/api/linkedin/accounts');
+  },
+  pauseLinkedInAccount(id) {
+    return _request('POST', `/api/linkedin/accounts/${id}/pause`);
+  },
+  resumeLinkedInAccount(id) {
+    return _request('POST', `/api/linkedin/accounts/${id}/resume`);
+  },
+  deleteLinkedInAccount(id) {
+    return _request('DELETE', `/api/linkedin/accounts/${id}`);
+  },
 };
 
 export default api;

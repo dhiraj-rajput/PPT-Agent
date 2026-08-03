@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Building2, FileStack, BrainCircuit, FileEdit, Mail,
   Kanban, Calendar, CheckSquare, BarChart3, FileBarChart, Users,
   Plug, Settings, ChevronLeft, Sparkles, Zap, Hash, ScrollText, X, Database,
-  Layers, Inbox
+  Layers, Inbox, Linkedin
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useErrorLogs } from '../../context/ErrorLogContext.jsx';
@@ -21,6 +21,7 @@ const bizNav = [
   { to: '/ai-research', label: 'AI Research', icon: BrainCircuit },
   { to: '/proposal-builder', label: 'Proposal Builder', icon: FileEdit },
   { to: '/rfp-auto-respond', label: 'RFP Auto-Respond', icon: Zap },
+  { to: '/linkedin/accounts', label: 'LinkedIn Accounts', icon: Linkedin },
   { to: '/email-campaign', label: 'Email Campaign', icon: Mail },
   { to: '/newsletter', label: 'Newsletter', icon: Sparkles },
   { to: '/linkedin-campaign', label: 'LinkedIn Campaigns', icon: Layers },
