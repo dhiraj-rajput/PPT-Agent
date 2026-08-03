@@ -881,6 +881,9 @@ export const api = {
   getLinkedInAccounts() {
     return _request('GET', '/api/linkedin/accounts');
   },
+  createLinkedInAccount(payload) {
+    return _request('POST', '/api/linkedin/accounts', payload);
+  },
   pauseLinkedInAccount(id) {
     return _request('POST', `/api/linkedin/accounts/${id}/pause`);
   },

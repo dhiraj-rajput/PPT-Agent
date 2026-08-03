@@ -5,9 +5,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSock
 from sqlalchemy import select, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import json
+from pydantic import BaseModel, Field
 from utils.db_client import get_db_session, _mysql_available
 from app.core.auth import get_current_user, decode_and_get_user_async
-from models.sql_models import LinkedInAccount
+from models.sql_models import LinkedInAccount, FingerprintProfile, Proxy
+from utils.encryption import encrypt_data
 from pipeline.linkedin.outreach.login_capture import run_guided_login_websocket
 
 logger = logging.getLogger(__name__)
@@ -147,6 +150,85 @@ async def delete_account(
         raise
     except Exception as e:
         logger.error(f"Failed to delete account {account_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class LinkedInAccountCreate(BaseModel):
+    label: str = Field(..., min_length=1)
+    region: str = "other"
+    li_at: str = Field(..., min_length=1)
+    jsessionid: str = Field("", min_length=0)
+
+@router.post("")
+async def create_linkedin_account(
+    form_data: LinkedInAccountCreate,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Connect a LinkedIn account manually by providing the active session cookies (li_at and JSESSIONID).
+    """
+    try:
+        user_id = int(current_user["id"])
+        
+        # 1. Create a default FingerprintProfile
+        fp = FingerprintProfile(
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            viewport="1440x900",
+            timezone="America/New_York",
+            locale="en-US",
+            webgl_seed="default"
+        )
+        db.add(fp)
+        await db.flush()
+        
+        # 2. Create a default Proxy
+        pr = Proxy(
+            region=form_data.region,
+            endpoint="mock://127.0.0.1:8080",
+            credentials_encrypted=""
+        )
+        db.add(pr)
+        await db.flush()
+        
+        # 3. Encrypt cookie data
+        cookie_data = {
+            "li_at": form_data.li_at,
+            "JSESSIONID": form_data.jsessionid
+        }
+        encrypted_cookies = encrypt_data(json.dumps(cookie_data))
+        
+        # 4. Create LinkedInAccount
+        acc = LinkedInAccount(
+            user_id=user_id,
+            label=form_data.label,
+            region=form_data.region,
+            auth_method="guided_login",
+            session_cookie_encrypted=encrypted_cookies,
+            fingerprint_profile_id=fp.id,
+            proxy_id=pr.id,
+            status="active",
+            daily_connection_cap=8,
+            daily_message_cap=15,
+            warmup_stage=1,
+            health_score=100
+        )
+        db.add(acc)
+        await db.flush()
+        
+        # Link back
+        fp.linkedin_account_id = acc.id
+        pr.assigned_account_id = acc.id
+        
+        await db.commit()
+        
+        return {
+            "status": "success",
+            "message": "LinkedIn account connected successfully.",
+            "account_id": acc.id
+        }
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to create LinkedIn account manually: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.websocket("/connect/ws")

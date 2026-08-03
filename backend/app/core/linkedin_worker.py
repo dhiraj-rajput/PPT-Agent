@@ -285,7 +285,8 @@ async def start_linkedin_worker_loop():
                 async for db in get_db_session():
                     stmt = select(LinkedInMessageLog).where(
                         LinkedInMessageLog.status == "approved",
-                        LinkedInMessageLog.direction == "out"
+                        LinkedInMessageLog.direction == "out",
+                        (LinkedInMessageLog.scheduled_send_at == None) | (LinkedInMessageLog.scheduled_send_at <= datetime.utcnow())
                     ).limit(5)
                     res = await db.execute(stmt)
                     approved_messages = res.scalars().all()

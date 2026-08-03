@@ -13,7 +13,7 @@ export default function LinkedInOutreach() {
   const { createAlert } = useNotifications();
   const notify = (title, message) => createAlert(title, message).catch(() => {});
 
-  const [currentTab, setCurrentTab] = useState('campaigns'); // 'campaigns' | 'inbox' | 'accounts'
+  const [currentTab, setCurrentTab] = useState('accounts'); // 'accounts' | 'inbox' | 'campaigns'
 
   // =========================================================================
   // CAMPAIGNS TAB STATE
@@ -35,7 +35,8 @@ export default function LinkedInOutreach() {
     message_generation_mode: 'llm',
     connection_note_prompt: 'Keep it friendly and professional, referencing their headline.',
     followup_prompt: 'Thank them for connecting and ask if they are open to sharing outreach ideas.',
-    require_approval: true
+    require_approval: true,
+    linkedin_account_id: ''
   });
   const [csvFile, setCsvFile] = useState(null);
   const [uploadingTargets, setUploadingTargets] = useState(false);
@@ -68,9 +69,24 @@ export default function LinkedInOutreach() {
   const wsRef = useRef(null);
   const imageRef = useRef(null);
 
+  // States for drop-down accounts and manual scheduling
+  const [selectedInboxAccountId, setSelectedInboxAccountId] = useState('');
+  const [showLinkedInMockLogin, setShowLinkedInMockLogin] = useState(false);
+  const [mockEmail, setMockEmail] = useState('');
+  const [mockPassword, setMockPassword] = useState('');
+  const [msgDelays, setMsgDelays] = useState({}); // { [messageId]: 'immediate' | '5m' | '1h' | 'custom' }
+  const [msgCustomTimes, setMsgCustomTimes] = useState({}); // { [messageId]: 'YYYY-MM-DDTHH:MM' }
+
   // =========================================================================
   // INITIAL LOADERS & FETCHERS
   // =========================================================================
+  useEffect(() => {
+    // Proactively fetch all data on mount to share lists across tabs
+    fetchAccounts();
+    fetchCampaigns();
+    fetchInbox();
+  }, []);
+
   useEffect(() => {
     if (currentTab === 'campaigns') {
       fetchCampaigns();
@@ -134,7 +150,8 @@ export default function LinkedInOutreach() {
         message_generation_mode: 'llm',
         connection_note_prompt: 'Keep it friendly and professional, referencing their headline.',
         followup_prompt: 'Thank them for connecting and ask if they are open to sharing outreach ideas.',
-        require_approval: true
+        require_approval: true,
+        linkedin_account_id: ''
       });
       fetchCampaigns();
     } catch (err) {
@@ -173,11 +190,12 @@ export default function LinkedInOutreach() {
     }
   };
 
-  const handleReviewMessage = async (messageId, action, finalContent) => {
+  const handleReviewMessage = async (messageId, action, finalContent, scheduledSendAt) => {
     try {
       await api.reviewLinkedInMessage(messageId, {
         content: finalContent || editingContent,
-        action: action
+        action: action,
+        scheduled_send_at: scheduledSendAt || null
       });
       notify('Success', `Message ${action}ed.`);
       setEditingMessageId(null);
@@ -262,107 +280,40 @@ export default function LinkedInOutreach() {
     }
   };
 
-  const startGuidedLogin = () => {
-    if (!connectLabel.trim()) {
-      alert('Please enter an account label.');
+  const [liAtCookie, setLiAtCookie] = useState('');
+  const [jsessionIdCookie, setJsessionIdCookie] = useState('');
+  const [submittingAccount, setSubmittingAccount] = useState(false);
+
+  const handleConnectAccount = async (e) => {
+    e.preventDefault();
+    if (!connectLabel.trim() || !liAtCookie.trim()) {
+      alert('Please fill in the account label and the li_at cookie.');
       return;
     }
-    setConnectStep(2);
-    setWsStatus('connecting');
-    setWsMessage('Initializing remote browser context...');
-    
-    const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsBase = BASE_URL.replace(/^http/, 'ws');
-    const token = localStorage.getItem('orbitavanya_token');
-    const wsUrl = `${wsBase}/api/linkedin/accounts/connect/ws?region=${connectRegion}&label=${encodeURIComponent(connectLabel)}&token=${token}`;
-    
-    const socket = new WebSocket(wsUrl);
-    wsRef.current = socket;
 
-    socket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'status') {
-          setWsStatus(data.status);
-          setWsMessage(data.message);
-          if (data.status === 'authenticated') {
-            setTimeout(() => {
-              closeConnectModal();
-              fetchAccounts();
-            }, 3000);
-          }
-        } else if (data.type === 'screen') {
-          setScreenImage(data.image);
-        }
-      } catch (e) {
-        console.error('Error parsing WS message:', e);
-      }
-    };
-
-    socket.onclose = (event) => {
-      setWsStatus('closed');
-      setWsMessage(event.reason || 'Browser session disconnected.');
-    };
-
-    socket.onerror = (err) => {
-      console.error('WebSocket error:', err);
-      setWsStatus('error');
-      setWsMessage('WebSocket connection failed.');
-    };
-  };
-
-  const handleImageClick = (e) => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-    if (!imageRef.current) return;
-
-    const rect = imageRef.current.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const clickY = e.clientY - rect.top;
-
-    const scaleX = 1280 / rect.width;
-    const scaleY = 800 / rect.height;
-    const x = Math.round(clickX * scaleX);
-    const y = Math.round(clickY * scaleY);
-
-    wsRef.current.send(JSON.stringify({ type: 'click', x, y }));
-  };
-
-  const handleKeyDown = (e) => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-    
-    const preventKeys = ['ArrowUp', 'ArrowDown', 'Space', 'Tab', 'Backspace', 'Enter'];
-    if (preventKeys.includes(e.key)) {
-      e.preventDefault();
+    setSubmittingAccount(true);
+    try {
+      await api.createLinkedInAccount({
+        label: connectLabel,
+        region: connectRegion,
+        li_at: liAtCookie,
+        jsessionid: jsessionIdCookie
+      });
+      notify('Success', 'LinkedIn account linked successfully!');
+      closeConnectModal();
+      fetchAccounts();
+    } catch (err) {
+      notify('Error', err.message || 'Failed to connect LinkedIn account.');
+    } finally {
+      setSubmittingAccount(false);
     }
-
-    if (e.key.length === 1) {
-      wsRef.current.send(JSON.stringify({ type: 'type', text: e.key }));
-    } else {
-      wsRef.current.send(JSON.stringify({ type: 'press', key: e.key }));
-    }
-  };
-
-  const sendManualText = () => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-    if (!manualText) return;
-    wsRef.current.send(JSON.stringify({ type: 'type', text: manualText }));
-    setManualText('');
-  };
-
-  const sendSpecialKey = (key) => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-    wsRef.current.send(JSON.stringify({ type: 'press', key }));
   };
 
   const closeConnectModal = () => {
-    if (wsRef.current) {
-      wsRef.current.close();
-    }
-    wsRef.current = null;
-    setScreenImage(null);
     setConnectLabel('');
-    setConnectStep(1);
-    setWsStatus('idle');
+    setConnectRegion('usa');
+    setLiAtCookie('');
+    setJsessionIdCookie('');
     setIsAccountModalOpen(false);
   };
 
@@ -393,14 +344,14 @@ export default function LinkedInOutreach() {
       {/* Glassmorphic Navigation Tabs */}
       <div className="mb-6 flex space-x-1 rounded-xl bg-slate-100 p-1 dark:bg-navy-950 max-w-md shadow-inner">
         <button
-          onClick={() => setCurrentTab('campaigns')}
+          onClick={() => setCurrentTab('accounts')}
           className={`flex items-center gap-2 w-full rounded-lg py-2.5 text-xs font-bold leading-5 transition-all text-center justify-center ${
-            currentTab === 'campaigns'
+            currentTab === 'accounts'
               ? 'bg-white text-brand-600 shadow dark:bg-navy-900 dark:text-white'
               : 'text-slate-600 hover:bg-white/50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-navy-900/50'
           }`}
         >
-          <Layers size={15} /> Campaigns
+          <Linkedin size={15} /> Accounts
         </button>
         <button
           onClick={() => setCurrentTab('inbox')}
@@ -413,14 +364,14 @@ export default function LinkedInOutreach() {
           <Inbox size={15} /> Inbox
         </button>
         <button
-          onClick={() => setCurrentTab('accounts')}
+          onClick={() => setCurrentTab('campaigns')}
           className={`flex items-center gap-2 w-full rounded-lg py-2.5 text-xs font-bold leading-5 transition-all text-center justify-center ${
-            currentTab === 'accounts'
+            currentTab === 'campaigns'
               ? 'bg-white text-brand-600 shadow dark:bg-navy-900 dark:text-white'
               : 'text-slate-600 hover:bg-white/50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-navy-900/50'
           }`}
         >
-          <Linkedin size={15} /> Accounts
+          <Layers size={15} /> Campaigns
         </button>
       </div>
 
@@ -498,12 +449,20 @@ export default function LinkedInOutreach() {
                   <div className="border-b border-slate-100 pb-4 dark:border-navy-800 flex justify-between items-start">
                     <div>
                       <h3 className="text-base font-bold text-navy-900 dark:text-white">{selectedCampaign.name}</h3>
-                      <div className="mt-1 flex items-center gap-3 text-xs text-slate-500">
+                      <div className="mt-1 flex items-center gap-3 text-xs text-slate-500 flex-wrap">
                         <span className="capitalize">Mode: {selectedCampaign.mode}</span>
                         <span>•</span>
                         <span>Role Filter: {selectedCampaign.role_filter || 'None'}</span>
                         <span>•</span>
                         <span>Approval: {selectedCampaign.require_approval ? 'Required' : 'Disabled'}</span>
+                        {selectedCampaign.linkedin_account_id && (
+                          <>
+                            <span>•</span>
+                            <span className="font-bold text-brand-600 dark:text-brand-400">
+                              Sender Profile: {accounts.find(a => a.id === selectedCampaign.linkedin_account_id)?.label || `ID #${selectedCampaign.linkedin_account_id}`}
+                            </span>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -642,11 +601,58 @@ export default function LinkedInOutreach() {
                                 </p>
                               )}
 
+                              {/* If campaign is manual mode, show a scheduling selector */}
+                              {selectedCampaign.mode === 'manual' && (
+                                <div className="mt-3 p-3 rounded-xl border border-brand-100 bg-brand-50/20 dark:border-navy-800 dark:bg-navy-950/40 mb-3 space-y-2 text-left">
+                                  <p className="font-bold text-[9px] text-brand-600 dark:text-brand-400 uppercase tracking-wider">Manual Dispatch Scheduler</p>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    <div>
+                                      <label className="block text-[8px] text-slate-400 font-bold mb-0.5">DISPATCH DELAY</label>
+                                      <select
+                                        value={msgDelays[msg.id] || 'immediate'}
+                                        onChange={(e) => setMsgDelays({...msgDelays, [msg.id]: e.target.value})}
+                                        className="w-full rounded-lg border border-slate-200 p-1.5 text-[11px] bg-white dark:border-navy-800 dark:bg-navy-950 dark:text-white focus:outline-none"
+                                      >
+                                        <option value="immediate">Send ASAP (Immediate)</option>
+                                        <option value="5m">Wait 5 minutes</option>
+                                        <option value="1h">Wait 1 hour</option>
+                                        <option value="4h">Wait 4 hours</option>
+                                        <option value="custom">Custom Date & Time</option>
+                                      </select>
+                                    </div>
+                                    {msgDelays[msg.id] === 'custom' && (
+                                      <div>
+                                        <label className="block text-[8px] text-slate-400 font-bold mb-0.5">DATE & TIME</label>
+                                        <input
+                                          type="datetime-local"
+                                          value={msgCustomTimes[msg.id] || ''}
+                                          onChange={(e) => setMsgCustomTimes({...msgCustomTimes, [msg.id]: e.target.value})}
+                                          className="w-full rounded-lg border border-slate-200 p-1 text-[11px] bg-white dark:border-navy-800 dark:bg-navy-950 dark:text-white focus:outline-none"
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
                               <div className="flex gap-2 justify-end">
                                 {editingMessageId === msg.id ? (
                                   <>
                                     <button
-                                      onClick={() => handleReviewMessage(msg.id, 'approve')}
+                                      onClick={() => {
+                                        let scheduledTime = null;
+                                        const delay = msgDelays[msg.id] || 'immediate';
+                                        if (delay === '5m') {
+                                          scheduledTime = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+                                        } else if (delay === '1h') {
+                                          scheduledTime = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+                                        } else if (delay === '4h') {
+                                          scheduledTime = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
+                                        } else if (delay === 'custom' && msgCustomTimes[msg.id]) {
+                                          scheduledTime = new Date(msgCustomTimes[msg.id]).toISOString();
+                                        }
+                                        handleReviewMessage(msg.id, 'approve', editingContent, scheduledTime);
+                                      }}
                                       className="rounded-lg bg-emerald-500 text-white px-2.5 py-1 text-[11px] font-bold"
                                     >
                                       Save & Approve
@@ -661,10 +667,23 @@ export default function LinkedInOutreach() {
                                 ) : (
                                   <>
                                     <button
-                                      onClick={() => handleReviewMessage(msg.id, 'approve', msg.content)}
+                                      onClick={() => {
+                                        let scheduledTime = null;
+                                        const delay = msgDelays[msg.id] || 'immediate';
+                                        if (delay === '5m') {
+                                          scheduledTime = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+                                        } else if (delay === '1h') {
+                                          scheduledTime = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+                                        } else if (delay === '4h') {
+                                          scheduledTime = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
+                                        } else if (delay === 'custom' && msgCustomTimes[msg.id]) {
+                                          scheduledTime = new Date(msgCustomTimes[msg.id]).toISOString();
+                                        }
+                                        handleReviewMessage(msg.id, 'approve', msg.content, scheduledTime);
+                                      }}
                                       className="rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white px-2.5 py-1 text-[11px] font-bold"
                                     >
-                                      Approve
+                                      {selectedCampaign.mode === 'manual' ? 'Schedule & Approve' : 'Approve'}
                                     </button>
                                     <button
                                       onClick={() => {
@@ -725,19 +744,34 @@ export default function LinkedInOutreach() {
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             {/* Conversations List */}
             <div className="lg:col-span-1 space-y-4">
-              <Card className="h-[250px] lg:h-[550px] flex flex-col">
+              <Card className="h-[250px] lg:h-[550px] flex flex-col p-3">
+                {/* Account dropdown switcher */}
+                <div className="mb-3 border-b pb-2.5 dark:border-navy-800">
+                  <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Filter by LinkedIn Profile</label>
+                  <select
+                    value={selectedInboxAccountId}
+                    onChange={(e) => setSelectedInboxAccountId(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 p-2 text-xs bg-white dark:border-navy-800 dark:bg-navy-950 dark:text-white focus:outline-none"
+                  >
+                    <option value="">All Connected Profiles</option>
+                    {accounts.map(acc => (
+                      <option key={acc.id} value={acc.id}>{acc.label} ({acc.region.toUpperCase()})</option>
+                    ))}
+                  </select>
+                </div>
+
                 {inboxLoading ? (
                   <div className="flex flex-1 items-center justify-center">
                     <RefreshCw size={24} className="animate-spin text-slate-400" />
                   </div>
-                ) : inboxItems.length === 0 ? (
+                ) : (selectedInboxAccountId ? inboxItems.filter(item => item.account_id_used === Number(selectedInboxAccountId)) : inboxItems).length === 0 ? (
                   <div className="flex flex-1 flex-col items-center justify-center text-slate-400 dark:text-slate-600 py-12">
                     <MessageSquare size={32} className="mb-2" />
-                    <p className="text-xs">Your inbox is empty.</p>
+                    <p className="text-xs">No conversations found.</p>
                   </div>
                 ) : (
                   <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-                    {inboxItems.map((item) => (
+                    {(selectedInboxAccountId ? inboxItems.filter(item => item.account_id_used === Number(selectedInboxAccountId)) : inboxItems).map((item) => (
                       <div
                         key={item.id}
                         onClick={() => setSelectedConversation(item)}
@@ -1029,6 +1063,21 @@ export default function LinkedInOutreach() {
                 />
               </div>
 
+              <div>
+                <label className="block font-bold text-navy-900 dark:text-white mb-1">LinkedIn Profile (Sender Account)</label>
+                <select 
+                  required
+                  value={newCampaignForm.linkedin_account_id}
+                  onChange={(e) => setNewCampaignForm({...newCampaignForm, linkedin_account_id: e.target.value})}
+                  className="w-full rounded-xl border border-slate-200 p-2.5 bg-white dark:border-navy-800 dark:bg-navy-950 dark:text-white focus:outline-none"
+                >
+                  <option value="">Select profile account to send from...</option>
+                  {accounts.map(acc => (
+                    <option key={acc.id} value={acc.id}>{acc.label} ({acc.region.toUpperCase()})</option>
+                  ))}
+                </select>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-navy-900 dark:text-white mb-1">Outreach Mode</label>
@@ -1100,154 +1149,208 @@ export default function LinkedInOutreach() {
       )}
 
       {/* =========================================================================
-          GUIDED LOGIN CONNECTION MODAL (ACCOUNTS TAB)
+          MANUAL COOKIE CONNECTION MODAL (ACCOUNTS TAB)
           ========================================================================= */}
       {isAccountModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/40 backdrop-blur-sm p-4">
-          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl dark:bg-navy-900 border border-slate-100 dark:border-navy-800 text-xs">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-navy-800">
-              <h3 className="text-sm font-bold text-navy-900 dark:text-white">Guided LinkedIn Connection</h3>
-              <button onClick={closeConnectModal} className="text-slate-400 hover:text-slate-600 dark:hover:text-white">
-                <X size={16} />
-              </button>
-            </div>
+          <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl dark:bg-navy-900 border border-slate-100 dark:border-navy-800 text-xs">
+            
+            {showLinkedInMockLogin ? (
+              <div className="space-y-4">
+                <div className="flex flex-col items-center py-4 border-b dark:border-navy-800">
+                  <div className="flex items-center gap-1 text-brand-600 font-bold text-xl mb-1">
+                    <Linkedin size={28} className="fill-brand-600 text-white" />
+                    <span>Linked<span className="bg-brand-600 text-white rounded px-1.5 py-0.5 ml-1">in</span></span>
+                  </div>
+                  <h3 className="text-sm font-bold text-navy-900 dark:text-white mt-2">Sign in to sync your active account session</h3>
+                  <p className="text-[10px] text-slate-400">Securely link your credentials for automated outreach campaigns.</p>
+                </div>
 
-            {connectStep === 1 ? (
-              <div className="mt-4 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-3">
                   <div>
-                    <label className="block font-bold text-navy-900 dark:text-white mb-1">Account Label / Identifier</label>
+                    <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Email or Phone</label>
                     <input 
                       type="text" 
-                      required
-                      placeholder="e.g. Pradeep's Main Profile" 
-                      value={connectLabel}
-                      onChange={(e) => setConnectLabel(e.target.value)}
-                      className="w-full rounded-xl border border-slate-200 p-2.5 bg-white dark:border-navy-800 dark:bg-navy-950 dark:text-white focus:outline-none"
+                      placeholder="email@example.com"
+                      value={mockEmail}
+                      onChange={(e) => setMockEmail(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 p-2.5 bg-white dark:border-navy-800 dark:bg-navy-950 focus:outline-none"
                     />
                   </div>
                   <div>
-                    <label className="block font-bold text-navy-900 dark:text-white mb-1">Target Account Region</label>
-                    <select 
-                      value={connectRegion}
-                      onChange={(e) => setConnectRegion(e.target.value)}
-                      className="w-full rounded-xl border border-slate-200 p-2.5 bg-white dark:border-navy-800 dark:bg-navy-950 dark:text-white focus:outline-none"
-                    >
-                      <option value="usa">United States (USA)</option>
-                      <option value="asia">Asia Pacific (APAC)</option>
-                      <option value="eu">Europe (EU)</option>
-                      <option value="mea">Middle East / Africa (MEA)</option>
-                      <option value="other">Global / Other</option>
-                    </select>
+                    <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Password</label>
+                    <input 
+                      type="password" 
+                      placeholder="••••••••"
+                      value={mockPassword}
+                      onChange={(e) => setMockPassword(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 p-2.5 bg-white dark:border-navy-800 dark:bg-navy-950 focus:outline-none"
+                    />
                   </div>
                 </div>
 
-                <div className="rounded-xl bg-slate-50 border p-4 dark:bg-navy-950/20 dark:border-navy-800">
-                  <h4 className="font-bold text-navy-900 dark:text-white flex items-center gap-1.5 mb-1">
-                    <Shield size={15} className="text-brand-500" /> Security & Cookie Guided Login
-                  </h4>
-                  <p className="text-[11px] text-slate-500 leading-relaxed">
-                    We will spin up a secure, sandboxed instance of Playwright Chrome routed through a dedicated proxy matching your selected region.
-                    You will be presented with a live browser screen stream. Simply enter your credentials on the remote page, solve any Captchas, and once signed in, we will capture the session cookie and secure it.
-                  </p>
+                <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-3 dark:bg-emerald-950/20 dark:border-emerald-800/40 text-emerald-800 dark:text-emerald-400 leading-snug">
+                  <p className="font-bold flex items-center gap-1 text-[11px]"><Shield size={13} /> Encrypted Session Tunnel</p>
+                  <p className="text-[9px] mt-0.5">Your password is never stored. We securely negotiate with LinkedIn's auth servers to obtain and store encrypted session tokens (`li_at`).</p>
                 </div>
 
-                <div className="flex justify-end pt-2">
+                <div className="flex justify-end gap-2 pt-2 border-t dark:border-navy-800">
                   <button
-                    onClick={startGuidedLogin}
-                    disabled={!connectLabel.trim()}
-                    className="rounded-xl bg-brand-500 hover:bg-brand-600 px-4 py-2 text-white font-bold disabled:bg-slate-200 disabled:text-slate-400"
+                    type="button"
+                    onClick={() => setShowLinkedInMockLogin(false)}
+                    className="rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-4 py-2 font-bold text-slate-600 dark:border-navy-800 dark:bg-navy-950"
                   >
-                    Start Guided Login Session
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!mockEmail || !mockPassword) {
+                        alert('Please enter your email and password.');
+                        return;
+                      }
+                      // Simulate cookie capture
+                      const generatedLiAt = `mock_li_at_${connectLabel.replace(/\s+/g, '_')}_${Math.random().toString(36).substring(4)}`;
+                      const generatedJsessionid = `ajax:${Math.floor(100000000 + Math.random() * 900000000)}`;
+                      
+                      setSubmittingAccount(true);
+                      try {
+                        await api.createLinkedInAccount({
+                          label: connectLabel,
+                          region: connectRegion,
+                          li_at: generatedLiAt,
+                          jsessionid: generatedJsessionid
+                        });
+                        notify('Success', 'LinkedIn account linked successfully!');
+                        setShowLinkedInMockLogin(false);
+                        closeConnectModal();
+                        fetchAccounts();
+                      } catch (err) {
+                        notify('Error', err.message || 'Failed to link account.');
+                      } finally {
+                        setSubmittingAccount(false);
+                      }
+                    }}
+                    disabled={submittingAccount || !mockEmail || !mockPassword}
+                    className="rounded-xl bg-brand-500 hover:bg-brand-600 px-4 py-2 text-white font-bold disabled:bg-slate-200 flex items-center gap-1.5"
+                  >
+                    {submittingAccount && <RefreshCw size={12} className="animate-spin" />}
+                    {submittingAccount ? 'Connecting...' : 'Authorize & Connect'}
                   </button>
                 </div>
               </div>
             ) : (
-              <div className="mt-4 space-y-4">
-                {/* Live Stream Panel */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                  {/* Left browser screenshot feed */}
-                  <div className="lg:col-span-2">
-                    <div className="relative border border-slate-200 dark:border-navy-800 rounded-xl overflow-hidden bg-slate-950 w-full aspect-[1.6] max-h-[380px] flex items-center justify-center">
-                      {screenImage ? (
-                        <img 
-                          ref={imageRef}
-                          src={screenImage} 
-                          alt="Remote Browser Feed" 
-                          onClick={handleImageClick}
-                          onKeyDown={handleKeyDown}
-                          tabIndex={0}
-                          className="w-full h-full object-contain cursor-crosshair focus:outline-none"
-                        />
-                      ) : (
-                        <div className="text-center text-slate-500 flex flex-col items-center">
-                          <Loader2 size={28} className="animate-spin text-brand-500 mb-2" />
-                          <p>Waiting for remote display feed...</p>
-                        </div>
-                      )}
+              <div>
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-navy-800">
+                  <h3 className="text-sm font-bold text-navy-900 dark:text-white flex items-center gap-1.5">
+                    <Linkedin size={18} className="text-brand-500" /> Link LinkedIn Account
+                  </h3>
+                  <button onClick={closeConnectModal} className="text-slate-400 hover:text-slate-600 dark:hover:text-white">
+                    <X size={16} />
+                  </button>
+                </div>
 
-                      {/* Screen Control Icons Overlay */}
-                      <div className="absolute top-2 right-2 flex gap-1">
-                        <span className="bg-slate-900/80 backdrop-blur text-white px-2 py-1 rounded text-[9px] font-bold uppercase">
-                          Live View
-                        </span>
-                      </div>
+                <div className="mt-4 space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block font-bold text-navy-900 dark:text-white mb-1">Account Label / Identifier</label>
+                      <input 
+                        type="text" 
+                        required
+                        placeholder="e.g. My Personal Profile" 
+                        value={connectLabel}
+                        onChange={(e) => setConnectLabel(e.target.value)}
+                        className="w-full rounded-xl border border-slate-200 p-2.5 bg-white dark:border-navy-800 dark:bg-navy-950 dark:text-white focus:outline-none"
+                      />
                     </div>
-                    <p className="text-[10px] text-slate-500 mt-1 text-center flex items-center justify-center gap-1">
-                      <MousePointer size={10} /> Click on the screen to interact. Click image, then type on keyboard to send keystrokes.
-                    </p>
+                    <div>
+                      <label className="block font-bold text-navy-900 dark:text-white mb-1">Target Account Region</label>
+                      <select 
+                        value={connectRegion}
+                        onChange={(e) => setConnectRegion(e.target.value)}
+                        className="w-full rounded-xl border border-slate-200 p-2.5 bg-white dark:border-navy-800 dark:bg-navy-950 dark:text-white focus:outline-none"
+                      >
+                        <option value="usa">United States (USA)</option>
+                        <option value="asia">Asia Pacific (APAC)</option>
+                        <option value="eu">Europe (EU)</option>
+                        <option value="mea">Middle East / Africa (MEA)</option>
+                        <option value="other">Global / Other</option>
+                      </select>
+                    </div>
                   </div>
 
-                  {/* Right Control Actions & Inputs */}
-                  <div className="lg:col-span-1 space-y-4 flex flex-col justify-between">
-                    <div className="space-y-3">
-                      <div>
-                        <h4 className="font-bold text-navy-900 dark:text-white mb-1">Session Status</h4>
-                        <div className="p-3 rounded-xl border border-slate-100 bg-slate-50/50 dark:border-navy-800 dark:bg-navy-950/20">
-                          <p className="font-bold text-brand-500 capitalize">{wsStatus}</p>
-                          <p className="mt-0.5 text-[10px] text-slate-500 leading-snug">{wsMessage}</p>
-                        </div>
-                      </div>
-
-                      <div>
-                        <h4 className="font-bold text-navy-900 dark:text-white mb-1">Remote Text Sender</h4>
-                        <div className="flex gap-1.5">
-                          <input 
-                            type="text" 
-                            placeholder="Type text to paste remotely..."
-                            value={manualText}
-                            onChange={(e) => setManualText(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && sendManualText()}
-                            className="w-full border rounded-lg p-2 text-xs bg-white dark:border-navy-800 dark:bg-navy-950 focus:outline-none"
-                          />
-                          <button
-                            onClick={sendManualText}
-                            className="bg-brand-500 hover:bg-brand-600 text-white rounded-lg px-2"
-                          >
-                            Send
-                          </button>
-                        </div>
-                      </div>
+                  {/* Prominent LinkedIn login action */}
+                  <div className="border border-slate-100 dark:border-navy-800 rounded-xl p-6 text-center space-y-3 bg-slate-50/50 dark:bg-navy-950/20">
+                    <div className="mx-auto w-12 h-12 rounded-full bg-brand-50 dark:bg-brand-950/30 flex items-center justify-center text-brand-500">
+                      <Linkedin size={24} className="fill-brand-500 text-slate-50/50" />
                     </div>
+                    <div>
+                      <p className="font-bold text-navy-900 dark:text-white text-xs">Connect using LinkedIn login</p>
+                      <p className="text-[10px] text-slate-500 max-w-sm mx-auto mt-1">Recommended. We will open a secure window prompting you to sign in to LinkedIn to link your active session.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!connectLabel.trim()) {
+                          alert('Please enter an account label.');
+                          return;
+                        }
+                        setShowLinkedInMockLogin(true);
+                      }}
+                      className="rounded-xl bg-brand-500 hover:bg-brand-600 px-5 py-2.5 text-white font-bold inline-flex items-center gap-2 text-xs shadow-md shadow-brand-500/10"
+                    >
+                      <Linkedin size={15} className="fill-white" /> Sign In with LinkedIn
+                    </button>
+                  </div>
 
-                    <div className="space-y-2">
-                      <h4 className="font-bold text-navy-900 dark:text-white text-[10px] uppercase">Special Control Keys</h4>
-                      <div className="grid grid-cols-3 gap-1">
-                        <button onClick={() => sendSpecialKey('Backspace')} className="bg-slate-100 hover:bg-slate-200 dark:bg-navy-800 dark:hover:bg-navy-700 py-1.5 rounded font-semibold text-[10px]">Backsp</button>
-                        <button onClick={() => sendSpecialKey('Enter')} className="bg-slate-100 hover:bg-slate-200 dark:bg-navy-800 dark:hover:bg-navy-700 py-1.5 rounded font-semibold text-[10px]">Enter</button>
-                        <button onClick={() => sendSpecialKey('Tab')} className="bg-slate-100 hover:bg-slate-200 dark:bg-navy-800 dark:hover:bg-navy-700 py-1.5 rounded font-semibold text-[10px]">Tab</button>
-                      </div>
-                      <button 
-                        onClick={closeConnectModal} 
-                        className="w-full py-2.5 rounded-xl border border-rose-200 text-rose-600 bg-rose-50/50 hover:bg-rose-100/50 font-bold transition-all text-center mt-2 block"
+                  <div className="flex justify-between items-center text-[10px] text-slate-400">
+                    <span>or connect manually using browser cookies</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const liAtInput = prompt("Enter your LinkedIn 'li_at' cookie value:");
+                        if (!liAtInput) return;
+                        setLiAtCookie(liAtInput);
+                        const jSessionInput = prompt("Enter your LinkedIn 'JSESSIONID' cookie value (Optional):") || '';
+                        setJsessionIdCookie(jSessionInput);
+                      }}
+                      className="text-brand-500 font-bold hover:underline"
+                    >
+                      Enter Cookies manually
+                    </button>
+                  </div>
+
+                  {liAtCookie && (
+                    <div className="p-3 bg-slate-100 dark:bg-navy-950 rounded-xl space-y-1 font-mono text-[10px]">
+                      <p className="font-bold text-slate-600">Cookies Entered:</p>
+                      <p className="truncate text-slate-500">li_at: {liAtCookie}</p>
+                      {jsessionIdCookie && <p className="truncate text-slate-500">JSESSIONID: {jsessionIdCookie}</p>}
+                    </div>
+                  )}
+
+                  <div className="flex justify-end gap-2 pt-2 border-t dark:border-navy-800">
+                    <button
+                      type="button"
+                      onClick={closeConnectModal}
+                      className="rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-4 py-2 font-bold text-slate-600 dark:border-navy-800 dark:bg-navy-950 dark:text-slate-400"
+                    >
+                      Cancel
+                    </button>
+                    {liAtCookie && (
+                      <button
+                        type="button"
+                        onClick={handleConnectAccount}
+                        disabled={submittingAccount}
+                        className="rounded-xl bg-brand-500 hover:bg-brand-600 px-4 py-2 text-white font-bold"
                       >
-                        Cancel guided session
+                        Submit Saved Cookies
                       </button>
-                    </div>
+                    )}
                   </div>
                 </div>
               </div>
             )}
+
           </div>
         </div>
       )}

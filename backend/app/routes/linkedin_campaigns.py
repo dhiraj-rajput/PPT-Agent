@@ -44,6 +44,7 @@ class CampaignCreateBody(BaseModel):
     followup_prompt: Optional[str] = ""
     require_approval: bool = True
     region_routing_rule: Optional[Dict[str, Any]] = None
+    linkedin_account_id: Optional[int] = None
 
 
 class CampaignUpdateBody(BaseModel):
@@ -57,6 +58,7 @@ class CampaignUpdateBody(BaseModel):
     require_approval: Optional[bool] = None
     region_routing_rule: Optional[Dict[str, Any]] = None
     status: Optional[str] = None  # "draft", "running", "paused", "completed"
+    linkedin_account_id: Optional[int] = None
 
 
 class TargetImportBody(BaseModel):
@@ -66,6 +68,7 @@ class TargetImportBody(BaseModel):
 class MessageReviewBody(BaseModel):
     content: str
     action: str  # "approve" | "reject" | "edit"
+    scheduled_send_at: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -95,6 +98,7 @@ async def list_campaigns(current_user: dict = Depends(get_current_user)):
                         "region_routing_rule": c.region_routing_rule,
                         "require_approval": c.require_approval,
                         "status": c.status,
+                        "linkedin_account_id": c.linkedin_account_id,
                         "created_at": c.created_at.isoformat() if c.created_at else None,
                         "updated_at": c.updated_at.isoformat() if c.updated_at else None,
                     })
@@ -131,6 +135,7 @@ async def create_campaign(
                     region_routing_rule=body.region_routing_rule,
                     require_approval=body.require_approval,
                     status="draft",
+                    linkedin_account_id=body.linkedin_account_id,
                     created_at=now_utc,
                     updated_at=now_utc
                 )
@@ -490,9 +495,18 @@ async def review_message(
                     raise HTTPException(status_code=404, detail="Message not found")
 
                 if body.action == "approve":
-                    m.status = "queued"
+                    m.status = "approved"
                     m.content = body.content
-                    m.sent_at = None  # Scheduled for sending
+                    m.sent_at = None
+                    if body.scheduled_send_at:
+                        try:
+                            clean_str = body.scheduled_send_at.replace("Z", "+00:00")
+                            m.scheduled_send_at = datetime.fromisoformat(clean_str).replace(tzinfo=None)
+                        except Exception as parse_err:
+                            logger.warning(f"Failed to parse scheduled_send_at '{body.scheduled_send_at}': {parse_err}")
+                            m.scheduled_send_at = None
+                    else:
+                        m.scheduled_send_at = None
                 elif body.action == "reject":
                     m.status = "failed"
                 elif body.action == "edit":

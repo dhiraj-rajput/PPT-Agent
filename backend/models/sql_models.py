@@ -255,10 +255,12 @@ class LinkedInCampaign(Base):
     region_routing_rule = Column(JSON, default=dict)
     require_approval = Column(Boolean, default=True)
     status = Column(Enum("draft", "running", "paused", "completed", name="linkedin_campaign_status"), default="draft")
+    linkedin_account_id = Column(Integer, ForeignKey("linkedin_accounts.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, default=_now, nullable=False)
     updated_at = Column(DateTime, default=_now, onupdate=_now)
 
     creator = relationship("User", back_populates="linkedin_campaigns", foreign_keys=[user_id])
+    account = relationship("LinkedInAccount", foreign_keys=[linkedin_account_id])
     targets = relationship("LinkedInTarget", back_populates="campaign", cascade="all, delete-orphan")
     steps = relationship("LinkedInSequenceStep", back_populates="campaign", cascade="all, delete-orphan")
     messages = relationship("LinkedInMessageLog", back_populates="campaign", cascade="all, delete-orphan")
@@ -1104,6 +1106,7 @@ class LinkedInMessageLog(Base):
     generated_by = Column(Enum("llm", "manual", "template", name="linkedin_msg_gen_by_enum"), nullable=False)
     status = Column(Enum("queued", "needs_review", "approved", "sent", "failed", name="linkedin_msg_status_enum"), default="queued")
     sent_at = Column(DateTime, nullable=True)
+    scheduled_send_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=_now, nullable=False)
     updated_at = Column(DateTime, default=_now, onupdate=_now, nullable=False)
 
