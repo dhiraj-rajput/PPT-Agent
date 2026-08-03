@@ -2,7 +2,8 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Building2, FileStack, BrainCircuit, FileEdit, Mail,
   Kanban, Calendar, CheckSquare, BarChart3, FileBarChart, Users,
-  Plug, Settings, ChevronLeft, Sparkles, Zap, Hash, ScrollText, X, Database
+  Plug, Settings, ChevronLeft, Sparkles, Zap, Hash, ScrollText, X, Database,
+  Layers, Inbox
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useErrorLogs } from '../../context/ErrorLogContext.jsx';
@@ -22,6 +23,8 @@ const bizNav = [
   { to: '/rfp-auto-respond', label: 'RFP Auto-Respond', icon: Zap },
   { to: '/email-campaign', label: 'Email Campaign', icon: Mail },
   { to: '/newsletter', label: 'Newsletter', icon: Sparkles },
+  { to: '/linkedin-campaign', label: 'LinkedIn Campaigns', icon: Layers },
+  { to: '/linkedin-inbox', label: 'LinkedIn Inbox', icon: Inbox },
   { to: '/meetings', label: 'Meetings', icon: Calendar },
 ];
 

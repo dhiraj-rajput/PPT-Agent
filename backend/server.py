@@ -53,6 +53,8 @@ from app.routes.analytics import router as analytics_router
 from app.routes.website_events import router as website_events_router
 from app.routes.naics import router as naics_router
 from app.routes.newsletters import router as newsletters_router
+from app.routes.linkedin_campaigns import router as linkedin_campaigns_router
+from app.routes.linkedin_inbox import router as linkedin_inbox_router
 
 # ---- Admin: Server Logs ----
 from app.routes.system_logs import router as system_logs_router
@@ -350,6 +352,8 @@ app.include_router(analytics_router, prefix="/api")
 app.include_router(website_events_router, prefix="/api")
 app.include_router(naics_router, prefix="/api")
 app.include_router(newsletters_router, prefix="/api")
+app.include_router(linkedin_campaigns_router, prefix="/api")
+app.include_router(linkedin_inbox_router, prefix="/api")
 
 # Admin: Server Logs
 app.include_router(system_logs_router, prefix="/api")

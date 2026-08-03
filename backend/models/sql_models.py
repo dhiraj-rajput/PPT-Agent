@@ -91,6 +91,8 @@ class User(Base):
     notifications = relationship("Notification", back_populates="user")
     integrations = relationship("Integration", back_populates="user")
     newsletters = relationship("Newsletter", back_populates="creator")
+    linkedin_accounts = relationship("LinkedInAccount", back_populates="creator", foreign_keys="LinkedInAccount.user_id")
+    linkedin_campaigns = relationship("LinkedInCampaign", back_populates="creator", foreign_keys="LinkedInCampaign.user_id")
 
 
 class OTP(Base):
@@ -965,3 +967,147 @@ class ActiveLease(Base):
     holder = Column(String(255), default="")
     expires_at = Column(DateTime, nullable=False)
     acquired_at = Column(DateTime, default=_now, nullable=False)
+
+
+# ===========================================================================
+# LINKEDIN OUTREACH MODULE
+# ===========================================================================
+
+class LinkedInAccount(Base):
+    __tablename__ = "linkedin_accounts"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    label = Column(String(255), nullable=False, default="")
+    region = Column(String(50), nullable=False, default="other")  # "asia", "usa", "mea", "eu", "other"
+    auth_method = Column(String(50), nullable=False, default="guided_login")  # "guided_login", "extension_capture"
+    session_cookie_encrypted = Column(TEXT, nullable=True)  # li_at + JSESSIONID, encrypted at rest
+    fingerprint_profile_id = Column(Integer, ForeignKey("fingerprint_profiles.id", ondelete="SET NULL"), nullable=True)
+    proxy_id = Column(Integer, ForeignKey("proxies.id", ondelete="SET NULL"), nullable=True)
+    status = Column(String(50), nullable=False, default="connecting")  # "connecting", "warming_up", "active", "cooldown", "flagged", "banned", "expired"
+    daily_connection_cap = Column(Integer, default=8)
+    daily_message_cap = Column(Integer, default=15)
+    warmup_stage = Column(Integer, default=0)
+    health_score = Column(Integer, default=100)
+    consecutive_flags = Column(Integer, default=0)
+    last_action_at = Column(DateTime, nullable=True)
+    last_checkpoint_at = Column(DateTime, nullable=True)
+    cooldown_until = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=_now, nullable=False)
+    updated_at = Column(DateTime, default=_now, onupdate=_now, nullable=False)
+
+    creator = relationship("User", back_populates="linkedin_accounts", foreign_keys=[user_id])
+    fingerprint = relationship("FingerprintProfile", foreign_keys=[fingerprint_profile_id], post_update=True)
+    proxy = relationship("Proxy", foreign_keys=[proxy_id], post_update=True)
+
+
+class FingerprintProfile(Base):
+    __tablename__ = "fingerprint_profiles"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    linkedin_account_id = Column(Integer, nullable=True)
+    user_agent = Column(String(500), nullable=False, default="")
+    viewport = Column(String(50), nullable=False, default="1440x900")
+    timezone = Column(String(100), nullable=False, default="America/Chicago")
+    locale = Column(String(20), nullable=False, default="en-US")
+    webgl_seed = Column(String(100), nullable=False, default="")
+
+
+class Proxy(Base):
+    __tablename__ = "proxies"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    region = Column(String(50), nullable=False, default="")
+    endpoint = Column(String(255), nullable=False, default="")
+    credentials_encrypted = Column(TEXT, nullable=True)
+    assigned_account_id = Column(Integer, nullable=True)
+
+
+class LinkedInCampaign(Base):
+    __tablename__ = "linkedin_campaigns"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    name = Column(String(255), nullable=False, default="")
+    mode = Column(String(50), nullable=False, default="manual")  # "auto", "manual", "hybrid"
+    role_filter = Column(String(255), nullable=False, default="")
+    message_generation_mode = Column(String(50), nullable=False, default="llm")  # "llm", "manual", "template"
+    our_company_profile_id = Column(Integer, nullable=True)
+    connection_note_prompt = Column(TEXT, nullable=True)
+    followup_prompt = Column(TEXT, nullable=True)
+    region_routing_rule = Column(JSON, nullable=True)  # e.g., {"apac": 3, "default": 1}
+    require_approval = Column(Boolean, default=True, nullable=False)
+    status = Column(String(50), nullable=False, default="draft")  # "draft", "running", "paused", "completed"
+    created_at = Column(DateTime, default=_now, nullable=False)
+    updated_at = Column(DateTime, default=_now, onupdate=_now, nullable=False)
+
+    creator = relationship("User", back_populates="linkedin_campaigns", foreign_keys=[user_id])
+    targets = relationship("LinkedInTarget", back_populates="campaign", cascade="all, delete-orphan")
+    steps = relationship("LinkedInSequenceStep", back_populates="campaign", cascade="all, delete-orphan")
+    messages = relationship("LinkedInMessageLog", back_populates="campaign", cascade="all, delete-orphan")
+
+
+class LinkedInTarget(Base):
+    __tablename__ = "linkedin_targets"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    person_id = Column(BigInteger, ForeignKey("people.id", ondelete="SET NULL"), nullable=True)
+    campaign_id = Column(Integer, ForeignKey("linkedin_campaigns.id", ondelete="SET NULL"), nullable=True)
+    assigned_account_id = Column(Integer, ForeignKey("linkedin_accounts.id", ondelete="SET NULL"), nullable=True)
+    seniority_target = Column(String(100), nullable=True)
+    scrape_status = Column(String(50), nullable=False, default="pending")  # "pending", "scraped", "failed"
+    scraped_profile_json = Column(JSON, nullable=True)
+    connection_status = Column(String(50), nullable=False, default="not_sent")  # "not_sent", "pending", "accepted", "rejected", "withdrawn"
+    last_action_at = Column(DateTime, nullable=True)
+
+    campaign = relationship("LinkedInCampaign", back_populates="targets")
+    person = relationship("Person")
+    account = relationship("LinkedInAccount")
+    messages = relationship("LinkedInMessageLog", back_populates="target", cascade="all, delete-orphan")
+
+
+class LinkedInSequenceStep(Base):
+    __tablename__ = "linkedin_sequence_steps"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    campaign_id = Column(Integer, ForeignKey("linkedin_campaigns.id", ondelete="CASCADE"), nullable=False)
+    step_order = Column(Integer, nullable=False, default=1)
+    trigger = Column(String(50), nullable=False)  # "on_connect_accept", "no_reply_after_days", "on_reply"
+    trigger_value = Column(Integer, nullable=True)  # e.g., number of days
+    action = Column(String(50), nullable=False)  # "send_message", "send_connection_note", "notify_human"
+    prompt_template = Column(TEXT, nullable=True)
+    static_message = Column(TEXT, nullable=True)
+
+    campaign = relationship("LinkedInCampaign", back_populates="steps")
+
+
+class LinkedInMessageLog(Base):
+    __tablename__ = "linkedin_message_logs"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    target_id = Column(Integer, ForeignKey("linkedin_targets.id", ondelete="SET NULL"), nullable=True)
+    campaign_id = Column(Integer, ForeignKey("linkedin_campaigns.id", ondelete="SET NULL"), nullable=True)
+    account_id_used = Column(Integer, ForeignKey("linkedin_accounts.id", ondelete="SET NULL"), nullable=True)
+    direction = Column(String(20), nullable=False)  # "out", "in"
+    content = Column(TEXT, nullable=True)
+    generated_by = Column(String(50), nullable=False, default="llm")  # "llm", "manual", "template"
+    status = Column(String(50), nullable=False, default="queued")  # "queued", "needs_review", "approved", "sent", "failed"
+    sent_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=_now, nullable=False)
+
+    target = relationship("LinkedInTarget", back_populates="messages")
+    campaign = relationship("LinkedInCampaign", back_populates="messages")
+    account = relationship("LinkedInAccount")
+    reply_classifications = relationship("LinkedInReplyClassification", back_populates="message_log", cascade="all, delete-orphan")
+
+
+class LinkedInReplyClassification(Base):
+    __tablename__ = "linkedin_reply_classifications"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    message_log_id = Column(Integer, ForeignKey("linkedin_message_logs.id", ondelete="CASCADE"), nullable=False)
+    intent = Column(String(50), nullable=False)  # "interested", "not_interested", "objection", "out_of_office", "meeting_request", "unclear"
+    confidence = Column(Numeric(4, 2), nullable=True)
+    suggested_next_action = Column(String(255), nullable=True)
+
+    message_log = relationship("LinkedInMessageLog", back_populates="reply_classifications")

@@ -88,6 +88,8 @@ const RFPAutoRespond      = lazy(() => import('./pages/RFPAutoRespond.jsx'));
 // Campaign / outreach pages
 const EmailCampaign       = lazy(() => import('./pages/EmailCampaign.jsx'));
 const Newsletter          = lazy(() => import('./pages/Newsletter.jsx'));
+const LinkedInCampaigns   = lazy(() => import('./pages/LinkedInCampaigns.jsx'));
+const LinkedInInbox       = lazy(() => import('./pages/LinkedInInbox.jsx'));
 
 // CRM / productivity pages
 const CRMPipeline         = lazy(() => import('./pages/CRMPipeline.jsx'));
@@ -149,6 +151,8 @@ export default function App() {
               <Route path="/proposal-builder" element={<ProposalBuilder />} />
               <Route path="/email-campaign" element={<EmailCampaign />} />
               <Route path="/newsletter" element={<Newsletter />} />
+              <Route path="/linkedin-campaign" element={<LinkedInCampaigns />} />
+              <Route path="/linkedin-inbox" element={<LinkedInInbox />} />
               <Route path="/crm-pipeline" element={<CRMPipeline />} />
               <Route path="/meetings" element={<Meetings />} />
               <Route path="/tasks" element={<Tasks />} />

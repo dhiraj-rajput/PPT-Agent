@@ -827,6 +827,55 @@ export const api = {
   getPeopleSummary() {
     return _request('GET', '/api/analytics/people-summary');
   },
+
+  // ── LinkedIn Campaigns ──────────────────────────────────────────────────
+  async listLinkedInCampaigns() {
+    return get('/api/linkedin/campaigns');
+  },
+  async createLinkedInCampaign(form) {
+    return post('/api/linkedin/campaigns', form);
+  },
+  async getLinkedInCampaign(id) {
+    return get(`/api/linkedin/campaigns/${id}`);
+  },
+  async updateLinkedInCampaign(id, form) {
+    return patch(`/api/linkedin/campaigns/${id}`, form);
+  },
+  async deleteLinkedInCampaign(id) {
+    return del(`/api/linkedin/campaigns/${id}`);
+  },
+  async importLinkedInTargets(id, { personIds, file }) {
+    const fd = new FormData();
+    if (personIds) fd.append('person_ids', personIds.join(','));
+    if (file) fd.append('file', file);
+    
+    const token = localStorage.getItem(TOKEN_KEY);
+    const res = await fetch(_buildUrl(`/api/linkedin/campaigns/${id}/import-targets`), {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    });
+    if (!res.ok) throw new Error(`Target import failed (${res.status})`);
+    return res.json();
+  },
+  async getLinkedInTargets(id, scrapeStatus = '') {
+    const query = scrapeStatus ? `?scrape_status=${scrapeStatus}` : '';
+    return get(`/api/linkedin/campaigns/${id}/targets${query}`);
+  },
+  async getLinkedInQueue(id) {
+    return get(`/api/linkedin/campaigns/${id}/queue`);
+  },
+  async reviewLinkedInMessage(messageId, { content, action }) {
+    return post(`/api/linkedin/campaigns/messages/${messageId}/review`, { content, action });
+  },
+
+  // ── LinkedIn Unified Inbox ──────────────────────────────────────────────
+  async getLinkedInInbox() {
+    return get('/api/linkedin/inbox');
+  },
+  async sendLinkedInReply(targetId, content) {
+    return post('/api/linkedin/inbox/reply', { target_id: targetId, content });
+  },
 };
 
 export default api;
