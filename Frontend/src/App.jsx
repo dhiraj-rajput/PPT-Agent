@@ -86,11 +86,9 @@ const ProposalBuilder     = lazy(() => import('./pages/ProposalBuilder.jsx'));
 const RFPAutoRespond      = lazy(() => import('./pages/RFPAutoRespond.jsx'));
 
 // Campaign / outreach pages
-const LinkedInAccounts    = lazy(() => import('./pages/LinkedInAccounts.jsx'));
+const LinkedInOutreach    = lazy(() => import('./pages/LinkedInOutreach.jsx'));
 const EmailCampaign       = lazy(() => import('./pages/EmailCampaign.jsx'));
 const Newsletter          = lazy(() => import('./pages/Newsletter.jsx'));
-const LinkedInCampaigns   = lazy(() => import('./pages/LinkedInCampaigns.jsx'));
-const LinkedInInbox       = lazy(() => import('./pages/LinkedInInbox.jsx'));
 
 // CRM / productivity pages
 const CRMPipeline         = lazy(() => import('./pages/CRMPipeline.jsx'));
@@ -150,11 +148,9 @@ export default function App() {
               <Route path="/naics" element={<NaicsMuster />} />
               <Route path="/ai-research" element={<AIResearch />} />
               <Route path="/proposal-builder" element={<ProposalBuilder />} />
-              <Route path="/linkedin/accounts" element={<LinkedInAccounts />} />
+              <Route path="/linkedin" element={<LinkedInOutreach />} />
               <Route path="/email-campaign" element={<EmailCampaign />} />
               <Route path="/newsletter" element={<Newsletter />} />
-              <Route path="/linkedin-campaign" element={<LinkedInCampaigns />} />
-              <Route path="/linkedin-inbox" element={<LinkedInInbox />} />
               <Route path="/crm-pipeline" element={<CRMPipeline />} />
               <Route path="/meetings" element={<Meetings />} />
               <Route path="/tasks" element={<Tasks />} />
