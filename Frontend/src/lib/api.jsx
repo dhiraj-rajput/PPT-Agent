@@ -827,6 +827,20 @@ export const api = {
   getPeopleSummary() {
     return _request('GET', '/api/analytics/people-summary');
   },
+
+  // ── LinkedIn Accounts ───────────────────────────────────────────────────
+  getLinkedInAccounts() {
+    return _request('GET', '/api/linkedin/accounts');
+  },
+  pauseLinkedInAccount(id) {
+    return _request('POST', `/api/linkedin/accounts/${id}/pause`);
+  },
+  resumeLinkedInAccount(id) {
+    return _request('POST', `/api/linkedin/accounts/${id}/resume`);
+  },
+  deleteLinkedInAccount(id) {
+    return _request('DELETE', `/api/linkedin/accounts/${id}`);
+  },
 };
 
 export default api;

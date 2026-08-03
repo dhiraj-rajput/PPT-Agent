@@ -53,6 +53,7 @@ from app.routes.analytics import router as analytics_router
 from app.routes.website_events import router as website_events_router
 from app.routes.naics import router as naics_router
 from app.routes.newsletters import router as newsletters_router
+from app.routes.linkedin_accounts import router as linkedin_accounts_router
 
 # ---- Admin: Server Logs ----
 from app.routes.system_logs import router as system_logs_router
@@ -103,6 +104,29 @@ async def lifespan(app: FastAPI):
     from app.core.email_worker import start_email_worker_loop
     worker_task = asyncio.create_task(start_email_worker_loop())
     _log.info("Email worker task started.")
+
+    # Start Background LinkedIn Worker Loop
+    try:
+        from app.core.linkedin_worker import start_linkedin_worker_loop
+        linkedin_worker_task = asyncio.create_task(start_linkedin_worker_loop())
+        _log.info("LinkedIn worker task started.")
+    except Exception as e:
+        _log.warning(f"Could not start LinkedIn worker loop: {e}")
+
+    # Start Background LinkedIn Health Monitor Loop (runs every 4 hours)
+    async def run_linkedin_health_loop():
+        # wait 60s to allow server to startup smoothly
+        await asyncio.sleep(60)
+        while True:
+            try:
+                from app.core.health_monitor import check_all_accounts_health
+                await check_all_accounts_health()
+            except Exception as e:
+                _log.warning(f"[LinkedIn Health Loop] Failed running health check: {e}")
+            await asyncio.sleep(14400)
+
+    linkedin_health_task = asyncio.create_task(run_linkedin_health_loop())
+    _log.info("LinkedIn health monitor loop task started.")
 
     # 4. Start Background TTL Cleanup Loop (runs every 60 minutes)
     async def run_ttl_cleanup_loop():
@@ -350,6 +374,7 @@ app.include_router(analytics_router, prefix="/api")
 app.include_router(website_events_router, prefix="/api")
 app.include_router(naics_router, prefix="/api")
 app.include_router(newsletters_router, prefix="/api")
+app.include_router(linkedin_accounts_router, prefix="/api")
 
 # Admin: Server Logs
 app.include_router(system_logs_router, prefix="/api")

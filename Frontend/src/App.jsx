@@ -86,6 +86,7 @@ const ProposalBuilder     = lazy(() => import('./pages/ProposalBuilder.jsx'));
 const RFPAutoRespond      = lazy(() => import('./pages/RFPAutoRespond.jsx'));
 
 // Campaign / outreach pages
+const LinkedInAccounts    = lazy(() => import('./pages/LinkedInAccounts.jsx'));
 const EmailCampaign       = lazy(() => import('./pages/EmailCampaign.jsx'));
 const Newsletter          = lazy(() => import('./pages/Newsletter.jsx'));
 
@@ -147,6 +148,7 @@ export default function App() {
               <Route path="/naics" element={<NaicsMuster />} />
               <Route path="/ai-research" element={<AIResearch />} />
               <Route path="/proposal-builder" element={<ProposalBuilder />} />
+              <Route path="/linkedin/accounts" element={<LinkedInAccounts />} />
               <Route path="/email-campaign" element={<EmailCampaign />} />
               <Route path="/newsletter" element={<Newsletter />} />
               <Route path="/crm-pipeline" element={<CRMPipeline />} />
