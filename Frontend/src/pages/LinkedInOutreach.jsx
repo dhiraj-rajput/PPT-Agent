@@ -63,6 +63,9 @@ export default function LinkedInOutreach() {
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editingContent, setEditingContent] = useState('');
   const [reviewTargetMessage, setReviewTargetMessage] = useState(null);
+  const [messageHistoryTarget, setMessageHistoryTarget] = useState(null);
+  const [messageHistoryList, setMessageHistoryList] = useState([]);
+  const [messageHistoryLoading, setMessageHistoryLoading] = useState(false);
 
   // =========================================================================
   // INBOX TAB STATE
@@ -153,6 +156,79 @@ export default function LinkedInOutreach() {
       notify('Error', `Failed to load message queue: ${err.message}`);
     } finally {
       setQueueLoading(false);
+    }
+  };
+
+  // Silently re-fetches targets/queue for the currently selected campaign
+  // without flipping the loading spinners, so the status bar can poll live.
+  const refreshCampaignDataQuietly = async (campaign) => {
+    if (!campaign) return;
+    try {
+      const res = await api.getLinkedInTargets(campaign.id);
+      setTargets(res.targets || []);
+    } catch (err) {
+      // Silent - this is a background poll, don't spam notifications
+    }
+    try {
+      const res = await api.getLinkedInQueue(campaign.id);
+      setQueue(res.queue || []);
+    } catch (err) {
+      // Silent
+    }
+  };
+
+  // Poll the selected campaign's targets/queue every few seconds while the
+  // Campaigns tab is open, so the scrape/outreach status bar stays live.
+  useEffect(() => {
+    if (currentTab !== 'campaigns' || !selectedCampaign) return;
+    const interval = setInterval(() => {
+      refreshCampaignDataQuietly(selectedCampaign);
+    }, 6000);
+    return () => clearInterval(interval);
+  }, [currentTab, selectedCampaign?.id]);
+
+  // Computes scrape/outreach progress counts for the status bar from the
+  // already-loaded targets list.
+  const getCampaignStats = (list) => {
+    const total = list.length;
+    const scraped = list.filter(t => t.scrape_status === 'scraped').length;
+    const scrapeFailed = list.filter(t => t.scrape_status === 'failed').length;
+    const sent = list.filter(t => t.message_log && t.message_log.status === 'sent').length;
+    const needsReview = list.filter(t => t.message_log && t.message_log.status === 'needs_review').length;
+    const queued = list.filter(t => t.message_log && t.message_log.status === 'approved').length;
+    const failedSend = list.filter(t => t.message_log && t.message_log.status === 'failed').length;
+    const accepted = list.filter(t => t.connection_status === 'accepted').length;
+    return {
+      total, scraped, scrapeFailed, sent, needsReview, queued, failedSend, accepted,
+      scrapePct: total ? Math.round((scraped / total) * 100) : 0,
+      sentPct: total ? Math.round((sent / total) * 100) : 0,
+    };
+  };
+
+  const handleToggleCampaignStatus = async () => {
+    if (!selectedCampaign) return;
+    const nextStatus = selectedCampaign.status === 'running' ? 'paused' : 'running';
+    try {
+      await api.updateLinkedInCampaign(selectedCampaign.id, { status: nextStatus });
+      setSelectedCampaign({ ...selectedCampaign, status: nextStatus });
+      notify('Success', nextStatus === 'running' ? 'Campaign started — scraping and outreach will begin shortly.' : 'Campaign paused.');
+      fetchCampaigns();
+    } catch (err) {
+      notify('Error', `Failed to update campaign status: ${err.message}`);
+    }
+  };
+
+  const openTargetMessages = async (target) => {
+    setMessageHistoryTarget(target);
+    setMessageHistoryList([]);
+    setMessageHistoryLoading(true);
+    try {
+      const res = await api.getLinkedInTargetMessages(selectedCampaign.id, target.id);
+      setMessageHistoryList(res.messages || []);
+    } catch (err) {
+      notify('Error', `Failed to load message history: ${err.message}`);
+    } finally {
+      setMessageHistoryLoading(false);
     }
   };
 
@@ -314,6 +390,24 @@ export default function LinkedInOutreach() {
       loadCampaignData(selectedCampaign);
     } catch (err) {
       notify('Error', `Failed to review message: ${err.message}`);
+    }
+  };
+
+  const handleResendMessage = async (messageId, target) => {
+    try {
+      const res = await api.resendLinkedInMessage(messageId);
+      if (res.warning) {
+        notify('Resend Queued — Action Needed', res.warning);
+      } else {
+        notify('Success', 'Message requeued — it will be retried on the next send cycle.');
+      }
+      loadCampaignData(selectedCampaign);
+      // If the message-history modal is open for this target, refresh it too
+      if (messageHistoryTarget && target && messageHistoryTarget.id === target.id) {
+        openTargetMessages(target);
+      }
+    } catch (err) {
+      notify('Error', `Failed to resend message: ${err.message}`);
     }
   };
 
@@ -558,7 +652,7 @@ export default function LinkedInOutreach() {
               {selectedCampaign ? (
                 <Card>
                   {/* Summary & Controls */}
-                  <div className="border-b border-slate-100 pb-4 dark:border-navy-800 flex justify-between items-start">
+                  <div className="border-b border-slate-100 pb-4 dark:border-navy-800 flex justify-between items-start gap-3 flex-wrap">
                     <div>
                       <h3 className="text-base font-bold text-navy-900 dark:text-white flex items-center gap-2">
                         {selectedCampaign.name}
@@ -601,7 +695,116 @@ export default function LinkedInOutreach() {
                         )}
                       </div>
                     </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={handleToggleCampaignStatus}
+                        disabled={!selectedCampaign.linkedin_account_id}
+                        title={!selectedCampaign.linkedin_account_id ? 'Assign a Sender Profile (LinkedIn account) in Edit Campaign before starting.' : ''}
+                        className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                          selectedCampaign.status === 'running'
+                            ? 'bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300'
+                            : 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-sm shadow-emerald-500/20'
+                        }`}
+                      >
+                        {selectedCampaign.status === 'running'
+                          ? (<><Pause size={13} /> Pause Campaign</>)
+                          : (<><Play size={13} /> Start Campaign</>)}
+                      </button>
+                    </div>
                   </div>
+
+                  {/* Live Scrape / Outreach Status Bar */}
+                  {(() => {
+                    const stats = getCampaignStats(targets);
+                    const senderAccount = accounts.find(a => a.id === selectedCampaign.linkedin_account_id);
+                    const senderInactive = senderAccount && !['active', 'warming_up'].includes(senderAccount.status);
+                    return (
+                      <div className="my-4 p-4 rounded-xl bg-slate-50 dark:bg-navy-950/40 border border-slate-100 dark:border-navy-800 space-y-4 text-xs">
+                        {senderInactive && (
+                          <div className="flex items-start gap-2 p-3 rounded-xl bg-rose-50 border border-rose-100 dark:bg-rose-950/20 dark:border-rose-900">
+                            <AlertCircle size={14} className="shrink-0 mt-0.5 text-rose-600 dark:text-rose-400" />
+                            <div>
+                              <p className="font-bold text-rose-700 dark:text-rose-300">
+                                Sender account "{senderAccount.label}" is {senderAccount.status} — queued messages will not send.
+                              </p>
+                              <p className="mt-0.5 text-rose-600/80 dark:text-rose-400/80">
+                                LinkedIn invalidated this account's session (this is the same issue as the earlier "Session Expired" notification). Any message that reaches "queued to send" will stay stuck until you reconnect it.{' '}
+                                <button
+                                  type="button"
+                                  onClick={() => setCurrentTab('accounts')}
+                                  className="underline font-bold"
+                                >
+                                  Go to Accounts tab to reconnect
+                                </button>
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 font-bold text-navy-900 dark:text-white">
+                            <Activity size={14} className="text-brand-500 shrink-0" />
+                            <span>Live Campaign Status</span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                            {selectedCampaign.status === 'running' && <Loader2 size={11} className="animate-spin text-emerald-500" />}
+                            {stats.total} target{stats.total === 1 ? '' : 's'} total
+                          </span>
+                        </div>
+
+                        {/* Scrape Status Bar */}
+                        <div>
+                          <div className="flex justify-between mb-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                            <span>Scrape Status</span>
+                            <span>{stats.scraped}/{stats.total} scraped ({stats.scrapePct}%){stats.scrapeFailed > 0 ? ` · ${stats.scrapeFailed} failed` : ''}</span>
+                          </div>
+                          <div className="h-2 w-full rounded-full bg-slate-200 dark:bg-navy-800 overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-brand-500 transition-all duration-500"
+                              style={{ width: `${stats.scrapePct}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Outreach Status Bar */}
+                        <div>
+                          <div className="flex justify-between mb-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                            <span>Outreach Status</span>
+                            <span>{stats.sent}/{stats.total} sent ({stats.sentPct}%)</span>
+                          </div>
+                          <div className="h-2 w-full rounded-full bg-slate-200 dark:bg-navy-800 overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                              style={{ width: `${stats.sentPct}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Breakdown chips */}
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                            {stats.needsReview} awaiting review
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
+                            {stats.queued} queued to send
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                            {stats.accepted} accepted
+                          </span>
+                          {stats.failedSend > 0 && (
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
+                              {stats.failedSend} failed to send
+                            </span>
+                          )}
+                        </div>
+
+                        {selectedCampaign.status !== 'running' && stats.total > 0 && (
+                          <p className="text-[10px] text-slate-400 italic">
+                            Campaign is {selectedCampaign.status} — scraping and sending are paused. Click "Start Campaign" above to resume live progress.
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* Targets Importer block */}
                   <div className="my-4 p-4 rounded-xl bg-slate-50 dark:bg-navy-950/40 border border-slate-100 dark:border-navy-800 space-y-3 text-xs">
@@ -861,6 +1064,22 @@ export default function LinkedInOutreach() {
                                               Review & Send
                                             </button>
                                           )}
+                                          {t.message_log && t.message_log.status === 'failed' && (
+                                            <button
+                                              onClick={() => handleResendMessage(t.message_log.id, t)}
+                                              className="bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 px-2 py-1 rounded text-[10px] font-bold transition-all shrink-0 flex items-center gap-1"
+                                              title="Retry sending this message"
+                                            >
+                                              <RefreshCw size={11} /> Resend
+                                            </button>
+                                          )}
+                                          <button
+                                            onClick={() => openTargetMessages(t)}
+                                            className="text-slate-400 hover:text-brand-600 p-1.5 rounded-lg hover:bg-brand-50 dark:hover:bg-navy-800/40 transition-colors"
+                                            title="View message history"
+                                          >
+                                            <MessageSquare size={13} />
+                                          </button>
                                           <button
                                             onClick={() => handleDeleteTarget(t.id)}
                                             className="text-rose-600 hover:text-rose-700 p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-colors"
@@ -2046,6 +2265,93 @@ export default function LinkedInOutreach() {
                   Approve & Send Note
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* =========================================================================
+          TARGET MESSAGE HISTORY MODAL
+          ========================================================================= */}
+      {messageHistoryTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/40 backdrop-blur-sm p-4 text-xs">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl dark:bg-navy-900 border border-slate-100 dark:border-navy-800 max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-navy-800 shrink-0">
+              <div>
+                <h3 className="text-sm font-bold text-navy-900 dark:text-white flex items-center gap-1.5">
+                  <MessageSquare size={14} className="text-brand-500" /> Message History
+                </h3>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  {messageHistoryTarget.person?.full_name || 'Prospect'} — {messageHistoryTarget.person?.title || 'Unknown Role'}
+                </p>
+              </div>
+              <button onClick={() => setMessageHistoryTarget(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-white">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="mt-3 space-y-3 overflow-y-auto flex-1">
+              {messageHistoryLoading ? (
+                <div className="flex justify-center py-8">
+                  <RefreshCw size={20} className="animate-spin text-slate-300" />
+                </div>
+              ) : messageHistoryList.length === 0 ? (
+                <p className="text-xs py-6 text-slate-400 text-center">No messages have been generated for this prospect yet.</p>
+              ) : (
+                messageHistoryList.map((m) => {
+                  const statusStyles = {
+                    sent: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
+                    approved: 'bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300',
+                    needs_review: 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
+                    failed: 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300',
+                    queued: 'bg-slate-100 text-slate-600 dark:bg-navy-800 dark:text-slate-400',
+                  };
+                  return (
+                    <div
+                      key={m.id}
+                      className={`p-3 rounded-xl border text-left ${
+                        m.direction === 'out'
+                          ? 'border-brand-100 bg-brand-50/30 dark:border-navy-800 dark:bg-navy-950/40'
+                          : 'border-slate-200 bg-white dark:border-navy-800 dark:bg-navy-950/10'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="font-bold text-[10px] uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                          {m.direction === 'out' ? <Send size={10} /> : <Inbox size={10} />}
+                          {m.direction === 'out' ? 'Outgoing' : 'Reply'}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${statusStyles[m.status] || 'bg-slate-100 text-slate-600'}`}>
+                          {m.status.replace('_', ' ')}
+                        </span>
+                      </div>
+                      <p className="text-navy-900 dark:text-white whitespace-pre-wrap">{m.content || '(no content)'}</p>
+                      <div className="mt-1.5 flex items-center justify-between gap-2">
+                        <p className="text-[10px] text-slate-400">
+                          {m.sent_at ? `Sent ${new Date(m.sent_at).toLocaleString()}` : m.scheduled_send_at ? `Scheduled for ${new Date(m.scheduled_send_at).toLocaleString()}` : `Created ${m.created_at ? new Date(m.created_at).toLocaleString() : ''}`}
+                        </p>
+                        {m.status === 'failed' && (
+                          <button
+                            type="button"
+                            onClick={() => handleResendMessage(m.id, messageHistoryTarget)}
+                            className="bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 px-2 py-1 rounded text-[10px] font-bold transition-all shrink-0 flex items-center gap-1"
+                          >
+                            <RefreshCw size={11} /> Resend
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="flex justify-end pt-3 mt-3 border-t dark:border-navy-800 shrink-0">
+              <button
+                type="button"
+                onClick={() => setMessageHistoryTarget(null)}
+                className="rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 dark:border-navy-800 dark:bg-navy-950 dark:text-slate-400 px-3.5 py-2 text-[11px] font-bold"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

@@ -868,8 +868,14 @@ export const api = {
   async getLinkedInQueue(id) {
     return get(`/api/linkedin/campaigns/${id}/queue`);
   },
+  async getLinkedInTargetMessages(campaignId, targetId) {
+    return get(`/api/linkedin/campaigns/${campaignId}/targets/${targetId}/messages`);
+  },
   async reviewLinkedInMessage(messageId, { content, action }) {
     return post(`/api/linkedin/campaigns/messages/${messageId}/review`, { content, action });
+  },
+  async resendLinkedInMessage(messageId) {
+    return post(`/api/linkedin/campaigns/messages/${messageId}/resend`, {});
   },
 
   // ── LinkedIn Unified Inbox ──────────────────────────────────────────────
