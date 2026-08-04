@@ -27,7 +27,15 @@ function daysUntilClosing(dateStr) {
   return diffDays > 0 ? diffDays : 0;
 }
 
+function getDynamicGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return { text: 'Good Morning!', icon: '☀️' };
+  if (hour < 17) return { text: 'Good Afternoon!', icon: '🌤️' };
+  return { text: 'Good Evening!', icon: '🌙' };
+}
+
 export default function Dashboard() {
+  const greeting = getDynamicGreeting();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -52,30 +60,37 @@ export default function Dashboard() {
       });
   };
 
-  // Re-fetches live data from the database and refreshes everything on the
-  // dashboard in place, without showing the full-page loading state.
-  const handleSyncAll = async () => {
+  const [syncDropdownOpen, setSyncDropdownOpen] = useState(false);
+
+  const handleSyncSource = async (targetSource = 'all') => {
     if (syncing) return;
     setSyncing(true);
+    setSyncDropdownOpen(false);
     setError('');
 
     try {
-      // Run all sync operations concurrently — reduces total time from ~5s to ~1s
-      await Promise.all([
-        api.syncTendersFromSource('sam_gov'),
-        api.syncTendersFromSource('companies_house_uk'),
-        api.getReports(),
-        api.getAllDraftRequests(),
-        api.getCompanies(),
-        api.getCRMPipeline(),
-      ]);
+      if (targetSource === 'sam_gov') {
+        await api.syncTendersFromSource('sam_gov');
+        createAlert('SAM.gov Synced', 'Successfully synced US Federal Tenders from SAM.gov!', '/dashboard');
+      } else if (targetSource === 'companies_house_uk') {
+        await api.syncTendersFromSource('companies_house_uk');
+        createAlert('Companies House Synced', 'Successfully synced UK Tenders from Companies House!', '/dashboard');
+      } else {
+        await Promise.all([
+          api.syncTendersFromSource('sam_gov'),
+          api.syncTendersFromSource('companies_house_uk'),
+          api.getReports(),
+          api.getAllDraftRequests(),
+          api.getCompanies(),
+          api.getCRMPipeline(),
+        ]);
+        createAlert('Data Synced', 'Data synced successfully across SAM.gov, Companies House, Tenders, Reports, and CRM!', '/dashboard');
+      }
 
-      const res = await api.getDashboardData();
-      setData(res);
+      await fetchDashboardData(sourceFilter);
       setLastSynced(new Date());
-      createAlert('Data Synced', 'Data synced successfully across SAM.gov, Companies House, Tenders, Reports, and CRM!', '/dashboard');
     } catch (err) {
-      setError(err.message || 'Failed to sync dashboard data.');
+      setError(err.message || 'Failed to sync data.');
     } finally {
       setSyncing(false);
     }
@@ -99,7 +114,7 @@ export default function Dashboard() {
       <div className="flex h-[50vh] flex-col items-center justify-center text-center p-4">
         <p className="text-sm font-semibold text-rose-600">{error}</p>
         <button 
-          onClick={fetchDashboardData} 
+          onClick={() => fetchDashboardData(sourceFilter)} 
           className="mt-4 rounded-xl bg-brand-500 px-4 py-2 text-xs font-bold text-white shadow-soft"
         >
           Retry
@@ -118,28 +133,73 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-navy-900 dark:text-white">Good Morning! 👋</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Here is what is happening with your business today.</p>
+          <h1 className="text-2xl font-extrabold tracking-tight text-navy-900 dark:text-white sm:text-3xl">
+            {greeting.text} {greeting.icon}
+          </h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            Real-time business intelligence, tenders, and multi-source analytics.
+          </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <DataSourceSelect value={sourceFilter} onChange={setSourceFilter} includeAll={true} />
-          {lastSynced && (
-            <span className="hidden text-[11px] font-medium text-slate-400 dark:text-slate-500 sm:block">
-              Last synced {lastSynced.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </span>
-          )}
-          <button
-            onClick={handleSyncAll}
-            disabled={syncing}
-            className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-4 py-2.5 text-sm font-bold text-navy-900 dark:text-white shadow-soft hover:bg-slate-50 dark:hover:bg-navy-800 disabled:opacity-60 disabled:cursor-not-allowed"
+
+        {/* Compact, tightly-grouped control bar */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+          {/* Grouped Source Filter & Sync Actions */}
+          <div className="inline-flex items-center gap-1.5 p-1 bg-slate-100/90 dark:bg-navy-800/90 rounded-2xl border border-slate-200/80 dark:border-navy-700/80 shadow-xs">
+            <DataSourceSelect value={sourceFilter} onChange={setSourceFilter} includeAll={true} className="!border-0 !bg-transparent !p-0" />
+
+            <div className="h-4 w-px bg-slate-200 dark:bg-navy-700 mx-0.5" />
+
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setSyncDropdownOpen(!syncDropdownOpen)}
+                disabled={syncing}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-white dark:bg-navy-900 text-navy-900 dark:text-white shadow-sm border border-slate-200/80 dark:border-navy-700 hover:bg-slate-50 dark:hover:bg-navy-850 disabled:opacity-60 transition-all"
+              >
+                <RefreshCw size={13} className={syncing ? 'animate-spin text-brand-500' : 'text-brand-500'} />
+                <span>{syncing ? 'Syncing…' : 'Sync Data'}</span>
+                <ChevronDown size={12} className={`transition-transform text-slate-400 ${syncDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {syncDropdownOpen && (
+                <div className="absolute right-0 mt-2 w-56 rounded-2xl border border-slate-100 dark:border-navy-700 bg-white dark:bg-navy-900 shadow-2xl z-30 overflow-hidden py-1 border-t-2 border-t-brand-500">
+                  <button
+                    type="button"
+                    onClick={() => handleSyncSource('all')}
+                    className="w-full text-left px-3.5 py-2 text-xs font-semibold text-navy-900 dark:text-white hover:bg-slate-50 dark:hover:bg-navy-800 flex items-center justify-between transition-colors"
+                  >
+                    <span>Sync All Sources</span>
+                    <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 px-1.5 py-0.5 rounded">SAM + CH</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSyncSource('sam_gov')}
+                    className="w-full text-left px-3.5 py-2 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-slate-50 dark:hover:bg-navy-800 flex items-center justify-between transition-colors"
+                  >
+                    <span>Sync SAM.gov (US)</span>
+                    <span className="text-[10px] font-bold text-blue-500 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded">Federal</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSyncSource('companies_house_uk')}
+                    className="w-full text-left px-3.5 py-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-slate-50 dark:hover:bg-navy-800 flex items-center justify-between transition-colors"
+                  >
+                    <span>Sync Companies House (UK)</span>
+                    <span className="text-[10px] font-bold text-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded">UK FTS</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <Link
+            to="/proposal-builder"
+            className="flex items-center gap-1.5 rounded-2xl bg-brand-500 hover:bg-brand-600 px-4 py-2 text-xs font-bold text-white shadow-soft transition-all shrink-0"
           >
-            <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
-            {syncing ? 'Syncing…' : 'Sync Now'}
-          </button>
-          <Link to="/proposal-builder" className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-bold text-white shadow-soft hover:bg-brand-600">
-            <Plus size={16} /> New Proposal
+            <Plus size={15} />
+            <span>New Proposal</span>
           </Link>
         </div>
       </div>

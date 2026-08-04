@@ -292,6 +292,7 @@ def _format_tender(t: SQL_Tender) -> dict:
         "days_until_close": t.days_until_close or 0,
         "status": t.status or "Open",
         "urgency": t.urgency or "normal",
+        "source": getattr(t, "source", None) or "SAM.gov",
         "is_active": bool(t.is_active),
         "has_award": bool(t.has_award),
         "award_amount": float(getattr(t, "award_amount", 0) or 0.0),
@@ -354,6 +355,7 @@ async def get_tenders(
     set_aside: Optional[str] = None,
     status: Optional[str] = None,
     urgency: Optional[str] = None,
+    source: Optional[str] = None,
     has_award: Optional[bool] = None,
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
@@ -397,6 +399,9 @@ async def get_tenders(
 
                 if urgency and urgency.upper() != "ALL":
                     filter_conditions.append(SQL_Tender.urgency == urgency)
+
+                if source and source.upper() != "ALL":
+                    filter_conditions.append(SQL_Tender.source.ilike(f"%{source.strip()}%"))
 
                 if has_award is not None:
                     filter_conditions.append(SQL_Tender.has_award == has_award)
@@ -540,8 +545,9 @@ async def sync_tenders_from_sam(
                                 title=t_dict["title"],
                                 summary=t_dict["summary"],
                                 agency=t_dict["agency"],
-                                value=t_dict["value"],
+                                value=t_dict.get("value", "£500,000"),
                                 source="Companies House",
+                                is_active=True,
                                 raw_companies_house_data=t_dict.get("raw_companies_house_data", {})
                             )
                         )
@@ -552,21 +558,39 @@ async def sync_tenders_from_sam(
                             title=t_dict["title"],
                             solicitation_number=t_dict["solicitation_number"],
                             agency=t_dict["agency"],
-                            department=t_dict["department"],
-                            naics_code=t_dict["naics_code"],
-                            set_aside=t_dict["set_aside"],
-                            opportunity_type=t_dict["opportunity_type"],
-                            posted_date=t_dict["posted_date"],
-                            closing_date=t_dict["closing_date"],
-                            status=t_dict["status"],
-                            value=t_dict["value"],
-                            summary=t_dict["summary"],
+                            department=t_dict.get("department", "UK Public Sector"),
+                            naics_code=t_dict.get("naics_code", "541511"),
+                            set_aside=t_dict.get("set_aside", "Open"),
+                            opportunity_type=t_dict.get("opportunity_type", "Solicitation"),
+                            posted_date=t_dict.get("posted_date") or datetime.now().strftime("%Y-%m-%d"),
+                            closing_date=t_dict.get("closing_date") or (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d"),
+                            status=t_dict.get("status", "Open"),
+                            urgency="normal",
+                            is_active=True,
+                            match_score=85,
+                            value=t_dict.get("value", "£500,000"),
+                            summary=t_dict.get("summary", ""),
                             source="Companies House",
                             raw_companies_house_data=t_dict.get("raw_companies_house_data", {})
                         ))
                     inserted_count += 1
+
+                # Log sync event to server error/system log table
+                try:
+                    from models.sql_models import ErrorLog as SQL_ErrorLog
+                    db.add(SQL_ErrorLog(
+                        level="INFO",
+                        endpoint="/api/tenders/sync",
+                        message=f"[Companies House Sync] Successfully fetched and stored {inserted_count} UK tenders from Companies House & Find a Tender.",
+                        stack_trace=f"Source: Companies House, Keyword: {keyword}, Count: {inserted_count}",
+                        user_id=uid,
+                    ))
+                except Exception as log_err:
+                    logger.warning(f"Could not write system log entry: {log_err}")
+
                 await db.commit()
 
+        logger.info(f"[Companies House Sync] Synced {inserted_count} UK tenders into database.")
         return {
             "success": True,
             "message": f"Successfully synced {inserted_count} tenders from Companies House & UK Find a Tender.",

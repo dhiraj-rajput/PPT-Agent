@@ -76,6 +76,7 @@ export default function Tenders() {
     if (setAsideFilter) params.set_aside = setAsideFilter;
     if (statusFilter !== 'All') params.status = statusFilter;
     if (urgencyFilter !== 'All') params.urgency = urgencyFilter;
+    if (sourceFilter && sourceFilter !== 'All') params.source = sourceFilter;
 
     api.getTenders(params)
       .then(data => {
@@ -98,7 +99,12 @@ export default function Tenders() {
         setTotal(filtered.length);
         setLoading(false);
       });
-  }, [currentPage, query, naicsFilter, setAsideFilter, statusFilter, urgencyFilter]);
+  }, [currentPage, query, naicsFilter, setAsideFilter, statusFilter, urgencyFilter, sourceFilter]);
+
+  // Refetch on sourceFilter change
+  useEffect(() => {
+    fetchTenders();
+  }, [sourceFilter, fetchTenders]);
 
   // ----- Fetch sync metadata -----
   const fetchMeta = () => {
@@ -108,17 +114,11 @@ export default function Tenders() {
   };
 
   const fetchTenderDocs = async (noticeId) => {
-    setDocsLoading(true);
-    setTenderDocs([]);
-    setDocsModal(noticeId);
     try {
-      const data = await api.getTenderDocuments(noticeId);
-      setTenderDocs(data.documents || []);
-    } catch (err) {
-      console.warn('Could not fetch tender documents:', err);
-      setTenderDocs([]);
-    } finally {
-      setDocsLoading(false);
+      const docs = await api.getTenderDocuments(noticeId);
+      setTenderDocsMap((prev) => ({ ...prev, [noticeId]: docs || [] }));
+    } catch {
+      setTenderDocsMap((prev) => ({ ...prev, [noticeId]: [] }));
     }
   };
 
@@ -126,17 +126,23 @@ export default function Tenders() {
   useEffect(() => { setCurrentPage(1); }, [naicsFilter, setAsideFilter, statusFilter, urgencyFilter]);
 
   // ----- Trigger SAM.gov Sync -----
-  const handleSync = (e) => {
+  const handleSyncSubmit = (e) => {
     e.preventDefault();
     setSyncing(true);
     setSyncResult(null);
-    const body = { ...syncForm };
-    // Clean empty strings
-    Object.keys(body).forEach(k => { if (body[k] === '') delete body[k]; });
 
-    api.syncTenders(body)
-      .then(data => {
-        setSyncResult({ ok: true, message: data.message, fetched: data.fetched });
+    const payload = {
+      naicsCode: syncForm.naicsCode.trim(),
+      keyword: syncForm.keyword.trim(),
+      typeOfSetAsideCode: syncForm.typeOfSetAsideCode,
+      active: syncForm.active,
+      limit: Number(syncForm.limit) || 25,
+      api_source: syncForm.api_source,
+    };
+
+    api.syncTenders(payload)
+      .then(res => {
+        setSyncResult({ ok: true, message: res.message || 'Sync successful!' });
         setSyncing(false);
         fetchTenders();
         fetchMeta();
@@ -152,22 +158,25 @@ export default function Tenders() {
   return (
     <div>
       <PageHeader
-        title="Tenders"
+        title="Tenders & Opportunities"
         subtitle={
           backendOffline
             ? `${tenders.length} tenders (static demo data — backend offline)`
             : cacheEmpty
-            ? 'No tenders cached yet — use Sync to fetch from SAM.gov'
-            : `${total.toLocaleString()} tenders cached from SAM.gov`
+            ? 'No tenders cached yet — use Sync to fetch opportunities'
+            : `${total.toLocaleString()} tenders cached in database`
         }
         action={
           !backendOffline && (
-            <button
-              onClick={() => setSyncOpen(true)}
-              className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-bold text-white shadow-soft hover:bg-brand-600 transition-colors"
-            >
-              <RefreshCw size={15} /> Sync from SAM.gov
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              <DataSourceSelect value={sourceFilter} onChange={setSourceFilter} includeAll={true} />
+              <button
+                onClick={() => setSyncOpen(true)}
+                className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-bold text-white shadow-soft hover:bg-brand-600 transition-colors shrink-0"
+              >
+                <RefreshCw size={15} /> Sync Tenders
+              </button>
+            </div>
           )
         }
       />
