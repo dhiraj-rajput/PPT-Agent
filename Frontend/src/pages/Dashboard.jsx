@@ -6,6 +6,7 @@ import {
   Calendar, Eye, FileText, MoreHorizontal, ArrowUp, Users2, Search, Heart, Handshake, Trophy, ExternalLink, Loader2, RefreshCw
 } from 'lucide-react';
 import { Card, ClosingAlertBadge } from '../components/ui/Common.jsx';
+import DataSourceSelect from '../components/ui/DataSourceSelect.jsx';
 import { api } from '../lib/api.jsx';
 
 const pipelineIcons = { Users: Users2, Search, FileText, Heart, Handshake, Trophy };
@@ -31,13 +32,15 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [syncing, setSyncing] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState('All');
   const [lastSynced, setLastSynced] = useState(null);
   const { createAlert } = useNotifications();
 
-  const fetchDashboardData = () => {
+  const fetchDashboardData = (source = sourceFilter) => {
     setLoading(true);
     setError('');
-    api.getDashboardData()
+    const params = source && source !== 'All' ? { source } : {};
+    api.getDashboardData(params)
       .then((res) => {
         setData(res);
         setLoading(false);
@@ -79,8 +82,8 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    fetchDashboardData();
-  }, []);
+    fetchDashboardData(sourceFilter);
+  }, [sourceFilter]);
 
   if (loading) {
     return (
@@ -120,7 +123,8 @@ export default function Dashboard() {
           <h1 className="text-2xl font-extrabold text-navy-900 dark:text-white">Good Morning! 👋</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Here is what is happening with your business today.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <DataSourceSelect value={sourceFilter} onChange={setSourceFilter} includeAll={true} />
           {lastSynced && (
             <span className="hidden text-[11px] font-medium text-slate-400 dark:text-slate-500 sm:block">
               Last synced {lastSynced.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

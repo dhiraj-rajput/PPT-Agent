@@ -51,8 +51,11 @@ def _calculate_rates(stats: dict) -> dict:
 
 
 @router.get("/dashboard")
-async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
-    """Fetch aggregated real metrics for the dashboard from MySQL."""
+async def get_dashboard_data(
+    source: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Fetch aggregated real metrics for the dashboard from MySQL with optional source filter."""
     prospects_count = 0
     contacted_count = 0
     proposals_count = 0
@@ -83,16 +86,39 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
     if _mysql_available:
         try:
             async for db in get_db_session():
-                prospects_count = (await db.execute(select(func.count()).select_from(SQL_Company))).scalar() or 0
+                comp_stmt = select(func.count()).select_from(SQL_Company)
+                tender_stmt = select(func.count()).select_from(SQL_Tender)
+                report_stmt = select(func.count()).select_from(SQL_Report)
+
+                if source and source != "All":
+                    comp_stmt = comp_stmt.where(SQL_Company.source.ilike(f"%{source}%"))
+                    tender_stmt = tender_stmt.where(SQL_Tender.source.ilike(f"%{source}%"))
+                    report_stmt = report_stmt.where(SQL_Report.source.ilike(f"%{source}%"))
+
+                prospects_count = (await db.execute(comp_stmt)).scalar() or 0
                 contacted_count = (await db.execute(select(func.count()).select_from(SQL_Lead).where(SQL_Lead.status.in_(["sent", "opened", "clicked", "replied"])))).scalar() or 0
-                proposals_count = (await db.execute(select(func.count()).select_from(SQL_Report))).scalar() or 0
+                proposals_count = (await db.execute(report_stmt)).scalar() or 0
                 meetings_count = (await db.execute(select(func.count()).select_from(SQL_Meeting))).scalar() or 0
                 negotiation_count = (await db.execute(select(func.count()).select_from(SQL_Lead).where(SQL_Lead.status == "replied"))).scalar() or 0
-                won_count = (await db.execute(select(func.count()).select_from(SQL_Tender).where(SQL_Tender.has_award == True))).scalar() or 0
+                
+                won_stmt = select(func.count()).select_from(SQL_Tender).where(SQL_Tender.has_award == True)
+                if source and source != "All":
+                    won_stmt = won_stmt.where(SQL_Tender.source.ilike(f"%{source}%"))
+                won_count = (await db.execute(won_stmt)).scalar() or 0
+                
                 campaigns = (await db.execute(select(SQL_Campaign))).scalars().all()
-                high = (await db.execute(select(func.count()).select_from(SQL_Company).where(SQL_Company.match_score >= 80))).scalar() or 0
-                medium = (await db.execute(select(func.count()).select_from(SQL_Company).where(SQL_Company.match_score >= 50, SQL_Company.match_score < 80))).scalar() or 0
-                low = (await db.execute(select(func.count()).select_from(SQL_Company).where(SQL_Company.match_score < 50))).scalar() or 0
+
+                h_stmt = select(func.count()).select_from(SQL_Company).where(SQL_Company.match_score >= 80)
+                m_stmt = select(func.count()).select_from(SQL_Company).where(SQL_Company.match_score >= 50, SQL_Company.match_score < 80)
+                l_stmt = select(func.count()).select_from(SQL_Company).where(SQL_Company.match_score < 50)
+                if source and source != "All":
+                    h_stmt = h_stmt.where(SQL_Company.source.ilike(f"%{source}%"))
+                    m_stmt = m_stmt.where(SQL_Company.source.ilike(f"%{source}%"))
+                    l_stmt = l_stmt.where(SQL_Company.source.ilike(f"%{source}%"))
+
+                high = (await db.execute(h_stmt)).scalar() or 0
+                medium = (await db.execute(m_stmt)).scalar() or 0
+                low = (await db.execute(l_stmt)).scalar() or 0
                 closing_soon = (await db.execute(select(SQL_Tender).where(
                     SQL_Tender.is_active == True,
                     SQL_Tender.closing_date != None,

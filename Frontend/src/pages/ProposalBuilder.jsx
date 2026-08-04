@@ -806,6 +806,13 @@ export default function ProposalBuilder() {
                             </span>
                           )}
                           <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold ${
+                            (p.source || '').toLowerCase().includes('companies') || (p.source || '').toLowerCase().includes('uk')
+                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400 border border-emerald-200/60'
+                              : 'bg-blue-50 text-blue-700 dark:bg-blue-950/20 dark:text-blue-400 border border-blue-200/60'
+                          }`}>
+                            {p.source || 'SAM.gov'}
+                          </span>
+                          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold ${
                             p.status === 'Processing' ? 'bg-brand-50 text-brand-700 dark:bg-brand-950/20 dark:text-brand-400 animate-pulse' :
                             'bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400'
                           }`}>

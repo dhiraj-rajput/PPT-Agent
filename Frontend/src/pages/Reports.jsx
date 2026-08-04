@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { FileBarChart, Download, Calendar, Eye, X, Loader2, AlertCircle, ShieldAlert, Filter, SortAsc, SortDesc, Mail, ExternalLink, Send, CheckCircle2 } from 'lucide-react';
 import { PageHeader, Card } from '../components/ui/Common.jsx';
+import DataSourceSelect from '../components/ui/DataSourceSelect.jsx';
 import { api } from '../lib/api.jsx';
 
 const DOCUMENT_TYPES = [
@@ -32,6 +33,7 @@ const FALLBACK_REPORTS = [
     date: 'Jul 13, 2026',
     mtime: 1752364800,
     status: 'Generated',
+    source: 'SAM.gov'
   },
   { 
     filename: 'N00164-26-R-0001_subcontract_proposal.pdf', 
@@ -45,6 +47,7 @@ const FALLBACK_REPORTS = [
     date: 'Jul 13, 2026',
     mtime: 1752364700,
     status: 'Generated',
+    source: 'Companies House'
   },
 ];
 
@@ -72,6 +75,7 @@ export default function Reports() {
 
   // Filter & Sort States
   const [typeFilter, setTypeFilter] = useState('all');
+  const [sourceFilter, setSourceFilter] = useState('All');
   const [sortOrder, setSortOrder] = useState('newest'); // 'newest' | 'oldest'
 
   // Send Email Modal States
@@ -230,6 +234,12 @@ export default function Reports() {
   // Filter and sort reports
   const filteredReports = reports
     .filter(r => {
+      if (sourceFilter !== 'All') {
+        const src = (r.source || '').toLowerCase();
+        const sf = sourceFilter.toLowerCase();
+        if (sf.includes('sam') && !src.includes('sam')) return false;
+        if (sf.includes('companies') && !src.includes('company') && !src.includes('companies') && !src.includes('uk')) return false;
+      }
       if (typeFilter === 'all') return true;
       if (typeFilter === 'other') {
         const type = (r.proposal_type || '').toLowerCase();
@@ -258,7 +268,10 @@ export default function Reports() {
 
   return (
     <div>
-      <PageHeader title="Reports & Proposals" subtitle="Generated business proposals, teaming agreements, and submission status tracking" />
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <PageHeader title="Reports & Proposals" subtitle="Generated business proposals, teaming agreements, and submission status tracking" />
+        <DataSourceSelect value={sourceFilter} onChange={setSourceFilter} includeAll={true} />
+      </div>
 
       {backendOffline && (
         <div className="mb-5 flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-700 dark:bg-amber-950/30 dark:border-amber-900/30 dark:text-amber-400">
@@ -352,9 +365,18 @@ export default function Reports() {
                         </div>
                       </td>
                       <td className="px-5 py-3.5">
-                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${proposalTypeBadgeColor(r.proposal_type)}`}>
-                          {r.proposal_type}
-                        </span>
+                        <div className="flex flex-col gap-1 items-start">
+                          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${proposalTypeBadgeColor(r.proposal_type)}`}>
+                            {r.proposal_type}
+                          </span>
+                          <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold ${
+                            (r.source || '').toLowerCase().includes('companies') || (r.source || '').toLowerCase().includes('uk')
+                              ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200/60'
+                              : 'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 border border-blue-200/60'
+                          }`}>
+                            {r.source || 'SAM.gov'}
+                          </span>
+                        </div>
                       </td>
                       {/* Status Column */}
                       <td className="px-5 py-3.5">

@@ -1256,9 +1256,18 @@ export default function ContactsDB() {
               ) : companies.map(c => (
                 <tr key={c.uei} className="border-b border-slate-50 dark:border-navy-850 hover:bg-slate-50/50 dark:hover:bg-navy-900/50">
                   <td className="px-4 py-3">
-                    <Link to={`/companies/${c.uei}`} className="font-semibold text-navy-900 dark:text-white hover:text-brand-600">
-                      {c.name || 'Unnamed Company'}
-                    </Link>
+                    <div className="flex items-center gap-1.5">
+                      <Link to={`/companies/${c.uei}`} className="font-semibold text-navy-900 dark:text-white hover:text-brand-600">
+                        {c.name || 'Unnamed Company'}
+                      </Link>
+                      <span className={`inline-flex items-center rounded-md px-1.5 py-0.2 text-[9px] font-bold ${
+                        (c.source || '').toLowerCase().includes('companies') || (c.source || '').toLowerCase().includes('uk')
+                          ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200/60'
+                          : 'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 border border-blue-200/60'
+                      }`}>
+                        {c.source || 'SAM.gov'}
+                      </span>
+                    </div>
                     {c.contact && <p className="text-[10px] text-slate-400">{c.contact}</p>}
                   </td>
                   <td className="px-4 py-3 font-mono text-slate-500">{c.uei || '—'}<br/><span className="text-[10px] text-slate-400">{c.cage_code}</span></td>

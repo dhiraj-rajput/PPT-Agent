@@ -280,8 +280,12 @@ _format_report_dict = _format_report
 
 
 @router.get("")
-async def get_reports(current_user: dict = Depends(get_current_user)):
-    """Retrieve all reports synced with MySQL sorted by date descending."""
+async def get_reports(
+    source: Optional[str] = None,
+    mode: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Retrieve all reports synced with MySQL sorted by date descending with optional source/mode filters."""
     global LAST_SYNC_TIME
     try:
         now = time.time()
@@ -293,6 +297,10 @@ async def get_reports(current_user: dict = Depends(get_current_user)):
         if _mysql_available:
             async for db in get_db_session():
                 stmt = select(SQL_Report).order_by(SQL_Report.created_at.desc())
+                if source and source != "All":
+                    stmt = stmt.where(SQL_Report.source.ilike(f"%{source}%"))
+                if mode and mode != "All":
+                    stmt = stmt.where(SQL_Report.report_type.ilike(f"%{mode}%"))
                 res = await db.execute(stmt)
                 reports_list = [_format_report_dict(r) for r in res.scalars().all()]
         return reports_list

@@ -286,6 +286,13 @@ export default function TenderDetail() {
               <span className="rounded-full bg-brand-50 dark:bg-brand-950/20 border border-brand-100 dark:border-brand-900/30 px-3 py-1 text-xs font-bold text-brand-700 dark:text-brand-400">
                 {category}
               </span>
+              <span className={`rounded-full px-3 py-1 text-xs font-bold ${
+                (tender.source || '').toLowerCase().includes('companies') || (tender.source || '').toLowerCase().includes('uk')
+                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400 border border-emerald-200/60'
+                  : 'bg-blue-50 text-blue-700 dark:bg-blue-950/20 dark:text-blue-400 border border-blue-200/60'
+              }`}>
+                {tender.source || 'SAM.gov'}
+              </span>
               <StatusBadge status={status} />
               {setAside && (
                 <span className="rounded-full bg-slate-100 dark:bg-navy-800 border border-slate-200 dark:border-navy-700 px-3 py-1 text-xs font-semibold text-slate-600 dark:text-slate-400">
@@ -301,12 +308,6 @@ export default function TenderDetail() {
             </p>
           </div>
 
-          <div className="flex shrink-0 items-center md:items-end flex-row md:flex-col gap-3 justify-between md:justify-start">
-            <div className="text-left md:text-right">
-              <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Match score</p>
-              <div className="mt-1 flex items-center gap-1">
-                <Sparkles size={14} className="text-brand-500" />
-                <MatchBadge score={matchScore} />
               </div>
             </div>
             {value && (

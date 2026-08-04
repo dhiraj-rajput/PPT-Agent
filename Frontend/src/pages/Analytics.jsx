@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ResponsiveContainer, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, LabelList } from 'recharts';
 import { FolderOpen, Building2, Target, Users2, Loader2, RefreshCw, Clock, Star, TrendingUp } from 'lucide-react';
 import { PageHeader, Card, StatusBadge } from '../components/ui/Common.jsx';
+import DataSourceSelect from '../components/ui/DataSourceSelect.jsx';
 import { api } from '../lib/api.jsx';
 
 export default function Analytics() {
@@ -10,11 +11,13 @@ export default function Analytics() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [sourceFilter, setSourceFilter] = useState('All');
 
-  const fetchAnalytics = () => {
+  const fetchAnalytics = (source = sourceFilter) => {
     setLoading(true);
     setError('');
-    api.getDashboardData()
+    const params = source && source !== 'All' ? { source } : {};
+    api.getDashboardData(params)
       .then((res) => {
         setData(res);
         setLoading(false);
@@ -26,8 +29,8 @@ export default function Analytics() {
   };
 
   useEffect(() => {
-    fetchAnalytics();
-  }, []);
+    fetchAnalytics(sourceFilter);
+  }, [sourceFilter]);
 
   if (loading) {
     return (
@@ -85,14 +88,17 @@ export default function Analytics() {
         title="Database Analytics"
         subtitle="Real-time company metrics, outbound conversions, and match analytics"
         action={
-          <button
-            onClick={fetchAnalytics}
-            disabled={loading}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-navy-900 dark:border-navy-700 dark:bg-navy-800 dark:text-slate-400 dark:hover:bg-navy-700"
-            title="Refresh data"
-          >
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-          </button>
+          <div className="flex items-center gap-3">
+            <DataSourceSelect value={sourceFilter} onChange={setSourceFilter} includeAll={true} />
+            <button
+              onClick={() => fetchAnalytics(sourceFilter)}
+              disabled={loading}
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-navy-900 dark:border-navy-700 dark:bg-navy-800 dark:text-slate-400 dark:hover:bg-navy-700"
+              title="Refresh data"
+            >
+              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+            </button>
+          </div>
         }
       />
 
