@@ -1022,6 +1022,7 @@ class LinkedInAccount(Base):
     last_action_at = Column(DateTime, nullable=True)
     last_checkpoint_at = Column(DateTime, nullable=True)
     cooldown_until = Column(DateTime, nullable=True)
+    last_error = Column(TEXT, nullable=True)
     created_at = Column(DateTime, default=_now, nullable=False)
     updated_at = Column(DateTime, default=_now, onupdate=_now, nullable=False)
 

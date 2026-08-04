@@ -105,6 +105,25 @@ async def resume_account(
         if not acc:
             raise HTTPException(status_code=404, detail="Account not found.")
 
+        # IMPORTANT: 'resume' must never be allowed to revive an account
+        # whose session is actually known-bad. This previously just flipped
+        # status back to active/warming_up unconditionally, which let an
+        # account with a dead li_at cookie get put back to work — it then
+        # failed on the very next send/health-check pass anyway, just more
+        # confusingly (chrome-error://chromewebdata/ navigation failures,
+        # ERR_TOO_MANY_REDIRECTS) instead of clearly asking for a reconnect.
+        # 'paused'/'cooldown' are fine to resume (those don't imply a dead
+        # session) — 'expired'/'banned'/'flagged' are not.
+        if acc.status in ("expired", "banned", "flagged"):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"This account's status is '{acc.status}', which means its LinkedIn session "
+                    f"is known to be invalid — resuming it would just fail again. Use 'Reconnect' "
+                    f"to log in again and get a fresh session instead."
+                ),
+            )
+
         # If warmup_stage is 0 or low, return to warming_up, else active
         new_status = "warming_up" if acc.warmup_stage == 0 else "active"
 
@@ -141,11 +160,24 @@ async def delete_account(
         if not acc:
             raise HTTPException(status_code=404, detail="Account not found.")
 
+        # Pause (don't just leave dangling) any running campaigns still
+        # pointed at this account. Without this, a campaign silently keeps
+        # its linkedin_account_id referencing a now-deleted row — the worker
+        # loop is defensive against that now (see linkedin_worker.py), but
+        # surfacing it as a paused campaign in the UI is much clearer than a
+        # campaign that looks 'running' but can never actually send.
+        from models.sql_models import LinkedInCampaign
+        await db.execute(
+            update(LinkedInCampaign)
+            .where(LinkedInCampaign.linkedin_account_id == account_id, LinkedInCampaign.status == "running")
+            .values(status="paused")
+        )
+
         await db.execute(
             delete(LinkedInAccount).where(LinkedInAccount.id == account_id)
         )
         await db.commit()
-        return {"status": "success", "message": "Account disconnected successfully."}
+        return {"status": "success", "message": "Account disconnected successfully. Any campaigns using it were paused."}
     except HTTPException:
         raise
     except Exception as e:

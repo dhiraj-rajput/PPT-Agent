@@ -227,6 +227,27 @@ async def update_campaign(
                     c.require_approval = body.require_approval
                 if body.region_routing_rule is not None:
                     c.region_routing_rule = body.region_routing_rule
+                if body.linkedin_account_id is not None:
+                    # Validate up front — this is exactly the field whose
+                    # staleness caused the worker-loop crash bug (a campaign
+                    # pointing at a deleted account). Never let a PATCH set
+                    # it to an account that doesn't exist or isn't this
+                    # user's.
+                    from models.sql_models import LinkedInAccount as SQL_LinkedInAccount_check
+                    acc_check = (
+                        await db.execute(
+                            select(SQL_LinkedInAccount_check).where(
+                                SQL_LinkedInAccount_check.id == body.linkedin_account_id,
+                                SQL_LinkedInAccount_check.user_id == int(current_user["id"]),
+                            )
+                        )
+                    ).scalar_one_or_none()
+                    if not acc_check:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"LinkedIn account {body.linkedin_account_id} not found or doesn't belong to you.",
+                        )
+                    c.linkedin_account_id = body.linkedin_account_id
                 if body.status is not None:
                     c.status = body.status
                 
@@ -467,6 +488,49 @@ async def remove_campaign_target(
     return {"error": "Database not available"}
 
 
+@router.get("/{campaign_id}/targets/{target_id}/messages")
+async def get_target_messages(
+    campaign_id: int,
+    target_id: int,
+    current_user: dict = Depends(get_current_user),
+):
+    """Retrieve the full message history (outgoing + incoming) for a single target, in order sent."""
+    messages: List[Dict[str, Any]] = []
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt_t = select(SQL_LinkedInTarget).where(
+                    SQL_LinkedInTarget.id == target_id,
+                    SQL_LinkedInTarget.campaign_id == campaign_id
+                )
+                t = (await db.execute(stmt_t)).scalar_one_or_none()
+                if not t:
+                    raise HTTPException(status_code=404, detail="Target not found in this campaign")
+
+                stmt = select(SQL_LinkedInMessageLog).where(
+                    SQL_LinkedInMessageLog.target_id == target_id
+                ).order_by(SQL_LinkedInMessageLog.created_at.asc())
+                res = await db.execute(stmt)
+                for m in res.scalars().all():
+                    messages.append({
+                        "id": m.id,
+                        "direction": m.direction,
+                        "content": m.content,
+                        "generated_by": m.generated_by,
+                        "status": m.status,
+                        "sent_at": m.sent_at.isoformat() if m.sent_at else None,
+                        "scheduled_send_at": m.scheduled_send_at.isoformat() if m.scheduled_send_at else None,
+                        "created_at": m.created_at.isoformat() if m.created_at else None,
+                        "updated_at": m.updated_at.isoformat() if m.updated_at else None,
+                    })
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error getting message history for target {target_id}: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Database error: {e}")
+    return {"messages": messages}
+
+
 @router.get("/{id}/queue")
 async def get_campaign_queue(
     id: int,
@@ -563,5 +627,60 @@ async def review_message(
             raise
         except Exception as e:
             logger.error(f"Error reviewing message {message_id}: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Database error: {e}")
+    return {"error": "Database not available"}
+
+
+@router.post("/messages/{message_id}/resend")
+async def resend_message(
+    message_id: int,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Retry a message that previously failed to send. Requeues it as 'approved'
+    with no schedule delay so the worker picks it up on its next poll cycle.
+    """
+    if _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_LinkedInMessageLog).where(SQL_LinkedInMessageLog.id == message_id)
+                m = (await db.execute(stmt)).scalar_one_or_none()
+                if not m:
+                    raise HTTPException(status_code=404, detail="Message not found")
+
+                if m.status != "failed":
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Only failed messages can be resent (current status: '{m.status}')."
+                    )
+
+                # Surface a clear warning up front if the sender account still
+                # isn't usable, rather than letting it silently fail again.
+                warning = None
+                if m.account_id_used:
+                    stmt_acc = select(SQL_LinkedInAccount).where(SQL_LinkedInAccount.id == m.account_id_used)
+                    acc = (await db.execute(stmt_acc)).scalar_one_or_none()
+                    if not acc:
+                        warning = "The sender account originally used for this message no longer exists."
+                    elif acc.status not in ("active", "warming_up"):
+                        warning = f"The sender account '{acc.label}' is currently '{acc.status}'. Reconnect it in the Accounts tab or this resend will fail again."
+                else:
+                    warning = "This campaign has no sender account assigned. Assign one in Edit Campaign before resending."
+
+                m.status = "approved"
+                m.sent_at = None
+                m.scheduled_send_at = None
+                m.updated_at = datetime.utcnow()
+
+                await db.commit()
+                return {
+                    "status": "success",
+                    "message": "Message requeued for sending.",
+                    "warning": warning,
+                }
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error resending message {message_id}: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=f"Database error: {e}")
     return {"error": "Database not available"}

@@ -91,6 +91,31 @@ async def run_guided_login_websocket(websocket: WebSocket, region: str, label: s
             timezone_id=fp["timezone"],
         )
 
+        # This session is BORN here — if LinkedIn fingerprints this browser
+        # as automated at the moment of login (even though a real human is
+        # typing the actual credentials into the live-streamed page), it can
+        # issue a short-lived/flagged session that gets silently invalidated
+        # within minutes. That would explain sessions "expiring" almost
+        # immediately regardless of anything the send flow does afterward.
+        # Same stealth patch as session_loader.py's send-side context —
+        # mask the most common headless-Chromium tells before anything loads.
+        await context.add_init_script(
+            """
+            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            window.chrome = window.chrome || { runtime: {} };
+            Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+            const originalQuery = window.navigator.permissions && window.navigator.permissions.query;
+            if (originalQuery) {
+                window.navigator.permissions.query = (parameters) => (
+                    parameters.name === 'notifications'
+                        ? Promise.resolve({ state: Notification.permission })
+                        : originalQuery(parameters)
+                );
+            }
+            """
+        )
+
         page = await context.new_page()
         
         async with page_lock:
@@ -132,11 +157,31 @@ async def run_guided_login_websocket(websocket: WebSocket, region: str, label: s
                     if li_at_cookie:
                         is_success = True
                         logger.info("Found li_at cookie! Authentication successful.")
-                        
-                        # Prepare credentials package
+
+                        # IMPORTANT: capture every cookie LinkedIn issued for this
+                        # session, not just li_at/JSESSIONID. LinkedIn's device/
+                        # fraud-detection layer keys off the full cookie set
+                        # (bcookie, bscookie, lidc, lang, etc. alongside li_at).
+                        # Replaying only li_at+JSESSIONID from a *different*
+                        # browser fingerprint/IP later is exactly what forces
+                        # LinkedIn into a login/checkpoint redirect loop — see
+                        # session_loader.py for how this full set gets replayed.
                         cookie_data = {
-                            "li_at": li_at_cookie["value"],
-                            "JSESSIONID": jsession_cookie["value"] if jsession_cookie else ""
+                            "cookies": [
+                                {
+                                    "name": c["name"],
+                                    "value": c["value"],
+                                    "domain": c.get("domain", ".linkedin.com"),
+                                    "path": c.get("path", "/"),
+                                    "secure": c.get("secure", True),
+                                    "sameSite": c.get("sameSite", "None") or "None",
+                                }
+                                for c in cookies
+                                if c["name"] in (
+                                    "li_at", "JSESSIONID", "bcookie", "bscookie",
+                                    "lidc", "lang", "li_gc", "li_mc", "liap",
+                                )
+                            ]
                         }
                         encrypted_cookies = encrypt_data(json.dumps(cookie_data))
 
@@ -153,14 +198,19 @@ async def run_guided_login_websocket(websocket: WebSocket, region: str, label: s
                             res_fp = await db.execute(stmt_fp)
                             fp_id = res_fp.lastrowid
 
-                            # 2. Create Proxy (Mock proxy placeholder for MVP)
-                            stmt_pr = insert(Proxy).values(
-                                region=region,
-                                endpoint="mock://127.0.0.1:8080",
-                                credentials_encrypted=""
-                            )
-                            res_pr = await db.execute(stmt_pr)
-                            pr_id = res_pr.lastrowid
+                            # 2. Attach a real, unassigned proxy for this region if the
+                            # pool has one. Deliberately do NOT fabricate a placeholder
+                            # proxy row here — a fake "mock://" endpoint is worse than no
+                            # proxy at all, since downstream send code could try to
+                            # actually route Playwright traffic through it. Leaving
+                            # proxy_id null when no real proxy exists is the correct
+                            # Phase 1 behavior (see plan doc, Phase 3 = real pool mgmt).
+                            stmt_pr_lookup = select(Proxy).where(
+                                Proxy.region == region,
+                                Proxy.assigned_account_id.is_(None),
+                            ).limit(1)
+                            existing_proxy = (await db.execute(stmt_pr_lookup)).scalar_one_or_none()
+                            pr_id = existing_proxy.id if existing_proxy else None
 
                             # 3. Create LinkedInAccount
                             stmt_acc = insert(LinkedInAccount).values(
@@ -186,11 +236,12 @@ async def run_guided_login_websocket(websocket: WebSocket, region: str, label: s
                                 .where(FingerprintProfile.id == fp_id)
                                 .values(linkedin_account_id=acc_id)
                             )
-                            await db.execute(
-                                update(Proxy)
-                                .where(Proxy.id == pr_id)
-                                .values(assigned_account_id=acc_id)
-                            )
+                            if pr_id:
+                                await db.execute(
+                                    update(Proxy)
+                                    .where(Proxy.id == pr_id)
+                                    .values(assigned_account_id=acc_id)
+                                )
                             await db.commit()
                             logger.info(f"LinkedInAccount saved in MySQL: ID={acc_id}")
 

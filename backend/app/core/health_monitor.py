@@ -7,53 +7,50 @@ from playwright.async_api import async_playwright
 
 from utils.db_client import get_db_session
 from utils.encryption import decrypt_data
+from pipeline.linkedin.outreach.session_loader import (
+    open_authenticated_context,
+    close_authenticated_context,
+    SessionExpiredError,
+)
 from models.sql_models import LinkedInAccount, Notification, AuditLog
 
 logger = logging.getLogger(__name__)
 
-async def check_account_health_with_playwright(account_id: int, decrypted_cookies: dict) -> str:
+async def check_account_health_with_playwright(account_id: int, decrypted_cookies: dict = None) -> str:
     """
     Checks the cookie session health of a single LinkedIn account.
     Returns: 'active', 'expired', 'flagged', or 'error'
+
+    NOTE: this used to open its own ad-hoc browser context with a hardcoded
+    UA/timezone and no proxy, replaying only the li_at cookie — the exact
+    same identity mismatch that caused send_connection_request_playwright()'s
+    ERR_TOO_MANY_REDIRECTS bug (see linkedin_worker.py). That meant a
+    perfectly healthy session could get flagged 'expired' here just because
+    the health-check's own browser fingerprint didn't match what the account
+    actually logged in with. Now uses session_loader.open_authenticated_context()
+    — the same identity-consistent path the real send flow uses — so a
+    session is only ever reported unhealthy because LinkedIn actually says so,
+    not because of how we're checking it.
+
+    The `decrypted_cookies` parameter is kept (unused) for backward
+    compatibility with existing callers; session_loader re-loads and decrypts
+    the account's stored session itself.
     """
     playwright_ctx = None
     browser = None
     context = None
     try:
-        playwright_ctx = await async_playwright().start()
-        browser = await playwright_ctx.chromium.launch(
-            headless=True,
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--disable-dev-shm-usage",
-                "--no-sandbox",
-            ]
-        )
+        try:
+            playwright_ctx, browser, context, page = await open_authenticated_context(account_id)
+        except SessionExpiredError:
+            return "expired"
 
-        context = await browser.new_context(
-            viewport={"width": 1280, "height": 800},
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-            locale="en-US",
-            timezone_id="America/New_York",
-        )
-
-        # Inject session cookie
-        await context.add_cookies([
-            {
-                "name": "li_at",
-                "value": decrypted_cookies["li_at"],
-                "domain": ".linkedin.com",
-                "path": "/",
-                "httpOnly": True,
-                "secure": True,
-                "sameSite": "None",
-            }
-        ])
-
-        page = await context.new_page()
         # Navigate to a lightweight authenticated endpoint
         await page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded", timeout=15000)
-        await page.wait_for_timeout(2000)
+        try:
+            await page.wait_for_load_state("networkidle", timeout=6000)
+        except Exception:
+            pass
 
         current_url = page.url
         logger.info(f"Health check navigation complete for account {account_id}. Current URL: {current_url}")
@@ -66,15 +63,19 @@ async def check_account_health_with_playwright(account_id: int, decrypted_cookie
             return "active"
 
     except Exception as e:
+        err_text = str(e)
+        # LinkedIn bounces an invalid/expired li_at cookie between the login and
+        # feed URLs, which Playwright surfaces as a redirect-loop navigation error
+        # rather than a normal /login redirect. Treat that the same as an expired
+        # session so the account gets flagged for reconnection instead of failing
+        # silently on every poll.
+        if "ERR_TOO_MANY_REDIRECTS" in err_text or "ERR_CONNECTION" in err_text or "net::ERR" in err_text:
+            logger.warning(f"Health check for account {account_id} hit a navigation/redirect error ({err_text}); treating session as expired.")
+            return "expired"
         logger.error(f"Health check browser error for account {account_id}: {e}")
         return "error"
     finally:
-        if context:
-            await context.close()
-        if browser:
-            await browser.close()
-        if playwright_ctx:
-            await playwright_ctx.stop()
+        await close_authenticated_context(playwright_ctx, browser, context)
 
 async def check_all_accounts_health():
     """
