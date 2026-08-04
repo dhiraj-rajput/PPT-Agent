@@ -114,20 +114,25 @@ export default function Tenders() {
   };
 
   const fetchTenderDocs = async (noticeId) => {
+    setDocsLoading(true);
+    setTenderDocs([]);
+    setDocsModal(noticeId);
     try {
-      const docs = await api.getTenderDocuments(noticeId);
-      setTenderDocsMap((prev) => ({ ...prev, [noticeId]: docs || [] }));
+      const data = await api.getTenderDocuments(noticeId);
+      setTenderDocs(data.documents || []);
     } catch {
-      setTenderDocsMap((prev) => ({ ...prev, [noticeId]: [] }));
+      setTenderDocs([]);
+    } finally {
+      setDocsLoading(false);
     }
   };
 
   useEffect(() => { fetchTenders(); fetchMeta(); }, [fetchTenders]);
   useEffect(() => { setCurrentPage(1); }, [naicsFilter, setAsideFilter, statusFilter, urgencyFilter]);
 
-  // ----- Trigger SAM.gov Sync -----
+  // ----- Trigger SAM.gov / Companies House Sync -----
   const handleSyncSubmit = (e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
     setSyncing(true);
     setSyncResult(null);
 
@@ -152,6 +157,8 @@ export default function Tenders() {
         setSyncing(false);
       });
   };
+
+  const handleSync = handleSyncSubmit;
 
   const pageCount = Math.ceil(total / itemsPerPage);
 
