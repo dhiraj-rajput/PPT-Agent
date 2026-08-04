@@ -12,6 +12,7 @@ import {
 } from 'recharts';
 import { api } from '../lib/api.jsx';
 import { PageHeader, Card, MatchBadge, StatusBadge, renderSafeText } from '../components/ui/Common.jsx';
+import DataSourceSelect from '../components/ui/DataSourceSelect.jsx';
 import { useNotifications } from '../context/NotificationContext.jsx';
 
 // ─── Global Constants & Helpers for Contacts Table ──────────────────────────
@@ -148,6 +149,7 @@ export default function ContactsDB() {
   const [compSizeFilter, setCompSizeFilter] = useState('All');
   const [compNaicsFilter, setCompNaicsFilter] = useState('All');
   const [compResearchedFilter, setCompResearchedFilter] = useState('All');
+  const [compSourceFilter, setCompSourceFilter] = useState('All');
   const [compNaicsCodes, setCompNaicsCodes] = useState([]);
   const [matchCompanyDesc, setMatchCompanyDesc] = useState(false);
   const [ownCompanyProfile, setOwnCompanyProfile] = useState(null);
@@ -167,7 +169,7 @@ export default function ContactsDB() {
   const [companyManualForm, setCompanyManualForm] = useState({
     name: '', uei: '', cage_code: '', primary_naics: '', primary_naics_desc: '',
     city: '', state: '', country: 'USA', contact: '', contact_role: 'Procurement Manager',
-    email: '', phone: '', size: 'Small', status: 'Active'
+    email: '', phone: '', size: 'Small', status: 'Active', source: 'Manual Entry'
   });
   const [companyDocEditor, setCompanyDocEditor] = useState({
     name: '', uei: '', cage_code: '', primary_naics: '', primary_naics_desc: '',
@@ -845,8 +847,17 @@ export default function ContactsDB() {
                       <input required value={companyManualForm.name} onChange={e => setCompanyManualForm({...companyManualForm, name: e.target.value})} className="w-full text-xs rounded-xl border bg-slate-50 dark:bg-navy-900 dark:text-white border-slate-200 dark:border-navy-700 px-3.5 py-2.5 outline-none focus:bg-white dark:focus:bg-navy-950" placeholder="Company Name"/>
                     </div>
                     <div>
-                      <label className="block text-xs font-bold mb-1.5 text-slate-500 dark:text-slate-400">Unique Entity ID (UEI) *</label>
-                      <input required value={companyManualForm.uei} onChange={e => setCompanyManualForm({...companyManualForm, uei: e.target.value})} className="w-full text-xs rounded-xl border bg-slate-50 dark:bg-navy-900 dark:text-white border-slate-200 dark:border-navy-700 px-3.5 py-2.5 outline-none font-mono" placeholder="12-char ID"/>
+                      <label className="block text-xs font-bold mb-1.5 text-slate-500 dark:text-slate-400">Data Source *</label>
+                      <select value={companyManualForm.source || 'Manual Entry'} onChange={e => setCompanyManualForm({...companyManualForm, source: e.target.value})} className="w-full text-xs rounded-xl border bg-slate-50 dark:bg-navy-900 dark:text-white border-slate-200 dark:border-navy-700 px-3.5 py-2.5 outline-none">
+                        <option value="Manual Entry">Manual Entry</option>
+                        <option value="SAM.gov">SAM.gov (US)</option>
+                        <option value="Companies House">Companies House (UK)</option>
+                        <option value="CSV Import">CSV Import</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold mb-1.5 text-slate-500 dark:text-slate-400">Unique Entity ID / Company Number *</label>
+                      <input required value={companyManualForm.uei} onChange={e => setCompanyManualForm({...companyManualForm, uei: e.target.value})} className="w-full text-xs rounded-xl border bg-slate-50 dark:bg-navy-900 dark:text-white border-slate-200 dark:border-navy-700 px-3.5 py-2.5 outline-none font-mono" placeholder="12-char UEI or 8-char UK Reg No."/>
                     </div>
                     <div>
                       <label className="block text-xs font-bold mb-1.5 text-slate-500 dark:text-slate-400">CAGE Code (Optional)</label>

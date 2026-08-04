@@ -342,6 +342,56 @@ function SamGovCard({ notify, onEdit }) {
   );
 }
 
+function CompaniesHouseCard({ notify, onEdit }) {
+  const [status, setStatus] = useState({ connected: false, apiKey: '' });
+  const [loading, setLoading] = useState(true);
+
+  async function loadStatus() {
+    setLoading(true);
+    try {
+      const data = await api.getCompaniesHouseStatus();
+      setStatus(data);
+    } catch {
+      // leave as not connected
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadStatus();
+  }, []);
+
+  return (
+    <Card className="flex flex-col">
+      <div className="flex items-start justify-between">
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-500/10 text-indigo-500">
+          <Landmark size={19} />
+        </div>
+        <ConnectionPill connected={status.connected} checking={loading} />
+      </div>
+      <p className="mt-3 text-sm font-bold text-navy-900 dark:text-white">Companies House UK API</p>
+      <p className="mt-1 text-xs text-slate-400 dark:text-slate-500 mb-2 flex-1">
+        {status.connected ? `Key configured: ${status.apiKey}` : 'Company registry data, officers, filings, and UK tenders integration.'}
+      </p>
+
+      <div className="mt-auto space-y-2">
+        <button
+          onClick={() => onEdit({
+            name: 'companies_house',
+            label: 'Companies House UK',
+            fields: [{ key: 'COMPANIES_HOUSE_KEY', label: 'API Key', type: 'password' }],
+            onSuccess: loadStatus
+          })}
+          className="w-full rounded-lg py-2 text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-navy-800 dark:text-slate-300 dark:hover:bg-navy-700 transition-colors"
+        >
+          Edit / Configure
+        </button>
+      </div>
+    </Card>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // LinkedIn, Companies House, SMTP, Docling, Ollama, WebSearch
 // ---------------------------------------------------------------------------
@@ -551,6 +601,7 @@ export default function Integrations() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-6">
         <GoogleMeetCard notify={notify} />
         <SamGovCard notify={notify} onEdit={handleEdit} />
+        <CompaniesHouseCard notify={notify} onEdit={handleEdit} />
         <LinkedInCard notify={notify} onEdit={handleEdit} />
         <DoclingCard />
         {GENERIC_INTEGRATIONS.map((def) => (

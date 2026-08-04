@@ -20,6 +20,7 @@ from pydantic import BaseModel
 
 from app.core.auth import get_current_user
 from utils.db_client import get_db_session, _mysql_available
+from utils.encryption import encrypt_data, decrypt_data
 from config.settings import settings
 from models.sql_models import (
     Integration as SQL_Integration,
@@ -258,9 +259,12 @@ async def sam_status(current_user: dict = Depends(get_current_user)):
                 stmt = select(SQL_Integration).where(SQL_Integration.service == "sam", SQL_Integration.user_id == user_id)
                 doc = (await db.execute(stmt)).scalar_one_or_none()
                 if doc and getattr(doc, "connected", False):
-                    raw_key = str(doc.access_token or "")
+                    token = str(doc.access_token or "")
+                    try:
+                        raw_key = decrypt_data(token)
+                    except Exception:
+                        raw_key = token
 
-        
         if not raw_key:
             env_keys = read_env_file_keys()
             raw_key = env_keys.get("SAM_GOV_API_KEY") or os.environ.get("SAM_GOV_API_KEY") or getattr(settings, "SAM_GOV_API_KEY", "") or ""
@@ -283,6 +287,8 @@ async def sam_connect(payload: SamApiKeyPayload, current_user: dict = Depends(ge
         if not api_key:
             raise HTTPException(400, "API key cannot be empty.")
             
+        encrypted_key = encrypt_data(api_key)
+
         if _mysql_available:
             async for db in get_db_session():
                 stmt = select(SQL_Integration).where(SQL_Integration.service == "sam", SQL_Integration.user_id == user_id)
@@ -291,14 +297,14 @@ async def sam_connect(payload: SamApiKeyPayload, current_user: dict = Depends(ge
                     await db.execute(
                         update(SQL_Integration)
                         .where(SQL_Integration.id == existing.id)
-                        .values(connected=True, access_token=api_key, updated_at=datetime.utcnow())
+                        .values(connected=True, access_token=encrypted_key, updated_at=datetime.utcnow())
                     )
                 else:
                     db.add(SQL_Integration(
                         user_id=user_id,
                         service="sam",
                         connected=True,
-                        access_token=api_key,
+                        access_token=encrypted_key,
                         refresh_token="",
                         created_at=datetime.utcnow(),
                         updated_at=datetime.utcnow()
@@ -326,6 +332,100 @@ async def sam_disconnect(current_user: dict = Depends(get_current_user)):
         return {"success": True, "message": "SAM.gov API Key disconnected."}
     except Exception as exc:
         raise HTTPException(500, f"Could not disconnect SAM.gov: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# Companies House (UK) API Key Integration
+# ---------------------------------------------------------------------------
+
+class CompaniesHouseApiKeyPayload(BaseModel):
+    api_key: str
+
+
+@router.get("/companies-house/status")
+async def companies_house_status(current_user: dict = Depends(get_current_user)):
+    try:
+        user_id = int(current_user["id"])
+        raw_key = ""
+        if _mysql_available:
+            async for db in get_db_session():
+                stmt = select(SQL_Integration).where(SQL_Integration.service == "companies_house", SQL_Integration.user_id == user_id)
+                doc = (await db.execute(stmt)).scalar_one_or_none()
+                if doc and getattr(doc, "connected", False):
+                    token = str(doc.access_token or "")
+                    try:
+                        raw_key = decrypt_data(token)
+                    except Exception:
+                        raw_key = token
+
+        if not raw_key:
+            env_keys = read_env_file_keys()
+            raw_key = env_keys.get("COMPANIES_HOUSE_KEY") or os.environ.get("COMPANIES_HOUSE_KEY") or getattr(settings, "COMPANIES_HOUSE_KEY", "") or ""
+
+        r_str = str(raw_key or "")
+        if r_str and len(r_str) > 5:
+            obfuscated = f"****{r_str[-4:]}" if len(r_str) >= 4 else "****"
+            return {"connected": True, "apiKey": obfuscated}
+
+        return {"connected": False, "apiKey": ""}
+    except Exception as exc:
+        raise HTTPException(500, f"Could not check Companies House connection status: {exc}")
+
+
+@router.post("/companies-house/connect")
+async def companies_house_connect(payload: CompaniesHouseApiKeyPayload, current_user: dict = Depends(get_current_user)):
+    try:
+        user_id = int(current_user["id"])
+        api_key = payload.api_key.strip()
+        if not api_key:
+            raise HTTPException(400, "API key cannot be empty.")
+
+        encrypted_key = encrypt_data(api_key)
+
+        if _mysql_available:
+            async for db in get_db_session():
+                stmt = select(SQL_Integration).where(SQL_Integration.service == "companies_house", SQL_Integration.user_id == user_id)
+                existing = (await db.execute(stmt)).scalar_one_or_none()
+                if existing:
+                    await db.execute(
+                        update(SQL_Integration)
+                        .where(SQL_Integration.id == existing.id)
+                        .values(connected=True, access_token=encrypted_key, updated_at=datetime.utcnow())
+                    )
+                else:
+                    db.add(SQL_Integration(
+                        user_id=user_id,
+                        service="companies_house",
+                        connected=True,
+                        access_token=encrypted_key,
+                        refresh_token="",
+                        created_at=datetime.utcnow(),
+                        updated_at=datetime.utcnow()
+                    ))
+                await db.commit()
+
+        update_env_file({"COMPANIES_HOUSE_KEY": api_key})
+        os.environ["COMPANIES_HOUSE_KEY"] = api_key
+
+        return {"success": True, "message": "Companies House API Key saved successfully."}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, f"Could not save Companies House API Key: {exc}")
+
+
+@router.delete("/companies-house")
+async def companies_house_disconnect(current_user: dict = Depends(get_current_user)):
+    try:
+        user_id = int(current_user["id"])
+        if _mysql_available:
+            async for db in get_db_session():
+                await db.execute(delete(SQL_Integration).where(SQL_Integration.service == "companies_house", SQL_Integration.user_id == user_id))
+                await db.commit()
+        return {"success": True, "message": "Companies House API Key disconnected."}
+    except Exception as exc:
+        raise HTTPException(500, f"Could not disconnect Companies House: {exc}")
+
 
 
 # ---------------------------------------------------------------------------

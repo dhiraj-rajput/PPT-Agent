@@ -45,8 +45,8 @@ async def check_account_health_with_playwright(account_id: int, decrypted_cookie
         except SessionExpiredError:
             return "expired"
 
-        # Navigate to a lightweight authenticated endpoint
-        await page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded", timeout=15000)
+        # Navigate to profile shortcut endpoint instead of /feed/ which triggers redirect loops
+        await page.goto("https://www.linkedin.com/in/me/", wait_until="domcontentloaded", timeout=20000)
         try:
             await page.wait_for_load_state("networkidle", timeout=6000)
         except Exception:

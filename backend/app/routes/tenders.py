@@ -452,6 +452,10 @@ async def _get_sam_api_key(user_id: Optional[int] = None) -> str:
                 doc = (await db.execute(stmt)).scalar_one_or_none()
                 if doc and getattr(doc, "connected", False) and getattr(doc, "access_token", None):
                     val = str(doc.access_token).strip()
+                    try:
+                        val = decrypt_data(val)
+                    except Exception:
+                        pass
                     if val and not val.startswith("your_"):
                         return val
         except Exception:
@@ -468,6 +472,36 @@ async def _get_sam_api_key(user_id: Optional[int] = None) -> str:
     return ""
 
 
+async def _get_companies_house_api_key(user_id: Optional[int] = None) -> str:
+    """Retrieve Companies House API key from user integration, env, or settings."""
+    if user_id and _mysql_available:
+        try:
+            async for db in get_db_session():
+                stmt = select(SQL_Integration).where(SQL_Integration.service == "companies_house", SQL_Integration.user_id == user_id)
+                doc = (await db.execute(stmt)).scalar_one_or_none()
+                if doc and getattr(doc, "connected", False) and getattr(doc, "access_token", None):
+                    val = str(doc.access_token).strip()
+                    try:
+                        val = decrypt_data(val)
+                    except Exception:
+                        pass
+                    if val:
+                        return val
+        except Exception:
+            pass
+
+    env_val = (os.environ.get("COMPANIES_HOUSE_KEY") or "").strip()
+    if env_val:
+        return env_val
+
+    settings_val = (getattr(settings, "COMPANIES_HOUSE_KEY", "") or "").strip()
+    if settings_val:
+        return settings_val
+
+    return ""
+
+
+
 @router.post("/sync")
 async def sync_tenders_from_sam(
     payload: dict = {},
@@ -480,9 +514,70 @@ async def sync_tenders_from_sam(
         except ValueError:
             pass
 
+    api_source = (payload.get("api_source") or payload.get("source") or "sam_gov").lower()
+    if api_source in ("companies_house_uk", "companies_house", "ch"):
+        ch_key = await _get_companies_house_api_key(uid)
+        from app.companies_house.opportunities import CompaniesHouseTendersClient
+        from app.companies_house.ch_client import CompaniesHouseClient
+
+        ch_client_obj = CompaniesHouseClient(api_key=ch_key)
+        tenders_client = CompaniesHouseTendersClient(ch_client=ch_client_obj)
+
+        keyword = payload.get("keyword") or "IT"
+        uk_tenders = tenders_client.search_uk_tenders(keyword=keyword, limit=min(int(payload.get("limit", 25)), 25))
+
+        inserted_count = 0
+        if _mysql_available:
+            async for db in get_db_session():
+                for t_dict in uk_tenders:
+                    stmt = select(SQL_Tender).where(SQL_Tender.id == t_dict["id"])
+                    existing = (await db.execute(stmt)).scalar_one_or_none()
+                    if existing:
+                        await db.execute(
+                            update(SQL_Tender)
+                            .where(SQL_Tender.id == t_dict["id"])
+                            .values(
+                                title=t_dict["title"],
+                                summary=t_dict["summary"],
+                                agency=t_dict["agency"],
+                                value=t_dict["value"],
+                                source="Companies House",
+                                raw_companies_house_data=t_dict.get("raw_companies_house_data", {})
+                            )
+                        )
+                    else:
+                        db.add(SQL_Tender(
+                            id=t_dict["id"],
+                            notice_id=t_dict["notice_id"],
+                            title=t_dict["title"],
+                            solicitation_number=t_dict["solicitation_number"],
+                            agency=t_dict["agency"],
+                            department=t_dict["department"],
+                            naics_code=t_dict["naics_code"],
+                            set_aside=t_dict["set_aside"],
+                            opportunity_type=t_dict["opportunity_type"],
+                            posted_date=t_dict["posted_date"],
+                            closing_date=t_dict["closing_date"],
+                            status=t_dict["status"],
+                            value=t_dict["value"],
+                            summary=t_dict["summary"],
+                            source="Companies House",
+                            raw_companies_house_data=t_dict.get("raw_companies_house_data", {})
+                        ))
+                    inserted_count += 1
+                await db.commit()
+
+        return {
+            "success": True,
+            "message": f"Successfully synced {inserted_count} tenders from Companies House & UK Find a Tender.",
+            "source": "Companies House",
+            "count": inserted_count
+        }
+
     api_key = await _get_sam_api_key(uid)
     force_mock = settings.FORCE_MOCK_SAM_GOV
     is_force = bool(payload.get("force"))
+
 
     if not force_mock and not is_force:
         # Check cooldown only if not forced

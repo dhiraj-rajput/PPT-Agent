@@ -158,6 +158,9 @@ class Company(Base):
     naics_code = Column(String(20), default="")
     match_score = Column(Integer, default=0)
     uei = Column(String(100), default="", index=True)
+    company_number = Column(String(20), default="", index=True)
+    source = Column(String(100), default="Manual Entry", index=True)
+
     
     # Gov / SAM fields
     contact = Column(String(255), default="N/A")
@@ -648,7 +651,9 @@ class Tender(Base):
     poc_phone = Column(String(255), default="")
 
     place_of_performance = Column(TEXT, default="")
+    source = Column(String(100), default="SAM.gov", index=True)
     raw_sam_data = Column(JSON, default=dict)   # Full SAM.gov API response preserved
+    raw_companies_house_data = Column(JSON, default=dict) # Companies House enrichment preserved
     updated_at = Column(DateTime, default=_now, onupdate=_now)
 
     draft_requests = relationship("DraftRequest", back_populates="tender")
@@ -702,6 +707,8 @@ class Report(Base):
     proposal_type = Column(String(100), default="")
     size = Column(Integer, default=0)
     status = Column(String(50), default="pending")
+    source = Column(String(100), default="", index=True)
+
 
     file_path = Column(String(1000), default="")
     file_size = Column(Integer, default=0)
@@ -954,6 +961,47 @@ class NaicsCode(Base):
     description = Column(TEXT, default="")
 
 
+class SicCode(Base):
+    """
+    UK SIC 2007 classification codes for Companies House.
+    FULLTEXT index on title+description for fast keyword search.
+    """
+    __tablename__ = "sic_codes"
+    __table_args__ = (
+        Index("ft_sic_title_desc", "title", "description", mysql_prefix="FULLTEXT"),
+    )
+
+    code = Column(String(20), primary_key=True)
+    title = Column(String(500), nullable=False, default="")
+    description = Column(TEXT, default="")
+
+
+class CompaniesHouseCompany(Base):
+    """
+    Dedicated store for UK Companies House entity profiles.
+    """
+    __tablename__ = "ch_companies"
+    __table_args__ = (
+        Index("ix_ch_companies_number", "company_number"),
+        Index("ix_ch_companies_status", "company_status"),
+        Index("ft_ch_companies_title", "title", mysql_prefix="FULLTEXT"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    company_number = Column(String(20), unique=True, nullable=False)
+    title = Column(String(255), nullable=False)
+    company_status = Column(String(100), default="active")
+    company_type = Column(String(100), default="ltd")
+    date_of_creation = Column(String(50), default="")
+    sic_codes = Column(JSON, default=list)
+    registered_office_address = Column(JSON, default=dict)
+    raw_data = Column(JSON, default=dict)
+    source = Column(String(100), default="Companies House", index=True)
+    created_at = Column(DateTime, default=_now, nullable=False)
+    updated_at = Column(DateTime, default=_now, onupdate=_now)
+
+
+
 # ===========================================================================
 # SYSTEM TABLES
 # ===========================================================================
@@ -1022,7 +1070,7 @@ class LinkedInAccount(Base):
     last_action_at = Column(DateTime, nullable=True)
     last_checkpoint_at = Column(DateTime, nullable=True)
     cooldown_until = Column(DateTime, nullable=True)
-    last_error = Column(TEXT, nullable=True)
+    last_error = Column(TEXT, nullable=True)   # Reason why session was last marked expired/flagged
     created_at = Column(DateTime, default=_now, nullable=False)
     updated_at = Column(DateTime, default=_now, onupdate=_now, nullable=False)
 

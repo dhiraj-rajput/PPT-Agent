@@ -59,7 +59,8 @@ export default function Dashboard() {
     try {
       // Run all sync operations concurrently — reduces total time from ~5s to ~1s
       await Promise.all([
-        api.syncTenders(),
+        api.syncTendersFromSource('sam_gov'),
+        api.syncTendersFromSource('companies_house_uk'),
         api.getReports(),
         api.getAllDraftRequests(),
         api.getCompanies(),
@@ -69,7 +70,7 @@ export default function Dashboard() {
       const res = await api.getDashboardData();
       setData(res);
       setLastSynced(new Date());
-      createAlert('Data Synced', 'Data synced successfully across SAM.gov, Tenders, Reports, and CRM!', '/dashboard');
+      createAlert('Data Synced', 'Data synced successfully across SAM.gov, Companies House, Tenders, Reports, and CRM!', '/dashboard');
     } catch (err) {
       setError(err.message || 'Failed to sync dashboard data.');
     } finally {

@@ -97,22 +97,79 @@ async def run_guided_login_websocket(websocket: WebSocket, region: str, label: s
         # issue a short-lived/flagged session that gets silently invalidated
         # within minutes. That would explain sessions "expiring" almost
         # immediately regardless of anything the send flow does afterward.
-        # Same stealth patch as session_loader.py's send-side context —
-        # mask the most common headless-Chromium tells before anything loads.
+        # Full stealth patch (matching session_loader.py) — mask ALL the common
+        # headless-Chromium tells before anything loads.
         await context.add_init_script(
             """
+            // 1. Hide webdriver flag
             Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-            window.chrome = window.chrome || { runtime: {} };
+
+            // 2. Restore window.chrome (headless Chromium omits it)
+            window.chrome = window.chrome || { runtime: {}, loadTimes: function(){}, csi: function(){}, app: {} };
+
+            // 3. Realistic language + plugin arrays
             Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-            const originalQuery = window.navigator.permissions && window.navigator.permissions.query;
-            if (originalQuery) {
+            Object.defineProperty(navigator, 'plugins', {
+                get: () => {
+                    const arr = [1, 2, 3, 4, 5];
+                    arr.__proto__ = PluginArray.prototype;
+                    return arr;
+                }
+            });
+
+            // 4. Fix permissions.query for 'notifications'
+            const _origPermQuery = window.navigator.permissions && window.navigator.permissions.query;
+            if (_origPermQuery) {
                 window.navigator.permissions.query = (parameters) => (
                     parameters.name === 'notifications'
                         ? Promise.resolve({ state: Notification.permission })
-                        : originalQuery(parameters)
+                        : _origPermQuery(parameters)
                 );
             }
+
+            // 5. Spoof hardware concurrency
+            Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
+
+            // 6. Spoof device memory
+            Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
+
+            // 7. Fix outerHeight / outerWidth
+            if (window.outerHeight === 0) {
+                Object.defineProperty(window, 'outerHeight', { get: () => window.innerHeight });
+            }
+            if (window.outerWidth === 0) {
+                Object.defineProperty(window, 'outerWidth', { get: () => window.innerWidth });
+            }
+
+            // 8. WebGL renderer / vendor spoofing
+            const _origGetContext = HTMLCanvasElement.prototype.getContext;
+            HTMLCanvasElement.prototype.getContext = function(type, attrs) {
+                const ctx = _origGetContext.call(this, type, attrs);
+                if (!ctx) return ctx;
+                if (type === 'webgl' || type === 'webgl2' || type === 'experimental-webgl') {
+                    const _origGetParam = ctx.getParameter.bind(ctx);
+                    ctx.getParameter = function(param) {
+                        if (param === 37445) return 'Intel Inc.';
+                        if (param === 37446) return 'Intel Iris OpenGL Engine';
+                        return _origGetParam(param);
+                    };
+                }
+                return ctx;
+            };
+
+            // 9. Canvas fingerprint noise
+            const _origToDataURL = HTMLCanvasElement.prototype.toDataURL;
+            HTMLCanvasElement.prototype.toDataURL = function(type) {
+                if (type === 'image/png' && this.width > 0) {
+                    const ctx2d = _origGetContext.call(this, '2d');
+                    if (ctx2d) {
+                        const imageData = ctx2d.getImageData(0, 0, 1, 1);
+                        imageData.data[0] = (imageData.data[0] + 1) % 256;
+                        ctx2d.putImageData(imageData, 0, 0);
+                    }
+                }
+                return _origToDataURL.apply(this, arguments);
+            };
             """
         )
 

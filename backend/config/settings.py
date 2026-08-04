@@ -175,6 +175,26 @@ class AppSettings(BaseSettings):
     )
 
     # ------------------------------------------------------------------
+    # Companies House (UK)
+    # ------------------------------------------------------------------
+    COMPANIES_HOUSE_KEY: str = Field(
+        default="",
+        description="UK Companies House API key."
+    )
+    COMPANIES_HOUSE_API_URL: str = Field(
+        default="https://api.company-information.service.gov.uk",
+        description="Companies House Public Data API base URL.",
+    )
+    COMPANIES_HOUSE_DOCUMENT_API_URL: str = Field(
+        default="https://document-api.company-information.service.gov.uk",
+        description="Companies House Document API base URL.",
+    )
+    FORCE_MOCK_COMPANIES_HOUSE: bool = Field(
+        default=False,
+        description="Force Companies House to use mock data instead of live queries.",
+    )
+
+    # ------------------------------------------------------------------
     # Optional / Other Search & Scraping Services
     # ------------------------------------------------------------------
     SERPAPI_API_KEY: str = Field(default="", description="SerpAPI key (fallback search).")

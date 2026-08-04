@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Search, Filter, Hash, BookOpen, Copy, Check, ChevronLeft, ChevronRight, RefreshCw, Plus, X, Upload } from 'lucide-react';
 import { api } from '../lib/api.jsx';
+import DataSourceSelect from '../components/ui/DataSourceSelect.jsx';
 
 const NAICS_SECTORS = [
   { value: '', label: 'All Sectors' },
@@ -33,6 +34,7 @@ export default function NaicsMuster() {
   const [limit] = useState(25);
   const [search, setSearch] = useState('');
   const [sector, setSector] = useState('');
+  const [sourceSystem, setSourceSystem] = useState('SAM.gov');
   const [loading, setLoading] = useState(false);
   const [copiedCode, setCopiedCode] = useState(null);
   const [expandedCodes, setExpandedCodes] = useState({});
@@ -60,7 +62,7 @@ export default function NaicsMuster() {
           isParent: false,
         })),
       ]
-    : [];
+    : [{ id: 'parent', name: 'Main Company', description: '', isParent: true }];
 
   function getSelectedEntity() {
     return entityOptions.find((ent) => ent.id === matchEntityId) || entityOptions[0];
@@ -82,32 +84,43 @@ export default function NaicsMuster() {
     title: '',
     description: ''
   });
-  const fetchNaics = useCallback(async (targetPage = page, targetSearch = search, targetSector = sector, targetMatch = matchCompanyDescription) => {
+
+  const fetchNaics = useCallback(async (targetPage = page, targetSearch = search, targetSector = sector, targetMatch = matchCompanyDescription, targetSystem = sourceSystem) => {
     setLoading(true);
     try {
-      const res = await api.getNaicsCodes({
-        search: targetSearch,
-        sector: targetSector,
-        match_company_description: targetMatch && !targetSearch,
-        page: targetPage,
-        limit,
-      });
-      setItems(res.items || []);
-      setTotal(res.total || 0);
+      if (targetSystem === 'Companies House') {
+        const res = await api.getSicCodes({
+          search: targetSearch,
+          page: targetPage,
+          limit,
+        });
+        setItems(res.items || []);
+        setTotal(res.total || 0);
+      } else {
+        const res = await api.getNaicsCodes({
+          search: targetSearch,
+          sector: targetSector,
+          match_company_description: targetMatch && !targetSearch,
+          page: targetPage,
+          limit,
+        });
+        setItems(res.items || []);
+        setTotal(res.total || 0);
+      }
     } catch (err) {
-      console.error('Error fetching NAICS codes:', err);
+      console.error('Error fetching classification codes:', err);
     } finally {
       setLoading(false);
     }
-  }, [limit]);
+  }, [limit, sourceSystem]);
 
   // Debounced search and direct filter refetch
   useEffect(() => {
     const timer = setTimeout(() => {
-      fetchNaics(page, search, sector, matchCompanyDescription);
+      fetchNaics(page, search, sector, matchCompanyDescription, sourceSystem);
     }, 200);
     return () => clearTimeout(timer);
-  }, [page, search, sector, matchCompanyDescription, fetchNaics]);
+  }, [page, search, sector, matchCompanyDescription, sourceSystem, fetchNaics]);
 
   // Reset page to 1 on filter or search changes
   useEffect(() => {
@@ -227,11 +240,16 @@ export default function NaicsMuster() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-navy-900 dark:text-white sm:text-3xl">
-            NAICS Code Muster
-          </h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold tracking-tight text-navy-900 dark:text-white sm:text-3xl">
+              {sourceSystem === 'Companies House' ? 'UK SIC Code Muster' : 'NAICS Code Muster'}
+            </h1>
+            <DataSourceSelect value={sourceSystem} onChange={setSourceSystem} includeAll={false} />
+          </div>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Search, filter, and reference standard North American Industry Classification System (NAICS) codes.
+            {sourceSystem === 'Companies House'
+              ? 'Search, filter, and reference standard UK Standard Industrial Classification (SIC 2007) codes.'
+              : 'Search, filter, and reference standard North American Industry Classification System (NAICS) codes.'}
           </p>
         </div>
         <button
@@ -239,7 +257,7 @@ export default function NaicsMuster() {
           className="flex items-center justify-center gap-2 rounded-xl bg-brand-500 hover:bg-brand-600 px-5 py-3 text-sm font-bold text-white shadow-soft transition-all"
         >
           <Plus size={16} />
-          Add NAICS Data
+          Add {sourceSystem === 'Companies House' ? 'SIC' : 'NAICS'} Data
         </button>
       </div>
 

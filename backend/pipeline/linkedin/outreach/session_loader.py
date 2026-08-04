@@ -88,16 +88,35 @@ def _cookie_list_from_encrypted(session_cookie_encrypted: str) -> list[dict]:
         return []
     data = json.loads(raw)
 
+    raw_cookies = []
     if "cookies" in data:
-        return data["cookies"]
+        raw_cookies = data["cookies"]
+    else:
+        # Legacy shape fallback.
+        if data.get("li_at"):
+            raw_cookies.append({"name": "li_at", "value": data["li_at"], "domain": ".linkedin.com", "path": "/", "secure": True, "sameSite": "None"})
+        if data.get("JSESSIONID"):
+            raw_cookies.append({"name": "JSESSIONID", "value": data["JSESSIONID"], "domain": ".linkedin.com", "path": "/", "secure": True, "sameSite": "None"})
 
-    # Legacy shape fallback.
-    legacy = []
-    if data.get("li_at"):
-        legacy.append({"name": "li_at", "value": data["li_at"], "domain": ".linkedin.com", "path": "/", "secure": True, "sameSite": "None"})
-    if data.get("JSESSIONID"):
-        legacy.append({"name": "JSESSIONID", "value": data["JSESSIONID"], "domain": ".linkedin.com", "path": "/", "secure": True, "sameSite": "None"})
-    return legacy
+    # Normalize cookies to ensure .linkedin.com domain and correct formatting
+    cleaned = []
+    for c in raw_cookies:
+        cookie = dict(c)
+        cookie["domain"] = ".linkedin.com"
+        cookie["path"] = "/"
+        cookie["secure"] = True
+
+        if cookie["name"] == "JSESSIONID":
+            val = cookie["value"].strip()
+            # JSESSIONID in LinkedIn headers/cookies must be enclosed in quotes
+            if not val.startswith('"') and not val.endswith('"'):
+                val = f'"{val}"'
+            cookie["value"] = val
+        elif cookie["name"] == "li_at":
+            cookie["value"] = cookie["value"].strip().strip('"')
+
+        cleaned.append(cookie)
+    return cleaned
 
 
 async def open_authenticated_context(account_id: int):
@@ -140,7 +159,21 @@ async def open_authenticated_context(account_id: int):
     playwright_ctx = await async_playwright().start()
     browser = await playwright_ctx.chromium.launch(**launch_args)
 
-    context_kwargs: dict = {"viewport": _parse_viewport(fingerprint.viewport if fingerprint else None)}
+    context_kwargs: dict = {
+        "viewport": _parse_viewport(fingerprint.viewport if fingerprint else None),
+        "extra_http_headers": {
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Sec-Ch-Ua": '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
+            "Sec-Ch-Ua-Mobile": "?0",
+            "Sec-Ch-Ua-Platform": '"Windows"',
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-User": "?1",
+            "Upgrade-Insecure-Requests": "1",
+        }
+    }
     if fingerprint:
         context_kwargs["user_agent"] = fingerprint.user_agent
         context_kwargs["locale"] = fingerprint.locale
@@ -154,22 +187,88 @@ async def open_authenticated_context(account_id: int):
     # all, which points at LinkedIn's client-side bot detection serving a
     # stripped/limited page rather than an auth or selector problem.
     # Headless Chromium exposes several tells a real browser doesn't
-    # (navigator.webdriver=true, no window.chrome, empty plugins/languages).
-    # Mask the most common ones before any page loads in this context.
+    # (navigator.webdriver=true, no window.chrome, empty plugins/languages,
+    # WebGL renderer = "Google SwiftShader" which is a known headless signal,
+    # canvas fingerprint is blank/zero, outerHeight/outerWidth = 0).
+    # Mask all of them before any page loads in this context.
     await context.add_init_script(
         """
+        // 1. Hide webdriver flag
         Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-        window.chrome = window.chrome || { runtime: {} };
+
+        // 2. Restore window.chrome (headless Chromium omits it)
+        window.chrome = window.chrome || { runtime: {}, loadTimes: function(){}, csi: function(){}, app: {} };
+
+        // 3. Realistic language + plugin arrays
         Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-        Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-        const originalQuery = window.navigator.permissions && window.navigator.permissions.query;
-        if (originalQuery) {
+        Object.defineProperty(navigator, 'plugins', {
+            get: () => {
+                // Mimic a real browser that has PDF viewer and native plugins
+                const arr = [1, 2, 3, 4, 5];
+                arr.__proto__ = PluginArray.prototype;
+                return arr;
+            }
+        });
+
+        // 4. Fix permissions.query for 'notifications'
+        const _origPermQuery = window.navigator.permissions && window.navigator.permissions.query;
+        if (_origPermQuery) {
             window.navigator.permissions.query = (parameters) => (
                 parameters.name === 'notifications'
                     ? Promise.resolve({ state: Notification.permission })
-                    : originalQuery(parameters)
+                    : _origPermQuery(parameters)
             );
         }
+
+        // 5. Spoof hardware concurrency (headless usually shows 2; real = 8+)
+        Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
+
+        // 6. Spoof device memory (headless usually shows 0.25)
+        Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
+
+        // 7. Fix outerHeight / outerWidth (headless = 0, dead giveaway)
+        if (window.outerHeight === 0) {
+            Object.defineProperty(window, 'outerHeight', { get: () => window.innerHeight });
+        }
+        if (window.outerWidth === 0) {
+            Object.defineProperty(window, 'outerWidth', { get: () => window.innerWidth });
+        }
+
+        // 8. WebGL renderer / vendor spoofing
+        // Headless Chromium reports "Google SwiftShader" — a known bot signal.
+        // Override getParameter to return a realistic renderer string.
+        const _origGetContext = HTMLCanvasElement.prototype.getContext;
+        HTMLCanvasElement.prototype.getContext = function(type, attrs) {
+            const ctx = _origGetContext.call(this, type, attrs);
+            if (!ctx) return ctx;
+            if (type === 'webgl' || type === 'webgl2' || type === 'experimental-webgl') {
+                const _origGetParam = ctx.getParameter.bind(ctx);
+                ctx.getParameter = function(param) {
+                    // UNMASKED_VENDOR_WEBGL
+                    if (param === 37445) return 'Intel Inc.';
+                    // UNMASKED_RENDERER_WEBGL
+                    if (param === 37446) return 'Intel Iris OpenGL Engine';
+                    return _origGetParam(param);
+                };
+            }
+            return ctx;
+        };
+
+        // 9. Canvas fingerprint noise — add imperceptible pixel noise so the
+        // fingerprint hash differs from the blank headless default.
+        const _origToDataURL = HTMLCanvasElement.prototype.toDataURL;
+        HTMLCanvasElement.prototype.toDataURL = function(type) {
+            if (type === 'image/png' && this.width > 0) {
+                const ctx2d = _origGetContext.call(this, '2d');
+                if (ctx2d) {
+                    // Add a single near-invisible pixel to alter the hash
+                    const imageData = ctx2d.getImageData(0, 0, 1, 1);
+                    imageData.data[0] = (imageData.data[0] + 1) % 256;
+                    ctx2d.putImageData(imageData, 0, 0);
+                }
+            }
+            return _origToDataURL.apply(this, arguments);
+        };
         """
     )
 

@@ -6,6 +6,29 @@ OrbitAvanya — FastAPI backend entry point using MySQL as the primary database.
 
 from __future__ import annotations
 
+import sys
+
+# ── Windows: switch to ProactorEventLoop BEFORE uvicorn/asyncio start ────────
+# On Windows, the default SelectorEventLoop cannot spawn subprocesses, which
+# means Playwright's chromium.launch() raises NotImplementedError when it tries
+# to start the browser process. ProactorEventLoop (IOCP-based) supports
+# subprocesses on Windows and is required for Playwright automation to work.
+# This must happen before ANY asyncio or uvicorn import runs the event loop.
+if sys.platform == "win32":
+    import asyncio
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
+
+def proactor_loop_factory(use_subprocess: bool = False):
+    """
+    Custom loop factory for uvicorn on Windows.
+    uvicorn 0.36+ defaults to SelectorEventLoop on Windows whenever use_subprocess=True
+    (e.g., during reload or background tasks), which breaks Playwright subprocess launching.
+    This factory explicitly returns an instance of asyncio.ProactorEventLoop so Playwright works cleanly.
+    """
+    return asyncio.ProactorEventLoop()
+# ─────────────────────────────────────────────────────────────────────────────
+
 import os
 import uvicorn
 import logging
@@ -88,9 +111,11 @@ async def lifespan(app: FastAPI):
         try:
             from app.routes.companies import import_sam_entities_csv
             from app.routes.naics import ensure_naics_populated
+            from app.routes.sic import ensure_sic_populated
             from utils.db_client import ensure_all_indexes
             
             ensure_naics_populated()
+            ensure_sic_populated()
             import_sam_entities_csv()
             ensure_all_indexes()
             _log.info("Background DB setup completed.")
@@ -129,6 +154,53 @@ async def lifespan(app: FastAPI):
 
     linkedin_health_task = asyncio.create_task(run_linkedin_health_loop())
     _log.info("LinkedIn health monitor loop task started.")
+
+    # Start Background LinkedIn Acceptance Check Loop (runs every 10 minutes)
+    async def run_linkedin_acceptance_loop():
+        await asyncio.sleep(30)
+        while True:
+            try:
+                from utils.db_client import get_db_session, _mysql_available
+                if _mysql_available:
+                    async for db in get_db_session():
+                        from app.core.linkedin_worker import check_invitation_acceptances
+                        await check_invitation_acceptances(db)
+                        break
+            except Exception as e:
+                _log.warning(f"[LinkedIn Acceptance Loop] Failed running acceptance check: {e}")
+            await asyncio.sleep(600)  # Check every 10 minutes
+
+    linkedin_acceptance_task = asyncio.create_task(run_linkedin_acceptance_loop())
+    _log.info("LinkedIn invitation acceptance loop task started.")
+
+    # Start LinkedIn Inbox Poll Loop (runs every 30 minutes — polls each active account's messages)
+    async def run_linkedin_inbox_poll_loop():
+        await asyncio.sleep(90)  # Short initial delay to let server finish startup
+        while True:
+            try:
+                from utils.db_client import get_db_session, _mysql_available
+                if _mysql_available:
+                    from app.core.linkedin_worker import poll_inbox_playwright
+                    from models.sql_models import LinkedInAccount
+                    from sqlalchemy import select
+                    async for db in get_db_session():
+                        stmt = select(LinkedInAccount).where(
+                            LinkedInAccount.status.in_(["active", "warming_up"])
+                        )
+                        res = await db.execute(stmt)
+                        active_accounts = res.scalars().all()
+                        break
+                    for acc in active_accounts:
+                        try:
+                            await poll_inbox_playwright(acc.id)
+                        except Exception as e:
+                            _log.warning(f"[LinkedIn Inbox Poll] Error polling account {acc.id}: {e}")
+            except Exception as e:
+                _log.warning(f"[LinkedIn Inbox Poll Loop] Outer error: {e}")
+            await asyncio.sleep(1800)  # Re-poll every 30 minutes
+
+    linkedin_inbox_task = asyncio.create_task(run_linkedin_inbox_poll_loop())
+    _log.info("LinkedIn inbox poll loop task started.")
 
     # 4. Start Background TTL Cleanup Loop (runs every 60 minutes)
     async def run_ttl_cleanup_loop():
@@ -374,7 +446,10 @@ app.include_router(leads_router, prefix="/api")
 app.include_router(tracking_router, prefix="/api")
 app.include_router(analytics_router, prefix="/api")
 app.include_router(website_events_router, prefix="/api")
+from app.routes.naics import router as naics_router
+from app.routes.sic import router as sic_router
 app.include_router(naics_router, prefix="/api")
+app.include_router(sic_router, prefix="/api")
 app.include_router(newsletters_router, prefix="/api")
 app.include_router(linkedin_campaigns_router, prefix="/api")
 app.include_router(linkedin_inbox_router, prefix="/api")
@@ -455,15 +530,45 @@ async def health():
 
 if __name__ == "__main__":
     reload_enabled = settings.ENV == "dev"
+
+    # ── Windows reload caveat ────────────────────────────────────────────────
+    # uvicorn's StatReload uses multiprocessing (subprocess spawn) on Windows.
+    # That subprocess starts with Python's DEFAULT event loop policy
+    # (SelectorEventLoop), which does NOT support spawning child processes —
+    # and Playwright needs to spawn Chromium.  We therefore disable StatReload
+    # on Windows so uvicorn runs in a single process where the
+    # WindowsProactorEventLoopPolicy we set at the top of this file applies.
+    #
+    # To get hot-reload back on Windows, install watchfiles:
+    #   uv add watchfiles
+    # uvicorn detects watchfiles and uses its thread-based reloader instead of
+    # the subprocess-based StatReload — threads share the process event loop
+    # policy so Playwright works correctly.
+    if sys.platform == "win32":
+        try:
+            import watchfiles  # noqa: F401  # if installed, uvicorn uses it automatically
+        except ImportError:
+            if reload_enabled:
+                import logging as _log_tmp
+                _log_tmp.getLogger("server").warning(
+                    "[Windows] Hot-reload disabled because 'watchfiles' is not installed. "
+                    "StatReload (subprocess-based) cannot share the ProactorEventLoop "
+                    "needed by Playwright. Run `uv add watchfiles` to re-enable hot-reload."
+                )
+                reload_enabled = False
+    # ─────────────────────────────────────────────────────────────────────────
+
     host = (
         "0.0.0.0"
         if (settings.CODESPACES or os.getenv("CODESPACES") == "true")
         else "127.0.0.1"
     )
+    loop_config = "server:proactor_loop_factory" if sys.platform == "win32" else "auto"
     uvicorn.run(
         "server:app",
         host=host,
         port=settings.PORT,
         reload=reload_enabled,
         timeout_keep_alive=600,
+        loop=loop_config,
     )

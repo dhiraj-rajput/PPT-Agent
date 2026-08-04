@@ -20,7 +20,9 @@ from models.sql_models import (
     LinkedInTarget,
     LinkedInCampaign,
     SystemStatus,
-    AuditLog
+    AuditLog,
+    Notification,
+    Person,
 )
 
 logger = logging.getLogger("linkedin_worker")
@@ -275,9 +277,14 @@ async def send_connection_request_playwright(account_id: int, profile_url: str, 
             await add_note_locator.first.click(timeout=5000)
             await page.wait_for_timeout(1000)
 
-            textarea = page.locator("textarea[name='message'], textarea#custom-message")
+            # LinkedIn hard-limits connection notes to 300 characters.
+            # Sending a longer note causes the Send button to stay disabled
+            # (LinkedIn's JS blocks it) — the request silently never goes out.
+            truncated_note = note_text[:300]
+
+            textarea = page.locator("textarea[name='message'], textarea#custom-message, textarea[id*='message' i]")
             if await textarea.count() > 0:
-                await textarea.first.fill(note_text)
+                await textarea.first.fill(truncated_note)
                 await page.wait_for_timeout(1000)
 
             # LinkedIn's exact label on the final send button after adding a
@@ -327,6 +334,117 @@ async def send_connection_request_playwright(account_id: int, profile_url: str, 
         return False
     finally:
         await close_authenticated_context(playwright_ctx, browser, context)
+
+
+async def check_invitation_acceptances(db) -> None:
+    """
+    Acceptance Detection Job: checks LinkedIn's sent-invitations page
+    (/mynetwork/invitation-manager/sent/) for each active account and marks
+    targets 'accepted' when their invitation is no longer listed as pending.
+
+    Called from server.py's acceptance_loop every 10 minutes.
+    Uses session_loader so the check runs under the account's full fingerprint
+    — the same fix that cured ERR_TOO_MANY_REDIRECTS in the send flow.
+    """
+    try:
+        stmt_accounts = select(LinkedInAccount).where(
+            LinkedInAccount.status.in_(["active", "warming_up"])
+        )
+        res_accounts = await db.execute(stmt_accounts)
+        active_accounts = res_accounts.scalars().all()
+
+        for acc in active_accounts:
+            # Find pending targets for this account
+            stmt_targets = (
+                select(LinkedInTarget)
+                .outerjoin(LinkedInCampaign, LinkedInTarget.campaign_id == LinkedInCampaign.id)
+                .where(
+                    LinkedInTarget.connection_status == "pending",
+                    (LinkedInTarget.assigned_account_id == acc.id) |
+                    (LinkedInCampaign.linkedin_account_id == acc.id)
+                )
+            )
+            res_targets = await db.execute(stmt_targets)
+            pending_targets = res_targets.scalars().all()
+
+            if not pending_targets:
+                continue
+
+            playwright_ctx = browser = context = None
+            try:
+                playwright_ctx, browser, context, page = await open_authenticated_context(acc.id)
+            except SessionExpiredError as e:
+                logger.warning(f"Acceptance check: account {acc.id} session expired — {e}")
+                await db.execute(
+                    update(LinkedInAccount)
+                    .where(LinkedInAccount.id == acc.id)
+                    .values(status="expired", last_error=str(e), updated_at=datetime.utcnow())
+                )
+                await db.execute(
+                    insert(Notification).values(
+                        user_id=acc.user_id,
+                        notification_type="linkedin_health_alert",
+                        title="LinkedIn Session Expired",
+                        message=f"Your LinkedIn account '{acc.label}' session has expired while checking acceptances. Please reconnect it.",
+                        is_read=False,
+                        link="/linkedin/accounts",
+                        related_id=str(acc.id),
+                        created_at=datetime.utcnow()
+                    )
+                )
+                await db.commit()
+                continue
+            except Exception as e:
+                logger.warning(f"Acceptance check: could not open session for account {acc.id}: {e}")
+                continue
+
+            try:
+                await page.goto(
+                    "https://www.linkedin.com/mynetwork/invitation-manager/sent/",
+                    wait_until="domcontentloaded",
+                    timeout=25000
+                )
+                try:
+                    await page.wait_for_load_state("networkidle", timeout=8000)
+                except Exception:
+                    pass
+
+                current_url = page.url
+                if "/login" in current_url or "/checkpoint" in current_url:
+                    raise SessionExpiredError(f"Redirected to {current_url} during acceptance check.")
+
+                content = await page.content()
+
+                for target in pending_targets:
+                    stmt_p = select(Person).where(Person.id == target.person_id)
+                    person = (await db.execute(stmt_p)).scalar_one_or_none()
+                    if person and person.linkedin_url:
+                        # If the slug is no longer in the Sent list, the invite was accepted
+                        slug = person.linkedin_url.rstrip("/").split("/")[-1]
+                        if slug and slug not in content:
+                            target.connection_status = "accepted"
+                            target.updated_at = datetime.utcnow()
+                            logger.info(
+                                f"Target {target.id} ({person.full_name}) invitation accepted — "
+                                f"slug '{slug}' no longer in sent list."
+                            )
+
+                await db.commit()
+            except SessionExpiredError as e:
+                logger.warning(f"Acceptance check for account {acc.id} — session expired mid-check: {e}")
+                await db.execute(
+                    update(LinkedInAccount)
+                    .where(LinkedInAccount.id == acc.id)
+                    .values(status="expired", last_error=str(e), updated_at=datetime.utcnow())
+                )
+                await db.commit()
+            except Exception as ex:
+                logger.warning(f"Acceptance check for account {acc.id} error: {ex}")
+            finally:
+                await close_authenticated_context(playwright_ctx, browser, context)
+
+    except Exception as e:
+        logger.error(f"Error running check_invitation_acceptances: {e}")
 
 
 async def _mark_account_expired(account_id: int, reason: str) -> None:
@@ -618,3 +736,175 @@ async def start_linkedin_worker_loop():
             logger.error(f"LinkedIn worker loop encountered an error: {e}", exc_info=True)
 
         await asyncio.sleep(15)  # Poll every 15 seconds
+
+
+async def poll_inbox_playwright(account_id: int) -> int:
+    """
+    Inbox Monitor: navigates to the LinkedIn /messaging/ page under the
+    account's full authenticated session, reads all visible conversation
+    snippets, and records direction='in' LinkedInMessageLog rows for any
+    reply from a known campaign target that hasn't been logged yet.
+
+    Returns the count of newly discovered messages.
+    Called from server.py's inbox_poll_loop every 30 min per active account.
+    """
+    logger.info(f"[Inbox Poll] Starting for account {account_id}")
+    playwright_ctx = browser = context = None
+    new_msgs_count = 0
+
+    try:
+        try:
+            playwright_ctx, browser, context, page = await open_authenticated_context(account_id)
+        except SessionExpiredError as e:
+            logger.warning(f"[Inbox Poll] account {account_id} session expired: {e}")
+            async for db in get_db_session():
+                await db.execute(
+                    update(LinkedInAccount)
+                    .where(LinkedInAccount.id == account_id)
+                    .values(status="expired", last_error=str(e), updated_at=datetime.utcnow())
+                )
+                await db.commit()
+            return 0
+
+        try:
+            await page.goto("https://www.linkedin.com/messaging/", wait_until="domcontentloaded", timeout=25000)
+            try:
+                await page.wait_for_load_state("networkidle", timeout=10000)
+            except Exception:
+                pass
+        except Exception as goto_err:
+            if "ERR_TOO_MANY_REDIRECTS" in str(goto_err) or "authwall" in str(goto_err) or "net::ERR" in str(goto_err):
+                logger.warning(f"[Inbox Poll] account {account_id} hit navigation redirect error: {goto_err}")
+                return 0
+            raise
+
+        current_url = page.url
+        if "/login" in current_url or "/checkpoint" in current_url or "authwall" in current_url:
+            logger.warning(f"[Inbox Poll] account {account_id} redirected to {current_url} — session invalid.")
+            return 0
+
+        # Wait for the conversation list pane to render
+        try:
+            await page.wait_for_selector(
+                "li.msg-conversation-listitem, [data-view-name='messaging-conversation-list-item']",
+                timeout=10000
+            )
+        except Exception:
+            logger.warning(f"[Inbox Poll] account {account_id}: conversation list did not render.")
+            return 0
+
+        # Scrape visible conversations (up to 50 threads)
+        conversations = []
+        conv_items = page.locator(
+            "li.msg-conversation-listitem, [data-view-name='messaging-conversation-list-item']"
+        )
+        count = await conv_items.count()
+        for i in range(min(count, 50)):
+            try:
+                item = conv_items.nth(i)
+
+                name_el = item.locator(
+                    ".msg-conversation-listitem__participant-names, "
+                    ".messaging-tablist-item__name, "
+                    "[data-anonymize='person-name']"
+                )
+                name = (await name_el.first.inner_text(timeout=1000)).strip() if await name_el.count() > 0 else ""
+
+                preview_el = item.locator(
+                    ".msg-conversation-listitem__message-snippet, "
+                    ".msg-conversation-listitem__snippet"
+                )
+                preview = (await preview_el.first.inner_text(timeout=1000)).strip() if await preview_el.count() > 0 else ""
+
+                link_el = item.locator("a[href*='/in/']")
+                profile_url = ""
+                if await link_el.count() > 0:
+                    href = await link_el.first.get_attribute("href") or ""
+                    profile_url = ("https://www.linkedin.com" + href) if href and not href.startswith("http") else href
+
+                if name or preview:
+                    conversations.append({"name": name, "preview": preview, "profile_url": profile_url})
+            except Exception:
+                continue
+
+        if not conversations:
+            logger.info(f"[Inbox Poll] account {account_id}: no conversations found.")
+            return 0
+
+        # Match conversations to known campaign targets and store incoming msgs
+        async for db in get_db_session():
+            stmt_targets = (
+                select(LinkedInTarget, Person, LinkedInCampaign)
+                .join(Person, LinkedInTarget.person_id == Person.id)
+                .join(LinkedInCampaign, LinkedInTarget.campaign_id == LinkedInCampaign.id)
+                .where(
+                    LinkedInCampaign.linkedin_account_id == account_id,
+                    LinkedInTarget.connection_status.in_(["pending", "accepted"])
+                )
+            )
+            target_rows = (await db.execute(stmt_targets)).all()
+
+            for conv in conversations:
+                if not conv["preview"]:
+                    continue
+
+                matched_target = matched_campaign_id = None
+                for target, person, campaign in target_rows:
+                    person_slug = (person.linkedin_url or "").rstrip("/").split("/")[-1].lower()
+                    conv_slug = conv["profile_url"].rstrip("/").split("/")[-1].lower() if conv["profile_url"] else ""
+                    name_match = (
+                        person.full_name and conv["name"]
+                        and person.full_name.lower().strip() == conv["name"].lower().strip()
+                    )
+                    url_match = bool(person_slug and conv_slug and person_slug == conv_slug)
+                    if name_match or url_match:
+                        matched_target = target
+                        matched_campaign_id = campaign.id
+                        break
+
+                if not matched_target:
+                    continue
+
+                # Skip already-logged identical previews to avoid duplicates
+                existing = (
+                    await db.execute(
+                        select(LinkedInMessageLog).where(
+                            LinkedInMessageLog.target_id == matched_target.id,
+                            LinkedInMessageLog.direction == "in",
+                            LinkedInMessageLog.content == conv["preview"]
+                        )
+                    )
+                ).scalar_one_or_none()
+                if existing:
+                    continue
+
+                # Record the incoming reply
+                db.add(LinkedInMessageLog(
+                    campaign_id=matched_campaign_id,
+                    target_id=matched_target.id,
+                    account_id_used=account_id,
+                    direction="in",
+                    message_type="reply",
+                    content=conv["preview"],
+                    generated_by="manual",
+                    status="needs_review",
+                    created_at=datetime.utcnow(),
+                    updated_at=datetime.utcnow(),
+                ))
+
+                # If target replied, the connection was accepted
+                matched_target.connection_status = "accepted"
+                matched_target.updated_at = datetime.utcnow()
+
+                new_msgs_count += 1
+                logger.info(f"[Inbox Poll] Reply from {conv['name']!r}: {conv['preview'][:80]!r}")
+
+            await db.commit()
+
+    except Exception as e:
+        logger.error(f"[Inbox Poll] Error for account {account_id}: {e}", exc_info=True)
+    finally:
+        await close_authenticated_context(playwright_ctx, browser, context)
+
+    logger.info(f"[Inbox Poll] account {account_id}: {new_msgs_count} new messages found.")
+    return new_msgs_count

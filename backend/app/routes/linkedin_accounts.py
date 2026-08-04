@@ -187,8 +187,18 @@ async def delete_account(
 class LinkedInAccountCreate(BaseModel):
     label: str = Field(..., min_length=1)
     region: str = "other"
+    # Required
     li_at: str = Field(..., min_length=1)
+    # Recommended — helps LinkedIn validate session state
     jsessionid: str = Field("", min_length=0)
+    # Optional but important for session longevity:
+    # These are the device/browser fingerprint cookies LinkedIn issues at login.
+    # Without them the session is "thin" and gets invalidated faster because
+    # LinkedIn can't verify device identity on subsequent requests.
+    # Paste from your browser's DevTools > Application > Cookies > linkedin.com
+    bcookie: str = Field("", min_length=0)   # Browser identifier, ~1yr, critical for anti-fraud
+    bscookie: str = Field("", min_length=0)  # Secure browser cookie, ~1yr
+    lidc: str = Field("", min_length=0)      # Data center routing, refreshes daily
 
 @router.post("")
 async def create_linkedin_account(
@@ -222,12 +232,28 @@ async def create_linkedin_account(
         db.add(pr)
         await db.flush()
         
-        # 3. Encrypt cookie data
-        cookie_data = {
-            "li_at": form_data.li_at,
-            "JSESSIONID": form_data.jsessionid
-        }
-        encrypted_cookies = encrypt_data(json.dumps(cookie_data))
+        # 3. Build cookie list in the new full-jar format so session_loader
+        # replays ALL provided cookies — not just li_at+JSESSIONID.
+        # This matches what guided-login now captures and prevents the
+        # "thin session" (only 2 cookies) that expires much faster.
+        cookie_list = []
+        def _add(name: str, value: str):
+            if value:
+                cookie_list.append({
+                    "name": name,
+                    "value": value,
+                    "domain": ".linkedin.com",
+                    "path": "/",
+                    "secure": True,
+                    "sameSite": "None",
+                })
+        _add("li_at",     form_data.li_at)
+        _add("JSESSIONID", form_data.jsessionid)
+        _add("bcookie",   form_data.bcookie)
+        _add("bscookie",  form_data.bscookie)
+        _add("lidc",      form_data.lidc)
+
+        encrypted_cookies = encrypt_data(json.dumps({"cookies": cookie_list}))
         
         # 4. Create LinkedInAccount
         acc = LinkedInAccount(

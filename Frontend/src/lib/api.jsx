@@ -272,6 +272,15 @@ export const api = {
   async disconnectSam() {
     return del('/api/integrations/sam');
   },
+  async getCompaniesHouseStatus() {
+    return get('/api/integrations/companies-house/status');
+  },
+  async connectCompaniesHouse(apiKey) {
+    return post('/api/integrations/companies-house/connect', { api_key: apiKey });
+  },
+  async disconnectCompaniesHouse() {
+    return del('/api/integrations/companies-house');
+  },
   async getEnvKeys() {
     return get('/api/integrations/env-keys');
   },
@@ -297,6 +306,20 @@ export const api = {
     const formData = new FormData();
     formData.append('file', file);
     return _upload('/api/naics/import', formData);
+  },
+
+  // ---------- SIC Codes (UK) ----------
+  async getSicCodes(params = {}) {
+    const qs = new URLSearchParams(params).toString();
+    return get(`/api/sic${qs ? `?${qs}` : ''}`);
+  },
+  async addSicCode(data) {
+    return post('/api/sic', data);
+  },
+  async importSicFile(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return _upload('/api/sic/import', formData);
   },
 
   // ---------- Companies ----------
@@ -406,6 +429,9 @@ export const api = {
   },
   async syncTenders(body = {}) {
     return post('/api/tenders/sync', body);
+  },
+  async syncTendersFromSource(source, body = {}) {
+    return post('/api/tenders/sync', { ...body, api_source: source });
   },
   async getTendersMeta() {
     return get('/api/tenders/meta');

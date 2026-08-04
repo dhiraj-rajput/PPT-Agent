@@ -6,6 +6,7 @@ import {
   ChevronLeft, ChevronRight, X, Filter, Trophy, Clock, AlertOctagon, SlidersHorizontal, Eye, FileText, Check, HelpCircle
 } from 'lucide-react';
 import { PageHeader, Card, MatchBadge, StatusBadge, renderSafeText } from '../components/ui/Common.jsx';
+import DataSourceSelect from '../components/ui/DataSourceSelect.jsx';
 import { tenders as staticTenders, daysUntilClosing } from '../data/tenders.jsx';
 import { api } from '../lib/api.jsx';
 
@@ -33,6 +34,7 @@ export default function Tenders() {
   const [query, setQuery] = useState('');
   const [naicsFilter, setNaicsFilter] = useState('');
   const [setAsideFilter, setSetAsideFilter] = useState('');
+  const [sourceFilter, setSourceFilter] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
@@ -625,7 +627,7 @@ export default function Tenders() {
                   className="w-full rounded-lg border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-400"
                 >
                   <option value="sam_gov">SAM.gov (USA Federal Tenders)</option>
-                  <option value="companies_house_uk" disabled>Companies House UK (Coming Soon)</option>
+                  <option value="companies_house_uk">Companies House (UK Find a Tender)</option>
                   <option value="find_a_tender_uk" disabled>Find a Tender UK (Coming Soon)</option>
                 </select>
                 <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
