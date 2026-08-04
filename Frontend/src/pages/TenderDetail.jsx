@@ -308,10 +308,24 @@ export default function TenderDetail() {
             </p>
           </div>
 
-              </div>
-            </div>
+          <div className="flex flex-col items-start md:items-end gap-3 shrink-0">
+            {matchScore && <MatchBadge score={matchScore} />}
+            <a
+              href={
+                rfpUrl ||
+                ((tender.source || '').toLowerCase().includes('companies') || (tender.source || '').toLowerCase().includes('uk')
+                  ? `https://www.find-tender.service.gov.uk/Search/Results?Keywords=${encodeURIComponent(title || '')}`
+                  : `https://sam.gov/search/?index=opp&q=${encodeURIComponent(solicitationNumber || title || '')}`)
+              }
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-navy-900 hover:bg-slate-50 dark:border-navy-700 dark:bg-navy-800 dark:text-white dark:hover:bg-navy-700 transition-colors shadow-soft"
+            >
+              <ExternalLink size={14} />
+              View on {(tender.source || '').toLowerCase().includes('companies') ? 'Find a Tender (UK)' : 'SAM.gov'}
+            </a>
             {value && (
-              <div className="text-right">
+              <div className="text-right mt-1">
                 <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Estimated Value</p>
                 <p className="text-base font-extrabold text-navy-900 dark:text-white mt-0.5">{value}</p>
               </div>
