@@ -293,6 +293,7 @@ def _format_tender(t: SQL_Tender) -> dict:
         "status": t.status or "Open",
         "urgency": t.urgency or "normal",
         "source": getattr(t, "source", None) or "SAM.gov",
+        "value": f"£{int(float(t.value or 0)):,}" if (getattr(t, "source", None) == "Companies House") else f"${int(float(t.value or 0)):,}",
         "is_active": bool(t.is_active),
         "has_award": bool(t.has_award),
         "award_amount": float(getattr(t, "award_amount", 0) or 0.0),
@@ -545,7 +546,7 @@ async def sync_tenders_from_sam(
                                 title=t_dict["title"],
                                 summary=t_dict["summary"],
                                 agency=t_dict["agency"],
-                                value=t_dict.get("value", "£500,000"),
+                                value=float(t_dict.get("value", 250000.0) or 250000.0),
                                 source="Companies House",
                                 is_active=True,
                                 raw_companies_house_data=t_dict.get("raw_companies_house_data", {})
@@ -568,7 +569,7 @@ async def sync_tenders_from_sam(
                             urgency="normal",
                             is_active=True,
                             match_score=85,
-                            value=t_dict.get("value", "£500,000"),
+                            value=float(t_dict.get("value", 250000.0) or 250000.0),
                             summary=t_dict.get("summary", ""),
                             source="Companies House",
                             raw_companies_house_data=t_dict.get("raw_companies_house_data", {})
@@ -580,10 +581,9 @@ async def sync_tenders_from_sam(
                     from models.sql_models import ErrorLog as SQL_ErrorLog
                     db.add(SQL_ErrorLog(
                         level="INFO",
-                        endpoint="/api/tenders/sync",
+                        source="/api/tenders/sync",
                         message=f"[Companies House Sync] Successfully fetched and stored {inserted_count} UK tenders from Companies House & Find a Tender.",
                         stack_trace=f"Source: Companies House, Keyword: {keyword}, Count: {inserted_count}",
-                        user_id=uid,
                     ))
                 except Exception as log_err:
                     logger.warning(f"Could not write system log entry: {log_err}")
