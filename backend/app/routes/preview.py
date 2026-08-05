@@ -10,7 +10,7 @@ import asyncio
 import logging
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.core.auth import get_current_user
 from utils.db_client import get_db_session, get_collection, _mysql_available
@@ -42,7 +42,7 @@ class OutlineSection(BaseModel):
     title: str
     word_budget: int
     included: bool = True
-    key_points: List[str] = []
+    key_points: List[str] = Field(default_factory=list)
 
 
 class QuestionResponse(BaseModel):
@@ -54,7 +54,7 @@ class CustomAnswersPayload(BaseModel):
     tender_id: Optional[str] = None
     solicitation_number: Optional[str] = None
     proposal_type: str = "Prime RFP Response"
-    answers: List[QuestionResponse] = []
+    answers: List[QuestionResponse] = Field(default_factory=list)
     custom_sections: Optional[List[OutlineSection]] = None
     company_profile: Optional[dict] = None
 

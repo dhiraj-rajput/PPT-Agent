@@ -316,3 +316,46 @@ async def websocket_connect(
         await run_guided_login_websocket(websocket, region, label, user_id)
     except Exception as e:
         logger.error(f"WebSocket session crash: {e}", exc_info=True)
+
+
+@router.get("/{account_id}/stats")
+async def get_account_stats(
+    account_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Returns connections count, pending sent invitations count, and profile views count for an account.
+    """
+    user_id = int(current_user["id"])
+    stmt = select(LinkedInAccount).where(LinkedInAccount.id == account_id, LinkedInAccount.user_id == user_id)
+    res = await db.execute(stmt)
+    acc = res.scalar_one_or_none()
+    if not acc:
+        raise HTTPException(status_code=404, detail="Account not found.")
+
+    from app.core.linkedin_worker import scrape_linkedin_stats_playwright
+    stats = await scrape_linkedin_stats_playwright(account_id)
+    return {"status": "success", "account_id": account_id, "stats": stats}
+
+
+@router.post("/{account_id}/sync-accepted")
+async def sync_account_accepted(
+    account_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Triggers an immediate Voyager REST API connection sync for accepted invitations.
+    """
+    user_id = int(current_user["id"])
+    stmt = select(LinkedInAccount).where(LinkedInAccount.id == account_id, LinkedInAccount.user_id == user_id)
+    res = await db.execute(stmt)
+    acc = res.scalar_one_or_none()
+    if not acc:
+        raise HTTPException(status_code=404, detail="Account not found.")
+
+    from app.core.linkedin_worker import check_invitation_acceptances
+    await check_invitation_acceptances(db)
+    return {"status": "success", "message": "Connection acceptance sync triggered successfully."}
+

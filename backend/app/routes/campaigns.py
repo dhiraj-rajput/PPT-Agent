@@ -116,20 +116,20 @@ async def _queue_pending_leads_async(campaign_id: int, daily_limit: int, base_ti
 
         now = datetime.now(timezone.utc)
         start = base_time if (base_time and base_time > now) else now
-        limit = daily_limit or 200
+        limit = max(daily_limit or 200, 1)
         spacing_ms = max(int((24 * 60 * 60 * 1000) / limit), 1000)
 
         for i, lead in enumerate(pending):
-            if i >= limit:
-                break
-            send_after = start + timedelta(milliseconds=i * spacing_ms)
+            day_index = i // limit
+            slot_in_day = i % limit
+            send_after = start + timedelta(days=day_index, milliseconds=slot_in_day * spacing_ms)
             await db.execute(
                 update(SQL_Lead)
                 .where(SQL_Lead.id == lead.id)
                 .values(send_after=send_after)
             )
         await db.commit()
-        return min(len(pending), limit)
+        return len(pending)
 
 
 @router.get("/worker-status")

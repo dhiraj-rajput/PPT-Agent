@@ -16,7 +16,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks, File, UploadFile, Query
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.core.auth import get_current_user
 from app.core.mailer import send_company_email_with_attachments
@@ -53,7 +53,7 @@ class CreateSubscriberBody(BaseModel):
 
 
 class BulkCompanySubscriberBody(BaseModel):
-    companyIds: Optional[List[str]] = []
+    companyIds: Optional[List[str]] = Field(default_factory=list)
     manualEmail: Optional[str] = ""
 
 
@@ -287,7 +287,7 @@ async def list_newsletter_subscribers(
 
 
 class AddCompanySubscribersBody(BaseModel):
-    companyIds: List[str] = []
+    companyIds: List[str] = Field(default_factory=list)
     manualEmail: Optional[str] = None
 
 
@@ -372,7 +372,7 @@ async def add_company_subscribers_to_newsletter(
 
 
 class AddPeopleSubscribersBody(BaseModel):
-    peopleIds: List[str] = []
+    peopleIds: List[str] = Field(default_factory=list)
     manualEmail: Optional[str] = None
 
 

@@ -269,8 +269,13 @@ async def init_mysql() -> bool:
                         col_type = col.type.compile(dialect=connection.dialect)
                         nullable = "NULL"
 
+                        col_type_str = str(col_type).upper()
+                        is_text_type = any(t in col_type_str for t in ["TEXT", "BLOB", "JSON", "GEOMETRY"])
+
                         default_str = ""
-                        if col.default is not None and getattr(col.default, "arg", None) is not None:
+                        if is_text_type:
+                            default_str = ""
+                        elif col.default is not None and getattr(col.default, "arg", None) is not None:
                             arg_val = getattr(col.default, "arg", None)
                             if isinstance(arg_val, (int, float)):
                                 default_str = f" DEFAULT {arg_val}"
@@ -279,9 +284,9 @@ async def init_mysql() -> bool:
                         elif col.nullable:
                             default_str = " DEFAULT NULL"
                         else:
-                            if "DATETIME" in str(col_type).upper() or "TIMESTAMP" in str(col_type).upper():
+                            if "DATETIME" in col_type_str or "TIMESTAMP" in col_type_str:
                                 default_str = " DEFAULT CURRENT_TIMESTAMP"
-                            elif "INT" in str(col_type).upper():
+                            elif "INT" in col_type_str or "BOOL" in col_type_str or "FLOAT" in col_type_str:
                                 default_str = " DEFAULT 0"
                             else:
                                 default_str = " DEFAULT ''"

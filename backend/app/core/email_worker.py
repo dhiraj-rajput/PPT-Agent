@@ -557,69 +557,95 @@ def check_incoming_replies():
                                 email_match = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", from_header)
                                 if email_match:
                                     sender_email = email_match.group(0).lower().strip()
+                                    BOUNCE_PATTERNS = [r"mailer-daemon@", r"postmaster@", r"mail-delivery-subsystem@", r"delivery-status@", r"amazonses\.com$"]
+                                    is_bounce_msg = any(re.search(pat, sender_email, re.I) for pat in BOUNCE_PATTERNS)
                                     
-                                    # Find lead in MySQL
-                                    with get_sync_db_session() as db:
-                                        stmt = select(SQL_Lead).where(
-                                            SQL_Lead.email == sender_email,
-                                            SQL_Lead.status.in_(["sent", "opened", "clicked"])
-                                        )
-                                        lead_row = db.execute(stmt).scalar_one_or_none()
-                                        if lead_row:
-                                            body_text = ""
-                                            if msg.is_multipart():
-                                                for part in msg.walk():
-                                                    if part.get_content_type() == "text/plain":
-                                                        payload = part.get_payload(decode=True)
-                                                        body_text = payload.decode(errors="ignore") if isinstance(payload, bytes) else str(payload)
-                                                        break
-                                            else:
-                                                payload = msg.get_payload(decode=True)
+                                    body_text = ""
+                                    if msg.is_multipart():
+                                        for part in msg.walk():
+                                            if part.get_content_type() == "text/plain":
+                                                payload = part.get_payload(decode=True)
                                                 body_text = payload.decode(errors="ignore") if isinstance(payload, bytes) else str(payload)
+                                                break
+                                    else:
+                                        payload = msg.get_payload(decode=True)
+                                        body_text = payload.decode(errors="ignore") if isinstance(payload, bytes) else str(payload)
 
-                                            body_text = body_text.strip() or "Reply received."
-                                            reply_subj = str(msg.get("Subject") or "Re: Outreach").strip()
+                                    body_text = body_text.strip() or "Reply received."
+                                    reply_subj = str(msg.get("Subject") or "Re: Outreach").strip()
 
-                                            db.execute(
-                                                update(SQL_Lead)
-                                                .where(SQL_Lead.id == lead_row.id)
-                                                .values(
-                                                    status="replied",
-                                                    reply_subject=reply_subj,
-                                                    reply_message=body_text,
-                                                    reply_preview=body_text[:200],
-                                                    replied_at=datetime.utcnow(),
-                                                    updated_at=datetime.utcnow()
+                                    with get_sync_db_session() as db:
+                                        if is_bounce_msg:
+                                            # Find target email inside bounce text
+                                            bounced_email_match = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", body_text)
+                                            target_bounced = bounced_email_match.group(0).lower().strip() if bounced_email_match else ""
+                                            if target_bounced:
+                                                stmt_b = select(SQL_Lead).where(SQL_Lead.email == target_bounced)
+                                                b_lead = db.execute(stmt_b).scalar_one_or_none()
+                                                if b_lead:
+                                                    b_lead.status = "bounced"
+                                                    b_lead.is_invalid = True
+                                                    b_lead.bounce_reason = "Hard bounce detected via IMAP"
+                                                    
+                                                    # Cascade invalidation to sibling leads at same company domain
+                                                    if "@" in target_bounced:
+                                                        domain = target_bounced.split("@")[1]
+                                                        if domain and domain not in ["gmail.com", "yahoo.com", "outlook.com", "hotmail.com"]:
+                                                            db.execute(
+                                                                update(SQL_Lead)
+                                                                .where(
+                                                                    SQL_Lead.email.like(f"%@{domain}"),
+                                                                    SQL_Lead.status == "pending"
+                                                                )
+                                                                .values(is_invalid=True, bounce_reason=f"Domain {domain} flagged via bounce cascade")
+                                                            )
+                                                            logger.warning(f"[Email Worker] Cascade-flagged domain {domain} due to bounce from {target_bounced}")
+                                                    db.commit()
+                                        else:
+                                            stmt = select(SQL_Lead).where(
+                                                SQL_Lead.email == sender_email,
+                                                SQL_Lead.status.in_(["sent", "opened", "clicked"])
+                                            )
+                                            lead_row = db.execute(stmt).scalar_one_or_none()
+                                            if lead_row:
+                                                db.execute(
+                                                    update(SQL_Lead)
+                                                    .where(SQL_Lead.id == lead_row.id)
+                                                    .values(
+                                                        status="replied",
+                                                        reply_subject=reply_subj,
+                                                        reply_message=body_text,
+                                                        reply_preview=body_text[:200],
+                                                        replied_at=datetime.utcnow(),
+                                                        updated_at=datetime.utcnow()
+                                                    )
                                                 )
-                                            )
-                                            
-                                            campaign_row = db.execute(
-                                                select(SQL_Campaign).where(SQL_Campaign.id == lead_row.campaign_id)
-                                            ).scalar_one()
-                                            raw_stats = getattr(campaign_row, "stats", {})
-                                            stats = {str(k): v for k, v in dict(raw_stats).items()} if isinstance(raw_stats, dict) else {}
-                                            stats["totalReplied"] = int(str(stats.get("totalReplied", 0) or 0)) + 1
+                                                
+                                                campaign_row = db.execute(
+                                                    select(SQL_Campaign).where(SQL_Campaign.id == lead_row.campaign_id)
+                                                ).scalar_one()
+                                                raw_stats = getattr(campaign_row, "stats", {})
+                                                stats = {str(k): v for k, v in dict(raw_stats).items()} if isinstance(raw_stats, dict) else {}
+                                                stats["totalReplied"] = int(str(stats.get("totalReplied", 0) or 0)) + 1
 
-
-                                            
-                                            db.execute(
-                                                update(SQL_Campaign)
-                                                .where(SQL_Campaign.id == lead_row.campaign_id)
-                                                .values(stats=stats, updated_at=datetime.utcnow())
-                                            )
-                                            
-                                            db.execute(insert(SQL_AuditLog).values(
-                                                action="lead.reply",
-                                                entity_type="Lead",
-                                                entity_id=str(lead_row.id),
-                                                details={"email": sender_email, "subject": reply_subj, "preview": body_text[:200]},
-                                                created_at=datetime.utcnow()
-                                            ))
-                                            db.commit()
-                                            
-                                            score_replied(int(str(lead_row.id)))
-                                            logger.info(f"[Email Worker] Detected incoming email reply from {sender_email}")
-                                            
+                                                db.execute(
+                                                    update(SQL_Campaign)
+                                                    .where(SQL_Campaign.id == lead_row.campaign_id)
+                                                    .values(stats=stats, updated_at=datetime.utcnow())
+                                                )
+                                                
+                                                db.execute(insert(SQL_AuditLog).values(
+                                                    action="lead.reply",
+                                                    entity_type="Lead",
+                                                    entity_id=str(lead_row.id),
+                                                    details={"email": sender_email, "subject": reply_subj, "preview": body_text[:200]},
+                                                    created_at=datetime.utcnow()
+                                                ))
+                                                db.commit()
+                                                
+                                                score_replied(int(str(lead_row.id)))
+                                                logger.info(f"[Email Worker] Detected incoming email reply from {sender_email}")
+                                                
                                         mail.store(mail_id, "+FLAGS", "\\Seen")
                 except Exception as parse_err:
                     logger.error(f"[Email Worker] Failed to parse IMAP message: {parse_err}")
@@ -649,7 +675,6 @@ async def check_scheduled_newsletters():
     if not editions:
         return
 
-    # Import lazily to avoid a circular import at module load time
     from app.routes.newsletters import _send_newsletter_background
     base_url = (settings.API_BASE_URL or "http://localhost:5050").rstrip("/") + "/"
 
@@ -680,8 +705,6 @@ async def check_scheduled_newsletters():
                 base_url,
                 None,
             )
-
-
             logger.info(f"[Email Worker] Dispatched scheduled newsletter edition {e_id}.")
         except Exception as e:
             logger.error(f"[Email Worker] Failed to dispatch scheduled edition {e_id}: {e}")
@@ -765,7 +788,9 @@ async def start_email_worker_loop():
                             stmt = select(SQL_Lead).where(
                                 SQL_Lead.campaign_id.in_(campaign_ids),
                                 SQL_Lead.status == "pending",
-                                (SQL_Lead.send_after <= now) | (SQL_Lead.send_after == None)
+                                (SQL_Lead.is_invalid == False) | (SQL_Lead.is_invalid == None),
+                                SQL_Lead.send_after.isnot(None),
+                                SQL_Lead.send_after <= now
                             ).limit(10)
                             res = await db.execute(stmt)
                             pending_leads = [_sql_lead_to_dict(l) for l in res.scalars().all()]

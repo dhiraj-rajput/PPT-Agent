@@ -57,20 +57,122 @@ def _paragraph_has_page_break(paragraph) -> bool:
     return False
 
 
+_PAGE_BREAK_BEFORE_QN = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}pageBreakBefore"
+
+# Canonical section names commonly used as the FIRST body heading in company
+# templates. If the template's own first heading-styled paragraph matches
+# one of these (case-insensitively, ignoring leading numbering like "1. "),
+# that is treated as the start of body content -- everything from there
+# onward is NOT preserved, because the AI-generated body will write its own
+# version of this exact section. This is what previously caused duplicate
+# "Executive Summary" sections: a template with no *explicit* page break but
+# with its own Executive Summary heading a page or two in was being kept in
+# full, and the AI then wrote a second one after it.
+_BODY_START_HEADING_PATTERNS = [
+    "executive summary", "introduction", "scope of work", "about us",
+    "company profile", "company overview", "our understanding",
+    "understanding of requirements", "proposed solution", "technical approach",
+    "cover letter", "table of contents",
+]
+
+_HEADING_STYLE_PREFIXES = ("heading", "title")
+
+
+def _paragraph_style_name(paragraph_el) -> str:
+    """Best-effort style name lookup without needing a bound Paragraph object
+    (we're walking raw body children, not doc.paragraphs, so we read the
+    pStyle w:val directly)."""
+    pPr = paragraph_el.find("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}pPr")
+    if pPr is None:
+        return ""
+    pStyle = pPr.find("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}pStyle")
+    if pStyle is None:
+        return ""
+    return pStyle.get("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val") or ""
+
+
+def _paragraph_text(paragraph_el) -> str:
+    return "".join(node.text or "" for node in paragraph_el.iter() if node.tag.endswith("}t")).strip()
+
+
+def _normalize_heading(text: str) -> str:
+    """Strip leading numbering ('1.', '1)', 'Section 1:') and punctuation so
+    '1. Executive Summary' and 'EXECUTIVE SUMMARY' compare equal."""
+    t = re.sub(r"^\s*(section\s+)?\d+[\.\)\:]?\s*", "", text.strip(), flags=re.IGNORECASE)
+    t = re.sub(r"[^a-z0-9 ]", "", t.lower()).strip()
+    t = re.sub(r"\s+", " ", t)
+    return t
+
+
+def _looks_like_body_start_heading(text: str) -> bool:
+    norm = _normalize_heading(text)
+    if not norm:
+        return False
+    return any(norm == pat or norm.startswith(pat) for pat in _BODY_START_HEADING_PATTERNS)
+
+
 def find_first_page_split_index(doc) -> Optional[int]:
     """Return the index (into doc.element.body's <w:p>/<w:tbl> children) of
-    the paragraph containing the first explicit page break, or None if the
-    template has no explicit page break (in which case the whole template is
-    the "first page")."""
+    the paragraph where the template's true cover/front-matter ends, or None
+    if the whole template should be treated as front matter (no signal
+    found at all).
+
+    Three signals are checked, in document order, and the EARLIEST one wins
+    (whichever indicates body content starts first):
+      1. An explicit manual page break run (<w:br w:type="page"/>).
+      2. A paragraph with the pageBreakBefore paragraph property set.
+      3. The first heading-styled paragraph (style name starting with
+         "Heading"/"Title") whose text matches a known first-body-section
+         name (Executive Summary, Introduction, Scope of Work, etc.) -- this
+         catches templates that flow straight from cover page into body
+         content with no explicit break at all, which is the common case
+         that previously caused the whole template (including its own
+         Executive Summary) to be preserved wholesale.
+    """
     body = doc.element.body
+    candidates: List[int] = []
     for idx, child in enumerate(body):
         tag = child.tag.rsplit("}", 1)[-1]
         if tag != "p":
             continue
         for br in child.findall(f".//{_PAGE_BREAK_QN}"):
             if br.get(_PAGE_BREAK_TYPE_QN) == "page":
-                return idx
-    return None
+                candidates.append(idx)
+                break
+        pPr = child.find("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}pPr")
+        if pPr is not None and pPr.find(_PAGE_BREAK_BEFORE_QN) is not None and idx > 0:
+            candidates.append(idx - 1)  # preserve up to (not including) this paragraph
+        if idx > 0:
+            style = _paragraph_style_name(child).lower()
+            if any(style.startswith(p) for p in _HEADING_STYLE_PREFIXES):
+                text = _paragraph_text(child)
+                if _looks_like_body_start_heading(text):
+                    candidates.append(idx - 1)
+    if not candidates:
+        return None
+    return min(candidates)
+
+
+def detect_preserved_headings(doc, split_idx: Optional[int]) -> List[str]:
+    """Returns normalized heading text for every heading-styled paragraph
+    that WILL be kept in the preserved region (index <= split_idx, or the
+    whole document if split_idx is None). Used by document_generator.py to
+    tell the section-writer prompt which section titles already exist in the
+    template so it doesn't author a second copy of them."""
+    body = doc.element.body
+    headings: List[str] = []
+    for idx, child in enumerate(body):
+        if split_idx is not None and idx > split_idx:
+            break
+        tag = child.tag.rsplit("}", 1)[-1]
+        if tag != "p":
+            continue
+        style = _paragraph_style_name(child).lower()
+        if any(style.startswith(p) for p in _HEADING_STYLE_PREFIXES):
+            text = _paragraph_text(child)
+            if text:
+                headings.append(text)
+    return headings
 
 
 def iter_first_page_paragraph_texts(doc) -> Iterator[str]:
@@ -234,6 +336,44 @@ def _ensure_required_styles(doc) -> None:
 # Public entry point
 # ---------------------------------------------------------------------------
 
+def get_preserved_headings(template_path: str) -> List[str]:
+    """Preview-only helper: opens the template read-only and returns the
+    heading titles that would be preserved verbatim, WITHOUT writing
+    anything. document_generator.py calls this before running any section
+    -writer LLM calls, so it can tell each call "this heading already exists
+    in the template, don't write it again" up front instead of generating
+    duplicate content and trying to strip it out afterward."""
+    from docx import Document
+    try:
+        doc = Document(template_path)
+    except Exception as exc:
+        logger.warning(f"[FirstPagePreserver] Could not open template to preview headings: {exc}")
+        return []
+    split_idx = find_first_page_split_index(doc)
+    return detect_preserved_headings(doc, split_idx)
+
+
+def dedupe_sections_against_preserved(
+    sections: List[Dict[str, Any]], preserved_headings: List[str]
+) -> List[Dict[str, Any]]:
+    """Drops any outline/generated section whose title normalizes to the same
+    thing as a heading already present in the preserved template region.
+    Belt-and-suspenders alongside telling the LLM up front -- if the model
+    ignores the instruction and writes the section anyway, this still keeps
+    it out of the final document instead of shipping a duplicate."""
+    if not preserved_headings:
+        return sections
+    preserved_norm = {_normalize_heading(h) for h in preserved_headings}
+    kept = []
+    for s in sections:
+        title = str(s.get("title") or s.get("key") or "")
+        if _normalize_heading(title) in preserved_norm:
+            logger.info(f"[FirstPagePreserver] Dropping generated section '{title}' -- already present in preserved template region.")
+            continue
+        kept.append(s)
+    return kept
+
+
 def build_document_with_preserved_first_page(
     template_path: str,
     sections: List[Dict[str, Any]],
@@ -267,6 +407,13 @@ def build_document_with_preserved_first_page(
 
         doc = Document(str(tmp_copy))
         split_idx = find_first_page_split_index(doc)
+
+        # Belt-and-suspenders: even though document_generator.py already told
+        # the section-writer prompt which headings exist in the template, if
+        # the model wrote one anyway, drop it here before it's ever added to
+        # the output document rather than shipping a visible duplicate.
+        preserved_headings = detect_preserved_headings(doc, split_idx)
+        sections = dedupe_sections_against_preserved(sections, preserved_headings)
 
         changed = _update_dates_in_preserved_region(doc, split_idx)
         if changed:

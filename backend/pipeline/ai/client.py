@@ -297,9 +297,17 @@ class OllamaAIClient:
         messages: List[Dict[str, str]],
         model: Optional[str] = None,
         max_retries: int = 3,
+        max_tokens: int = 8192,
     ) -> Dict[str, Any]:
-        """Same as chat_text, but parses the response as a JSON object."""
-        raw = self.chat_text(messages, model=model, max_retries=max_retries, json_mode=True)
+        """Same as chat_text, but parses the response as a JSON object.
+
+        max_tokens previously had no way to be raised for this call, so every
+        structured-JSON extraction (RFP parsing, outline building, etc.) was
+        silently capped at 8192 output tokens (~6k words) regardless of how
+        much source material it was asked to summarise. Callers extracting
+        from large/complex documents should pass a higher value explicitly.
+        """
+        raw = self.chat_text(messages, model=model, max_retries=max_retries, json_mode=True, max_tokens=max_tokens)
         return self._parse_json_from_response(raw)
 
     # ------------------------------------------------------------------

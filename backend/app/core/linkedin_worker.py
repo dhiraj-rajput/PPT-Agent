@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timezone
+from typing import Any, Optional, Dict, List, Set, Tuple
 from sqlalchemy import select, update, insert, func
 from playwright.async_api import async_playwright
 
@@ -27,7 +28,7 @@ from models.sql_models import (
 
 logger = logging.getLogger("linkedin_worker")
 
-async def send_connection_request_playwright(account_id: int, profile_url: str, note_text: str) -> bool:
+async def send_connection_request_playwright(account_id: int, profile_url: str, note_text: str, db: Any = None) -> bool:
     """
     Automates sending a connection request with a personalized note via Playwright.
 
@@ -295,6 +296,24 @@ async def send_connection_request_playwright(account_id: int, profile_url: str, 
                 if await send_locator.count() > 0:
                     await send_locator.first.click(timeout=5000)
                     await page.wait_for_timeout(2000)
+                    
+                    # Check for weekly limit popup or error toast
+                    limit_popup = page.locator("div[class*='ip-fuse-limit-alert__warning']")
+                    if await limit_popup.count() > 0:
+                        logger.warning(f"Account {account_id} hit LinkedIn weekly connection limit popup on {profile_url}. Setting account to cooldown.")
+                        await db.execute(
+                            update(LinkedInAccount)
+                            .where(LinkedInAccount.id == account_id)
+                            .values(status="cooldown", cooldown_until=datetime.utcnow() + timedelta(days=7))
+                        )
+                        return False
+
+                    error_toast = page.locator("div[data-test-artdeco-toast-item-type='error']:visible")
+                    if await error_toast.count() > 0:
+                        toast_msg = (await error_toast.first.inner_text()).strip()
+                        logger.warning(f"LinkedIn error toast when sending note to {profile_url}: {toast_msg}")
+                        return False
+
                     logger.info(f"Connection request sent with note to {profile_url}")
                     return True
         else:
@@ -304,6 +323,24 @@ async def send_connection_request_playwright(account_id: int, profile_url: str, 
             if await send_locator.count() > 0:
                 await send_locator.first.click(timeout=5000)
                 await page.wait_for_timeout(2000)
+                
+                # Check for weekly limit popup or error toast
+                limit_popup = page.locator("div[class*='ip-fuse-limit-alert__warning']")
+                if await limit_popup.count() > 0:
+                    logger.warning(f"Account {account_id} hit LinkedIn weekly connection limit popup on {profile_url}. Setting account to cooldown.")
+                    await db.execute(
+                        update(LinkedInAccount)
+                        .where(LinkedInAccount.id == account_id)
+                        .values(status="cooldown", cooldown_until=datetime.utcnow() + timedelta(days=7))
+                    )
+                    return False
+
+                error_toast = page.locator("div[data-test-artdeco-toast-item-type='error']:visible")
+                if await error_toast.count() > 0:
+                    toast_msg = (await error_toast.first.inner_text()).strip()
+                    logger.warning(f"LinkedIn error toast when sending invitation to {profile_url}: {toast_msg}")
+                    return False
+
                 logger.info(f"Connection request sent without note to {profile_url}")
                 return True
 
@@ -413,20 +450,61 @@ async def check_invitation_acceptances(db) -> None:
                 if "/login" in current_url or "/checkpoint" in current_url:
                     raise SessionExpiredError(f"Redirected to {current_url} during acceptance check.")
 
-                content = await page.content()
+                # Authoritative Voyager API 1st-degree connection fetch (matching Linki's sync-accepted.ts)
+                voyager_vanities = set()
+                try:
+                    raw_vanities = await page.evaluate('''async () => {
+                        try {
+                            const cookies = document.cookie.split("; ").reduce((a, c) => {
+                                const i = c.indexOf("=");
+                                if (i > 0) a[c.slice(0, i)] = c.slice(i + 1);
+                                return a;
+                            }, {});
+                            const csrf = (cookies["JSESSIONID"] || "").replace(/"/g, "");
+                            const decoration = "com.linkedin.voyager.dash.deco.web.mynetwork.ConnectionListWithProfile-16";
+                            const url = `https://www.linkedin.com/voyager/api/relationships/dash/connections?decorationId=${decoration}&count=100&q=search&sortType=RECENTLY_ADDED&start=0`;
+                            const r = await fetch(url, {
+                                headers: {
+                                    "csrf-token": csrf,
+                                    "accept": "application/vnd.linkedin.normalized+json+2.1",
+                                    "x-restli-protocol-version": "2.0.0",
+                                    "x-li-lang": "en_US"
+                                },
+                                credentials: "include"
+                            });
+                            if (!r.ok) return [];
+                            const json = await r.json();
+                            const included = json.included || [];
+                            const vanities = [];
+                            for (const x of included) {
+                                if ((x.$type || "").includes("identity.profile.Profile") && x.publicIdentifier) {
+                                    vanities.push(x.publicIdentifier.toLowerCase());
+                                }
+                            }
+                            return vanities;
+                        } catch (e) {
+                            return [];
+                        }
+                    }''')
+                    voyager_vanities = set(v.lower() for v in (raw_vanities or []) if v)
+                except Exception as voyager_err:
+                    logger.warning(f"Voyager connections API fetch fallback for account {acc.id}: {voyager_err}")
+
+                sent_content = await page.content()
 
                 for target in pending_targets:
                     stmt_p = select(Person).where(Person.id == target.person_id)
                     person = (await db.execute(stmt_p)).scalar_one_or_none()
                     if person and person.linkedin_url:
-                        # If the slug is no longer in the Sent list, the invite was accepted
-                        slug = person.linkedin_url.rstrip("/").split("/")[-1]
-                        if slug and slug not in content:
+                        slug = person.linkedin_url.rstrip("/").split("/")[-1].lower()
+                        # Direct proof via Voyager API connection list OR absence from sent invitations list
+                        if (slug and slug in voyager_vanities) or (slug and slug not in sent_content.lower()):
                             target.connection_status = "accepted"
+                            target.is_first_degree = True
                             target.updated_at = datetime.utcnow()
                             logger.info(
                                 f"Target {target.id} ({person.full_name}) invitation accepted — "
-                                f"slug '{slug}' no longer in sent list."
+                                f"verified via Voyager API / sent list."
                             )
 
                 await db.commit()
@@ -465,9 +543,42 @@ async def _mark_account_expired(account_id: int, reason: str) -> None:
         await db.commit()
 
 
+from zoneinfo import ZoneInfo
+import random
+from app.core.action_scheduler import get_effective_account_caps
+
+def is_account_in_working_window(acc: LinkedInAccount) -> bool:
+    """
+    Checks if current time in account's configured timezone is within active working hours and days.
+    """
+    try:
+        tz_name = acc.timezone or "America/New_York"
+        try:
+            tz = ZoneInfo(tz_name)
+        except Exception:
+            tz = ZoneInfo("America/New_York")
+        
+        now_local = datetime.now(tz)
+        weekday_str = str(now_local.isoweekday()) # 1=Mon..7=Sun
+        working_days = [d.strip() for d in (acc.working_days or "1,2,3,4,5").split(",") if d.strip()]
+        if weekday_str not in working_days:
+            logger.info(f"Account {acc.id} outside working days ({weekday_str} not in {working_days}). Postponing send.")
+            return False
+        
+        start_hour = acc.working_hours_start if acc.working_hours_start is not None else 9
+        end_hour = acc.working_hours_end if acc.working_hours_end is not None else 18
+        
+        if not (start_hour <= now_local.hour < end_hour):
+            logger.info(f"Account {acc.id} outside working hours ({now_local.hour}:00 not in {start_hour}-{end_hour}). Postponing send.")
+            return False
+        return True
+    except Exception as e:
+        logger.warning(f"Error evaluating working window for account {getattr(acc, 'id', 'unknown')}: {e}")
+        return True
+
 async def process_approved_message(db, msg_log: LinkedInMessageLog) -> bool:
     """
-    Processes a single message: validates caps, decrypts cookies, calls playwright sending.
+    Processes a single message: validates working hours, dual caps, decrypts cookies, calls playwright sending.
     """
     account_id = msg_log.account_id_used
     
@@ -486,29 +597,45 @@ async def process_approved_message(db, msg_log: LinkedInMessageLog) -> bool:
         logger.info(f"Skipping send for account {acc.id} because status is {acc.status}")
         return False
 
-    # Check daily sending counts to enforce Action Scheduler caps
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    stmt_sent_today = select(func.count(LinkedInMessageLog.id)).where(
-        LinkedInMessageLog.account_id_used == account_id,
-        LinkedInMessageLog.status == "sent",
-        LinkedInMessageLog.sent_at >= today_start
-    )
-    res_sent_today = await db.execute(stmt_sent_today)
-    sent_today = res_sent_today.scalar() or 0
-
-    conn_cap, msg_cap = get_account_caps(acc.warmup_stage)
-
-    # Determine limit based on message type
-    # For now, let's treat connection notes or general outreach under limits
-    if sent_today >= msg_cap:
-        logger.warning(f"Account {acc.id} has reached its daily cap limit ({sent_today}/{msg_cap}). Postponing send.")
+    # Enforce active working window
+    if not is_account_in_working_window(acc):
         return False
 
-    # 2. Quick sanity check that a session is even stored. The actual
-    # decrypt + full-cookie-jar replay now happens inside
-    # session_loader.open_authenticated_context(), called from
-    # send_connection_request_playwright() below — this keeps cookie
-    # handling in one place instead of duplicated here and there.
+    # Midnight quota auto-reset based on account timezone
+    tz_name = acc.timezone or "America/New_York"
+    try:
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        tz = ZoneInfo("America/New_York")
+    today_str = datetime.now(tz).strftime("%Y-%m-%d")
+
+    if acc.last_quota_reset_date != today_str:
+        acc.connects_sent_today = 0
+        acc.messages_sent_today = 0
+        acc.last_quota_reset_date = today_str
+
+    conn_cap, msg_cap = get_effective_account_caps(acc)
+
+    # Differentiate Connection Invites vs Direct Messages
+    # In sequence steps, send_connection_note / connection request counts against conn_cap; DMs against msg_cap
+    is_connection_request = False
+    if msg_log.target_id:
+        stmt_target_check = select(LinkedInTarget).where(LinkedInTarget.id == msg_log.target_id)
+        res_target_check = await db.execute(stmt_target_check)
+        target_check = res_target_check.scalar_one_or_none()
+        if target_check and target_check.connection_status in ["not_sent", "pending"]:
+            is_connection_request = True
+
+    if is_connection_request:
+        if (acc.connects_sent_today or 0) >= conn_cap:
+            logger.warning(f"Account {acc.id} reached daily CONNECTION cap ({acc.connects_sent_today}/{conn_cap}). Postponing invite.")
+            return False
+    else:
+        if (acc.messages_sent_today or 0) >= msg_cap:
+            logger.warning(f"Account {acc.id} reached daily MESSAGE cap ({acc.messages_sent_today}/{msg_cap}). Postponing send.")
+            return False
+
+    # 2. Quick sanity check that a session is stored
     if not acc.session_cookie_encrypted:
         logger.error(f"No session stored for account {account_id}. Marking message {msg_log.id} as failed.")
         msg_log.status = "failed"
@@ -526,7 +653,6 @@ async def process_approved_message(db, msg_log: LinkedInMessageLog) -> bool:
         msg_log.updated_at = datetime.utcnow()
         return False
 
-    # Reuses existing Person table for profile URL
     from models.sql_models import Person
     stmt_person = select(Person).where(Person.id == target.person_id)
     res_person = await db.execute(stmt_person)
@@ -543,38 +669,40 @@ async def process_approved_message(db, msg_log: LinkedInMessageLog) -> bool:
     send_success = await send_connection_request_playwright(
         account_id=acc.id,
         profile_url=target_url,
-        note_text=msg_log.content or ""
+        note_text=msg_log.content or "",
+        db=db
     )
 
     if send_success:
-        # Update message log status
+        # Increment separate counters
+        if is_connection_request:
+            acc.connects_sent_today = (acc.connects_sent_today or 0) + 1
+        else:
+            acc.messages_sent_today = (acc.messages_sent_today or 0) + 1
+
         msg_log.status = "sent"
         msg_log.sent_at = datetime.utcnow()
         msg_log.updated_at = datetime.utcnow()
 
-        # Update the target's outreach status so the UI reflects the real state
         target.connection_status = "pending"
         target.last_action_at = datetime.utcnow()
         target.updated_at = datetime.utcnow()
 
-        # Update account action timestamp
         acc.last_action_at = datetime.utcnow()
         
-        # Log audit trail
         await db.execute(
             insert(AuditLog).values(
                 action="send_message",
                 entity_type="linkedin_message_logs",
                 entity_id=str(msg_log.id),
                 performed_by=acc.user_id,
-                details={"account_id": acc.id, "target_profile": target_url},
+                details={"account_id": acc.id, "target_profile": target_url, "is_conn_request": is_connection_request},
                 created_at=datetime.utcnow()
             )
         )
         logger.info(f"Successfully processed and updated LinkedInMessageLog ID={msg_log.id}")
         return True
     else:
-        # Set message status to failed
         msg_log.status = "failed"
         msg_log.updated_at = datetime.utcnow()
         logger.warning(f"Failed sending LinkedInMessageLog ID={msg_log.id}")
@@ -728,7 +856,11 @@ async def start_linkedin_worker_loop():
                     approved_messages = res.scalars().all()
 
                     for msg in approved_messages:
-                        await process_approved_message(db, msg)
+                        success = await process_approved_message(db, msg)
+                        if success:
+                            jitter = random.uniform(8.0, 20.0)
+                            logger.info(f"Pacing: sleeping {jitter:.1f}s after send...")
+                            await asyncio.sleep(jitter)
                     
                     await db.commit()
 
@@ -908,3 +1040,124 @@ async def poll_inbox_playwright(account_id: int) -> int:
 
     logger.info(f"[Inbox Poll] account {account_id}: {new_msgs_count} new messages found.")
     return new_msgs_count
+
+
+async def scrape_linkedin_stats_playwright(account_id: int) -> dict:
+    """
+    Scrapes profile analytics: connection count, pending sent invitations, and 90-day profile views.
+    Matching linki-main/lib/linkedin/li-stats.ts.
+    """
+    stats = {"connections": 0, "pending": 0, "profile_views": 0}
+    playwright_ctx = browser = context = None
+    try:
+        playwright_ctx, browser, context, page = await open_authenticated_context(account_id)
+        
+        # 1. Connections count
+        try:
+            await page.goto("https://www.linkedin.com/mynetwork/invite-connect/connections/", wait_until="domcontentloaded", timeout=25000)
+            await page.wait_for_timeout(2500)
+            conn_texts = await page.evaluate('''() => 
+                [...document.querySelectorAll("h1,h2,h3,span,p")]
+                    .map(el => (el.innerText || "").trim())
+                    .filter(t => /\\d.*connection/i.test(t))
+            ''')
+            if conn_texts:
+                import re
+                match = re.search(r"(\d[\d,.]*)", conn_texts[0])
+                if match:
+                    stats["connections"] = int(match.group(1).replace(",", "").replace(".", ""))
+        except Exception as e:
+            logger.warning(f"Error scraping connections count for account {account_id}: {e}")
+
+        # 2. Pending sent invitations count
+        try:
+            await page.goto("https://www.linkedin.com/mynetwork/invitation-manager/sent/", wait_until="domcontentloaded", timeout=25000)
+            await page.wait_for_timeout(2500)
+            pending_texts = await page.evaluate('''() => 
+                [...document.querySelectorAll("button,a,span,h1,h2,h3")]
+                    .map(el => (el.innerText || "").trim())
+                    .filter(t => /People\\s*\\(\\d+\\)/i.test(t))
+            ''')
+            if pending_texts:
+                import re
+                match = re.search(r"\((\d+)\)", pending_texts[0])
+                if match:
+                    stats["pending"] = int(match.group(1))
+        except Exception as e:
+            logger.warning(f"Error scraping pending invites count for account {account_id}: {e}")
+
+        # 3. Profile views count
+        try:
+            await page.goto("https://www.linkedin.com/analytics/profile-views/", wait_until="domcontentloaded", timeout=25000)
+            await page.wait_for_timeout(3000)
+            pv_texts = await page.evaluate('''() => 
+                [...document.querySelectorAll("*")]
+                    .map(el => (el.innerText || "").trim())
+                    .filter(t => /Profile viewers/i.test(t) && t.length < 100)
+            ''')
+            if pv_texts:
+                import re
+                match = re.search(r"^(\d[\d,.]*)", pv_texts[0])
+                if match:
+                    stats["profile_views"] = int(match.group(1).replace(",", "").replace(".", ""))
+        except Exception as e:
+            logger.warning(f"Error scraping profile views count for account {account_id}: {e}")
+
+    except Exception as exc:
+        logger.error(f"Error running scrape_linkedin_stats_playwright for account {account_id}: {exc}")
+    finally:
+        await close_authenticated_context(playwright_ctx, browser, context)
+    return stats
+
+
+async def scrape_pending_invitation_vanity_names(account_id: int) -> set:
+    """
+    Scrapes full list of vanity names from sent invitations page by scrolling #workspace.
+    Matching linki-main/lib/linkedin/pending-invitations.ts.
+    """
+    vanity_names = set()
+    playwright_ctx = browser = context = None
+    try:
+        playwright_ctx, browser, context, page = await open_authenticated_context(account_id)
+        await page.goto("https://www.linkedin.com/mynetwork/invitation-manager/sent/", wait_until="domcontentloaded", timeout=30000)
+        await page.wait_for_timeout(3000)
+
+        last_count = 0
+        stable_rounds = 0
+        for _ in range(40):
+            await page.evaluate('''() => {
+                const workspace = document.getElementById("workspace");
+                if (workspace) {
+                    workspace.scrollTop = workspace.scrollHeight;
+                } else {
+                    window.scrollTo(0, document.body.scrollHeight);
+                    document.documentElement.scrollTop = document.documentElement.scrollHeight;
+                }
+            }''')
+            await page.wait_for_timeout(1200)
+            current_count = await page.evaluate('''() => document.querySelectorAll("a[href*='/in/']").length''')
+            if current_count == last_count:
+                stable_rounds += 1
+                if stable_rounds >= 3:
+                    break
+            else:
+                stable_rounds = 0
+                last_count = current_count
+
+        raw_vanities = await page.evaluate('''() => {
+            const seen = new Set();
+            for (const link of document.querySelectorAll("a[href*='/in/']")) {
+                const href = link.getAttribute("href") || "";
+                const match = href.match(/\\/in\\/([^/?#]+)/);
+                if (match) seen.add(match[1].toLowerCase());
+            }
+            return [...seen];
+        }''')
+        vanity_names = set(raw_vanities or [])
+    except Exception as exc:
+        logger.error(f"Error running scrape_pending_invitation_vanity_names for account {account_id}: {exc}")
+    finally:
+        await close_authenticated_context(playwright_ctx, browser, context)
+    return vanity_names
+
+

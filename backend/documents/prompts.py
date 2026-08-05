@@ -130,6 +130,236 @@ Respond ONLY with a JSON object:
 
 
 # ---------------------------------------------------------------------------
+# RFP Chunk Extractor — used when the RFP text is too large for one call.
+# Runs once per ~45k-char chunk; a later merge pass (RFP_MERGE_SYNTHESIS_PROMPT)
+# combines every chunk's output into one ParsedRFP-equivalent structure. This
+# replaces silently truncating the raw text at a fixed character cap: instead
+# every chunk gets read, nothing past char N is ever dropped.
+# ---------------------------------------------------------------------------
+
+RFP_CHUNK_EXTRACT_PROMPT = """\
+You are an expert RFP/tender analyst extracting structured facts from ONE
+PART of a larger RFP/tender document. You will only see this one chunk —
+other chunks cover the rest of the document and will be merged later. Do NOT
+assume this chunk contains the whole document; do not say things like
+"the document is incomplete."
+
+Extract everything relevant found ONLY in this chunk. It is completely fine
+to return empty lists for a chunk that has no new items — do not invent
+anything to fill a category.
+
+Extract:
+1. requirements — every distinct requirement, deliverable, or scope item.
+2. compliance_requirements — mandatory certifications, licenses, standards,
+   codes (e.g. ISO, OISD, DGMS, IMO/SOLAS), insurance types, safety/HSE
+   mandates, statutory compliance (PF/ESI/labour law), or legal clauses that
+   MUST be satisfied to be considered compliant.
+3. structural_elements — anything that defines HOW the bidder must submit or
+   what document(s)/form(s)/annexures/proformas the bidder must fill in and
+   return as part of their response. Examples: "two-envelope bidding system",
+   "Bid Bond of Rs 80,00,000 in the format of Annexure-2, from a listed
+   bank", "Annexure-3 checklist must be submitted with Envelope-I",
+   "Price Schedule must follow the exact table in Section 7, Case I and
+   Case II", "Performance Bank Guarantee of 10% of contract value within 15
+   days of LOI". For EACH one, capture: type (e.g. "bid_security" |
+   "mandatory_form" | "submission_format" | "pricing_format" |
+   "evaluation_criterion" | "other"), name (short label, referencing the
+   exact clause/annexure number if given), and description (what exactly
+   the bidder must do/produce, verbatim details like amounts/formats/deadlines).
+4. metadata_candidates — any of: buyer_name, issuing_agency, project_title,
+   solicitation_number/tender_number, submission_deadline, bid_validity,
+   contract_duration, evaluation_criteria, contact_person, tender_fee,
+   pre_bid_conference, currency, governing_law/jurisdiction. Only include a
+   key if this chunk actually states it.
+5. missing_or_ambiguous — anything in THIS chunk that is vague, contradictory,
+   marked TBD, or that a bidder could not respond to accurately without
+   clarification. Be specific (name the exact clause/topic), not generic.
+
+Respond ONLY with a JSON object:
+{
+  "requirements": [{"name": "...", "description": "...", "quantity": "...", "budget": "...", "timeline": "...", "status": "Required|Optional|Information", "source_clause": "..."}],
+  "compliance_requirements": ["..."],
+  "structural_elements": [{"type": "...", "name": "...", "description": "..."}],
+  "metadata_candidates": {"...": "..."},
+  "missing_or_ambiguous": ["..."]
+}
+"""
+
+
+# ---------------------------------------------------------------------------
+# RFP Merge/Synthesis — combines every chunk's structured extract (never the
+# raw text again, so this call's input size stays bounded regardless of how
+# long the source RFP is) into one final parsed-RFP object, including the
+# human-readable summary that used to be generated from truncated raw text.
+# ---------------------------------------------------------------------------
+
+RFP_MERGE_SYNTHESIS_PROMPT = """\
+You are merging structured extracts produced from sequential chunks of ONE
+RFP/tender document (each chunk was analyzed independently and in order).
+Your job is to deduplicate, reconcile, and synthesize them into one final,
+complete picture of the RFP. Nothing that appears in any chunk should be
+silently dropped — merge duplicates (same requirement/clause mentioned in
+two chunks) into a single clean entry rather than deleting either.
+
+Also classify the RFP's overall response model so downstream tooling can
+adapt instead of assuming every RFP is a product/SaaS price list:
+- "product_catalog": buyer wants specific priced products/services matched
+  against a vendor's catalog/SKUs (typical SaaS/IT reseller RFP).
+- "capability_tender": buyer wants a contractor with proven capability,
+  experience, financial strength, and compliance to execute a scope of work
+  (typical construction/EPC/engineering/services tender) — pricing is a
+  lump-sum/schedule-of-rates bid, not a catalog match.
+- "hybrid": meaningful elements of both.
+
+Respond ONLY with a JSON object:
+{
+  "parsed_content": "<thorough structured analysis of requirements, grouped by category, referencing clause numbers where available — this is the master reference the rest of the pipeline works from, so do not compress away detail>",
+  "rfp_type": "product_catalog|capability_tender|hybrid",
+  "missing_fields": ["<specific, deduplicated gap>", ...],
+  "metadata": {
+    "buyer_name": "...", "solicitation_number": "...", "project_title": "...",
+    "issuing_agency": "...", "submission_deadline": "...", "bid_validity": "...",
+    "contract_duration": "...", "naics_code": "...", "set_aside": "...",
+    "contact_person": "...", "evaluation_criteria": "...", "tender_fee": "...",
+    "currency": "...", "governing_law": "..."
+  },
+  "requirements": [{"name": "...", "description": "...", "quantity": "...", "budget": "...", "timeline": "...", "status": "Required|Optional|Information"}],
+  "compliance_requirements": ["<deduplicated>"],
+  "structural_elements": [{"type": "...", "name": "...", "description": "..."}],
+  "summary": "<3-6 sentence plain-English summary of what is being solicited and how the bidder must respond>"
+}
+"""
+
+
+# ---------------------------------------------------------------------------
+# Outline Architect — Stage 1.5. Replaces the previous hardcoded 5-section
+# skeleton (Executive Summary / Scope / Pricing / Timeline / Terms) used for
+# every RFP regardless of content. Reads the merged parsed RFP (including
+# structural_elements — the annexures/forms/submission-format requirements
+# extracted above) and produces the outline THIS specific RFP actually
+# requires, including one section per mandatory form/annexure the bidder
+# must literally fill in and return.
+# ---------------------------------------------------------------------------
+
+OUTLINE_ARCHITECT_PROMPT = """\
+You are a proposal architect. You will receive a merged, structured analysis
+of one RFP/tender, including any structural_elements it defines (submission
+format, mandatory annexures/forms, bid security, price schedule format,
+evaluation criteria).
+
+Design the exact section outline a compliant proposal for THIS RFP needs.
+Do not default to a generic Executive-Summary/Scope/Pricing/Timeline/Terms
+skeleton unless the RFP itself is simple enough that that genuinely covers
+everything required — for a complex tender, the outline must include:
+  - One section per major requirement/scope theme (not just one "Scope of
+    Work" catch-all if the RFP has many distinct scope areas).
+  - One dedicated section (or clearly ordered sub-sections) for EACH
+    mandatory annexure/form/proforma the bidder must complete and return —
+    name it after the RFP's own annexure/clause number and title so a
+    reviewer can map it back to the RFP (e.g. "Annexure 3 — Checklist Prior
+    to Bidding" not "Checklist"). If the RFP requires forms that need the
+    bidder's own registration numbers, bank details, or signatures that
+    cannot be known, generate the section as a ready-to-complete template
+    with clearly marked blanks (e.g. "[BIDDER TO INSERT: PAN NUMBER]")
+    rather than skipping it.
+  - A section that explicitly walks through the RFP's compliance/evaluation
+    criteria (e.g. Bid Evaluation Criteria, financial turnover thresholds,
+    experience requirements) and states how this bid meets each one,
+    item-by-item.
+  - A pricing section that mirrors the RFP's OWN price schedule structure
+    (its exact line items/table format/cases) rather than a generic 3-column
+    table, whenever the RFP specifies one.
+  - Sections should be ordered to match how a reviewer scoring against the
+    RFP's own evaluation criteria would expect to find them.
+
+Scale total depth to the RFP's actual complexity: word_budget per section
+should be proportional to how much that topic occupies in the RFP text (a
+requirement with 30 sub-clauses deserves far more than 400 words; a single
+throwaway clause does not need a 1000-word section). There is no fixed
+ceiling — a large, complex tender should produce a large, complex outline.
+
+Respond ONLY with a JSON object:
+{
+  "sections": [
+    {
+      "key": "<short_snake_case_id>",
+      "title": "<Numbered section title, referencing RFP annexure/clause numbers where applicable>",
+      "word_budget": <integer, scaled to complexity>,
+      "included": true,
+      "is_mandatory_form": <true if this section is a literal RFP annexure/form the bidder must fill and return, else false>,
+      "source_clause": "<RFP section/clause/annexure this maps to, or empty string>",
+      "key_points": ["<specific point to cover, referencing exact RFP requirements/numbers, not generic filler>", ...]
+    }
+  ],
+  "notes": "<any overall structuring notes, e.g. RFP mandates a specific envelope/submission structure the response should mention>"
+}
+"""
+
+
+# ---------------------------------------------------------------------------
+# Clarifying Questions — turns missing_fields / structural gaps into a SHORT,
+# deduplicated list of genuinely necessary questions for the human bidder,
+# instead of the old generic "pricing strategy focus" wizard questions that
+# had no connection to the actual uploaded RFP. Only asks what materially
+# changes the proposal's content or compliance; anything answerable from the
+# RFP text itself or from the company profile must NOT be asked.
+# ---------------------------------------------------------------------------
+
+CLARIFYING_QUESTIONS_PROMPT = """\
+You are preparing to write a proposal in response to a specific RFP/tender.
+You have: (1) the merged structured analysis of the RFP, including any
+missing_fields/ambiguities already flagged, and (2) whatever is known about
+the responding company (profile / catalog / previously answered questions,
+if any).
+
+Your job is to produce the SMALL set of questions a human must answer before
+the proposal can be written accurately and compliantly. Be ruthless about
+NOT asking:
+  - Anything the RFP text already states.
+  - Anything answerable from the company profile already provided.
+  - Generic strategy fluff ("what's your value proposition focus?") that
+    doesn't change what must literally appear in a compliant response.
+
+DO ask about things like:
+  - A mandatory form/annexure that needs bidder-specific data you don't have
+    (e.g. bank name for a Bid Bond, registration/PAN/GST numbers, whether
+    bidding solo or as a JV/consortium, proposed subcontractors).
+  - A genuinely ambiguous or TBD requirement in the RFP that has more than
+    one reasonable interpretation, where picking wrong would misrepresent
+    the bid.
+  - A required capability/experience claim the RFP's evaluation criteria
+    demands proof of (e.g. "5 completed similar projects in last 3 years")
+    where you don't know if/how the company can substantiate it.
+  - Pricing strategy ONLY if the RFP's own price schedule leaves the bidder
+    genuine strategic room (e.g. optional pricing cases/alternates) — not
+    generic "which pricing model" if the RFP already mandates a fixed
+    schedule format.
+
+If there is truly nothing that needs asking (RFP is fully self-contained and
+the company profile covers everything), return an empty questions array —
+do not invent filler questions just to have some.
+
+Cap at 8 questions maximum per round, ordered by how much each one blocks
+accurate generation. Group related items into one question when possible.
+
+Respond ONLY with a JSON object:
+{
+  "questions": [
+    {
+      "id": "<short_snake_case_id>",
+      "question": "<specific question, referencing the exact RFP clause/annexure it relates to>",
+      "why_it_matters": "<one sentence: what happens to the proposal if this isn't answered>",
+      "category": "<e.g. Compliance | Pricing Strategy | Company Data | Submission Logistics>",
+      "input_type": "text|single_select|multi_select",
+      "options": [{"id": "...", "label": "...", "description": "..."}],
+      "allow_skip": <true if the pipeline can proceed with a clearly-marked placeholder if unanswered, false if this genuinely blocks accurate generation>
+    }
+  ]
+}
+"""
+
+
+# ---------------------------------------------------------------------------
 # Inventory Stats — product-by-product fact report
 # Ported from BidForge's INVENTORY_STATS_PROMPT
 # ---------------------------------------------------------------------------

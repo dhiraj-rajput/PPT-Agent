@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from typing import List, Optional, Any
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.core.auth import get_current_user
 from app.core.mailer import send_meeting_invite_email, send_meeting_cancelled_email
@@ -148,7 +148,7 @@ class CreateMeetingBody(BaseModel):
     type: Optional[str] = "Video Call"
     location: Optional[str] = ""
     provider: Optional[str] = "jitsi"
-    attendees: Optional[List[AttendeeInput]] = []
+    attendees: Optional[List[AttendeeInput]] = Field(default_factory=list)
 
     class Config:
         populate_by_name = True

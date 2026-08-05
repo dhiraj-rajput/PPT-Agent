@@ -273,3 +273,91 @@ class LinkedInProfileScraper:
             data["title"] = data["experience"][0].get("title", "")
 
         return data
+
+    async def enrich_sales_nav_profile(
+        self,
+        page: Page,
+        sales_nav_url: str,
+    ) -> Dict[str, Any]:
+        """
+        Intercepts salesApiProfiles XHR response on Sales Navigator profile navigation.
+        Matching linki-main/lib/linkedin/enrich.ts.
+        """
+        intercepted_data = {}
+
+        async def _handle_response(response):
+            try:
+                if "salesApiProfiles" in response.url or "salesApiProfile" in response.url:
+                    if response.status == 200:
+                        json_body = await response.json()
+                        profile_info = json_body.get("data") or json_body
+                        if isinstance(profile_info, dict):
+                            intercepted_data.update(profile_info)
+            except Exception:
+                pass
+
+        page.on("response", _handle_response)
+
+        try:
+            await page.goto(sales_nav_url, wait_until="domcontentloaded", timeout=30000)
+            await page.wait_for_timeout(3000)
+        except Exception as err:
+            logger.warning(f"[ProfileScraper] Error navigating Sales Nav URL {sales_nav_url}: {err}")
+
+        return intercepted_data
+
+    async def scrape_recent_posts(
+        self,
+        page: Page,
+        public_id: str,
+    ) -> List[Dict[str, Any]]:
+        """
+        Pulls recent member posts using Voyager memberShareFeed API.
+        Matching linki-main/lib/linkedin/profile-scrape.ts.
+        """
+        if not public_id:
+            return []
+
+        posts = []
+        try:
+            raw_posts = await page.evaluate('''async (pid) => {
+                try {
+                    const cookies = document.cookie.split("; ").reduce((a, c) => {
+                        const i = c.indexOf("=");
+                        if (i > 0) a[c.slice(0, i)] = c.slice(i + 1);
+                        return a;
+                    }, {});
+                    const csrf = (cookies["JSESSIONID"] || "").replace(/"/g, "");
+                    const url = `https://www.linkedin.com/voyager/api/feed/updates?q=memberShareFeed&moduleKey=member-shares:desktop&count=10&postModuleType=member-shares&publicId=${pid}`;
+                    const r = await fetch(url, {
+                        headers: {
+                            "csrf-token": csrf,
+                            "accept": "application/vnd.linkedin.normalized+json+2.1",
+                            "x-restli-protocol-version": "2.0.0",
+                            "x-li-lang": "en_US"
+                        },
+                        credentials: "include"
+                    });
+                    if (!r.ok) return [];
+                    const json = await r.json();
+                    const included = json.included || [];
+                    const out = [];
+                    for (const item of included) {
+                        if ((item.$type || "").includes("Update") && item.commentary) {
+                            out.push({
+                                text: item.commentary.text?.text || "",
+                                urn: item.entityUrn || ""
+                            });
+                        }
+                    }
+                    return out;
+                } catch (e) {
+                    return [];
+                }
+            }''', public_id)
+            posts = raw_posts or []
+        except Exception as exc:
+            logger.warning(f"[ProfileScraper] Error fetching Voyager posts for {public_id}: {exc}")
+
+        return posts
+
