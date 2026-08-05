@@ -363,6 +363,9 @@ async def import_leads_api(
     body: BulkImportBody,
     current_user: dict = Depends(get_current_user),
 ):
+    if len(body.leads) > 5000:
+        raise HTTPException(status_code=400, detail="Cannot import more than 5,000 leads in a single request.")
+
     try:
         camp_id = int(body.campaignId)
     except ValueError:
@@ -434,8 +437,12 @@ async def import_leads_api(
                         "updated_at": datetime.utcnow()
                     })
 
+                # Chunk inserts into batches of 500
+                chunk_size = 500
+                for i in range(0, len(to_insert), chunk_size):
+                    batch = to_insert[i:i + chunk_size]
+                    await db.execute(insert(SQL_Lead).values(batch))
                 if to_insert:
-                    await db.execute(insert(SQL_Lead).values(to_insert))
                     await db.commit()
                 report["imported"] = len(to_insert)
         except Exception as e:

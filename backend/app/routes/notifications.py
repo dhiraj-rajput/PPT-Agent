@@ -70,6 +70,7 @@ class CreateNotifBody(BaseModel):
     message: Optional[str] = ""
     link: Optional[str] = ""
     userId: Optional[str] = None
+    type: Optional[str] = "custom"
 
 
 @router.post("", status_code=201)
@@ -99,7 +100,7 @@ async def create_notification(
 
                 new_notif = SQL_Notification(
                     user_id=target_id,
-                    notification_type="custom",
+                    notification_type=body.type or "custom",
                     title=body.title,
                     message=body.message or "",
                     link=body.link or "",

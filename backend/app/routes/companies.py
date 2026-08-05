@@ -191,7 +191,15 @@ def get_attachments(current_user: dict = Depends(get_current_user)):
 
 @router.post("/send-email")
 async def send_company_email(body: SendCompanyEmailBody, current_user: dict = Depends(get_current_user)):
-    """Send a custom email to a company with optional attachments (proposal/RFP)."""
+    """Send a custom email to a company with optional attachments (proposal/RFP).
+    Restricted to Admin/Owner to prevent open mail relay abuse."""
+    # Only Admin/Owner users may send emails through the company SMTP
+    user_role = (current_user.get("role") or "").strip().lower()
+    if user_role not in ("admin", "owner", "manager"):
+        raise HTTPException(
+            status_code=403,
+            detail="Only Admin, Owner, or Manager users can send company emails."
+        )
     if not body.to_email:
         raise HTTPException(status_code=400, detail="Recipient email is required.")
     

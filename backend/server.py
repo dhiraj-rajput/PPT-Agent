@@ -86,6 +86,22 @@ from app.routes.system_logs import router as system_logs_router
 _log = logging.getLogger("server")
 
 
+# ── Background tasks strong-reference store ─────────────────────────────────
+# asyncio.create_task() only holds a *weak* reference internally. If the
+# returned Task object isn't stored elsewhere the GC may collect the task
+# mid-run without any exception. We keep strong references here until
+# completion so that cannot happen.
+_bg_tasks: set = set()
+
+def _spawn_task(coro_or_future) -> "asyncio.Task":
+    """Create an asyncio task and keep a strong reference to it."""
+    task = asyncio.ensure_future(coro_or_future)
+    _bg_tasks.add(task)
+    task.add_done_callback(_bg_tasks.discard)
+    return task
+# ─────────────────────────────────────────────────────────────────────────────
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     import asyncio
@@ -123,22 +139,23 @@ async def lifespan(app: FastAPI):
             _log.warning(f"Background DB setup warning: {e}")
 
     try:
-        asyncio.create_task(asyncio.to_thread(setup_bg_data))
+        _spawn_task(asyncio.to_thread(setup_bg_data))
     except Exception as e:
         _log.warning(f"Could not spawn background DB setup thread: {e}")
 
     # 3. Start Background Email Worker Loop
     from app.core.email_worker import start_email_worker_loop
-    worker_task = asyncio.create_task(start_email_worker_loop())
+    worker_task = _spawn_task(start_email_worker_loop())
     _log.info("Email worker task started.")
 
     # Start Background LinkedIn Worker Loop
     try:
         from app.core.linkedin_worker import start_linkedin_worker_loop
-        linkedin_worker_task = asyncio.create_task(start_linkedin_worker_loop())
+        linkedin_worker_task = _spawn_task(start_linkedin_worker_loop())
         _log.info("LinkedIn worker task started.")
     except Exception as e:
         _log.warning(f"Could not start LinkedIn worker loop: {e}")
+        linkedin_worker_task = None
 
     # Start Background LinkedIn Health Monitor Loop (runs every 4 hours)
     async def run_linkedin_health_loop():
@@ -152,7 +169,7 @@ async def lifespan(app: FastAPI):
                 _log.warning(f"[LinkedIn Health Loop] Failed running health check: {e}")
             await asyncio.sleep(14400)
 
-    linkedin_health_task = asyncio.create_task(run_linkedin_health_loop())
+    linkedin_health_task = _spawn_task(run_linkedin_health_loop())
     _log.info("LinkedIn health monitor loop task started.")
 
     # Start Background LinkedIn Acceptance Check Loop (runs every 10 minutes)
@@ -170,7 +187,7 @@ async def lifespan(app: FastAPI):
                 _log.warning(f"[LinkedIn Acceptance Loop] Failed running acceptance check: {e}")
             await asyncio.sleep(600)  # Check every 10 minutes
 
-    linkedin_acceptance_task = asyncio.create_task(run_linkedin_acceptance_loop())
+    linkedin_acceptance_task = _spawn_task(run_linkedin_acceptance_loop())
     _log.info("LinkedIn invitation acceptance loop task started.")
 
     # Start LinkedIn Inbox Poll Loop (runs every 30 minutes — polls each active account's messages)
@@ -199,7 +216,7 @@ async def lifespan(app: FastAPI):
                 _log.warning(f"[LinkedIn Inbox Poll Loop] Outer error: {e}")
             await asyncio.sleep(1800)  # Re-poll every 30 minutes
 
-    linkedin_inbox_task = asyncio.create_task(run_linkedin_inbox_poll_loop())
+    linkedin_inbox_task = _spawn_task(run_linkedin_inbox_poll_loop())
     _log.info("LinkedIn inbox poll loop task started.")
 
     # 4. Start Background TTL Cleanup Loop (runs every 60 minutes)
@@ -233,7 +250,7 @@ async def lifespan(app: FastAPI):
                 _log.warning(f"[TTL Cleanup] Failed running cleanup: {e}")
             await asyncio.sleep(3600)
 
-    cleanup_task = asyncio.create_task(run_ttl_cleanup_loop())
+    cleanup_task = _spawn_task(run_ttl_cleanup_loop())
     _log.info("TTL cleanup background loop task started.")
 
     yield

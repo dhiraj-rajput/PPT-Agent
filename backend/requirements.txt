@@ -12,6 +12,7 @@ asyncmy>=0.2.8            # fast async MySQL driver for SQLAlchemy
 pymysql>=1.1.0            # sync MySQL driver for background workers
 alembic>=1.13.0           # schema migration tool (optional, use for production upgrades)
 cryptography>=41.0.0      # required by aiomysql/asyncmy for TLS connections
+filelock>=3.13.0          # cross-process file locking for concurrent .env writes
 
 
 # Presentation generation & Excel catalog matching

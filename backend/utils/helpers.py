@@ -38,9 +38,10 @@ from config.settings import settings
 from datetime import datetime, timedelta
 
 class MongoSemaphore:
-    def __init__(self, name="subprocess_limit", max_leases=3):
+    def __init__(self, name="subprocess_limit", max_leases=3, timeout_seconds=300):
         self.name = name
         self.max_leases = max_leases
+        self.timeout_seconds = timeout_seconds
         self.lease_id = None
         self.slot_name = None
 
@@ -50,7 +51,11 @@ class MongoSemaphore:
             return self
 
         self.lease_id = str(uuid.uuid4())
+        start_time = time.time()
         while True:
+            if time.time() - start_time > self.timeout_seconds:
+                raise TimeoutError(f"Timed out waiting ({self.timeout_seconds}s) for semaphore slot '{self.name}'.")
+
             try:
                 with get_sync_db_session() as db:
                     from models.sql_models import ActiveLease as SQL_ActiveLease

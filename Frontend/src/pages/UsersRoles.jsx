@@ -94,12 +94,18 @@ export default function UsersRoles() {
     }
   }
 
+  const [tempPasswordModal, setTempPasswordModal] = useState(null);
+
   async function handleResendInvite(user) {
     setMenuOpenId(null);
     try {
       const res = await api.resendUserInvite(user.id);
       const msg = res.warning || `New temporary password generated for ${user.email}.`;
-      alert(`${msg}\n\nTemp Password: ${res.tempPassword || '(Sent via email)'}`);
+      setTempPasswordModal({
+        email: user.email,
+        message: msg,
+        tempPassword: res.tempPassword || ''
+      });
       notify('Invite Resent', `New temporary password sent to ${user.email}.`, '/settings/users');
     } catch (err) {
       const msg = typeof err?.message === 'string' ? err.message : String(err || 'Could not resend invite.');
@@ -351,6 +357,29 @@ export default function UsersRoles() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {tempPasswordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-navy-800 p-6 shadow-2xl border border-slate-100 dark:border-navy-700">
+            <h3 className="text-base font-bold text-navy-900 dark:text-white">Temporary Credentials Generated</h3>
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{tempPasswordModal.message}</p>
+
+            {tempPasswordModal.tempPassword && (
+              <div className="mt-4 rounded-xl bg-slate-100 dark:bg-navy-900 p-3 text-center">
+                <span className="text-xs text-slate-400 uppercase tracking-wide font-semibold block mb-1">Temporary Password</span>
+                <code className="text-sm font-mono font-bold text-brand-600 dark:text-brand-400 select-all">{tempPasswordModal.tempPassword}</code>
+              </div>
+            )}
+
+            <button
+              onClick={() => setTempPasswordModal(null)}
+              className="mt-5 w-full rounded-xl bg-brand-500 py-2.5 text-xs font-bold text-white hover:bg-brand-600"
+            >
+              Done
+            </button>
+          </div>
         </div>
       )}
     </div>

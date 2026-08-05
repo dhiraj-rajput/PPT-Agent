@@ -70,7 +70,10 @@ export default function Meetings() {
   const filteredUsers = useMemo(() => {
     const q = userSearch.trim().toLowerCase();
     if (!q) return users;
-    return users.filter((u) => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
+    // Guard against null/undefined name or email values
+    return users.filter((u) =>
+      (u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q)
+    );
   }, [users, userSearch]);
 
   function toggleUser(id) {

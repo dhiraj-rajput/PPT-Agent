@@ -332,8 +332,11 @@ class SAMOpportunitiesClient:
         """
         groups: Dict[str, List[Dict[str, Any]]] = {}
         for notice in notices:
-            sol_num = notice.get("solicitationNumber") or notice.get("solnum") or notice.get("opportunityId") or "unknown"
+            sol_num = notice.get("solicitationNumber") or notice.get("solnum") or ""
             sol_num = sol_num.strip()
+            if not sol_num:
+                opp_id = str(notice.get("opportunityId") or notice.get("noticeId") or "").strip()
+                sol_num = f"opp-{opp_id}" if opp_id else f"unk-{uuid.uuid4().hex[:8]}"
             groups.setdefault(sol_num, []).append(notice)
 
         merged_list = []

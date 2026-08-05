@@ -265,10 +265,16 @@ async def upload_campaign_attachment(
 ):
     import os
     import shutil
+    from pathlib import Path as _Path
     try:
         os.makedirs("private/uploads", exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        filename = f"{timestamp}_{file.filename}"
+        # Strip all directory components from the attacker-controlled filename
+        # e.g. "../../main.py" → "main.py"  (path traversal prevention)
+        safe_name = _Path(file.filename).name if file.filename else "upload"
+        if not safe_name:
+            safe_name = "upload"
+        filename = f"{timestamp}_{safe_name}"
         dest_path = os.path.join("private/uploads", filename)
         
         def save_file_sync():
@@ -279,7 +285,7 @@ async def upload_campaign_attachment(
             
         return {
             "attachmentPath": dest_path,
-            "attachmentFilename": file.filename
+            "attachmentFilename": safe_name
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save upload: {e}")

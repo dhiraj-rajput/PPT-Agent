@@ -9,6 +9,13 @@ from __future__ import annotations
 import os
 import logging
 from typing import Optional
+try:
+    from filelock import FileLock as _FileLock
+    _ENV_LOCK = _FileLock(".env.lock", timeout=10)
+except ImportError:
+    import contextlib
+    _FileLock = None  # type: ignore
+    _ENV_LOCK = contextlib.nullcontext()  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -452,34 +459,37 @@ def read_env_file_keys() -> dict:
 
 
 def update_env_file(updates: dict) -> None:
+    """Write updates to .env file. Protected by a cross-process file lock to
+    prevent concurrent writes from corrupting the file."""
     env_path = ".env"
-    if not os.path.exists(env_path):
+    with _ENV_LOCK:
+        if not os.path.exists(env_path):
+            with open(env_path, "w", encoding="utf-8") as f:
+                pass
+
+        with open(env_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        updated_keys = set()
+        new_lines = []
+
+        for line in lines:
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#") and "=" in line:
+                parts = line.split("=", 1)
+                key = parts[0].strip()
+                if key in updates:
+                    new_lines.append(f"{key}={updates[key]}\n")
+                    updated_keys.add(key)
+                    continue
+            new_lines.append(line)
+
+        for key, value in updates.items():
+            if key not in updated_keys:
+                new_lines.append(f"{key}={value}\n")
+
         with open(env_path, "w", encoding="utf-8") as f:
-            pass
-            
-    with open(env_path, "r", encoding="utf-8") as f:
-        lines = f.readlines()
-        
-    updated_keys = set()
-    new_lines = []
-    
-    for line in lines:
-        stripped = line.strip()
-        if stripped and not stripped.startswith("#") and "=" in line:
-            parts = line.split("=", 1)
-            key = parts[0].strip()
-            if key in updates:
-                new_lines.append(f"{key}={updates[key]}\n")
-                updated_keys.add(key)
-                continue
-        new_lines.append(line)
-        
-    for key, value in updates.items():
-        if key not in updated_keys:
-            new_lines.append(f"{key}={value}\n")
-            
-    with open(env_path, "w", encoding="utf-8") as f:
-        f.writelines(new_lines)
+            f.writelines(new_lines)
 
 
 _SECRET_KEY_SUFFIXES = ("_API_KEY", "_SECRET", "_PASS", "_KEY", "_TOKEN", "_LI_AT")
@@ -527,6 +537,10 @@ TARGET_KEYS = [
 
 @router.get("/env-keys")
 def get_env_keys(current_user: dict = Depends(get_current_user)):
+    # Only Admins and Owners may view API keys
+    user_role = (current_user.get("role") or "").strip().lower()
+    if user_role not in ("admin", "owner"):
+        raise HTTPException(status_code=403, detail="Only Admin or Owner users can view API keys.")
     try:
         env_keys = read_env_file_keys()
 
@@ -567,6 +581,10 @@ async def linkedin_status(current_user: dict = Depends(get_current_user)):
 
 @router.post("/env-keys")
 async def save_env_keys(payload: dict, current_user: dict = Depends(get_current_user)):
+    # Only Admins and Owners may modify API keys / environment variables
+    user_role = (current_user.get("role") or "").strip().lower()
+    if user_role not in ("admin", "owner"):
+        raise HTTPException(status_code=403, detail="Only Admin or Owner users can update API keys.")
     try:
         updates = {}
         for k, new_val in payload.items():

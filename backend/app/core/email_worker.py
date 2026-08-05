@@ -27,6 +27,14 @@ from app.core.tracking_helpers import (
 
 logger = logging.getLogger("email_worker")
 
+_worker_tasks: set = set()
+
+def _spawn_worker_task(coro_or_future) -> None:
+    """Create an asyncio task and keep a strong reference until complete."""
+    task = asyncio.ensure_future(coro_or_future)
+    _worker_tasks.add(task)
+    task.add_done_callback(_worker_tasks.discard)
+
 
 def is_within_working_hours(tz_str: str) -> bool:
     """Check if local time in tz_str is Monday-Friday 9:00 AM to 5:00 PM."""
@@ -535,9 +543,6 @@ def check_incoming_replies():
         mail.select("INBOX")
 
         status, messages = mail.search(None, "UNSEEN")
-        if status != "OK" or not messages[0]:
-            status, messages = mail.search(None, "ALL")
-
         if status == "OK" and messages[0]:
             mail_ids = messages[0].split()[-30:]
 
@@ -730,12 +735,12 @@ async def start_email_worker_loop():
             if current_time - last_reply_check >= 30:
                 last_reply_check = current_time
                 try:
-                    asyncio.create_task(asyncio.to_thread(check_incoming_replies))
+                    _spawn_worker_task(asyncio.to_thread(check_incoming_replies))
                 except Exception as e:
                     logger.warning(f"[Email Worker] Could not spawn thread for reply check: {e}")
 
             # Dispatch scheduled newsletters
-            asyncio.create_task(check_scheduled_newsletters())
+            _spawn_worker_task(check_scheduled_newsletters())
 
             # Query active campaigns
             running_campaigns = []

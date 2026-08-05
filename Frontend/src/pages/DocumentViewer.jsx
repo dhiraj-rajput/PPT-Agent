@@ -33,7 +33,12 @@ export default function DocumentViewer() {
     document.body.appendChild(script);
 
     return () => {
-      document.body.removeChild(script);
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
+      try {
+        delete window.EmailTracker;
+      } catch {}
     };
   }, [campaignId, leadId, apiBase]);
 

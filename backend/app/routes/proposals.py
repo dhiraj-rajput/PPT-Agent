@@ -218,7 +218,13 @@ def run_proposal_generation_sync(mode: str, solicitation: Optional[str] = None, 
                     elif "run_compactor" in line_str:
                         update_progress(75, "Compacting profiling metrics...")
             
-            p_profile.wait()
+            try:
+                p_profile.wait(timeout=600)
+            except subprocess.TimeoutExpired:
+                p_profile.kill()
+                p_profile.wait()
+                update_progress(50, "Competitor profiling timed out after 10 minutes", "failed")
+                return
 
         # Step 2: Document Generation
         initial_progress = 80 if profile_cmd else 15
@@ -257,7 +263,13 @@ def run_proposal_generation_sync(mode: str, solicitation: Optional[str] = None, 
                 elif "Step 4" in line_str or "Step 5" in line_str or "Generating DOCX-styled PDF" in line_str or "DOCX-styled PDF" in line_str:
                     update_progress(90, "Compiling Word document and rendering PDF...")
                 
-        p_doc.wait()
+        try:
+            p_doc.wait(timeout=600)
+        except subprocess.TimeoutExpired:
+            p_doc.kill()
+            p_doc.wait()
+            update_progress(90, "Proposal document compilation timed out after 10 minutes", "failed")
+            return
         
         if p_doc.returncode != 0:
             logger.error(f"Error compiling proposal: process exited with code {p_doc.returncode}")

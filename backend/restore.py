@@ -49,14 +49,15 @@ def restore_database():
             with open(json_file, "r", encoding="utf-8") as f:
                 data = json_util.loads(f.read())
 
-            # Clear existing collection data only after JSON is parsed successfully
-            coll.delete_many({})
-
             if data:
+                # Only delete existing data AFTER we've successfully parsed
+                # non-empty replacement data. This prevents an empty/corrupt
+                # backup from wiping the production collection.
+                coll.delete_many({})
                 coll.insert_many(data)
                 print(f"  [OK] Restored collection '{coll_name}': {len(data)} documents")
             else:
-                print(f"  - Collection '{coll_name}' is empty")
+                print(f"  - Collection '{coll_name}' is empty in backup, skipping (data preserved)")
 
         print(f"\n[SUCCESS] Database '{db_name}' restored successfully!")
     finally:

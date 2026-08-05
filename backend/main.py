@@ -206,9 +206,10 @@ def main():
     else:
         print_summary(result)
 
-    # Exit with code 1 if there were any errors
+    # Exit with code 1 if there were any errors, so CI/CD pipelines and
+    # calling scripts can detect failures correctly.
     if result.get("errors"):
-        sys.exit(0)  # Still 0 — errors are non-fatal warnings
+        sys.exit(1)  # Non-zero exit so bash/CI can detect the failure
 
 
 if __name__ == "__main__":

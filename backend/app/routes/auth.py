@@ -47,6 +47,16 @@ from config.settings import settings
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+# Strong-reference store for fire-and-forget tasks (prevents GC from
+# silently cancelling tasks before they complete — see CPython issue gh-91887)
+_fire_and_forget_tasks: set = set()
+
+def _fire_and_forget(coro) -> None:
+    """Schedule a coroutine as a background task with a strong reference."""
+    task = asyncio.create_task(coro)
+    _fire_and_forget_tasks.add(task)
+    task.add_done_callback(_fire_and_forget_tasks.discard)
+
 _OTP_TTL_MINUTES = settings.OTP_TTL_MINUTES
 _MAX_OTP_ATTEMPTS = 5
 
@@ -175,7 +185,7 @@ async def _send_otp_for_user(user_id: str, email: str, purpose: str) -> None:
             import logging as _logging
             _logging.getLogger("auth").info("🔑 [DEV OTP] Generated OTP for %s (%s): %s", email, purpose, otp)
             print(f"\n🔑 [DEV OTP CODE] {email} ({purpose}): {otp}\n", flush=True)
-            asyncio.create_task(send_otp_email(email, otp, purpose))
+            _fire_and_forget(send_otp_email(email, otp, purpose))
             return
         except Exception as e:
             import logging
@@ -755,12 +765,6 @@ async def upload_avatar(
         else:
             raise HTTPException(400, "Unsupported image type. Use JPG, PNG, GIF, or WEBP.")
 
-    content = await file.read()
-    if len(content) > _MAX_AVATAR_BYTES:
-        raise HTTPException(400, "Image is too large. Max size is 5MB.")
-    if not content:
-        raise HTTPException(400, "Uploaded file is empty.")
-
     upload_dir = Path(_AVATAR_DIR)
     upload_dir.mkdir(parents=True, exist_ok=True)
 
@@ -774,11 +778,26 @@ async def upload_avatar(
     unique_name = f"{user_id}_{uuid.uuid4().hex}{ext}"
     dest_path = upload_dir / unique_name
     
-    def write_avatar_file():
-        with open(dest_path, "wb") as f:
-            f.write(content)
+    def save_avatar_chunks_sync(src_file: UploadFile, target_path: Path, max_bytes: int = _MAX_AVATAR_BYTES):
+        written = 0
+        with open(target_path, "wb") as f:
+            while True:
+                chunk = src_file.file.read(64 * 1024)
+                if not chunk:
+                    break
+                written += len(chunk)
+                if written > max_bytes:
+                    f.close()
+                    if target_path.exists():
+                        target_path.unlink()
+                    raise HTTPException(400, "Image is too large. Max size is 5MB.")
+                f.write(chunk)
+        if written == 0:
+            if target_path.exists():
+                target_path.unlink()
+            raise HTTPException(400, "Uploaded file is empty.")
 
-    await asyncio.to_thread(write_avatar_file)
+    await asyncio.to_thread(save_avatar_chunks_sync, file, dest_path)
 
     uid = int(current_user["id"])
     if _mysql_available:

@@ -28,7 +28,12 @@ try:
     from a2wsgi import ASGIMiddleware
     application = ASGIMiddleware(fastapi_app)  # type: ignore
 
-except Exception:
+except Exception as err:
+    import logging
+    logging.getLogger("passenger_wsgi").warning(
+        "a2wsgi is not installed; falling back to native asyncio WSGI adapter. "
+        "For optimal production performance under Phusion Passenger, install a2wsgi: pip install a2wsgi. Error: %s", err
+    )
     def application(environ, start_response):
         """Native lightweight WSGI-to-ASGI converter for LiteSpeed pre-fork mode."""
         loop = asyncio.new_event_loop()

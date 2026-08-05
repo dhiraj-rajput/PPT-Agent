@@ -43,8 +43,12 @@ export function AuthProvider({ children }) {
     setUser((prev) => (prev ? { ...prev, ...patch } : prev));
   }
 
+  const role = (user?.role || '').toLowerCase();
+  const isAdmin = role === 'admin' || role === 'owner';
+  const isOwner = role === 'owner';
+
   return (
-    <AuthContext.Provider value={{ user, loading, completeAuth, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, loading, completeAuth, logout, updateUser, isAdmin, isOwner }}>
       {children}
     </AuthContext.Provider>
   );

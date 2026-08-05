@@ -1,5 +1,5 @@
 import { useParams, Link } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   ArrowLeft, Mail, Phone, MapPin, Building2, Sparkles,
   FileText, Calendar, Loader2, Check, Download, AlertTriangle,
@@ -314,9 +314,22 @@ export default function CompanyDetail() {
     checkForActiveTask();
   }, [company]); // runs once when company data arrives
 
+  const proposalPollRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (proposalPollRef.current) {
+        clearInterval(proposalPollRef.current);
+      }
+    };
+  }, []);
+
   // Run partnership proposal generation pipeline with progress polling
   const handleGenerateProposal = (wizardData) => {
     if (!company) return;
+    if (proposalPollRef.current) {
+      clearInterval(proposalPollRef.current);
+    }
     setIsGenerating(true);
     setGenerationError(null);
     setGenerationProgress(5);
@@ -326,7 +339,7 @@ export default function CompanyDetail() {
     api.generatePartnership(company.name, wizardData)
       .then(() => {
         // Start polling status
-        const pollInterval = setInterval(() => {
+        proposalPollRef.current = setInterval(() => {
           api.getProposalStatusByCompany(company.name)
             .then((statusData) => {
               setGenerationProgress(statusData.progress || 0);
@@ -334,7 +347,7 @@ export default function CompanyDetail() {
               setGenerationStatus(statusData.status || 'processing');
 
               if (statusData.status === 'completed') {
-                clearInterval(pollInterval);
+                if (proposalPollRef.current) clearInterval(proposalPollRef.current);
                 setIsGenerating(false);
                 fetchRecentProposals(company.name);
                 // Open preview modal automatically
@@ -346,7 +359,7 @@ export default function CompanyDetail() {
                   size: 'Calculated'
                 });
               } else if (statusData.status === 'failed') {
-                clearInterval(pollInterval);
+                if (proposalPollRef.current) clearInterval(proposalPollRef.current);
                 setIsGenerating(false);
                 setGenerationError(statusData.message);
               }

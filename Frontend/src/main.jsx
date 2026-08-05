@@ -13,26 +13,37 @@ window.fetch = async function (url, options = {}) {
   const token = localStorage.getItem('orbitavanya_token');
   const strUrl = String(url);
   const apiBase = import.meta.env.VITE_API_URL || 'http://127.0.0.1:5050';
-  if (token && (strUrl.startsWith(apiBase) || strUrl.startsWith('http://127.0.0.1:5050') || strUrl.startsWith('http://localhost:5050') || strUrl.startsWith('/api/'))) {
-    options.headers = options.headers || {};
-    if (options.headers instanceof Headers) {
-      if (!options.headers.has('Authorization')) {
-        options.headers.set('Authorization', `Bearer ${token}`);
+  
+  const isApiRoute =
+    strUrl.startsWith('/api/') ||
+    strUrl.startsWith(apiBase) ||
+    strUrl.startsWith('http://127.0.0.1:5050') ||
+    strUrl.startsWith('http://localhost:5050');
+
+  if (token && isApiRoute) {
+    const newOptions = { ...options };
+    if (newOptions.headers instanceof Headers) {
+      const headers = new Headers(newOptions.headers);
+      if (!headers.has('Authorization')) {
+        headers.set('Authorization', `Bearer ${token}`);
       }
-    } else if (Array.isArray(options.headers)) {
-      const hasAuth = options.headers.some(([k]) => k.toLowerCase() === 'authorization');
+      newOptions.headers = headers;
+    } else if (Array.isArray(newOptions.headers)) {
+      const headers = [...newOptions.headers];
+      const hasAuth = headers.some(([k]) => k.toLowerCase() === 'authorization');
       if (!hasAuth) {
-        options.headers.push(['Authorization', `Bearer ${token}`]);
+        headers.push(['Authorization', `Bearer ${token}`]);
       }
+      newOptions.headers = headers;
     } else {
-      const hasAuth = Object.keys(options.headers).some(k => k.toLowerCase() === 'authorization');
+      const headers = { ...(newOptions.headers || {}) };
+      const hasAuth = Object.keys(headers).some(k => k.toLowerCase() === 'authorization');
       if (!hasAuth) {
-        options.headers = {
-          ...options.headers,
-          'Authorization': `Bearer ${token}`,
-        };
+        headers['Authorization'] = `Bearer ${token}`;
       }
+      newOptions.headers = headers;
     }
+    return originalFetch(url, newOptions);
   }
   return originalFetch(url, options);
 };

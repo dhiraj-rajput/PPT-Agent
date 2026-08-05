@@ -68,6 +68,9 @@ export default function Tenders() {
   const debounceRef = useRef(null);
 
   // ----- Fetch cached tenders from backend -----
+  // NOTE: `query` is NOT in the dependency array here — the debounced useEffect
+  // below handles re-fetching when the search query changes, preventing duplicate
+  // concurrent requests that occurred when both the effect and onChange fired.
   const fetchTenders = useCallback((searchQuery = query) => {
     setLoading(true);
     const params = { page: currentPage, limit: itemsPerPage };
@@ -99,12 +102,29 @@ export default function Tenders() {
         setTotal(filtered.length);
         setLoading(false);
       });
-  }, [currentPage, query, naicsFilter, setAsideFilter, statusFilter, urgencyFilter, sourceFilter]);
+  }, [currentPage, naicsFilter, setAsideFilter, statusFilter, urgencyFilter, sourceFilter]); // query excluded intentionally
 
-  // Refetch on sourceFilter change
+  // Debounced refetch when query changes — prevents duplicate requests
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      fetchTenders(query);
+    }, query ? 350 : 0);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [query, fetchTenders]);
+
+  // Refetch on sourceFilter change (immediate, no debounce needed)
   useEffect(() => {
     fetchTenders();
   }, [sourceFilter, fetchTenders]);
+
+  // Reset page to 1 when filters change
+  useEffect(() => { setCurrentPage(1); }, [naicsFilter, setAsideFilter, statusFilter, urgencyFilter]);
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
 
   // ----- Fetch sync metadata -----
   const fetchMeta = () => {

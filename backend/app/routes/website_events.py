@@ -11,7 +11,7 @@ from typing import Optional, Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from utils.db_client import get_db_session, get_sync_db_session, _mysql_available
+from utils.db_client import get_db_session, _mysql_available
 from app.core.email_worker import add_score, SCORE_RULES
 from models.sql_models import (
     WebsiteEvent as SQL_WebsiteEvent,
@@ -53,7 +53,7 @@ def score_for_website_event(event_type: str, page: str = "", duration: float = 0
 
 
 @router.post("")
-def log_website_event(body: WebsiteEventBody):
+async def log_website_event(body: WebsiteEventBody):
     if body.eventType not in VALID_EVENT_TYPES:
         raise HTTPException(
             status_code=400,
@@ -66,7 +66,7 @@ def log_website_event(body: WebsiteEventBody):
     if not _mysql_available:
         raise HTTPException(status_code=500, detail="Database is unavailable.")
 
-    with get_sync_db_session() as db:
+    async for db in get_db_session():
         if body.leadId:
             try:
                 lead_id = int(body.leadId)
@@ -74,7 +74,7 @@ def log_website_event(body: WebsiteEventBody):
                 raise HTTPException(status_code=400, detail="Invalid lead ID.")
             
             stmt = select(SQL_Lead).where(SQL_Lead.id == lead_id)
-            lead = db.execute(stmt).scalar_one_or_none()
+            lead = (await db.execute(stmt)).scalar_one_or_none()
             if not lead:
                 raise HTTPException(status_code=404, detail="Lead not found.")
 
@@ -85,7 +85,7 @@ def log_website_event(body: WebsiteEventBody):
                 raise HTTPException(status_code=400, detail="Invalid campaign ID.")
             
             stmt_c = select(SQL_Campaign).where(SQL_Campaign.id == campaign_id)
-            camp = db.execute(stmt_c).scalar_one_or_none()
+            camp = (await db.execute(stmt_c)).scalar_one_or_none()
             if not camp:
                 raise HTTPException(status_code=404, detail="Campaign not found.")
 
@@ -105,8 +105,8 @@ def log_website_event(body: WebsiteEventBody):
             created_at=datetime.utcnow()
         )
         db.add(new_event)
-        db.commit()
-        db.refresh(new_event)
+        await db.commit()
+        await db.refresh(new_event)
         event_id = str(new_event.id)
 
         if lead_id:
@@ -115,11 +115,11 @@ def log_website_event(body: WebsiteEventBody):
                 add_score(lead_id, points)
 
             if body.eventType == "form_submit":
-                db.execute(
+                await db.execute(
                     update(SQL_Lead)
                     .where(SQL_Lead.id == lead_id, ~SQL_Lead.status.in_(["replied", "unsubscribed"]))
                     .values(status="clicked", updated_at=datetime.utcnow())
                 )
-                db.commit()
+                await db.commit()
 
     return {"ok": True, "eventId": event_id}

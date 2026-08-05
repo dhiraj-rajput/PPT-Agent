@@ -11,6 +11,7 @@ rest of the application still works without email.
 from __future__ import annotations
 
 import asyncio
+import html as _html
 import logging
 import os
 from typing import Optional
@@ -155,17 +156,22 @@ async def send_invite_email(
     temp_password: str,
 ) -> None:
     login_link = f"{settings.CLIENT_URL}/login"
+    # HTML-escape all user-controlled inputs to prevent XSS in email clients
+    safe_name = _html.escape(invitee_name or "")
+    safe_inviter = _html.escape(inviter_name or "A teammate")
+    safe_role = _html.escape(role or "")
+    safe_email = _html.escape(to_email or "")
     html = _shell(
         "You've been invited to OrbitAvanya",
         f"""
       <p style="color:#374151; font-size: 14px;">
-        Hi {invitee_name or ''}, {inviter_name or 'A teammate'} has invited you to join the
-        OrbitAvanya workspace as <strong>{role}</strong>.
+        Hi {safe_name}, {safe_inviter} has invited you to join the
+        OrbitAvanya workspace as <strong>{safe_role}</strong>.
       </p>
       <p style="color:#374151; font-size: 14px;">Your temporary sign-in details:</p>
       <p style="font-size: 14px; color:#111827; background:#f3f4f6; padding: 12px 16px; border-radius: 8px;">
-        Email: <strong>{to_email}</strong><br/>
-        Temporary password: <strong>{temp_password}</strong>
+        Email: <strong>{safe_email}</strong><br/>
+        Temporary password: <strong>{_html.escape(temp_password)}</strong>
       </p>
       <p style="color:#374151; font-size: 14px;">
         Please sign in and change your password from Settings as soon as possible.
@@ -194,15 +200,21 @@ async def send_task_assigned_email(
     assigner_name: Optional[str],
 ) -> None:
     tasks_link = f"{settings.CLIENT_URL}/tasks"
+    # HTML-escape all user-controlled inputs
+    safe_assignee = _html.escape(assignee_name or "")
+    safe_assigner = _html.escape(assigner_name or "a teammate")
+    safe_title = _html.escape(task_title or "")
+    safe_due = _html.escape(due or "Not set")
+    safe_priority = _html.escape(priority or "Medium")
     html = _shell(
         "New task assigned to you",
         f"""
       <p style="color:#374151; font-size: 14px;">
-        Hi {assignee_name or ''}, {assigner_name or 'a teammate'} assigned you a new task in OrbitAvanya.
+        Hi {safe_assignee}, {safe_assigner} assigned you a new task in OrbitAvanya.
       </p>
       <p style="font-size: 14px; color:#111827; background:#f3f4f6; padding: 12px 16px; border-radius: 8px;">
-        <strong>{task_title}</strong><br/>
-        Due: {due or 'Not set'} &middot; Priority: {priority or 'Medium'}
+        <strong>{safe_title}</strong><br/>
+        Due: {safe_due} &middot; Priority: {safe_priority}
       </p>
       <p style="margin: 24px 0;">
         <a href="{tasks_link}" style="background:#4f46e5; color:#fff; padding: 10px 20px; border-radius: 8px; text-decoration:none; font-size: 14px; font-weight: bold;">
@@ -229,6 +241,12 @@ async def send_meeting_invite_email(
     organizer_name: Optional[str],
 ) -> None:
     meetings_link = f"{settings.CLIENT_URL}/meetings"
+    # HTML-escape user-controlled values
+    safe_title = _html.escape(title or "")
+    safe_date = _html.escape(date or "")
+    safe_time = _html.escape(time or "")
+    safe_organizer = _html.escape(organizer_name or "A teammate")
+    safe_location = _html.escape(location or "To be confirmed")
     if meeting_type == "Video Call" and meeting_link:
         join_block = f"""
         <p style="margin: 16px 0;">
@@ -239,17 +257,17 @@ async def send_meeting_invite_email(
         <p style="color:#9ca3af; font-size: 12px;">Or copy this link: {meeting_link}</p>
         """
     else:
-        join_block = f'<p style="color:#374151; font-size: 14px;">Location: {location or "To be confirmed"}</p>'
+        join_block = f'<p style="color:#374151; font-size: 14px;">Location: {safe_location}</p>'
 
     html = _shell(
         "Meeting invitation",
         f"""
       <p style="color:#374151; font-size: 14px;">
-        {organizer_name or 'A teammate'} scheduled a meeting with you on OrbitAvanya.
+        {safe_organizer} scheduled a meeting with you on OrbitAvanya.
       </p>
       <p style="font-size: 14px; color:#111827; background:#f3f4f6; padding: 12px 16px; border-radius: 8px;">
-        <strong>{title}</strong><br/>
-        {date} at {time}
+        <strong>{safe_title}</strong><br/>
+        {safe_date} at {safe_time}
       </p>
       {join_block}
       <p style="color:#9ca3af; font-size: 12px;">Full details: {meetings_link}</p>

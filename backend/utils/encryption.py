@@ -7,7 +7,13 @@ from config.settings import settings
 logger = logging.getLogger(__name__)
 
 def _get_fernet_key() -> bytes:
-    jwt_secret = getattr(settings, "JWT_SECRET", "") or "default_secret_for_linkedin_encryption"
+    jwt_secret = getattr(settings, "JWT_SECRET", "") or ""
+    if not jwt_secret:
+        raise ValueError(
+            "[Encryption] JWT_SECRET is not set in environment variables. "
+            "Cannot derive encryption key — refusing to use a hardcoded fallback. "
+            "Set JWT_SECRET in your .env file before starting the application."
+        )
     key_hash = hashlib.sha256(jwt_secret.encode("utf-8")).digest()
     return base64.urlsafe_b64encode(key_hash)
 

@@ -17,7 +17,7 @@ const topNav = [
 const bizNav = [
   { to: '/database', label: 'Database', icon: Database },
   { to: '/tenders', label: 'Tenders', icon: FileStack },
-  { to: '/naics', label: 'NAICS Muster', icon: Hash },
+  { to: '/naics', label: 'Code Muster', icon: Hash },
   { to: '/ai-research', label: 'AI Research', icon: BrainCircuit },
   { to: '/proposal-builder', label: 'Proposal Builder', icon: FileEdit },
   { to: '/rfp-auto-respond', label: 'RFP Auto-Respond', icon: Zap },

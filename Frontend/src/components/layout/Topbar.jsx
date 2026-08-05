@@ -217,8 +217,10 @@ export default function Topbar({ onMenuClick }) {
   useEffect(() => {
     if (!showSearch || !searchQuery.trim()) {
       setSearchResults([]);
+      setSearchLoading(false);
       return;
     }
+    let active = true;
     setSearchLoading(true);
     const timer = setTimeout(() => {
       const fetchPromise = searchTab === 'tenders'
@@ -227,14 +229,23 @@ export default function Topbar({ onMenuClick }) {
 
       fetchPromise
         .then((res) => {
+          if (!active) return;
           const items = searchTab === 'tenders' ? (res.tenders || []) : (res.companies || []);
           setSearchResults(items);
         })
-        .catch((err) => console.error(err))
-        .finally(() => setSearchLoading(false));
+        .catch((err) => {
+          if (!active) return;
+          console.error(err);
+        })
+        .finally(() => {
+          if (active) setSearchLoading(false);
+        });
     }, 250);
 
-    return () => clearTimeout(timer);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, [searchQuery, searchTab, showSearch]);
 
   useEffect(() => {

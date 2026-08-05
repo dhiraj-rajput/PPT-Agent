@@ -114,18 +114,13 @@ export default function NaicsMuster() {
     }
   }, [limit, sourceSystem]);
 
-  // Debounced search and direct filter refetch
+  // Debounced search and filter refetch
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchNaics(page, search, sector, matchCompanyDescription, sourceSystem);
     }, 200);
     return () => clearTimeout(timer);
   }, [page, search, sector, matchCompanyDescription, sourceSystem, fetchNaics]);
-
-  // Reset page to 1 on filter or search changes
-  useEffect(() => {
-    setPage(1);
-  }, [search, sector, matchCompanyDescription]);
 
 
   // Copy code to clipboard

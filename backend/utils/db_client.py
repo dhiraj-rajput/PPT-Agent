@@ -247,11 +247,15 @@ def ensure_all_indexes() -> None:
     with _indexes_lock:
         if _indexes_ensured_flag:
             return
-        _indexes_ensured_flag = True
+        # NOTE: Flag is set AFTER successful execution so a crash during
+        # ensure_indexes() does not permanently skip future initialization.
 
     logger.info("Creating indexes for all collections...")
 
     ensure_indexes()
+
+    with _indexes_lock:
+        _indexes_ensured_flag = True
 
 
     def _safe_create(col_name: str, keys: list, **kwargs):

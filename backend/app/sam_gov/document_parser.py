@@ -306,15 +306,24 @@ class DocumentParser:
             result["status"] = "download_failed"
             return result
 
-        # Peak at initial chunk for magic header validation
-        initial_chunk = b""
-        chunks = []
-        for chunk in response.iter_content(chunk_size=8192):
-            if chunk:
-                chunks.append(chunk)
-                if len(initial_chunk) < 64:
-                    initial_chunk += chunk
-        content_bytes = b"".join(chunks)
+        # Stream response directly to a temporary file on disk
+        import tempfile
+        temp_dir = Path(target_dir)
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        
+        initial_bytes = b""
+        total_written = 0
+        
+        with tempfile.NamedTemporaryFile("wb", dir=temp_dir, delete=False) as temp_f:
+            temp_path = Path(temp_f.name)
+            for chunk in response.iter_content(chunk_size=64 * 1024):
+                if chunk:
+                    if len(initial_bytes) < 64:
+                        initial_bytes += chunk[:64 - len(initial_bytes)]
+                    temp_f.write(chunk)
+                    total_written += len(chunk)
+
+        content_bytes = initial_bytes  # header snippet for format detection
 
         # --- Determine filename ---
         filename = ""
@@ -373,18 +382,20 @@ class DocumentParser:
                 f"Skipping {filename}: URL returned HTML/non-PDF content. "
                 f"This is likely a login redirect or error page. Check SAM_GOV_API_KEY."
             )
+            if temp_path.exists():
+                temp_path.unlink()
             result["status"] = "invalid_pdf_content"
             return result
 
         result["filename"] = filename
 
         try:
-            os.makedirs(target_dir, exist_ok=True)
             target_path = os.path.join(target_dir, filename)
-            with open(target_path, "wb") as f:
-                f.write(content_bytes)
+            if os.path.exists(target_path):
+                os.remove(target_path)
+            os.rename(temp_path, target_path)
 
-            file_size = len(content_bytes)
+            file_size = total_written
             logger.info(f"Saved document to disk: {target_path} ({file_size} bytes)")
 
             result["status"] = "success"

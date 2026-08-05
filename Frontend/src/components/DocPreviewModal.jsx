@@ -38,9 +38,14 @@ export default function DocPreviewModal({ title, subtitle, filename, blob, fetch
 
         if (isDocx) {
           const mammoth = await import('mammoth');
+          const DOMPurify = (await import('dompurify')).default;
           const arrayBuffer = await fileBlob.arrayBuffer();
           const result = await mammoth.convertToHtml({ arrayBuffer });
-          if (!cancelled) setDocxHtml(result.value);
+          // Sanitize to prevent XSS from malicious .docx files
+          const safeHtml = DOMPurify.sanitize(result.value, {
+            USE_PROFILES: { html: true },
+          });
+          if (!cancelled) setDocxHtml(safeHtml);
         } else {
           localUrl = URL.createObjectURL(fileBlob);
           if (!cancelled) setObjectUrl(localUrl);

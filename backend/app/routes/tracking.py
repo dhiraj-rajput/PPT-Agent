@@ -3,7 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, Header, Request, HTTPException
 from fastapi.responses import Response, RedirectResponse, HTMLResponse
 
-from utils.db_client import get_sync_db_session, _mysql_available
+from utils.db_client import get_db_session, get_sync_db_session, _mysql_available
 from models.sql_models import (
     TrackingEvent as SQL_TrackingEvent,
     Lead as SQL_Lead,
@@ -35,7 +35,7 @@ def _client_ip(request: Request) -> str:
 
 
 @router.get("/open/{trackingId}.png")
-def open_tracking(
+async def open_tracking(
     trackingId: str,
     request: Request,
     user_agent: Optional[str] = Header(None, alias="User-Agent"),
@@ -55,12 +55,12 @@ def open_tracking(
         return response
 
     try:
-        with get_sync_db_session() as db:
+        async for db in get_db_session():
             stmt = select(SQL_TrackingEvent).where(
                 SQL_TrackingEvent.tracking_id == trackingId,
                 SQL_TrackingEvent.event_type == "open"
             )
-            registered = db.execute(stmt).scalar_one_or_none()
+            registered = (await db.execute(stmt)).scalar_one_or_none()
             if not registered:
                 return response
 
@@ -69,7 +69,7 @@ def open_tracking(
             ua = user_agent or ""
 
             if is_first_open:
-                db.execute(
+                await db.execute(
                     update(SQL_TrackingEvent)
                     .where(SQL_TrackingEvent.id == registered.id)
                     .values(
@@ -83,7 +83,7 @@ def open_tracking(
                 # 1. Handle Lead/Campaign Open
                 if getattr(registered, "lead_id", None):
                     stmt_lead = select(SQL_Lead).where(SQL_Lead.id == registered.lead_id)
-                    lead = db.execute(stmt_lead).scalar_one_or_none()
+                    lead = (await db.execute(stmt_lead)).scalar_one_or_none()
                     if lead and getattr(lead, "status", "") != "replied":
                         status_to_set = "opened" if getattr(lead, "status", "") in ("sent", "pending", "draft") else getattr(lead, "status", "")
                         update_dict = {
@@ -93,7 +93,7 @@ def open_tracking(
                         if not getattr(lead, "opened_at", None):
                             update_dict["opened_at"] = datetime.utcnow()
 
-                        db.execute(
+                        await db.execute(
                             update(SQL_Lead)
                             .where(SQL_Lead.id == lead.id)
                             .values(**update_dict)
@@ -101,12 +101,12 @@ def open_tracking(
 
                         # Increment campaign stats
                         if getattr(registered, "campaign_id", None):
-                            camp_row = db.execute(select(SQL_Campaign).where(SQL_Campaign.id == registered.campaign_id)).scalar_one_or_none()
+                            camp_row = (await db.execute(select(SQL_Campaign).where(SQL_Campaign.id == registered.campaign_id))).scalar_one_or_none()
                             if camp_row:
                                 raw_stats = getattr(camp_row, "stats", {})
                                 stats = {str(k): v for k, v in dict(raw_stats).items()} if isinstance(raw_stats, dict) else {}
                                 stats["totalOpened"] = int(str(stats.get("totalOpened", 0) or 0)) + 1
-                                db.execute(
+                                await db.execute(
                                     update(SQL_Campaign)
                                     .where(SQL_Campaign.id == registered.campaign_id)
                                     .values(stats=stats, updated_at=datetime.utcnow())
@@ -117,24 +117,24 @@ def open_tracking(
 
                 # 2. Handle Newsletter Edition Open
                 if getattr(registered, "edition_id", None):
-                    edition_row = db.execute(select(SQL_Edition).where(SQL_Edition.id == registered.edition_id)).scalar_one_or_none()
+                    edition_row = (await db.execute(select(SQL_Edition).where(SQL_Edition.id == registered.edition_id))).scalar_one_or_none()
                     if edition_row:
                         raw_stats = getattr(edition_row, "stats", {})
                         stats = {str(k): v for k, v in dict(raw_stats).items()} if isinstance(raw_stats, dict) else {}
                         stats["opened"] = int(str(stats.get("opened", 0) or 0)) + 1
-                        db.execute(
+                        await db.execute(
                             update(SQL_Edition)
                             .where(SQL_Edition.id == registered.edition_id)
                             .values(stats=stats, updated_at=datetime.utcnow())
                         )
 
                     if getattr(registered, "newsletter_id", None):
-                        news_row = db.execute(select(SQL_Newsletter).where(SQL_Newsletter.id == registered.newsletter_id)).scalar_one_or_none()
+                        news_row = (await db.execute(select(SQL_Newsletter).where(SQL_Newsletter.id == registered.newsletter_id))).scalar_one_or_none()
                         if news_row:
                             raw_stats_news = getattr(news_row, "stats", {})
                             stats_news = {str(k): v for k, v in dict(raw_stats_news).items()} if isinstance(raw_stats_news, dict) else {}
                             stats_news["totalOpened"] = int(str(stats_news.get("totalOpened", 0) or 0)) + 1
-                            db.execute(
+                            await db.execute(
                                 update(SQL_Newsletter)
                                 .where(SQL_Newsletter.id == registered.newsletter_id)
                                 .values(stats=stats_news, updated_at=datetime.utcnow())
@@ -142,7 +142,7 @@ def open_tracking(
 
 
                     if getattr(registered, "subscriber_id", None):
-                        db.execute(
+                        await db.execute(
                             update(SQL_NewsletterSend)
                             .where(
                                 SQL_NewsletterSend.edition_id == registered.edition_id,
@@ -150,11 +150,11 @@ def open_tracking(
                             )
                             .values(opened_at=datetime.utcnow())
                         )
-                db.commit()
+                await db.commit()
 
             else:
                 # Repeat open: Log another tracking event
-                db.execute(insert(SQL_TrackingEvent).values(
+                await db.execute(insert(SQL_TrackingEvent).values(
                     tracking_id=trackingId,
                     lead_id=registered.lead_id,
                     campaign_id=registered.campaign_id,
@@ -168,7 +168,7 @@ def open_tracking(
                     created_at=datetime.utcnow(),
                     updated_at=datetime.utcnow(),
                 ))
-                db.commit()
+                await db.commit()
     except Exception as e:
         # Silently log to stdout so recipient rendering is never affected
         print(f"[Tracking] Open tracking error: {e}")
@@ -177,7 +177,7 @@ def open_tracking(
 
 
 @router.get("/click/{trackingId}")
-def click_tracking(
+async def click_tracking(
     trackingId: str,
     request: Request,
     user_agent: Optional[str] = Header(None, alias="User-Agent"),
@@ -189,12 +189,12 @@ def click_tracking(
         return RedirectResponse(url="/", status_code=302)
 
     try:
-        with get_sync_db_session() as db:
+        async for db in get_db_session():
             stmt = select(SQL_TrackingEvent).where(
                 SQL_TrackingEvent.tracking_id == trackingId,
                 SQL_TrackingEvent.event_type == "click"
             )
-            registered = db.execute(stmt).scalar_one_or_none()
+            registered = (await db.execute(stmt)).scalar_one_or_none()
             if not registered or not getattr(registered, "destination_url", ""):
                 raise HTTPException(status_code=404, detail="Link not found.")
 

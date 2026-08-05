@@ -31,8 +31,6 @@ export default function RFPAutoRespond() {
   const rfpRef = useRef(null);
   const tplRef = useRef(null);
   const pollRef = useRef(null);
-
-  const [aiStatus, setAiStatus] = useState(null);
   const [previewFile, setPreviewFile] = useState(null); // local File being previewed pre-upload
   const [previewingResult, setPreviewingResult] = useState(false); // generated output preview
 
@@ -41,12 +39,6 @@ export default function RFPAutoRespond() {
   // -------------------------------------------------------------------------
 
   useEffect(() => {
-    api.health().then((res) => {
-      if (res && res.ai_status) {
-        setAiStatus(res.ai_status);
-      }
-    }).catch(() => {});
-
     const savedTaskId = localStorage.getItem('rfp_active_task_id');
     if (savedTaskId) {
       setTaskId(savedTaskId);

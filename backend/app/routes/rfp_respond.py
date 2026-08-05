@@ -213,22 +213,45 @@ async def upload_rfp(
     task_dir = UPLOAD_DIR / task_id
     task_dir.mkdir(parents=True, exist_ok=True)
 
-    rfp_dests = []
-    for file in rfp_files:
-        if file.filename:
-            content = await file.read()
-            if len(content) > MAX_FILE_SIZE:
+def _save_upload_file_sync(file: UploadFile, dest_path: Path, max_bytes: int = 10 * 1024 * 1024) -> None:
+    total_written = 0
+    with open(dest_path, "wb") as out:
+        while True:
+            chunk = file.file.read(64 * 1024)
+            if not chunk:
+                break
+            total_written += len(chunk)
+            if total_written > max_bytes:
+                out.close()
+                if dest_path.exists():
+                    dest_path.unlink()
                 raise HTTPException(
                     status_code=413,
                     detail=f"File '{file.filename}' exceeds the 10MB size limit."
                 )
+            out.write(chunk)
+
+
+@router.post("/upload")
+async def upload_rfp(
+    background_tasks: BackgroundTasks,
+    rfp_files: list[UploadFile] = File(...),
+    template_file: Optional[UploadFile] = File(None),
+    wizard_config: Optional[str] = Form(None),
+    current_user: dict = Depends(get_current_user),
+):
+    if len(rfp_files) > 5:
+        raise HTTPException(status_code=400, detail="Cannot upload more than 5 RFP files at once.")
+
+    task_id = uuid.uuid4().hex[:12]
+    task_dir = UPLOAD_DIR / task_id
+    task_dir.mkdir(parents=True, exist_ok=True)
+
+    rfp_dests = []
+    for file in rfp_files:
+        if file.filename:
             dest = task_dir / _safe_name(file.filename)
-
-            def write_rfp_file(path_target, file_content):
-                with open(path_target, "wb") as f:
-                    f.write(file_content)
-
-            await asyncio.to_thread(write_rfp_file, dest, content)
+            await asyncio.to_thread(_save_upload_file_sync, file, dest)
             rfp_dests.append(str(dest))
 
     if not rfp_dests:
@@ -240,16 +263,8 @@ async def upload_rfp(
     if template_file is not None and template_file.filename:
         if not template_file.filename.lower().endswith(".docx"):
             raise HTTPException(400, "Template must be a .docx file.")
-        content = await template_file.read()
-        if len(content) > MAX_FILE_SIZE:
-            raise HTTPException(status_code=413, detail="Template file exceeds the 10MB size limit.")
         template_dest = task_dir / _safe_name(template_file.filename)
-
-        def write_tmpl_file(path_target, file_content):
-            with open(path_target, "wb") as f:
-                f.write(file_content)
-
-        await asyncio.to_thread(write_tmpl_file, template_dest, content)
+        await asyncio.to_thread(_save_upload_file_sync, template_file, template_dest)
     else:
         from documents.default_template import get_default_template_path
         default_path = get_default_template_path()
