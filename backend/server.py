@@ -7,6 +7,8 @@ OrbitAvanya — FastAPI backend entry point using MySQL as the primary database.
 from __future__ import annotations
 
 import sys
+import asyncio
+
 
 # ── Windows: switch to ProactorEventLoop BEFORE uvicorn/asyncio start ────────
 # On Windows, the default SelectorEventLoop cannot spawn subprocesses, which

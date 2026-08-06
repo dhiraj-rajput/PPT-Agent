@@ -10,9 +10,9 @@ export function PageHeader({ title, subtitle, action }) {
   );
 }
 
-export function Card({ children, className = '' }) {
+export function Card({ children, className = '', ...rest }) {
   return (
-    <div className={`rounded-2xl border border-slate-100 bg-white p-5 shadow-card dark:border-navy-800 dark:bg-navy-900 ${className}`}>
+    <div className={`rounded-2xl border border-slate-100 bg-white p-5 shadow-card dark:border-navy-800 dark:bg-navy-900 ${className}`} {...rest}>
       {children}
     </div>
   );

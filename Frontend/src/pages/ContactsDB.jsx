@@ -184,6 +184,7 @@ export default function ContactsDB() {
   const [peopleStatusFilter, setPeopleStatusFilter] = useState('All');
   const [peopleSourceFilter, setPeopleSourceFilter] = useState('All');
   const [peopleCountryFilter, setPeopleCountryFilter] = useState('All');
+  const [peopleSeniorityFilter, setPeopleSeniorityFilter] = useState('All');
   const [peopleSourceOptions, setPeopleSourceOptions] = useState([]);
   const [peopleCountryOptions, setPeopleCountryOptions] = useState([]);
 
@@ -279,6 +280,8 @@ export default function ContactsDB() {
       .finally(() => setLoadingCompanies(false));
   }, [compQuery, companiesPage, compSizeFilter, compNaicsFilter, compResearchedFilter, matchCompanyDesc]);
 
+  const peopleRequestIdRef = useRef(0);
+
   const loadPeopleList = useCallback((q = peopleQuery, p = peoplePage) => {
     setLoadingPeople(true);
     const params = { page: String(p), limit: String(LIMIT) };
@@ -286,17 +289,29 @@ export default function ContactsDB() {
     if (peopleStatusFilter !== 'All') params.status = peopleStatusFilter;
     if (peopleSourceFilter !== 'All') params.source = peopleSourceFilter;
     if (peopleCountryFilter !== 'All') params.country = peopleCountryFilter;
+    if (peopleSeniorityFilter !== 'All') params.seniority = peopleSeniorityFilter;
+
+    // Guard against race conditions: if the user clicks through filters quickly
+    // (e.g. multiple chart clicks), an older, slower request can resolve AFTER a
+    // newer one and overwrite the table with stale/wrong results — which is what
+    // caused "clicking works sometimes, needs a reload" behavior. We tag each
+    // request with an incrementing id and only apply the response if it's still
+    // the most recent request in flight.
+    const requestId = ++peopleRequestIdRef.current;
 
     api.getPeople(params)
       .then(res => {
+        if (requestId !== peopleRequestIdRef.current) return; // stale response, ignore
         setPeople(res?.people || []);
         setTotalPeople(res?.total || 0);
         if (res?.source_options) setPeopleSourceOptions(res.source_options);
         if (res?.country_options) setPeopleCountryOptions(res.country_options);
       })
       .catch(() => {})
-      .finally(() => setLoadingPeople(false));
-  }, [peopleQuery, peoplePage, peopleStatusFilter, peopleSourceFilter, peopleCountryFilter]);
+      .finally(() => {
+        if (requestId === peopleRequestIdRef.current) setLoadingPeople(false);
+      });
+  }, [peopleQuery, peoplePage, peopleStatusFilter, peopleSourceFilter, peopleCountryFilter, peopleSeniorityFilter]);
 
   // Loading triggers
   useEffect(() => {
@@ -305,11 +320,11 @@ export default function ContactsDB() {
 
   useEffect(() => {
     if (tableView === 'all' || tableView === 'people') loadPeopleList();
-  }, [loadPeopleList, tableView, peoplePage, peopleStatusFilter, peopleSourceFilter, peopleCountryFilter]);
+  }, [loadPeopleList, tableView, peoplePage, peopleStatusFilter, peopleSourceFilter, peopleCountryFilter, peopleSeniorityFilter]);
 
   // Reset pagination
   useEffect(() => { setCompaniesPage(1); }, [compQuery, compSizeFilter, compNaicsFilter, compResearchedFilter, matchCompanyDesc]);
-  useEffect(() => { setPeoplePage(1); }, [peopleQuery, peopleStatusFilter, peopleSourceFilter, peopleCountryFilter]);
+  useEffect(() => { setPeoplePage(1); }, [peopleQuery, peopleStatusFilter, peopleSourceFilter, peopleCountryFilter, peopleSeniorityFilter]);
 
   // ──────────────────────────────────────────────────────────────────────────
   // Companies Write / Import Submit Handlers
@@ -556,6 +571,43 @@ export default function ContactsDB() {
   const totalRecordsCount = (companiesSummary?.total || 0) + (peopleSummary?.total || 0);
 
   // ──────────────────────────────────────────────────────────────────────────
+  // Click-to-filter handlers for the People analytics charts
+  // (Source pie chart + Country bar chart + Seniority bar chart all drill
+  // down into the People table below)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  const scrollToPeopleTable = () => {
+    // Wait a tick so the table has re-rendered with the new filter applied
+    requestAnimationFrame(() => {
+      document.getElementById('people-table-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
+  const handleSourceSliceClick = (entry) => {
+    const name = entry?.name || entry?.payload?.name;
+    if (!name) return;
+    setTableView('people');
+    setPeopleSourceFilter(prev => (prev === name ? 'All' : name));
+    scrollToPeopleTable();
+  };
+
+  const handleCountryBarClick = (entry) => {
+    const name = entry?.name || entry?.payload?.name || entry?.activeLabel;
+    if (!name) return;
+    setTableView('people');
+    setPeopleCountryFilter(prev => (prev === name ? 'All' : name));
+    scrollToPeopleTable();
+  };
+
+  const handleSeniorityBarClick = (entry) => {
+    const name = entry?.name || entry?.payload?.name || entry?.activeLabel;
+    if (!name) return;
+    setTableView('people');
+    setPeopleSeniorityFilter(prev => (prev === name ? 'All' : name));
+    scrollToPeopleTable();
+  };
+
+  // ──────────────────────────────────────────────────────────────────────────
   // UI Render
   // ──────────────────────────────────────────────────────────────────────────
 
@@ -735,12 +787,44 @@ export default function ContactsDB() {
           {tableView === 'people' && (
             <>
               <Card>
-                <div className="p-4 border-b dark:border-navy-850"><h4 className="text-xs font-bold text-navy-900 dark:text-white uppercase tracking-wider">Contact Sources Ratio</h4></div>
+                <div className="p-4 border-b dark:border-navy-850 flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-navy-900 dark:text-white uppercase tracking-wider">Contact Sources Ratio</h4>
+                  {peopleSourceFilter !== 'All' && (
+                    <button
+                      type="button"
+                      onClick={() => setPeopleSourceFilter('All')}
+                      className="flex items-center gap-1 rounded-full bg-brand-50 dark:bg-brand-950/30 px-2 py-0.5 text-[10px] font-bold text-brand-600 hover:bg-brand-100"
+                    >
+                      {peopleSourceFilter} <X size={10} />
+                    </button>
+                  )}
+                </div>
+                <p className="px-4 pt-2 text-[10px] text-slate-400">Click a slice to filter the directory below by source</p>
                 <div className="h-64 p-4 flex items-center justify-center">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={peopleSummary?.bySource || []} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} label>
-                        {(peopleSummary?.bySource || []).map((entry, idx) => <Cell key={`cell-${idx}`} fill={COLORS[idx % COLORS.length]} />)}
+                      <Pie
+                        data={peopleSummary?.bySource || []}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        label
+                        onClick={handleSourceSliceClick}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        {(peopleSummary?.bySource || []).map((entry, idx) => (
+                          <Cell
+                            key={`cell-${idx}`}
+                            fill={COLORS[idx % COLORS.length]}
+                            stroke={peopleSourceFilter === entry.name ? '#0f172a' : 'transparent'}
+                            strokeWidth={peopleSourceFilter === entry.name ? 2 : 0}
+                            style={{ cursor: 'pointer' }}
+                          />
+                        ))}
                       </Pie>
                       <Tooltip />
                       <Legend verticalAlign="bottom" height={36} />
@@ -749,16 +833,83 @@ export default function ContactsDB() {
                 </div>
               </Card>
 
-              <Card className="xl:col-span-2">
-                <div className="p-4 border-b dark:border-navy-850"><h4 className="text-xs font-bold text-navy-900 dark:text-white uppercase tracking-wider">Contacts Seniority Level distribution</h4></div>
+              <Card>
+                <div className="p-4 border-b dark:border-navy-850 flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-navy-900 dark:text-white uppercase tracking-wider">Contacts by Country</h4>
+                  {peopleCountryFilter !== 'All' && (
+                    <button
+                      type="button"
+                      onClick={() => setPeopleCountryFilter('All')}
+                      className="flex items-center gap-1 rounded-full bg-brand-50 dark:bg-brand-950/30 px-2 py-0.5 text-[10px] font-bold text-brand-600 hover:bg-brand-100"
+                    >
+                      {peopleCountryFilter} <X size={10} />
+                    </button>
+                  )}
+                </div>
+                <p className="px-4 pt-2 text-[10px] text-slate-400">Click a bar to filter the directory below by country</p>
+                <div className="h-64 p-4">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={peopleSummary?.byCountry || []}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                      <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                      <Tooltip />
+                      <Bar
+                        dataKey="value"
+                        radius={[4, 4, 0, 0]}
+                        name="Contacts Count"
+                        onClick={handleCountryBarClick}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        {(peopleSummary?.byCountry || []).map((entry, idx) => (
+                          <Cell
+                            key={`bar-cell-${idx}`}
+                            fill={peopleCountryFilter === entry.name ? '#0f172a' : '#10b981'}
+                            style={{ cursor: 'pointer' }}
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+
+              <Card>
+                <div className="p-4 border-b dark:border-navy-850 flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-navy-900 dark:text-white uppercase tracking-wider">Contacts Seniority Level Distribution</h4>
+                  {peopleSeniorityFilter !== 'All' && (
+                    <button
+                      type="button"
+                      onClick={() => setPeopleSeniorityFilter('All')}
+                      className="flex items-center gap-1 rounded-full bg-brand-50 dark:bg-brand-950/30 px-2 py-0.5 text-[10px] font-bold text-brand-600 hover:bg-brand-100"
+                    >
+                      {peopleSeniorityFilter} <X size={10} />
+                    </button>
+                  )}
+                </div>
+                <p className="px-4 pt-2 text-[10px] text-slate-400">Click a bar to filter the directory below by seniority</p>
                 <div className="h-64 p-4">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={peopleSummary?.bySeniority || []}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} />
                       <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                      <YAxis tick={{ fontSize: 10 }} />
+                      <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
                       <Tooltip />
-                      <Bar dataKey="value" fill="#10b981" radius={[4, 4, 0, 0]} name="Contacts Count" />
+                      <Bar
+                        dataKey="value"
+                        radius={[4, 4, 0, 0]}
+                        name="Contacts Count"
+                        onClick={handleSeniorityBarClick}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        {(peopleSummary?.bySeniority || []).map((entry, idx) => (
+                          <Cell
+                            key={`sen-cell-${idx}`}
+                            fill={peopleSeniorityFilter === entry.name ? '#0f172a' : '#f59e0b'}
+                            style={{ cursor: 'pointer' }}
+                          />
+                        ))}
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -780,7 +931,7 @@ export default function ContactsDB() {
       )}
 
       {(tableView === 'all' || tableView === 'people') && (
-        <Card className="p-6">
+        <Card className="p-6" id="people-table-section">
           <div className="flex items-center gap-2 mb-4">
             <Users size={16} className="text-brand-500" />
             <h3 className="text-sm font-extrabold text-navy-900 dark:text-white">People &amp; Contacts Directory</h3>
@@ -1349,6 +1500,11 @@ export default function ContactsDB() {
           <select value={peopleCountryFilter} onChange={e=>setPeopleCountryFilter(e.target.value)} className="rounded-xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-3 py-2.5 text-xs font-semibold text-slate-600 dark:text-slate-300 outline-none max-w-xs cursor-pointer truncate">
             <option value="All">All Countries</option>
             {peopleCountryOptions.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+
+          <select value={peopleSeniorityFilter} onChange={e=>setPeopleSeniorityFilter(e.target.value)} className="rounded-xl border border-slate-200 dark:border-navy-700 bg-white dark:bg-navy-900 px-3 py-2.5 text-xs font-semibold text-slate-600 dark:text-slate-300 outline-none cursor-pointer">
+            <option value="All">All Seniority</option>
+            {(peopleSummary?.bySeniority || []).map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
           </select>
         </div>
 
