@@ -520,17 +520,34 @@ export const api = {
   },
 
   // ---------- RFP Auto-Respond ----------
-  async uploadRfp(rfpFiles, templateFile = null, wizardConfig = null) {
+  async analyzeRfp(rfpFiles, templateFile = null) {
+    const formData = new FormData();
+    if (Array.isArray(rfpFiles)) {
+      rfpFiles.forEach(file => formData.append('rfp_files', file));
+    } else {
+      formData.append('rfp_files', rfpFiles);
+    }
+    if (templateFile) formData.append('template_file', templateFile);
+    return _upload('/api/rfp-respond/analyze', formData);
+  },
+  async getRfpAnalyzeStatus(taskId) {
+    return get(`/api/rfp-respond/status/${taskId}`);
+  },
+  async clarifyRfp(taskId, answers) {
+    return post('/api/rfp-respond/clarify', { task_id: taskId, answers });
+  },
+  async uploadRfp(rfpFiles, templateFile = null, wizardConfig = null, analysisTaskId = null) {
     const formData = new FormData();
     if (Array.isArray(rfpFiles)) {
       rfpFiles.forEach(file => {
         formData.append('rfp_files', file);
       });
-    } else {
+    } else if (rfpFiles) {
       formData.append('rfp_files', rfpFiles);
     }
     if (templateFile) formData.append('template_file', templateFile);
     if (wizardConfig) formData.append('wizard_config', JSON.stringify(wizardConfig));
+    if (analysisTaskId) formData.append('analysis_task_id', analysisTaskId);
     return _upload('/api/rfp-respond/upload', formData);
   },
   async getRfpRespondStatus(taskId) {

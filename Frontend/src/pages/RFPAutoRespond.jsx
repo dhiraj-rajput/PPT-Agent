@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Upload, FileText, Loader2, CheckCircle, AlertCircle, Download, X, Zap, FileCheck, Eye } from 'lucide-react';
 import { api } from '../lib/api.jsx';
-import PreGenerationWizard from '../components/PreGenerationWizard.jsx';
+import RfpAnalysisWizard from '../components/RfpAnalysisWizard.jsx';
 import DocPreviewModal from '../components/DocPreviewModal.jsx';
 import DefaultTemplateUploader from '../components/DefaultTemplateUploader.jsx';
 import { useNotifications } from '../context/NotificationContext.jsx';
@@ -9,11 +9,15 @@ import { useNotifications } from '../context/NotificationContext.jsx';
  * RFPAutoRespond.jsx
  * -------------------
  * Upload an RFP document (PDF / DOCX / TXT) and optionally a .docx template.
- * The OrbitAvanya AI pipeline (Parse → Inventory → Competitor Intel → Strategy → Generate)
+ * The OrbitAvanya AI pipeline (Parse → Outline → Clarify → Explore → Strategy → Generate)
  * runs in the background and produces a ready-to-send proposal document.
  *
- * Equivalent to the standalone "BidForge" pipeline, now integrated into the
- * main OrbitAvanya platform with the same AI fallback chain used everywhere else.
+ * The RFP is now analyzed BEFORE any questions are asked -- RfpAnalysisWizard
+ * uploads the file(s), waits for /rfp-respond/analyze to actually parse the
+ * document and build an RFP-specific outline, and only then shows whichever
+ * clarifying questions are genuinely needed (previously, the wizard opened
+ * immediately on file selection and asked generic questions unrelated to the
+ * uploaded RFP, because the file hadn't reached the server yet at that point).
  */
 
 const POLL_INTERVAL_MS = 2500;
@@ -96,27 +100,28 @@ export default function RFPAutoRespond() {
       return;
     }
     setError('');
-    
-    // Open the pre-generation wizard
-    setWizardModal({
-      mode: 'prime', // Assuming direct RFP response is acting as prime
-      solicitation: rfpFiles.map(f => f.name).join(', '),
-      tender_title: 'RFP Auto-Respond',
-    });
+
+    // Analyze the RFP first (real parsing + RFP-specific outline +
+    // clarifying questions) instead of opening a generic wizard blind.
+    setWizardModal(true);
   }
 
-  async function handleWizardConfirm(wizardConfig) {
+  // Called by RfpAnalysisWizard once analysis (and any clarification rounds)
+  // are done -- `analysisTaskId` already has the parsed RFP, outline, and
+  // resolved answers cached server-side, so generation reuses all of it
+  // instead of re-uploading/re-parsing anything.
+  async function handleAnalysisReady(analysisTaskId) {
     setWizardModal(null);
     setUploading(true);
     setTaskId(null);
     setTaskState(null);
     try {
-      const { task_id } = await api.uploadRfp(rfpFiles, templateFile, wizardConfig);
+      const { task_id } = await api.uploadRfp([], null, null, analysisTaskId);
       setTaskId(task_id);
       localStorage.setItem('rfp_active_task_id', task_id);
       setTaskState({ progress: 0, status: 'processing', message: 'Upload received, queuing pipeline...', filename: null });
     } catch (err) {
-      setError(err.message || 'Upload failed. Please try again.');
+      setError(err.message || 'Failed to start generation. Please try again.');
     } finally {
       setUploading(false);
     }
@@ -508,11 +513,11 @@ export default function RFPAutoRespond() {
       )}
 
       {wizardModal && (
-        <PreGenerationWizard
-          proposalType="Prime RFP Response"
-          solicitationNumber={wizardModal.solicitation}
+        <RfpAnalysisWizard
+          rfpFiles={rfpFiles}
+          templateFile={templateFile}
           onCancel={() => setWizardModal(null)}
-          onConfirmGenerate={handleWizardConfirm}
+          onReadyToGenerate={handleAnalysisReady}
         />
       )}
 

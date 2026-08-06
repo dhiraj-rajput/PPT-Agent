@@ -122,66 +122,39 @@ async def send_connection_request_playwright(account_id: int, profile_url: str, 
         except Exception:
             logger.warning(f"No recognizable profile action button rendered at all for {profile_url} within 10s.")
 
-        # 1. Look for the Connect action. Real DOM inspection of a LinkedIn
-        # profile page confirms this is an <a> tag with
-        # aria-label="Invite <Name> to connect" — NOT a <button> element:
-        #
-        #   <a aria-label="Invite Dr. Umesh Raut to connect"
-        #      componentkey="ConnectButtonstate:invitation:...">
-        #     <span>Connect</span>
-        #   </a>
-        #
-        # get_by_role("button", name="Connect") can never match this — its
-        # implicit ARIA role is "link", not "button". That's the actual
-        # reason every earlier attempt found zero buttons even on pages
-        # that rendered fine. Target the real markup: match on the
-        # aria-label pattern LinkedIn uses consistently for this action.
-        connect_btn = None
+        # LinkedIn custom-invite preload URL strategy:
+        # Extract vanityName from profile_url and navigate to preload custom-invite modal URL
+        vanity_name = profile_url.rstrip("/").split("/")[-1]
+        preload_url = f"https://www.linkedin.com/preload/custom-invite/?vanityName={vanity_name}"
 
-        connect_link_locator = page.locator("a[aria-label*='to connect' i]")
+        # 1. Look for the Connect action on profile top card
+        connect_btn = None
+        connect_link_locator = page.locator("a[href*='/preload/custom-invite/'], a[aria-label*='to connect' i]")
         try:
-            if await connect_link_locator.count() > 0 and await connect_link_locator.first.is_visible(timeout=3000):
-                connect_btn = connect_link_locator.first
+            if await connect_link_locator.count() > 0:
+                target_elem = connect_link_locator.first
+                try:
+                    await target_elem.scroll_into_view_if_needed(timeout=2000)
+                except Exception:
+                    pass
+                connect_btn = target_elem
         except Exception:
             connect_btn = None
 
-        if not connect_btn:
-            # Some LinkedIn surfaces (search results, "People you may know"
-            # cards) render Connect as a real <button> instead of an <a> —
-            # keep the role-based check as a fallback for those contexts.
-            connect_button_locator = page.get_by_role("button", name="Connect", exact=False)
+        if connect_btn:
             try:
-                if await connect_button_locator.count() > 0 and await connect_button_locator.first.is_visible(timeout=2000):
-                    connect_btn = connect_button_locator.first
-            except Exception:
-                connect_btn = None
-
-        if not connect_btn:
-            # Broader link-role fallback in case the aria-label wording
-            # varies ("Invite ... to connect" vs some other phrasing).
-            connect_link_role_locator = page.get_by_role("link", name="Invite", exact=False)
-            try:
-                if await connect_link_role_locator.count() > 0:
-                    connect_btn = connect_link_role_locator.first
-            except Exception:
-                pass
-
-        if not connect_btn:
-            # Try the "More" overflow menu — Connect is sometimes tucked in there.
-            more_locator = page.get_by_role("button", name="More", exact=False)
-            try:
-                if await more_locator.count() > 0:
-                    await more_locator.first.click(timeout=5000)
-                    await page.wait_for_timeout(800)
-                    dropdown = page.locator("div.artdeco-dropdown__content")
-                    dropdown_connect_link = dropdown.locator("a[aria-label*='to connect' i]")
-                    dropdown_connect_btn = dropdown.get_by_role("button", name="Connect", exact=False)
-                    if await dropdown_connect_link.count() > 0:
-                        connect_btn = dropdown_connect_link.first
-                    elif await dropdown_connect_btn.count() > 0:
-                        connect_btn = dropdown_connect_btn.first
-            except Exception as exc:
-                logger.warning(f"Could not check 'More' menu for {profile_url}: {exc}")
+                # Trigger click via JS MouseEvent so browser does not full-navigate
+                await connect_btn.evaluate("el => el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))")
+                await page.wait_for_timeout(2000)
+            except Exception as click_err:
+                logger.warning(f"JS click on Connect link failed, navigating to preload URL: {click_err}")
+                await page.goto(preload_url, wait_until="domcontentloaded")
+                await page.wait_for_timeout(2500)
+        else:
+            # Direct navigation fallback to custom-invite preload modal
+            logger.info(f"Navigating directly to custom-invite preload URL: {preload_url}")
+            await page.goto(preload_url, wait_until="domcontentloaded")
+            await page.wait_for_timeout(2500)
 
         if not connect_btn:
             # Diagnostic: log every visible button's accessible name so it's
@@ -260,40 +233,41 @@ async def send_connection_request_playwright(account_id: int, profile_url: str, 
         await connect_btn.click(timeout=5000)
         await page.wait_for_timeout(1500)
 
-        # 2. The "Add a note to your invitation?" modal (confirmed from a
-        # live screenshot: header "Add a note to your invitation?" with
-        # "Add a note" / "Send without a note" buttons). Scope everything
-        # to the dialog itself so we're never at risk of matching an
-        # unrelated same-labeled button elsewhere on the page.
-        dialog = page.locator("div[role='dialog']")
+        # 2. The "Add a note to your invitation?" modal (confirmed from live user screenshots
+        # and preload custom-invite pages: header "Add a note to your invitation?" with
+        # "Add a note" / "Send without a note" buttons).
+        dialog = page.locator("div[role='dialog'], div.artdeco-modal, main")
         try:
-            await dialog.first.wait_for(state="visible", timeout=5000)
+            if await dialog.count() > 0:
+                dialog_target = dialog.first
+            else:
+                dialog_target = page
         except Exception:
-            dialog = page  # fall back to page-wide search if no dialog role found
+            dialog_target = page
 
-        add_note_locator = dialog.get_by_role("button", name="Add a note", exact=False)
+        add_note_locator = dialog_target.get_by_role("button", name="Add a note", exact=False)
         has_note_option = await add_note_locator.count() > 0
 
         if has_note_option and note_text:
-            await add_note_locator.first.click(timeout=5000)
-            await page.wait_for_timeout(1000)
+            try:
+                await add_note_locator.first.click(timeout=5000)
+                await page.wait_for_timeout(1000)
+            except Exception:
+                pass
 
             # LinkedIn hard-limits connection notes to 300 characters.
-            # Sending a longer note causes the Send button to stay disabled
-            # (LinkedIn's JS blocks it) — the request silently never goes out.
             truncated_note = note_text[:300]
 
-            textarea = page.locator("textarea[name='message'], textarea#custom-message, textarea[id*='message' i]")
+            textarea = page.locator("textarea[name='message'], textarea#custom-message, textarea[id*='message' i], textarea")
             if await textarea.count() > 0:
                 await textarea.first.fill(truncated_note)
                 await page.wait_for_timeout(1000)
 
             # LinkedIn's exact label on the final send button after adding a
             # note varies by surface ("Send", "Send now", "Send invitation")
-            # — try them in order rather than assuming one.
             for send_name in ("Send invitation", "Send now", "Send"):
-                send_locator = dialog.get_by_role("button", name=send_name, exact=False)
-                if await send_locator.count() > 0:
+                send_locator = dialog_target.get_by_role("button", name=send_name, exact=False)
+                if await send_locator.count() > 0 and await send_locator.first.is_visible():
                     await send_locator.first.click(timeout=5000)
                     await page.wait_for_timeout(2000)
                     
@@ -552,24 +526,30 @@ def is_account_in_working_window(acc: LinkedInAccount) -> bool:
     Checks if current time in account's configured timezone is within active working hours and days.
     """
     try:
-        tz_name = acc.timezone or "America/New_York"
-        try:
-            tz = ZoneInfo(tz_name)
-        except Exception:
-            tz = ZoneInfo("America/New_York")
+        if getattr(acc, "working_hours_start", None) == 0 and getattr(acc, "working_hours_end", None) == 24:
+            return True
+
+        tz_name = getattr(acc, "timezone", None)
+        if not tz_name:
+            tz = datetime.now().astimezone().tzinfo
+        else:
+            try:
+                tz = ZoneInfo(tz_name)
+            except Exception:
+                tz = datetime.now().astimezone().tzinfo
         
         now_local = datetime.now(tz)
         weekday_str = str(now_local.isoweekday()) # 1=Mon..7=Sun
-        working_days = [d.strip() for d in (acc.working_days or "1,2,3,4,5").split(",") if d.strip()]
+        working_days = [d.strip() for d in (getattr(acc, "working_days", None) or "1,2,3,4,5,6,7").split(",") if d.strip()]
         if weekday_str not in working_days:
             logger.info(f"Account {acc.id} outside working days ({weekday_str} not in {working_days}). Postponing send.")
             return False
         
-        start_hour = acc.working_hours_start if acc.working_hours_start is not None else 9
-        end_hour = acc.working_hours_end if acc.working_hours_end is not None else 18
+        start_hour = acc.working_hours_start if getattr(acc, "working_hours_start", None) is not None else 8
+        end_hour = acc.working_hours_end if getattr(acc, "working_hours_end", None) is not None else 22
         
         if not (start_hour <= now_local.hour < end_hour):
-            logger.info(f"Account {acc.id} outside working hours ({now_local.hour}:00 not in {start_hour}-{end_hour}). Postponing send.")
+            logger.info(f"Account {acc.id} outside working hours ({now_local.hour}:00 local not in {start_hour}-{end_hour}). Postponing send.")
             return False
         return True
     except Exception as e:

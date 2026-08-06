@@ -28,6 +28,10 @@ def main():
     parser.add_argument("--template", default=None, help="Optional path to an uploaded .docx template.")
     parser.add_argument("--wizard-config", default=None, help="Optional JSON string from the pre-generation wizard.")
     parser.add_argument("--solicitation", default="", help="Optional solicitation/reference number.")
+    parser.add_argument(
+        "--parsed-rfp-json", default=None,
+        help="Optional path to a cached parsed-RFP JSON (from /rfp-respond/analyze) to skip re-parsing.",
+    )
     args = parser.parse_args()
 
     try:
@@ -37,6 +41,7 @@ def main():
             solicitation_number=args.solicitation,
             template_path=args.template,
             wizard_config=args.wizard_config,
+            parsed_rfp_json_path=args.parsed_rfp_json,
         )
         print(f"\nSUCCESS: {final_path}")
     except Exception as exc:
