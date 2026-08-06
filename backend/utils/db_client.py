@@ -401,8 +401,8 @@ def update_task_status(
                     text(
                         "INSERT INTO task_statuses (task_id, task_type, status, progress, message, last_updated, result, created_at) "
                         "VALUES (:task_id, :task_type, :status, :progress, :message, :last_updated, :result, :created_at) "
-                        "ON DUPLICATE KEY UPDATE task_type=VALUES(task_type), status=VALUES(status), progress=VALUES(progress), "
-                        "message=VALUES(message), last_updated=VALUES(last_updated), result=VALUES(result)"
+                        "ON DUPLICATE KEY UPDATE task_type=:task_type, status=:status, progress=:progress, "
+                        "message=:message, last_updated=:last_updated, result=:result"
                     ),
                     {
                         "task_id": task_id,
@@ -506,8 +506,8 @@ async def update_task_status_async(
                     text(
                         "INSERT INTO task_statuses (task_id, task_type, status, progress, message, last_updated, result, created_at) "
                         "VALUES (:task_id, :task_type, :status, :progress, :message, :last_updated, :result, :created_at) "
-                        "ON DUPLICATE KEY UPDATE task_type=VALUES(task_type), status=VALUES(status), progress=VALUES(progress), "
-                        "message=VALUES(message), last_updated=VALUES(last_updated), result=VALUES(result)"
+                        "ON DUPLICATE KEY UPDATE task_type=:task_type, status=:status, progress=:progress, "
+                        "message=:message, last_updated=:last_updated, result=:result"
                     ),
                     {
                         "task_id": task_id,
