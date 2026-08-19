@@ -7,8 +7,15 @@ import {
   ShieldCheck, BookTemplate, ChevronDown, ChevronUp, FileText, FileDown
 } from 'lucide-react';
 import { Card, MatchBadge, StatusBadge, renderSafeText } from '../components/ui/Common.jsx';
-import { tenders as staticTenders, daysUntilClosing } from '../data/tenders.jsx';
-import { companies as staticCompanies } from '../data/companies.jsx';
+// Fallback static data — used only when the backend is offline.
+// Static data files were archived to .archive/linki-integration-2026/.
+const staticTenders = [];
+const staticCompanies = [];
+const daysUntilClosing = (dateStr) => {
+  if (!dateStr) return null;
+  const diff = new Date(dateStr) - new Date();
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+};
 import { api } from '../lib/api.jsx';
 import { useNotifications } from '../context/NotificationContext.jsx';
 

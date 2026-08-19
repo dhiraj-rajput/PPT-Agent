@@ -27,26 +27,28 @@ how to pull brand colors/logo from an uploaded .docx template.
 
 from __future__ import annotations
 
+import concurrent.futures
 import json
+import re
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from utils.helpers import setup_logger
 
 logger = setup_logger(__name__)
 
-# Absolute floor -- below this, something has clearly gone wrong (empty
-# provider response, etc.) regardless of how small the outline is. The real
-# per-document minimum is computed from the outline's own word budgets (see
-# _expected_min_chars below) so a genuinely short, simple RFP isn't forced
-# to pad itself out to a size tuned for a 90-page tender, and a complex
-# tender's minimum scales up instead of being capped at the same old 15k.
-ABSOLUTE_MIN_MARKDOWN_LENGTH = 3000
+# Minimum acceptable length for the generated markdown. Anything shorter than
+# this almost certainly means the model returned a stub/error instead of a
+# real proposal, and we should fail loudly rather than ship it.
+MIN_MARKDOWN_LENGTH = 15000
 
-# Roughly how many characters a well-written word ends up as once markdown
-# formatting (tables, headers, bullets) is included. Used only to derive a
-# sanity-check floor from the outline's word budgets, not to cap anything.
-CHARS_PER_WORD_FLOOR = 4.0
+# How many sections to generate concurrently. Each section is an independent
+# LLM call (same inputs, different brief) -- there is no reason to run them
+# one-at-a-time. This is the single biggest lever on wall-clock time for
+# Step 5 (by far the longest step for any RFP with more than 2-3 sections).
+# Capped modestly so a 15-section outline doesn't fire 15 simultaneous
+# requests at whatever AI provider is configured and trip rate limits.
+MAX_PARALLEL_SECTIONS = 4
 
 
 def generate_final_document(
@@ -65,43 +67,37 @@ def generate_final_document(
     target_docx_path = str(out_dir / f"{output_name}.docx")
 
     brand_config = _load_brand_config(template_path, out_dir)
-    company_name = brand_config.get("company_name", "OrbitAvanya Tech LLP")
+
+    # The bidder's own company profile (UEI, CAGE, NAICS, address, contact,
+    # capabilities, products) lives in MongoDB's `own_company_profile`
+    # collection -- previously nothing in this pipeline ever read it, so the
+    # model had no real values to use for cover-page/registration fields and
+    # left placeholders like "[BIDDER TO INSERT: UEI]" in the output even
+    # though the real UEI was sitting in the database the whole time.
+    company_profile = _fetch_own_company_profile()
+    company_name = _first_present(
+        company_profile.get("company_name"),
+        company_profile.get("legal_name"),
+        brand_config.get("company_name"),
+        "OrbitAvanya Tech LLP",
+    )
+    verified_company_block = _format_verified_company_block(company_profile)
     company_profile_summary = _company_profile_summary(template_path, brand_config)
 
-    # Headings already present in the uploaded template's preserved front
-    # matter (cover page, and anything before the template's own first body
-    # heading -- see first_page_preserver.find_first_page_split_index). Used
-    # to (a) tell every section-writer call up front which sections NOT to
-    # write, and (b) drop the outline entries for them before spending an
-    # LLM call generating content that would just get discarded later.
-    preserved_headings: list[str] = []
-    if template_path and Path(template_path).exists():
-        try:
-            from documents.bidforge.first_page_preserver import get_preserved_headings
-            preserved_headings = get_preserved_headings(template_path)
-            if preserved_headings:
-                logger.info(
-                    f"[BidForge:DocGen] Template already contains: {preserved_headings} -- "
-                    f"these will NOT be regenerated."
-                )
-        except Exception as exc:
-            logger.debug(f"[BidForge:DocGen] Could not preview preserved headings: {exc}")
-
-    markdown_content, expected_min_chars = _generate_markdown(
+    markdown_content = _generate_markdown(
         parsed_rfp, inventory, competitor_intel, strategy, company_name, wizard_config,
         company_profile_summary=company_profile_summary,
+        verified_company_block=verified_company_block,
         preserving_first_page=bool(template_path),
-        preserved_headings=preserved_headings,
     )
 
-    min_length = max(ABSOLUTE_MIN_MARKDOWN_LENGTH, int(expected_min_chars * 0.4))
-    if not markdown_content or len(markdown_content.strip()) < min_length:
+    if not markdown_content or len(markdown_content.strip()) < MIN_MARKDOWN_LENGTH:
         raise ValueError(
             f"[BidForge:DocGen] Generated proposal markdown was too short "
             f"({len(markdown_content.strip()) if markdown_content else 0} chars, "
-            f"expected at least ~{min_length} for this outline). Refusing to ship a "
-            f"stub document -- check the AI provider logs for the real failure "
-            f"instead of silently falling back."
+            f"minimum {MIN_MARKDOWN_LENGTH}). Refusing to ship a stub document -- "
+            f"check the AI provider logs for the real failure instead of silently "
+            f"falling back."
         )
 
     # When a template was uploaded, preserve its actual first/cover page
@@ -115,7 +111,8 @@ def generate_final_document(
 
             _, sections = _parse_markdown_into_sections(markdown_content)
             docx_path = build_document_with_preserved_first_page(
-                template_path, sections, brand_config, target_docx_path
+                template_path, sections, brand_config, target_docx_path,
+                company_profile=company_profile,
             )
             import importlib
             try:
@@ -147,7 +144,9 @@ def generate_final_document(
 def _company_profile_summary(template_path: Optional[str], brand_config: Dict[str, Any]) -> str:
     """Best-effort plain-language company profile (website, email, phone,
     leadership) extracted from the uploaded template, for use as AI context
-    so generated content references real details instead of inventing them."""
+    so generated content references real details instead of inventing them.
+    This is a secondary/stylistic source -- _fetch_own_company_profile()
+    below is the authoritative one for factual fields like UEI/CAGE."""
     if not template_path:
         return ""
     try:
@@ -159,37 +158,125 @@ def _company_profile_summary(template_path: Optional[str], brand_config: Dict[st
         return ""
 
 
-def _resolve_sections(
-    wizard_config: Dict[str, Any],
-    parsed_rfp: Dict[str, Any],
-    company_profile_summary: str,
-) -> tuple[list[Dict[str, Any]], str]:
-    """Decides the section outline to generate from, in priority order:
-      1. Sections explicitly supplied in wizard_config (the user reviewed/
-         edited these in the UI after calling /rfp-respond/analyze).
-      2. Freshly built via documents.bidforge.outline.build_outline, which
-         reads THIS RFP's parsed structure (including mandatory annexures/
-         forms) instead of using a fixed skeleton. This is the path taken
-         when generation is triggered without going through the wizard
-         (e.g. the CLI, or an API caller that skips /analyze).
-    Returns (sections, outline_notes).
-    """
-    sections = wizard_config.get("sections") if isinstance(wizard_config, dict) else None
-    if isinstance(sections, list) and sections:
-        return sections, str(wizard_config.get("outline_notes") or "")
+# Fields worth surfacing to the model by name, in a sensible reading order.
+# Anything present in the Mongo document gets included even if not listed
+# here (see the loop in _format_verified_company_block), this just controls
+# ordering/labels for the common ones.
+_PROFILE_FIELD_LABELS = [
+    ("company_name", "Company Name"),
+    ("legal_name", "Legal Entity Name"),
+    ("uei", "UEI (Unique Entity ID)"),
+    ("cage_code", "CAGE Code"),
+    ("duns", "DUNS Number"),
+    ("primary_naics", "Primary NAICS Code"),
+    ("primary_naics_desc", "Primary NAICS Description"),
+    ("size", "Business Size"),
+    ("socioeconomic_status", "Socioeconomic Status / Set-Aside Certifications"),
+    ("address", "Address"),
+    ("website", "Website"),
+    ("email", "Email"),
+    ("phone", "Phone"),
+    ("poc_name", "Point of Contact"),
+    ("poc_title", "Point of Contact Title"),
+]
 
-    from documents.bidforge.outline import build_outline
-    outline = build_outline(parsed_rfp, company_context=company_profile_summary)
-    return outline.get("sections", []), str(outline.get("notes") or "")
+
+def _fetch_own_company_profile() -> Dict[str, Any]:
+    """Fetches the bidder's own company profile from MongoDB
+    (`own_company_profile` collection -- the same one the Proposal
+    Builder / PreGenerationWizard flow already reads via
+    app/routes/companies.py's /own-profile endpoint). Fails soft to an
+    empty dict so a Mongo hiccup degrades to "no verified data" rather
+    than crashing generation."""
+    try:
+        from utils.db_client import get_collection
+        col = get_collection("own_company_profile")
+        doc = col.find_one({}) or {}
+        if "_id" in doc:
+            doc = {k: v for k, v in doc.items() if k != "_id"}
+        if doc:
+            logger.info(
+                f"[BidForge:DocGen] Loaded own_company_profile from MongoDB "
+                f"({len(doc)} field(s): {', '.join(sorted(doc.keys()))})."
+            )
+        else:
+            logger.warning(
+                "[BidForge:DocGen] own_company_profile is empty in MongoDB -- "
+                "generated content will fall back to template-derived details "
+                "and may leave placeholders for fields like UEI/CAGE. Fill in "
+                "Settings > Company Profile to fix this."
+            )
+        return doc
+    except Exception as exc:
+        logger.warning(f"[BidForge:DocGen] Could not load own_company_profile from MongoDB: {exc}")
+        return {}
 
 
-def _section_max_tokens(word_budget: int) -> int:
-    """Scales the per-call output token budget to what THIS section actually
-    needs instead of every section call inheriting the same flat 8192-token
-    default regardless of whether it was asked for 400 words or 4000. ~2.3
-    tokens/word covers markdown overhead (tables, headers, bullets) with
-    headroom; clamped to a sane floor/ceiling."""
-    return max(1200, min(int(word_budget * 2.3) + 400, 16000))
+def _format_verified_company_block(profile: Dict[str, Any]) -> str:
+    """Renders the fetched company profile into an explicit, unambiguous
+    context block the model is told to treat as ground truth. This directly
+    replaces the previous behavior of leaving "[BIDDER TO INSERT: UEI]"-style
+    placeholders for data that was actually available the whole time."""
+    if not profile:
+        return ""
+
+    lines: List[str] = []
+    seen_keys = set()
+    for key, label in _PROFILE_FIELD_LABELS:
+        val = profile.get(key)
+        if val:
+            lines.append(f"- {label}: {val}")
+            seen_keys.add(key)
+
+    capabilities = profile.get("capabilities")
+    if capabilities:
+        if isinstance(capabilities, list):
+            lines.append("- Core Capabilities: " + "; ".join(str(c) for c in capabilities))
+        else:
+            lines.append(f"- Core Capabilities: {capabilities}")
+        seen_keys.add("capabilities")
+
+    products = profile.get("products")
+    if products:
+        if isinstance(products, list):
+            product_lines = []
+            for p in products:
+                if isinstance(p, dict):
+                    product_lines.append(f"{p.get('name', '')} — {p.get('description', '')}".strip(" —"))
+                else:
+                    product_lines.append(str(p))
+            lines.append("- Products/Services: " + "; ".join(product_lines))
+        else:
+            lines.append(f"- Products/Services: {products}")
+        seen_keys.add("products")
+
+    # Anything else in the document that isn't already covered above --
+    # keeps this future-proof if new fields get added to the profile schema
+    # without this file needing an update to surface them.
+    for key, val in profile.items():
+        if key in seen_keys or key in ("updatedAt", "id"):
+            continue
+        if not val or isinstance(val, (dict, list)):
+            continue
+        label = key.replace("_", " ").title()
+        lines.append(f"- {label}: {val}")
+
+    if not lines:
+        return ""
+
+    return (
+        "OUR VERIFIED COMPANY PROFILE (source of truth -- from our own company "
+        "registration data, not the RFP):\n"
+        + "\n".join(lines)
+        + "\n\nUse these EXACT values wherever the proposal references our company's "
+        "identity, registration numbers, contact info, or capabilities. Do NOT write "
+        "a bracketed placeholder (e.g. \"[BIDDER TO INSERT: UEI]\") for ANY field "
+        "listed above -- the real value is given. Only use a placeholder for "
+        "information that is genuinely bidder-specific to THIS SPECIFIC opportunity "
+        "and not a general company fact (e.g. a project-specific reference number, "
+        "a client's own contract number, a price that depends on strategy decided "
+        "elsewhere in this brief)."
+    )
 
 
 def _generate_markdown(
@@ -200,18 +287,11 @@ def _generate_markdown(
     company_name: str,
     wizard_config: Optional[str | Dict[str, Any]],
     company_profile_summary: str = "",
+    verified_company_block: str = "",
     preserving_first_page: bool = False,
-    preserved_headings: Optional[list[str]] = None,
-) -> tuple[str, int]:
-    """Returns (markdown_text, expected_min_chars) -- the latter is derived
-    from the resolved outline's own word budgets so the caller's stub-detection
-    floor scales with what THIS document was actually asked to contain."""
+) -> str:
     from pipeline.ai.client import get_ai_client
     from documents.prompts import SECTION_WRITER_PROMPT
-    from documents.bidforge.first_page_preserver import dedupe_sections_against_preserved
-    from documents.bidforge.clarify import answers_to_context_block
-
-    preserved_headings = preserved_headings or []
 
     buyer_name = _first_present(
         (parsed_rfp.get("metadata", {}) or {}).get("buyer_name"),
@@ -220,43 +300,85 @@ def _generate_markdown(
     )
 
     config = _decode_wizard_config(wizard_config)
-    sections, outline_notes = _resolve_sections(config, parsed_rfp, company_profile_summary)
+    sections = config.get("sections") if isinstance(config, dict) else None
+    
+    # If no sections are configured in the wizard config, fallback to default standard outline
+    if not isinstance(sections, list) or not sections:
+        sections = [
+            {
+                "key": "executive_summary",
+                "title": "1. Executive Summary",
+                "word_budget": 600,
+                "included": True,
+                "key_points": [
+                    "Understanding of Agency mission & critical objectives",
+                    "Summary of proposed solution & key discriminators",
+                    "Commitment to schedule & compliance"
+                ]
+            },
+            {
+                "key": "scope_of_work",
+                "title": "2. Scope of Work",
+                "word_budget": 1200,
+                "included": True,
+                "key_points": [
+                    "Detailed description of proposed services",
+                    "Specific delivery methods & methodology",
+                    "Quality assurance & compliance"
+                ]
+            },
+            {
+                "key": "pricing_table",
+                "title": "3. Pricing Proposal & Deliverables",
+                "word_budget": 500,
+                "included": True,
+                "key_points": [
+                    "Breakdown of pricing by service/product item",
+                    "Volume discounts or bundle incentives"
+                ]
+            },
+            {
+                "key": "implementation_timeline",
+                "title": "4. Implementation & Schedule",
+                "word_budget": 500,
+                "included": True,
+                "key_points": [
+                    "Milestones and delivery dates",
+                    "Resource allocation plan"
+                ]
+            },
+            {
+                "key": "terms_conditions",
+                "title": "5. Terms and Conditions",
+                "word_budget": 400,
+                "included": True,
+                "key_points": [
+                    "Payment schedule & SLA parameters",
+                    "Proposal validity period"
+                ]
+            }
+        ]
 
-    # Drop any section that duplicates something already in the preserved
-    # template region BEFORE spending an LLM call on it -- not just after.
-    sections = dedupe_sections_against_preserved(sections, preserved_headings)
-    sections = [s for s in sections if isinstance(s, dict) and s.get("included") is not False and str(s.get("title") or s.get("key") or "").strip()]
-
-    if not sections:
-        logger.warning("[BidForge:DocGen] No sections resolved after dedupe -- outline stage may have failed.")
-
-    expected_min_chars = int(sum(int(s.get("word_budget", 500)) for s in sections) * CHARS_PER_WORD_FLOOR)
-
-    # SECTION 1 -- full parsed RFP requirements, including structural
-    # elements (mandatory annexures/forms/submission format) so every
-    # section call can see the whole compliance picture, not just a flat
-    # requirements list.
+    # SECTION 1 -- full parsed RFP requirements. raw_text trimmed from 25k to
+    # 15k chars: this whole block gets repeated verbatim in every section's
+    # own call, so trimming it cuts real latency/cost per call across N
+    # sections without losing much (the structured requirements/compliance
+    # lists right above it already carry the extracted substance).
     section1 = (
         f"COMPANY NAME (responding entity): {company_name}\n"
-        f"BUYER / CUSTOMER: {buyer_name}\n"
-        f"RFP TYPE: {parsed_rfp.get('rfp_type', 'capability_tender')}\n\n"
+        f"BUYER / CUSTOMER: {buyer_name}\n\n"
         f"Parsed content:\n{parsed_rfp.get('parsed_content', '') or parsed_rfp.get('summary', '')}\n\n"
         f"Structured requirements:\n{json.dumps(parsed_rfp.get('requirements', []), indent=2)}\n\n"
         f"Compliance requirements:\n{json.dumps(parsed_rfp.get('compliance_requirements', []), indent=2)}\n\n"
-        f"Structural elements (submission format, mandatory forms/annexures, bid security, pricing format):\n"
-        f"{json.dumps(parsed_rfp.get('structural_elements', []), indent=2)}\n\n"
         f"Missing/flagged fields:\n{json.dumps(parsed_rfp.get('missing_fields', []), indent=2)}\n\n"
-        f"Raw source text (reference only -- do not quote large verbatim blocks):\n"
-        f"{(parsed_rfp.get('raw_text', '') or '')[:40000]}"
+        f"Raw source text (part):\n{(parsed_rfp.get('raw_text', '') or '')[:15000]}"
     )
 
-    # SECTION 2 -- inventory + competitor data. Only meaningful for
-    # product-catalog-style RFPs; for capability-based tenders (construction/
-    # EPC/services) these will legitimately be empty, which is fine.
+    # SECTION 2 -- inventory + competitor data
     section2 = (
-        f"INVENTORY ANALYSIS (our products/services available for delivery, if applicable to this RFP type):\n"
+        f"INVENTORY ANALYSIS (our products/services available for delivery):\n"
         f"{json.dumps(inventory.get('items', []), indent=2)}\n\n"
-        f"COMPETITOR / MARKET PRICING (if applicable):\n"
+        f"COMPETITOR / MARKET PRICING:\n"
         f"{json.dumps(competitor_intel.get('items', []), indent=2)}"
     )
 
@@ -266,33 +388,31 @@ def _generate_markdown(
         f"Overall strategic notes:\n{strategy.get('strategic_notes', '')}"
     )
 
+    # Verified Mongo company profile is the PRIMARY/authoritative source for
+    # factual company details (UEI, CAGE, address, contact, capabilities).
+    # The template-derived summary is a secondary style/tone reference and
+    # is explicitly told to defer to the verified block on any conflict.
     company_profile_block = ""
+    if verified_company_block:
+        company_profile_block += f"\n{verified_company_block}\n"
     if company_profile_summary:
-        company_profile_block = f"""
-COMPANY PROFILE (extracted from the uploaded .docx template -- use these
-real details whenever you reference contact info, website, or leadership;
-never invent different ones):
+        company_profile_block += f"""
+ADDITIONAL COMPANY STYLE/TONE REFERENCE (extracted from the uploaded .docx
+template -- use for tone and phrasing only; if it conflicts with OUR
+VERIFIED COMPANY PROFILE above on any factual detail like a registration
+number, contact info, or company name, the VERIFIED profile above wins):
 {company_profile_summary}
 """
 
-    answers_block = answers_to_context_block(config.get("answers") or [])
-    answers_section = f"\n{answers_block}\n" if answers_block else ""
-
     cover_page_note = ""
     if preserving_first_page:
-        headings_list = "\n".join(f"  - {h}" for h in preserved_headings) if preserved_headings else "  (none detected -- treat the whole template as front matter)"
-        cover_page_note = f"""
-NOTE ON THE COVER / REGISTRATION PAGE: The uploaded template's own front
-matter will be kept exactly as-is and placed before whatever you write here.
-The following heading(s) ALREADY EXIST in that preserved region -- do NOT
-write a section with the same or a substantially similar title to any of
-these (this includes not writing a title page or a "Prepared for/by" block):
-{headings_list}
-Start directly with substantive content for the section you were asked to write.
+        cover_page_note = """
+NOTE ON THE COVER / REGISTRATION PAGE: The uploaded template's own first
+page (cover page, registration details, company info) will be kept exactly
+as-is and placed before whatever you write here -- do NOT write a title
+page, a "Prepared for / Prepared by" block, or restate registration/company
+details. Start directly with the first section's substantive content.
 """
-
-    if outline_notes:
-        cover_page_note += f"\nOUTLINE NOTES FROM THE PROPOSAL ARCHITECT STAGE: {outline_notes}\n"
 
     # Prepare common background for all calls
     common_context = f"""=======================================================
@@ -306,45 +426,46 @@ SECTION 2: EXPLORE OUTPUT (Inventory & Competitor Data):
 
 SECTION 3: SUMMARISE OUTPUT (Strategic Pricing Decisions):
 {section3}
-{company_profile_block}{answers_section}{cover_page_note}"""
+{company_profile_block}{cover_page_note}"""
 
-    markdown_parts = []
+    included_sections = [
+        s for s in sections
+        if isinstance(s, dict) and s.get("included") is not False and str(s.get("title") or s.get("key") or "").strip()
+    ]
 
-    if not preserving_first_page:
-        # Only write our own title line when there is no template cover page
-        # to preserve -- otherwise this duplicates the template's own title.
-        title_line = f"# {company_name} — Response to {buyer_name}"
-        markdown_parts.append(title_line)
-
-    for section in sections:
+    def _generate_one(section: Dict[str, Any]) -> str:
         title = str(section.get("title") or section.get("key") or "").strip()
-
         description = str(section.get("description") or "").strip()
         key_points = section.get("key_points") or []
         if isinstance(key_points, str):
             key_points = [line.strip() for line in key_points.splitlines() if line.strip()]
-        word_budget = int(section.get("word_budget", 500) or 500)
+
+        section_number = _extract_section_number(title)
 
         brief = f"SECTION BRIEF to generate:\n- Section Title: {title}\n"
-        if section.get("is_mandatory_form"):
+        if section_number:
             brief += (
-                "- THIS SECTION IS A MANDATORY RFP FORM/ANNEXURE the bidder must complete "
-                "and return, not free-form prose. Reproduce its required fields/structure "
-                "and fill in every value you can determine from the RFP context, the company "
-                "profile, or the human-confirmed answers above. For any value that is "
-                "genuinely bidder-specific and unknown (e.g. a bank guarantee number), leave "
-                "a clearly marked placeholder like \"[BIDDER TO INSERT: ...]\" rather than "
-                "inventing one.\n"
+                f"- This section's number is \"{section_number}\". If you write any "
+                f"subsection headings (### or ####), they MUST be numbered "
+                f"\"{section_number}.1\", \"{section_number}.2\", \"{section_number}.3\" etc. "
+                f"in that exact sequential order -- never a number disconnected from "
+                f"\"{section_number}\" (do not invent an unrelated number like \"12.1\").\n"
             )
-        if section.get("source_clause"):
-            brief += f"- Maps to RFP clause/annexure: {section.get('source_clause')}\n"
         if description:
             brief += f"- Focus: {description}\n"
         if key_points:
             brief += "- Key Points to address:\n"
             for kp in key_points:
-                brief += f"    * {kp}\n"
-        brief += f"- Target Length: {word_budget} words."
+                # Defensively strip any pre-existing "N.N " numbering from an
+                # upstream-generated key_point string before it reaches the
+                # model -- if the outline stage itself produced a wrongly
+                # -numbered point (e.g. "12.1 Labor Category Mapping..."),
+                # echoing it verbatim into the brief is exactly how that
+                # wrong number ends up copied straight into the section's
+                # own subheadings.
+                cleaned_kp = re.sub(r"^\s*\d+(?:\.\d+)*\s+", "", str(kp))
+                brief += f"    * {cleaned_kp}\n"
+        brief += f"- Target Length: {section.get('word_budget', 500)} words."
 
         user_message = f"""{common_context}
 =======================================================
@@ -358,14 +479,107 @@ INSTRUCTIONS FOR THIS CALL
             {"role": "user", "content": user_message},
         ]
 
-        logger.info(f"[BidForge:DocGen] Generating section: {title} (~{word_budget} words)...")
-        section_content = get_ai_client().chat_text(
-            messages, json_mode=False, max_tokens=_section_max_tokens(word_budget)
-        )
-        if section_content:
-            markdown_parts.append(section_content.strip())
+        logger.info(f"[BidForge:DocGen] Generating section: {title}...")
+        section_content = get_ai_client().chat_text(messages, json_mode=False)
+        if not section_content:
+            return ""
+        section_content = section_content.strip()
+        # Deterministic safety net: regardless of what the model wrote,
+        # force every subsection heading in THIS section's own output to be
+        # numbered sequentially under this section's real number. This is
+        # what actually guarantees no more "6.0 ... 12.1 ..." jumps, rather
+        # than relying on the model following the instruction above.
+        if section_number:
+            section_content = _renumber_subheadings(section_content, section_number)
+        return section_content
 
-    return "\n\n".join(markdown_parts), expected_min_chars
+    markdown_parts: List[str] = []
+    if not preserving_first_page:
+        title_line = f"# {company_name} — Response to {buyer_name}"
+        markdown_parts.append(title_line)
+
+    if included_sections:
+        # Parallel section generation: each call is fully independent (same
+        # shared context, different brief), so there is no reason to run
+        # them one at a time. This is the single biggest lever on wall-clock
+        # time for what was previously the longest-running pipeline step.
+        results: List[Optional[str]] = [None] * len(included_sections)
+        max_workers = min(MAX_PARALLEL_SECTIONS, len(included_sections))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_index = {
+                executor.submit(_generate_one, section): idx
+                for idx, section in enumerate(included_sections)
+            }
+            for future in concurrent.futures.as_completed(future_to_index):
+                idx = future_to_index[future]
+                try:
+                    results[idx] = future.result()
+                except Exception as exc:
+                    title = str(included_sections[idx].get("title") or "").strip()
+                    logger.error(f"[BidForge:DocGen] Section '{title}' failed to generate: {exc}")
+                    results[idx] = ""
+
+        for content in results:
+            if content:
+                markdown_parts.append(content)
+
+    return "\n\n".join(markdown_parts)
+
+
+_SECTION_NUMBER_RE = re.compile(r"^\s*(\d+(?:\.\d+)*)")
+_SUBHEADING_LINE_RE = re.compile(r"^(#{3,4})\s+(?:\d+(?:\.\d+)*\s+)?(.*)$")
+
+
+def _extract_section_number(title: str) -> str:
+    """Pulls the leading number off a section title, e.g. '6.0 Labor Rate...'
+    -> '6', '4.2 Compliance Matrix' -> '4.2'. Returns '' if the title has no
+    leading number (in which case subsection renumbering is skipped rather
+    than guessing)."""
+    match = _SECTION_NUMBER_RE.match(title or "")
+    if not match:
+        return ""
+    num = match.group(1)
+    # Normalize "6.0" -> "6" so subsections read "6.1" not "6.0.1".
+    if num.endswith(".0"):
+        num = num[:-2]
+    return num
+
+
+def _renumber_subheadings(markdown_text: str, section_number: str) -> str:
+    """Forces every ### / #### heading within a single generated section's
+    markdown to be numbered sequentially under section_number, regardless of
+    whatever number (if any) the model wrote. This is what guarantees a
+    document can never again jump from section "6.0" straight to a
+    subheading "12.1" -- the actual number in the output no longer depends
+    on the model getting it right.
+
+    Level-3 (###) headings get "{section_number}.{n}"; a run of level-4
+    (####) headings nested under the most recent level-3 heading get
+    "{section_number}.{n}.{m}". If the model didn't write any level-3
+    headings before a level-4 one, that level-4 heading is numbered directly
+    off section_number instead.
+    """
+    lines = markdown_text.splitlines()
+    out_lines: List[str] = []
+    h3_counter = 0
+    h4_counter = 0
+    for line in lines:
+        match = _SUBHEADING_LINE_RE.match(line)
+        if not match:
+            out_lines.append(line)
+            continue
+        hashes, text = match.groups()
+        text = text.strip()
+        if len(hashes) == 3:
+            h3_counter += 1
+            h4_counter = 0
+            out_lines.append(f"{hashes} {section_number}.{h3_counter} {text}")
+        else:  # #### 
+            if h3_counter == 0:
+                h3_counter += 1
+            h4_counter += 1
+            out_lines.append(f"{hashes} {section_number}.{h3_counter}.{h4_counter} {text}")
+    return "\n".join(out_lines)
 
 
 def _wizard_instructions(wizard_config: Optional[str | Dict[str, Any]]) -> str:

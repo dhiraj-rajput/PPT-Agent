@@ -19,7 +19,10 @@ def restore_database():
         db_name = db.name
     except Exception as e:
         import pymongo
-        print(f"[INFO] Using direct PyMongo connection to {settings.MONGO_URI}")
+        from urllib.parse import urlparse
+        _parsed = urlparse(settings.MONGO_URI)
+        _safe_uri = f"{_parsed.scheme}://***:***@{_parsed.hostname}"
+        print(f"[INFO] Using direct PyMongo connection to {_safe_uri}")
         client = pymongo.MongoClient(settings.MONGO_URI)
         db_name = settings.MONGO_DB_NAME
         db = client[db_name]

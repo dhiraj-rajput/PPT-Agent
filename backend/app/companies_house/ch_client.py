@@ -70,7 +70,9 @@ class RateLimiter:
 
 
 class ETagCache:
-    """Simple in-memory ETag cache to save quota on repeated API calls."""
+    """In-memory ETag cache to save quota on repeated API calls. Capped at MAX_SIZE entries (LRU eviction)."""
+    MAX_SIZE = 1000
+
     def __init__(self):
         self._cache: Dict[str, Dict[str, Any]] = {}
 
@@ -81,6 +83,10 @@ class ETagCache:
         return None, None
 
     def set(self, url: str, etag: str, data: Dict[str, Any]):
+        if url not in self._cache and len(self._cache) >= self.MAX_SIZE:
+            # Evict oldest entry (FIFO approximation)
+            oldest_key = next(iter(self._cache))
+            del self._cache[oldest_key]
         self._cache[url] = {"etag": etag, "data": data}
 
 

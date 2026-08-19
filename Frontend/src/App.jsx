@@ -85,13 +85,7 @@ const AIResearch          = lazy(() => import('./pages/AIResearch.jsx'));
 const ProposalBuilder     = lazy(() => import('./pages/ProposalBuilder.jsx'));
 const RFPAutoRespond      = lazy(() => import('./pages/RFPAutoRespond.jsx'));
 
-// Campaign / outreach pages
-const LinkedInOutreach    = lazy(() => import('./pages/LinkedInOutreach.jsx'));
-const EmailCampaign       = lazy(() => import('./pages/EmailCampaign.jsx'));
-const Newsletter          = lazy(() => import('./pages/Newsletter.jsx'));
-
-// CRM / productivity pages
-const CRMPipeline         = lazy(() => import('./pages/CRMPipeline.jsx'));
+// Productivity pages
 const Meetings            = lazy(() => import('./pages/Meetings.jsx'));
 const Tasks               = lazy(() => import('./pages/Tasks.jsx'));
 const Analytics           = lazy(() => import('./pages/Analytics.jsx'));
@@ -148,10 +142,6 @@ export default function App() {
               <Route path="/naics" element={<NaicsMuster />} />
               <Route path="/ai-research" element={<AIResearch />} />
               <Route path="/proposal-builder" element={<ProposalBuilder />} />
-              <Route path="/linkedin" element={<LinkedInOutreach />} />
-              <Route path="/email-campaign" element={<EmailCampaign />} />
-              <Route path="/newsletter" element={<Newsletter />} />
-              <Route path="/crm-pipeline" element={<CRMPipeline />} />
               <Route path="/meetings" element={<Meetings />} />
               <Route path="/tasks" element={<Tasks />} />
               <Route path="/analytics" element={<Analytics />} />

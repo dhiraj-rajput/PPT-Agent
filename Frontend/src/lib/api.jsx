@@ -287,9 +287,6 @@ export const api = {
   async saveEnvKeys(keys) {
     return post('/api/integrations/env-keys', keys);
   },
-  async getLinkedinStatus() {
-    return get('/api/integrations/linkedin/status');
-  },
   async saveIntegrationConfig(name, data) {
     return post('/api/integrations/env-keys', data);
   },
@@ -602,111 +599,6 @@ export const api = {
     return res.blob();
   },
 
-  // ---------- Email Campaigns ----------
-  async listCampaigns() {
-    return get('/api/campaigns');
-  },
-  async createCampaign(form) {
-    return post('/api/campaigns', form);
-  },
-  async getCampaign(id) {
-    return get(`/api/campaigns/${id}`);
-  },
-  async updateCampaign(id, form) {
-    return patch(`/api/campaigns/${id}`, form);
-  },
-  async deleteCampaign(id) {
-    return del(`/api/campaigns/${id}`);
-  },
-  async duplicateCampaign(id) {
-    return post(`/api/campaigns/${id}/duplicate`);
-  },
-  async pauseCampaign(id) {
-    return post(`/api/campaigns/${id}/pause`);
-  },
-  async resumeCampaign(id) {
-    return post(`/api/campaigns/${id}/resume`);
-  },
-  async launchCampaign(id) {
-    return post(`/api/campaigns/${id}/launch`);
-  },
-
-  // ---------- Leads ----------
-  async listLeads(campaignId, status = '') {
-    const query = status ? `?campaignId=${campaignId}&status=${status}` : `?campaignId=${campaignId}`;
-    return get(`/api/leads${query}`);
-  },
-  async createLead(leadData) {
-    return post('/api/leads', leadData);
-  },
-  async importLeadsCsv(campaignId, file) {
-    const formData = new FormData();
-    formData.append('campaignId', campaignId);
-    formData.append('file', file);
-    return _upload('/api/leads/import/csv', formData);
-  },
-  async uploadCampaignAttachment(file) {
-    const formData = new FormData();
-    formData.append('file', file);
-    return _upload('/api/campaigns/upload-attachment', formData);
-  },
-  async importLeadsApi(campaignId, leads) {
-    return post('/api/leads/import/api', { campaignId, leads });
-  },
-  async addCompaniesToCampaign(campaignId, companies) {
-    return post('/api/leads/import/companies', { campaignId, companies });
-  },
-  async getCompaniesInUse() {
-    return get('/api/leads/companies-in-use');
-  },
-  async resendLead(id) {
-    return post(`/api/leads/${id}/resend`);
-  },
-  async deleteLead(id) {
-    return del(`/api/leads/${id}`);
-  },
-
-  // ---------- Newsletter ----------
-  async getNewsletters() {
-    return get('/api/newsletters');
-  },
-  async createNewsletter(data) {
-    return post('/api/newsletters', data);
-  },
-  async deleteNewsletter(id) {
-    return del(`/api/newsletters/${id}`);
-  },
-  async getNewsletterSubscribers(id, params = {}) {
-    const q = new URLSearchParams(params).toString();
-    return get(`/api/newsletters/${id}/subscribers${q ? `?${q}` : ''}`);
-  },
-  async addNewsletterSubscriber(id, data) {
-    return post(`/api/newsletters/${id}/subscribers`, data);
-  },
-  async addNewsletterSubscribersFromCompanies(id, companyIds = [], manualEmail = '') {
-    return post(`/api/newsletters/${id}/subscribers/companies`, { companyIds, manualEmail });
-  },
-  async addNewsletterSubscribersFromPeople(id, peopleIds = [], manualEmail = '') {
-    return post(`/api/newsletters/${id}/subscribers/people`, { peopleIds, manualEmail });
-  },
-  async createNewsletterEdition(id, data) {
-    return post(`/api/newsletters/${id}/editions`, data);
-  },
-  async getNewsletterEditions(id) {
-    return get(`/api/newsletters/${id}/editions`);
-  },
-  async updateNewsletterEdition(editionId, data) {
-    return put(`/api/newsletters/editions/${editionId}`, data);
-  },
-  async deleteNewsletterEdition(editionId) {
-    return del(`/api/newsletters/editions/${editionId}`);
-  },
-  async uploadNewsletterImage(file) {
-    const formData = new FormData();
-    formData.append('file', file);
-    return _upload('/api/newsletters/upload-image', formData);
-  },
-
   // ---------- Analytics ----------
   async getAnalyticsOverview() {
     return get('/api/analytics/overview');
@@ -792,9 +684,6 @@ export const api = {
   async getDashboardData() {
     return get('/api/analytics/dashboard');
   },
-  async getCampaignWorkerStatus() {
-    return get('/api/campaigns/worker-status');
-  },
   async getAvailableAttachments() {
     return get('/api/companies/attachments');
   },
@@ -835,33 +724,6 @@ export const api = {
     return cleanBase;
   },
 
-  // ── AI Email Beautifier ─────────────────────────────────────────────────
-  beautifyEmail({ subject = '', body, style = 'professional' }) {
-    return _request('POST', '/api/campaigns/beautify-email', { subject, body, style });
-  },
-
-  async uploadEmailImage(file) {
-    const token = localStorage.getItem(TOKEN_KEY);
-    const fd = new FormData();
-    fd.append('file', file);
-    const res = await fetch(_buildUrl('/api/campaigns/upload-image'), {
-      method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: fd,
-    });
-    if (!res.ok) throw new Error(`Image upload failed (${res.status})`);
-    return res.json();
-  },
-
-  // ── People Leads ────────────────────────────────────────────────────────
-  importPeopleToLeads({ campaignId, peopleIds, segmentTag = '' }) {
-    return _request('POST', '/api/leads/import/people', { campaignId, peopleIds, segmentTag });
-  },
-
-  getPeopleFilters() {
-    return _request('GET', '/api/leads/people-filters');
-  },
-
   // ── Database Analytics ──────────────────────────────────────────────────
   getCompaniesSummary() {
     return _request('GET', '/api/analytics/companies-summary');
@@ -870,81 +732,7 @@ export const api = {
   getPeopleSummary() {
     return _request('GET', '/api/analytics/people-summary');
   },
-
-  // ── LinkedIn Campaigns ──────────────────────────────────────────────────
-  async listLinkedInCampaigns() {
-    return get('/api/linkedin/campaigns');
-  },
-  async createLinkedInCampaign(form) {
-    return post('/api/linkedin/campaigns', form);
-  },
-  async getLinkedInCampaign(id) {
-    return get(`/api/linkedin/campaigns/${id}`);
-  },
-  async updateLinkedInCampaign(id, form) {
-    return patch(`/api/linkedin/campaigns/${id}`, form);
-  },
-  async deleteLinkedInCampaign(id) {
-    return del(`/api/linkedin/campaigns/${id}`);
-  },
-  async importLinkedInTargets(id, { personIds, file }) {
-    const fd = new FormData();
-    if (personIds) fd.append('person_ids', personIds.join(','));
-    if (file) fd.append('file', file);
-    
-    const token = localStorage.getItem(TOKEN_KEY);
-    const res = await fetch(_buildUrl(`/api/linkedin/campaigns/${id}/import-targets`), {
-      method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: fd,
-    });
-    if (!res.ok) throw new Error(`Target import failed (${res.status})`);
-    return res.json();
-  },
-  async getLinkedInTargets(id, scrapeStatus = '') {
-    const query = scrapeStatus ? `?scrape_status=${scrapeStatus}` : '';
-    return get(`/api/linkedin/campaigns/${id}/targets${query}`);
-  },
-  async deleteLinkedInTarget(campaignId, targetId) {
-    return del(`/api/linkedin/campaigns/${campaignId}/targets/${targetId}`);
-  },
-  async getLinkedInQueue(id) {
-    return get(`/api/linkedin/campaigns/${id}/queue`);
-  },
-  async getLinkedInTargetMessages(campaignId, targetId) {
-    return get(`/api/linkedin/campaigns/${campaignId}/targets/${targetId}/messages`);
-  },
-  async reviewLinkedInMessage(messageId, { content, action }) {
-    return post(`/api/linkedin/campaigns/messages/${messageId}/review`, { content, action });
-  },
-  async resendLinkedInMessage(messageId) {
-    return post(`/api/linkedin/campaigns/messages/${messageId}/resend`, {});
-  },
-
-  // ── LinkedIn Unified Inbox ──────────────────────────────────────────────
-  async getLinkedInInbox() {
-    return get('/api/linkedin/inbox');
-  },
-  async sendLinkedInReply(targetId, content) {
-    return post('/api/linkedin/inbox/reply', { target_id: targetId, content });
-  },
-
-  // ── LinkedIn Accounts ───────────────────────────────────────────────────
-  getLinkedInAccounts() {
-    return _request('GET', '/api/linkedin/accounts');
-  },
-  createLinkedInAccount(payload) {
-    return _request('POST', '/api/linkedin/accounts', payload);
-  },
-  pauseLinkedInAccount(id) {
-    return _request('POST', `/api/linkedin/accounts/${id}/pause`);
-  },
-  resumeLinkedInAccount(id) {
-    return _request('POST', `/api/linkedin/accounts/${id}/resume`);
-  },
-  deleteLinkedInAccount(id) {
-    return _request('DELETE', `/api/linkedin/accounts/${id}`);
-  },
 };
 
 export default api;
+

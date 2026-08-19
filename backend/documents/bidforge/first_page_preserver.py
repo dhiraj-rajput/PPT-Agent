@@ -277,6 +277,85 @@ def _update_stale_dates_in_text(text: str, today: date) -> str:
     return text
 
 
+_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
+_PHONE_RE = re.compile(r"(?<!\d)(\+?\d[\d\-\s().]{7,}\d)(?!\d)")
+_WEBSITE_RE = re.compile(r"\b(?:https?://)?(?:www\.)?[A-Za-z0-9\-]+\.(?:com|net|org|io|co|tech|in)\b(?:/[^\s]*)?", re.IGNORECASE)
+
+
+def _update_company_identity_in_preserved_region(doc, split_idx: Optional[int], profile: Dict[str, Any]) -> int:
+    """Same one-run-at-a-time safety pattern as _update_dates_in_preserved_region
+    above, but for stale bidder-identity fields (email, phone, website) on the
+    preserved cover/contact page instead of dates.
+
+    WHY THIS EXISTS: a company's saved default template (used whenever a
+    request doesn't upload its own template) is often an old example
+    proposal -- its cover/contact page can end up with contact details that
+    no longer match the company's actual profile. Since that page is
+    otherwise preserved byte-for-byte, those stale details would silently
+    ship in every generated proposal. This patches email/phone/website
+    in-place wherever the preserved page's own text differs from the real
+    company profile, using the exact same conservative approach as the date
+    updater: only ever rewrite a match that lives entirely inside one run's
+    text, so nothing else on the page is touched.
+
+    Company/legal NAME is deliberately NOT touched here -- unlike an email or
+    phone number, a name can't be pattern-matched safely (it could just as
+    easily be the client's name, a person's name in a testimonial, etc.), so
+    a wrong company name on a stale default template still needs a human to
+    fix the template itself. Everything else on this page (email, phone,
+    website) is safe to pattern-match because those formats are unambiguous.
+    """
+    if not profile:
+        return 0
+    real_email = str(profile.get("email") or "").strip()
+    real_phone = str(profile.get("phone") or "").strip()
+    real_website = str(profile.get("website") or "").strip()
+    if not (real_email or real_phone or real_website):
+        return 0
+
+    body = doc.element.body
+    changed = 0
+    for idx, child in enumerate(body):
+        if split_idx is not None and idx > split_idx:
+            break
+        tag = child.tag.rsplit("}", 1)[-1]
+        if tag != "p":
+            continue
+        for run_el in child.findall(".//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}r"):
+            for t_el in run_el.findall("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t"):
+                original = t_el.text or ""
+                updated = original
+                has_email = bool(_EMAIL_RE.search(original))
+
+                if real_email and has_email:
+                    m = _EMAIL_RE.search(updated)
+                    if m and m.group(0).lower() != real_email.lower():
+                        updated = updated[:m.start()] + real_email + updated[m.end():]
+
+                # Skip the website check entirely for a run that contains an
+                # email address -- an email's domain (e.g. "realcompany.com"
+                # in "bids@realcompany.com") also matches the website
+                # pattern, and rewriting it there would corrupt the email
+                # address that was just correctly fixed above.
+                if real_website and not has_email:
+                    m = _WEBSITE_RE.search(updated)
+                    if m and real_website.lower() not in m.group(0).lower():
+                        updated = updated[:m.start()] + real_website + updated[m.end():]
+
+                if real_phone:
+                    m = _PHONE_RE.search(updated)
+                    if m:
+                        digits_found = re.sub(r"\D", "", m.group(0))
+                        digits_real = re.sub(r"\D", "", real_phone)
+                        if digits_found and digits_found != digits_real:
+                            updated = updated[:m.start()] + real_phone + updated[m.end():]
+
+                if updated != original:
+                    t_el.text = updated
+                    changed += 1
+    return changed
+
+
 def _update_dates_in_preserved_region(doc, split_idx: Optional[int], today: Optional[date] = None) -> int:
     """Walk every paragraph in the preserved first-page region and patch
     stale dates in place, run by run. Only touches a run when the *entire*
@@ -379,6 +458,7 @@ def build_document_with_preserved_first_page(
     sections: List[Dict[str, Any]],
     brand_cfg: Dict[str, Any],
     output_docx_path: str,
+    company_profile: Optional[Dict[str, Any]] = None,
 ) -> str:
     """
     Build the final proposal .docx by:
@@ -386,7 +466,9 @@ def build_document_with_preserved_first_page(
          original upload path).
       2. Leaving everything up to the first explicit page break untouched,
          except patching any stale dates found there to today's date in the
-         same format.
+         same format, and any stale email/phone/website found there to the
+         real values from company_profile (e.g. MongoDB's
+         own_company_profile) if provided.
       3. Deleting everything after that page break (the template's own
          placeholder body, if any) and appending the AI-generated proposal
          sections in its place, styled using the template's own extracted
@@ -418,6 +500,14 @@ def build_document_with_preserved_first_page(
         changed = _update_dates_in_preserved_region(doc, split_idx)
         if changed:
             logger.info(f"[FirstPagePreserver] Updated {changed} stale date field(s) on the preserved first page.")
+
+        identity_changed = _update_company_identity_in_preserved_region(doc, split_idx, company_profile or {})
+        if identity_changed:
+            logger.info(
+                f"[FirstPagePreserver] Updated {identity_changed} stale contact field(s) "
+                f"(email/phone/website) on the preserved first page to match the real "
+                f"company profile."
+            )
 
         body = doc.element.body
         if split_idx is not None:

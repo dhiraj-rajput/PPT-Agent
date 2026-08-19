@@ -697,6 +697,12 @@ RULES
   belongs in a different section (e.g. don't re-explain pricing in the
   Executive Summary).
 - Start your output with a single Markdown heading for this section: "## <section title>".
+- Do NOT write a second "## " (level-2) heading anywhere else in your output,
+  even as a transition, summary lead-in, or reference to what a "next
+  section" will cover -- every "## " heading starts a brand-new page in the
+  final document, so a second one here creates a stray, mostly-empty page
+  between this section and the next one. If you need to introduce a new
+  sub-topic partway through, use "### " (level-3), never "## " again.
 - Write in a professional, confident tone.
 - Use concrete numbers from the data — never invent prices or quantities.
 - If information relevant to this section is missing or marked "Not specified",
@@ -711,6 +717,10 @@ RULES
     * Use "### " for a subsection heading within this section, "#### " for a
       sub-subsection if needed. Never write a heading level without the
       matching number of "#" characters and a following space.
+    * If the brief tells you this section's number (e.g. "6"), number every
+      "### "/"#### " heading you write as "6.1", "6.2", "6.2.1", etc., in
+      that exact sequential order — never a number unrelated to this
+      section's own number, and never restart or skip numbers.
     * Always close bold/italic markers on the same line: "**bold**", not
       "**bold" left open. Never leave a stray single "*" or "_".
     * Use "---" on its own line only for an intentional visual divider
@@ -720,6 +730,11 @@ RULES
   reasoning — this is customer-facing.
 - COMPANY_NAME placeholder should be replaced with the actual responding
   company name.
+- If an OUR VERIFIED COMPANY PROFILE block is provided in the context, treat
+  every value in it as ground truth and use it verbatim wherever this
+  section references the company's registration numbers, contact info, or
+  capabilities — do NOT write a bracketed placeholder (e.g.
+  "[BIDDER TO INSERT: UEI]") for any field that block already gives you.
 - If a COMPANY PROFILE block (website, email, phone, leadership) is provided
   in the context, use those exact details wherever this section references
   contact info or leadership — never invent alternates.

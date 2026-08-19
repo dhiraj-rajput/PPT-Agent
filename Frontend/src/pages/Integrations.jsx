@@ -184,6 +184,16 @@ const GENERIC_INTEGRATIONS = [
     ],
   },
   {
+    name: 'linkedin',
+    icon: Globe,
+    iconWrapClass: 'bg-blue-50 dark:bg-blue-500/10 text-blue-500',
+    title: 'LinkedIn Agent Session Cookie',
+    description: 'Session cookie (li_at) used for LinkedIn agent and automated company/contact research.',
+    fields: [
+      { key: 'LINKEDIN_LI_AT', label: 'Cookie Token (li_at string)', type: 'password', optional: true },
+    ],
+  },
+  {
     name: 'browserless',
     icon: Globe,
     iconWrapClass: 'bg-slate-100 dark:bg-slate-500/10 text-slate-500',
@@ -193,6 +203,7 @@ const GENERIC_INTEGRATIONS = [
       { key: 'BROWSERLESS_CDP_URL', label: 'CDP WebSocket URL (wss://...&token=...)', type: 'password', optional: true },
     ],
   },
+
 ];
 
 // ---------------------------------------------------------------------------
@@ -393,65 +404,9 @@ function CompaniesHouseCard({ notify, onEdit }) {
 }
 
 // ---------------------------------------------------------------------------
-// LinkedIn, Companies House, SMTP, Docling, Ollama, WebSearch
+// Docling OCR Engine
 // ---------------------------------------------------------------------------
 
-function LinkedInCard({ notify, onEdit }) {
-  const [status, setStatus] = useState({ connected: false, expired: false });
-  const [loading, setLoading] = useState(true);
-
-  async function loadStatus() {
-    setLoading(true);
-    try {
-      if (api.getLinkedinStatus) {
-        const res = await api.getLinkedinStatus();
-        setStatus(res);
-      }
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    loadStatus();
-  }, []);
-
-  return (
-    <Card className="flex flex-col">
-      {(status.expired || !status.connected) && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-400 font-semibold mb-3">
-          ⚠️ LinkedIn Cookie Expired: Please update your session cookie (li_at) to continue automated research.
-        </div>
-      )}
-      <div className="flex items-start justify-between">
-         <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-500 dark:bg-blue-500/10">
-           <Globe size={19} />
-         </div>
-         <ConnectionPill connected={status.connected && !status.expired} checking={loading} />
-      </div>
-      <p className="mt-3 text-sm font-bold text-navy-900 dark:text-white">LinkedIn Auto-Researcher</p>
-      <p className="mt-1 text-xs text-slate-400 dark:text-slate-500 mb-2 flex-1">
-        Automated research for companies and contacts.
-      </p>
-      <button onClick={() => onEdit({
-          name: 'linkedin',
-          label: 'LinkedIn',
-          fields: [{ key: 'LINKEDIN_LI_AT', label: 'Cookie token (li_at string)', type: 'password' }],
-          onSuccess: (formData) => {
-             if (formData && formData.LINKEDIN_LI_AT) {
-                // Optimistically clear the error
-                setStatus({ connected: true, expired: false });
-             }
-             loadStatus();
-          }
-      })} className="mt-auto w-full rounded-lg py-2 text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-navy-800 dark:text-slate-300 dark:hover:bg-navy-700 transition-colors">
-        Edit / Configure
-      </button>
-    </Card>
-  )
-}
 
 function DoclingCard() {
   return (
@@ -602,8 +557,8 @@ export default function Integrations() {
         <GoogleMeetCard notify={notify} />
         <SamGovCard notify={notify} onEdit={handleEdit} />
         <CompaniesHouseCard notify={notify} onEdit={handleEdit} />
-        <LinkedInCard notify={notify} onEdit={handleEdit} />
         <DoclingCard />
+
         {GENERIC_INTEGRATIONS.map((def) => (
           <GenericIntegrationCard
             key={def.name}

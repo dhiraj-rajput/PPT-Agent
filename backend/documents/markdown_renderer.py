@@ -337,6 +337,34 @@ def _parse_markdown_into_sections(markdown_content: str) -> tuple[str, List[Dict
     if current_section and (current_section["blocks"] or current_section["title"] != "Executive Summary"):
         sections.append(current_section)
 
+    # Drop any section that ended up with no real content. Each level-2
+    # ("## ") heading forces a page break before it (see above) -- if the
+    # model ever emits a stray extra "## " heading partway through what
+    # should be one continuous section (which happens occasionally: a
+    # leftover transition line, an accidentally-duplicated heading, etc.),
+    # that stray heading previously became its own "section" with zero
+    # blocks, which still got a hard page break and rendered as a blank or
+    # near-blank page in the final document. A truly contentless heading
+    # contributes nothing worth a page of its own regardless of why it
+    # appeared, so it's dropped here rather than rendered.
+    def _is_effectively_empty(section: Dict[str, Any]) -> bool:
+        blocks = section.get("blocks") or []
+        if not blocks:
+            return True
+        real_content = [b for b in blocks if b.get("type") != "subheading"]
+        if real_content:
+            return False
+        # Only subheading block(s) and nothing else -- still not a real page.
+        total_text = sum(len(str(b.get("text", ""))) for b in blocks)
+        return total_text < 5
+
+    non_empty_sections = [s for s in sections if not _is_effectively_empty(s)]
+    if len(non_empty_sections) != len(sections):
+        dropped = [s.get("title", "?") for s in sections if _is_effectively_empty(s)]
+        logger.info(f"[MarkdownRenderer] Dropped {len(dropped)} content-less section(s) that would have "
+                    f"rendered as blank/near-blank pages: {dropped}")
+    sections = non_empty_sections
+
     return doc_title, sections
 
 

@@ -10,6 +10,7 @@ Downloads RFP documents and winning proposal documents locally.
 import logging
 import os
 import re
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 import requests

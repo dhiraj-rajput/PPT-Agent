@@ -7,7 +7,14 @@ import {
 } from 'lucide-react';
 import { PageHeader, Card, MatchBadge, StatusBadge, renderSafeText } from '../components/ui/Common.jsx';
 import DataSourceSelect from '../components/ui/DataSourceSelect.jsx';
-import { tenders as staticTenders, daysUntilClosing } from '../data/tenders.jsx';
+// Fallback static data — used only when the backend is offline.
+// Static data files were archived to .archive/linki-integration-2026/.
+const staticTenders = [];
+const daysUntilClosing = (dateStr) => {
+  if (!dateStr) return null;
+  const diff = new Date(dateStr) - new Date();
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+};
 import { api } from '../lib/api.jsx';
 
 const SET_ASIDE_OPTIONS = [

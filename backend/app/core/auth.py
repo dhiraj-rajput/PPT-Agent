@@ -20,11 +20,8 @@ from typing import Optional
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
-from bson import ObjectId
-from bson.errors import InvalidId
-from pymongo.errors import PyMongoError
 
-from utils.db_client import get_async_collection, get_collection, get_db_session, get_sync_db_session, _mysql_available
+from utils.db_client import get_db_session, get_sync_db_session, _mysql_available
 from config.settings import settings
 from sqlalchemy import select
 from models.sql_models import User

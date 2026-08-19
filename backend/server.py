@@ -70,17 +70,10 @@ from app.routes.templates import router as templates_router
 # ---- Preview / Pre-generation wizard ----
 from app.routes.preview import router as preview_router
 
-# ---- Email Outreach & Campaign Module ----
-from app.routes.campaigns import router as campaigns_router
-from app.routes.leads import router as leads_router
-from app.routes.tracking import router as tracking_router
+# ---- Analytics (retained — read-only, no outreach engine) ----
 from app.routes.analytics import router as analytics_router
-from app.routes.website_events import router as website_events_router
 from app.routes.naics import router as naics_router
-from app.routes.newsletters import router as newsletters_router
-from app.routes.linkedin_campaigns import router as linkedin_campaigns_router
-from app.routes.linkedin_inbox import router as linkedin_inbox_router
-from app.routes.linkedin_accounts import router as linkedin_accounts_router
+from app.routes.sic import router as sic_router
 
 # ---- Admin: Server Logs ----
 from app.routes.system_logs import router as system_logs_router
@@ -106,8 +99,6 @@ def _spawn_task(coro_or_future) -> "asyncio.Task":
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    import asyncio
-
     # ── Startup ────────────────────────────────────────────────────────────
 
     # 0. Initialise MySQL schema
@@ -118,7 +109,6 @@ async def lifespan(app: FastAPI):
             _log.info("MySQL schema initialized successfully.")
         except Exception as e:
             _log.error(f"Failed to initialize MySQL schema: {e}", exc_info=True)
-
 
     # 1. Initialise async Motor client (for legacy / document-heavy collections)
     init_motor_client()
@@ -131,7 +121,7 @@ async def lifespan(app: FastAPI):
             from app.routes.naics import ensure_naics_populated
             from app.routes.sic import ensure_sic_populated
             from utils.db_client import ensure_all_indexes
-            
+
             ensure_naics_populated()
             ensure_sic_populated()
             import_sam_entities_csv()
@@ -145,83 +135,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         _log.warning(f"Could not spawn background DB setup thread: {e}")
 
-    # 3. Start Background Email Worker Loop
-    from app.core.email_worker import start_email_worker_loop
-    worker_task = _spawn_task(start_email_worker_loop())
-    _log.info("Email worker task started.")
-
-    # Start Background LinkedIn Worker Loop
-    try:
-        from app.core.linkedin_worker import start_linkedin_worker_loop
-        linkedin_worker_task = _spawn_task(start_linkedin_worker_loop())
-        _log.info("LinkedIn worker task started.")
-    except Exception as e:
-        _log.warning(f"Could not start LinkedIn worker loop: {e}")
-        linkedin_worker_task = None
-
-    # Start Background LinkedIn Health Monitor Loop (runs every 4 hours)
-    async def run_linkedin_health_loop():
-        # wait 60s to allow server to startup smoothly
-        await asyncio.sleep(60)
-        while True:
-            try:
-                from app.core.health_monitor import check_all_accounts_health
-                await check_all_accounts_health()
-            except Exception as e:
-                _log.warning(f"[LinkedIn Health Loop] Failed running health check: {e}")
-            await asyncio.sleep(14400)
-
-    linkedin_health_task = _spawn_task(run_linkedin_health_loop())
-    _log.info("LinkedIn health monitor loop task started.")
-
-    # Start Background LinkedIn Acceptance Check Loop (runs every 10 minutes)
-    async def run_linkedin_acceptance_loop():
-        await asyncio.sleep(30)
-        while True:
-            try:
-                from utils.db_client import get_db_session, _mysql_available
-                if _mysql_available:
-                    async for db in get_db_session():
-                        from app.core.linkedin_worker import check_invitation_acceptances
-                        await check_invitation_acceptances(db)
-                        break
-            except Exception as e:
-                _log.warning(f"[LinkedIn Acceptance Loop] Failed running acceptance check: {e}")
-            await asyncio.sleep(600)  # Check every 10 minutes
-
-    linkedin_acceptance_task = _spawn_task(run_linkedin_acceptance_loop())
-    _log.info("LinkedIn invitation acceptance loop task started.")
-
-    # Start LinkedIn Inbox Poll Loop (runs every 30 minutes — polls each active account's messages)
-    async def run_linkedin_inbox_poll_loop():
-        await asyncio.sleep(90)  # Short initial delay to let server finish startup
-        while True:
-            try:
-                from utils.db_client import get_db_session, _mysql_available
-                if _mysql_available:
-                    from app.core.linkedin_worker import poll_inbox_playwright
-                    from models.sql_models import LinkedInAccount
-                    from sqlalchemy import select
-                    async for db in get_db_session():
-                        stmt = select(LinkedInAccount).where(
-                            LinkedInAccount.status.in_(["active", "warming_up"])
-                        )
-                        res = await db.execute(stmt)
-                        active_accounts = res.scalars().all()
-                        break
-                    for acc in active_accounts:
-                        try:
-                            await poll_inbox_playwright(acc.id)
-                        except Exception as e:
-                            _log.warning(f"[LinkedIn Inbox Poll] Error polling account {acc.id}: {e}")
-            except Exception as e:
-                _log.warning(f"[LinkedIn Inbox Poll Loop] Outer error: {e}")
-            await asyncio.sleep(1800)  # Re-poll every 30 minutes
-
-    linkedin_inbox_task = _spawn_task(run_linkedin_inbox_poll_loop())
-    _log.info("LinkedIn inbox poll loop task started.")
-
-    # 4. Start Background TTL Cleanup Loop (runs every 60 minutes)
+    # 3. Start Background TTL Cleanup Loop (runs every 60 minutes)
     async def run_ttl_cleanup_loop():
         while True:
             try:
@@ -260,14 +174,6 @@ async def lifespan(app: FastAPI):
     # ── Shutdown ───────────────────────────────────────────────────────────
 
     # 1. Cancel background loops
-    worker_task.cancel()
-    try:
-        await worker_task
-    except asyncio.CancelledError:
-        _log.info("Email worker task cancelled cleanly.")
-    except Exception as e:
-        _log.warning(f"Email worker shutdown error: {e}")
-
     cleanup_task.cancel()
     try:
         await cleanup_task
@@ -458,23 +364,9 @@ app.include_router(tenders_router, prefix="/api")
 app.include_router(rfp_respond_router, prefix="/api")
 app.include_router(templates_router, prefix="/api")
 app.include_router(preview_router, prefix="/api")
-
-# Campaign & Outreach module routers
-app.include_router(campaigns_router, prefix="/api")
-app.include_router(leads_router, prefix="/api")
-app.include_router(tracking_router, prefix="/api")
 app.include_router(analytics_router, prefix="/api")
-app.include_router(website_events_router, prefix="/api")
-from app.routes.naics import router as naics_router
-from app.routes.sic import router as sic_router
 app.include_router(naics_router, prefix="/api")
 app.include_router(sic_router, prefix="/api")
-app.include_router(newsletters_router, prefix="/api")
-app.include_router(linkedin_campaigns_router, prefix="/api")
-app.include_router(linkedin_inbox_router, prefix="/api")
-app.include_router(linkedin_accounts_router, prefix="/api")
-
-# Admin: Server Logs
 app.include_router(system_logs_router, prefix="/api")
 
 # Serve downloaded tender documents statically
@@ -484,13 +376,6 @@ from fastapi.staticfiles import StaticFiles
 _downloads_dir = Path("downloads")
 _downloads_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/downloads", StaticFiles(directory=str(_downloads_dir)), name="downloads")
-
-
-@app.get("/tracker.js")
-def get_root_tracker_js():
-    from app.routes.tracking import TRACKER_JS
-    from fastapi.responses import Response
-    return Response(content=TRACKER_JS, media_type="application/javascript")
 
 
 @app.get("/")
@@ -550,19 +435,6 @@ async def health():
 if __name__ == "__main__":
     reload_enabled = settings.ENV == "dev"
 
-    # ── Windows reload caveat ────────────────────────────────────────────────
-    # uvicorn's StatReload uses multiprocessing (subprocess spawn) on Windows.
-    # That subprocess starts with Python's DEFAULT event loop policy
-    # (SelectorEventLoop), which does NOT support spawning child processes —
-    # and Playwright needs to spawn Chromium.  We therefore disable StatReload
-    # on Windows so uvicorn runs in a single process where the
-    # WindowsProactorEventLoopPolicy we set at the top of this file applies.
-    #
-    # To get hot-reload back on Windows, install watchfiles:
-    #   uv add watchfiles
-    # uvicorn detects watchfiles and uses its thread-based reloader instead of
-    # the subprocess-based StatReload — threads share the process event loop
-    # policy so Playwright works correctly.
     if sys.platform == "win32":
         try:
             import watchfiles  # noqa: F401  # if installed, uvicorn uses it automatically
@@ -575,7 +447,6 @@ if __name__ == "__main__":
                     "needed by Playwright. Run `uv add watchfiles` to re-enable hot-reload."
                 )
                 reload_enabled = False
-    # ─────────────────────────────────────────────────────────────────────────
 
     host = (
         "0.0.0.0"

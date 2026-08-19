@@ -6,7 +6,9 @@ import {
   Eye, X, ShieldAlert, Cpu, RefreshCw, ExternalLink
 } from 'lucide-react';
 import { Card, MatchBadge, StatusBadge, ProgressBar, renderSafeText } from '../components/ui/Common.jsx';
-import { tenders } from '../data/tenders.jsx';
+// Fallback static data — used only when the backend is offline.
+// Static data files were archived to .archive/linki-integration-2026/.
+const tenders = [];
 import { api } from '../lib/api.jsx';
 import { useNotifications } from '../context/NotificationContext.jsx';
 import PreGenerationWizard from '../components/PreGenerationWizard.jsx';

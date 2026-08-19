@@ -535,6 +535,7 @@ TARGET_KEYS = [
 ]
 
 
+
 @router.get("/env-keys")
 def get_env_keys(current_user: dict = Depends(get_current_user)):
     # Only Admins and Owners may view API keys
@@ -552,31 +553,6 @@ def get_env_keys(current_user: dict = Depends(get_current_user)):
         return response
     except Exception as exc:
         raise HTTPException(500, f"Failed to retrieve environment API keys: {exc}")
-
-
-@router.get("/linkedin/status")
-async def linkedin_status(current_user: dict = Depends(get_current_user)):
-    try:
-        user_id = int(current_user["id"])
-        env_keys = read_env_file_keys()
-        li_at = env_keys.get("LINKEDIN_LI_AT") or os.environ.get("LINKEDIN_LI_AT") or ""
-        
-        expired = True
-        connected = False
-        if _mysql_available:
-            async for db in get_db_session():
-                stmt = select(SQL_Integration).where(SQL_Integration.service == "linkedin", SQL_Integration.user_id == user_id)
-                doc = (await db.execute(stmt)).scalar_one_or_none()
-                if doc:
-                    expired = bool(doc.extra_data.get("expired", True))
-                    connected = bool(doc.connected)
-        
-        if not li_at or "EXPIRED" in li_at.upper() or expired:
-            return {"connected": False, "expired": True, "status": "expired"}
-            
-        return {"connected": connected, "expired": False, "status": "connected"}
-    except Exception:
-        return {"connected": False, "expired": True, "status": "expired"}
 
 
 @router.post("/env-keys")
@@ -615,31 +591,8 @@ async def save_env_keys(payload: dict, current_user: dict = Depends(get_current_
                     except Exception as e:
                         logger.error(f"Failed to cast env variable {k} to type {current_type}: {e}")
                         setattr(settings, k, v)
-                
-                if k == "LINKEDIN_LI_AT" and v and _mysql_available:
-                    user_id = int(current_user["id"])
-                    async for db in get_db_session():
-                        stmt = select(SQL_Integration).where(SQL_Integration.service == "linkedin", SQL_Integration.user_id == user_id)
-                        existing = (await db.execute(stmt)).scalar_one_or_none()
-                        if existing:
-                            await db.execute(
-                                update(SQL_Integration)
-                                .where(SQL_Integration.id == existing.id)
-                                .values(connected=True, extra_data={"expired": False, "status": "connected", "li_at": v}, updated_at=datetime.utcnow())
-                            )
-                        else:
-                            db.add(SQL_Integration(
-                                user_id=user_id,
-                                service="linkedin",
-                                connected=True,
-                                access_token=v,
-                                refresh_token="",
-                                extra_data={"expired": False, "status": "connected", "li_at": v},
-                                created_at=datetime.utcnow(),
-                                updated_at=datetime.utcnow()
-                            ))
-                        await db.commit()
                         
         return {"status": "success", "message": "API keys updated successfully."}
     except Exception as exc:
         raise HTTPException(500, f"Failed to save environment API keys: {exc}")
+

@@ -261,8 +261,8 @@ def ensure_all_indexes() -> None:
     def _safe_create(col_name: str, keys: list, **kwargs):
         try:
             get_collection(col_name).create_index(keys, **kwargs)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"[Index] Failed to create index on '{col_name}': {e}")
 
     # Website pipeline
     _safe_create("raw_website", [("company_slug", pymongo.ASCENDING), ("scraped_at", pymongo.DESCENDING)], name="idx_raw_website_slug_time")
