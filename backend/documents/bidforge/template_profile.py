@@ -31,10 +31,9 @@ logger = logging.getLogger(__name__)
 def extract_template_brand(template_path: str, output_dir: Optional[str] = None) -> Dict[str, Any]:
     """Best-effort extraction of a brand profile from `template_path`.
 
-    Every field that can't be confidently determined falls back to the
-    OrbitAvanya default brand (via get_brand_config()), so the generated
-    document never ends up with missing/blank branding even if the
-    uploaded template is plain or unusually structured.
+    Prefers the full TemplateAnalyzer (tables, IDs, sections, contacts) and
+    merges logo/cover extraction. Falls back to OrbitAvanya defaults so
+    generation never loses branding.
     """
     import importlib
     try:
@@ -43,6 +42,17 @@ def extract_template_brand(template_path: str, output_dir: Optional[str] = None)
         get_brand_config = importlib.import_module("documents.brand_config").get_brand_config
 
     brand = get_brand_config()
+
+    # Rich analyzer: fonts, colors, contacts, tables, identifiers, sections
+    try:
+        from documents.template_analyzer import analyze_template
+        profile = analyze_template(template_path)
+        rich = profile.to_brand_config_dict()
+        for k, v in rich.items():
+            if v not in (None, "", [], {}):
+                brand[k] = v
+    except Exception as exc:
+        logger.warning(f"[TemplateProfile] TemplateAnalyzer failed ({exc}); using lightweight extract.")
 
     try:
         doc = OpenDocument(template_path)
@@ -74,7 +84,7 @@ def extract_template_brand(template_path: str, output_dir: Optional[str] = None)
         f"logo={'yes' if logo_path else 'no (using default)'}, "
         f"cover_graphic={'yes' if cover_path else ('same as logo' if logo_path else 'no (using default)')}, "
         f"accent={brand.get('accent_color')}, heading_font={brand.get('heading_font')}, "
-        f"body_font={brand.get('body_font')}"
+        f"body_font={brand.get('body_font')}, sections={len(brand.get('sections') or [])}"
     )
     return brand
 

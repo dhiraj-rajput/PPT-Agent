@@ -22,6 +22,30 @@ SOCIAL_DOMAINS = [
 
 INVALID_EMAIL_EXTS = ('.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.css', '.js', '.wix', '.ico', '.tiff', '.bmp', '.wixpress')
 
+CF_EMAIL_PROTECTION_HREF = re.compile(r'/cdn-cgi/l/email-protection#([0-9a-fA-F]+)')
+
+
+def _decode_cf_email(encoded_hex: str) -> str:
+    """
+    Decode a Cloudflare 'email protection' obfuscated string back to a real
+    email address. Cloudflare replaces on-page emails with a hex-encoded,
+    single-byte-XOR'd string (data-cfemail="..." attribute, or a
+    /cdn-cgi/l/email-protection#... href) and reconstructs it client-side
+    with JS — which a headless scrape of raw HTML never executes, so these
+    emails were previously dropped entirely.
+    """
+    try:
+        raw = bytes.fromhex(encoded_hex.strip())
+        if len(raw) < 2:
+            return ""
+        key = raw[0]
+        decoded = bytes(b ^ key for b in raw[1:])
+        email = decoded.decode("utf-8", errors="ignore")
+        return email if "@" in email else ""
+    except Exception:
+        return ""
+
+
 def is_valid_email(email: str) -> bool:
     email_lower = email.strip().lower()
     if any(email_lower.endswith(ext) for ext in INVALID_EMAIL_EXTS):
@@ -103,13 +127,29 @@ def extract_contact_info(html_content: str, text_content: str = "") -> Dict[str,
                 if phone:
                     contacts["phone_numbers"].append(phone)
             else:
+                cf_match = CF_EMAIL_PROTECTION_HREF.search(href)
+                if cf_match:
+                    decoded = _decode_cf_email(cf_match.group(1))
+                    if decoded:
+                        contacts["emails"].append(decoded)
+                    continue
                 for domain in SOCIAL_DOMAINS:
                     if domain in href.lower():
-                        clean = re.sub(r'^[^h]+', '', href).strip()
-                        link = clean if clean.startswith(("http://", "https://")) else href.strip()
+                        link = href.strip()
+                        if link.startswith("//"):
+                            link = "https:" + link
+                        elif not link.startswith(("http://", "https://")):
+                            link = "https://" + link.lstrip("/")
                         contacts["social_links"].append(link)
                         if "linkedin.com/company" in link.lower() and not contacts["linkedin_url"]:
                             contacts["linkedin_url"] = link
+
+        # Cloudflare also renders a <span class="__cf_email__" data-cfemail="...">
+        # in place of the visible email text on the page (no <a> tag involved).
+        for tag in soup.find_all(attrs={"data-cfemail": True}):
+            decoded = _decode_cf_email(str(tag["data-cfemail"]))
+            if decoded:
+                contacts["emails"].append(decoded)
 
         # Also regex-scan text for emails & phones
         search_text = f"{soup.get_text()} {text_content}"

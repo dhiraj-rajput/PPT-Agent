@@ -177,10 +177,10 @@ const GENERIC_INTEGRATIONS = [
     icon: Bot,
     iconWrapClass: 'bg-purple-50 dark:bg-purple-500/10 text-purple-500',
     title: 'OpenRouter AI LLM (Optional)',
-    description: 'Access multiple LLMs via OpenRouter.',
+    description: 'Free tier: use model openrouter/free (auto-picks $0 models). Specific free models end with :free. Avoid openrouter/auto unless you have paid credits.',
     fields: [
-      { key: 'OPENROUTER_API_KEY', label: 'API Key', type: 'password', optional: true },
-      { key: 'OPENROUTER_MODEL', label: 'Model Name (e.g. nvidia/nemotron-3-ultra-550b-a55b:free)', type: 'text', optional: true },
+      { key: 'OPENROUTER_API_KEY', label: 'API Key (sk-or-v1-...)', type: 'password', optional: true },
+      { key: 'OPENROUTER_MODEL', label: 'Model (recommended: openrouter/free)', type: 'text', optional: true },
     ],
   },
   {

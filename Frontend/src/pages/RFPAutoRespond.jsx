@@ -43,6 +43,7 @@ export default function RFPAutoRespond() {
   // -------------------------------------------------------------------------
 
   useEffect(() => {
+    // Restore active GENERATION task (was already persisted)
     const savedTaskId = localStorage.getItem('rfp_active_task_id');
     if (savedTaskId) {
       setTaskId(savedTaskId);
@@ -52,6 +53,24 @@ export default function RFPAutoRespond() {
         })
         .catch(() => {
           localStorage.removeItem('rfp_active_task_id');
+        });
+    }
+
+    // Restore active ANALYSIS/WIZARD task — re-open wizard if user navigated away
+    const savedAnalysisTaskId = localStorage.getItem('rfp_active_analysis_task_id');
+    if (savedAnalysisTaskId && !savedTaskId) {
+      // Check if the analysis task is still active (not completed/failed)
+      api.getRfpAnalyzeStatus(savedAnalysisTaskId)
+        .then((state) => {
+          if (state.status !== 'failed') {
+            // Re-open wizard with the resumed task ID
+            setWizardModal({ resume: savedAnalysisTaskId });
+          } else {
+            localStorage.removeItem('rfp_active_analysis_task_id');
+          }
+        })
+        .catch(() => {
+          localStorage.removeItem('rfp_active_analysis_task_id');
         });
     }
   }, []);
@@ -103,7 +122,7 @@ export default function RFPAutoRespond() {
 
     // Analyze the RFP first (real parsing + RFP-specific outline +
     // clarifying questions) instead of opening a generic wizard blind.
-    setWizardModal(true);
+    setWizardModal({ resume: null });
   }
 
   // Called by RfpAnalysisWizard once analysis (and any clarification rounds)
@@ -111,6 +130,8 @@ export default function RFPAutoRespond() {
   // resolved answers cached server-side, so generation reuses all of it
   // instead of re-uploading/re-parsing anything.
   async function handleAnalysisReady(analysisTaskId) {
+    // Clear wizard state from localStorage since we're moving to generation
+    localStorage.removeItem('rfp_active_analysis_task_id');
     setWizardModal(null);
     setUploading(true);
     setTaskId(null);
@@ -127,15 +148,27 @@ export default function RFPAutoRespond() {
     }
   }
 
+  function handleWizardCancel() {
+    localStorage.removeItem('rfp_active_analysis_task_id');
+    setWizardModal(null);
+  }
+
+  function handleAnalysisTaskStarted(analysisTaskId) {
+    // Persist the analysis task ID so wizard can be restored if user navigates away
+    localStorage.setItem('rfp_active_analysis_task_id', analysisTaskId);
+  }
+
   function reset() {
     clearInterval(pollRef.current);
     localStorage.removeItem('rfp_active_task_id');
+    localStorage.removeItem('rfp_active_analysis_task_id');
     setRfpFiles([]);
     setTemplateFile(null);
     setTaskId(null);
     setTaskState(null);
     setError('');
   }
+
 
   // -------------------------------------------------------------------------
   // Derived state & helpers
@@ -165,31 +198,54 @@ export default function RFPAutoRespond() {
     }
   };
 
+  /**
+   * Map pipeline progress + message to the 4 top-of-page stage cards.
+   * Backend milestones (from rfp_respond + bidforge_cli):
+   *   1 Parse ~5–20, 2 Inventory ~20–40, 3 Market/Strategy ~40–70, 4 Generate ~70–100
+   * Also keyword-match the status message so stages advance even if progress
+   * numbers jump or lag.
+   */
   const getStepStatus = (index) => {
     if (!taskState) return 'pending';
-    const bounds = [15, 35, 65, 100];
+    if (isCompleted) return 'completed';
+
+    const msg = String(taskState.message || '').toLowerCase();
+    // Keyword → stage index (0..3)
+    const keywordStage = (() => {
+      if (/generat|document|docx|pdf|writing proposal|final/.test(msg)) return 3;
+      if (/market|competitor|pricing|intel|strateg|summaris/.test(msg)) return 2;
+      if (/inventory|explore|match|catalog|offering/.test(msg)) return 1;
+      if (/parse|upload|queue|start|outline|analy|rfp/.test(msg)) return 0;
+      return null;
+    })();
+
+    // Progress bounds: inclusive upper edge of each stage
+    const bounds = [20, 40, 70, 100];
     const prevBound = index === 0 ? 0 : bounds[index - 1];
     const currentBound = bounds[index];
-    
-    if (isCompleted) return 'completed';
-    
-    if (isFailed) {
-      if (progress > prevBound && progress <= currentBound) {
-        return 'failed';
+
+    const stageFromProgress = (() => {
+      if (progress <= 0) return 0;
+      for (let i = 0; i < bounds.length; i++) {
+        if (progress <= bounds[i]) return i;
       }
-      if (progress > currentBound) return 'completed';
+      return 3;
+    })();
+
+    const activeStage = keywordStage != null ? Math.max(keywordStage, stageFromProgress) : stageFromProgress;
+
+    if (isFailed) {
+      if (index < activeStage) return 'completed';
+      if (index === activeStage) return 'failed';
       return 'pending';
     }
-    
-    if (isRunning) {
-      if (progress > prevBound && progress <= currentBound) {
-        return 'active';
-      }
-      if (progress > currentBound) {
-        return 'completed';
-      }
+
+    if (isRunning || progress > 0) {
+      if (index < activeStage) return 'completed';
+      if (index === activeStage) return 'active';
+      return 'pending';
     }
-    
+
     return 'pending';
   };
 
@@ -516,10 +572,13 @@ export default function RFPAutoRespond() {
         <RfpAnalysisWizard
           rfpFiles={rfpFiles}
           templateFile={templateFile}
-          onCancel={() => setWizardModal(null)}
+          resumeTaskId={wizardModal?.resume || null}
+          onTaskStarted={handleAnalysisTaskStarted}
+          onCancel={handleWizardCancel}
           onReadyToGenerate={handleAnalysisReady}
         />
       )}
+
 
       {previewFile && (
         <DocPreviewModal

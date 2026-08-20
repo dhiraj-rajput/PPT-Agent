@@ -69,10 +69,14 @@ _PAGE_BREAK_BEFORE_QN = "{http://schemas.openxmlformats.org/wordprocessingml/200
 # with its own Executive Summary heading a page or two in was being kept in
 # full, and the AI then wrote a second one after it.
 _BODY_START_HEADING_PATTERNS = [
-    "executive summary", "introduction", "scope of work", "about us",
-    "company profile", "company overview", "our understanding",
-    "understanding of requirements", "proposed solution", "technical approach",
-    "cover letter", "table of contents",
+    "executive summary", "executive overview", "introduction", "scope of work",
+    "about us", "company profile", "company overview", "corporate overview",
+    "our understanding", "understanding of requirements", "proposed solution",
+    "technical approach", "cover letter", "table of contents",
+    "core competencies", "core enterprise", "product suite", "solutions",
+    "master corporate", "accreditation", "quality accreditation",
+    "strategic value", "corporate contact", "contact desk",
+    "relevant experience", "past performance", "pricing", "commercial offer",
 ]
 
 _HEADING_STYLE_PREFIXES = ("heading", "title")
@@ -143,12 +147,26 @@ def find_first_page_split_index(doc) -> Optional[int]:
         if pPr is not None and pPr.find(_PAGE_BREAK_BEFORE_QN) is not None and idx > 0:
             candidates.append(idx - 1)  # preserve up to (not including) this paragraph
         if idx > 0:
+            text = _paragraph_text(child)
             style = _paragraph_style_name(child).lower()
-            if any(style.startswith(p) for p in _HEADING_STYLE_PREFIXES):
-                text = _paragraph_text(child)
+            # Heading-styled OR plain bold-looking body-start titles (capability
+            # brochures often use Normal + bold instead of Heading 1).
+            if any(style.startswith(p) for p in _HEADING_STYLE_PREFIXES) or _looks_like_body_start_heading(text):
                 if _looks_like_body_start_heading(text):
                     candidates.append(idx - 1)
     if not candidates:
+        # Last resort: if the template is long (>12 body paragraphs), keep only
+        # the first ~8 as cover identity and treat the rest as disposable body
+        # so we never ship the entire capability brochure as "page 1".
+        paras = [c for c in body if c.tag.rsplit("}", 1)[-1] == "p"]
+        if len(paras) > 12:
+            # Map 8th paragraph back to body child index
+            count = 0
+            for idx, child in enumerate(body):
+                if child.tag.rsplit("}", 1)[-1] == "p":
+                    count += 1
+                    if count >= 8:
+                        return idx
         return None
     return min(candidates)
 
@@ -478,10 +496,17 @@ def build_document_with_preserved_first_page(
     """
     from docx import Document
     import importlib
+    import sys
     try:
         from backend.scripts import proposal_generator as pg
     except ImportError:
-        pg = importlib.import_module("scripts.proposal_generator")
+        try:
+            pg = importlib.import_module("scripts.proposal_generator")
+        except ImportError:
+            backend_root = Path(__file__).resolve().parents[2]
+            if str(backend_root) not in sys.path:
+                sys.path.insert(0, str(backend_root))
+            pg = importlib.import_module("scripts.proposal_generator")
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_copy = Path(tmp_dir) / "template_copy.docx"

@@ -85,6 +85,7 @@ def _compute_lifecycle(
     active_flag: str,
     award_date_str: str = "",
     award_amount: float = 0.0,
+    award_awardee: str = "",
 ) -> dict:
     now = datetime.now(tz=timezone.utc)
 
@@ -115,7 +116,7 @@ def _compute_lifecycle(
         except Exception:
             pass
 
-    has_award = bool(award_amount > 0 or award_date_str)
+    has_award = bool(award_amount > 0 or award_date_str or (award_awardee and award_awardee.strip()))
     if has_award:
         return {
             "status": "Won",
@@ -193,7 +194,14 @@ def _map_opportunity(opp: dict) -> dict:
     award_info = opp.get("award") or {}
     award_amount = float(award_info.get("amount") or 0.0)
     award_date = award_info.get("date") or ""
-    award_awardee = (award_info.get("awardee") or {}).get("name") or ""
+    awardee_obj = award_info.get("awardee") or {}
+    # SAM.gov uses legalBusinessName on award notices; fall back to name / uei
+    award_awardee = (
+        awardee_obj.get("legalBusinessName")
+        or awardee_obj.get("name")
+        or awardee_obj.get("legalName")
+        or ""
+    )
 
     closing = (
         opp.get("responseDeadLine")
@@ -208,6 +216,7 @@ def _map_opportunity(opp: dict) -> dict:
         active_flag=active_flag,
         award_date_str=award_date,
         award_amount=award_amount,
+        award_awardee=award_awardee,
     )
 
     posted = opp.get("postedDate") or opp.get("publishDate") or ""
@@ -538,16 +547,23 @@ async def sync_tenders_from_sam(
                 for t_dict in uk_tenders:
                     stmt = select(SQL_Tender).where(SQL_Tender.id == t_dict["id"])
                     existing = (await db.execute(stmt)).scalar_one_or_none()
+                    ch_rfp_url = t_dict.get("rfp_url") or t_dict.get("uiLink") or ""
                     if existing:
                         await db.execute(
                             update(SQL_Tender)
                             .where(SQL_Tender.id == t_dict["id"])
                             .values(
                                 title=t_dict["title"],
-                                summary=t_dict["summary"],
+                                summary=t_dict.get("summary") or existing.summary or "",
                                 agency=t_dict["agency"],
                                 value=float(t_dict.get("value", 250000.0) or 250000.0),
+                                status=t_dict.get("status", "Open"),
+                                has_award=t_dict.get("has_award", False),
+                                award_amount=t_dict.get("award_amount", 0.0),
+                                award_date=t_dict.get("award_date", ""),
+                                award_awardee=t_dict.get("award_awardee", ""),
                                 source="Companies House",
+                                rfp_url=ch_rfp_url or existing.rfp_url or "",
                                 is_active=True,
                                 raw_companies_house_data=t_dict.get("raw_companies_house_data", {})
                             )
@@ -572,9 +588,26 @@ async def sync_tenders_from_sam(
                             value=float(t_dict.get("value", 250000.0) or 250000.0),
                             summary=t_dict.get("summary", ""),
                             source="Companies House",
+                            rfp_url=ch_rfp_url,
+                            has_award=t_dict.get("has_award", False),
+                            award_amount=t_dict.get("award_amount", 0.0),
+                            award_date=t_dict.get("award_date", ""),
+                            award_awardee=t_dict.get("award_awardee", ""),
                             raw_companies_house_data=t_dict.get("raw_companies_house_data", {})
                         ))
                     inserted_count += 1
+
+                    # Kick off document downloads for this UK notice (attachments from OCDS)
+                    try:
+                        sol_num = _sanitize_path_component(str(t_dict.get("solicitation_number") or t_dict["id"]))
+                        downloads_path = Path("downloads") / "opportunities" / sol_num / "rfp_docs"
+                        _ensure_ch_rfp_downloaded(
+                            sol_num,
+                            t_dict.get("raw_companies_house_data"),
+                            str(downloads_path),
+                        )
+                    except Exception as dl_err:
+                        logger.warning(f"[Companies House Sync] Doc download for {t_dict.get('id')}: {dl_err}")
 
                 # Log sync event to server error/system log table
                 try:
@@ -1094,7 +1127,7 @@ async def request_draft(
             await db.commit()
             await db.refresh(new_req)
 
-            if mode == "prime":
+            if mode in ("prime", "subcontract"):
                 sol_num = str(getattr(tender, "solicitation_number", "") or "")
                 if sol_num:
                     background_tasks.add_task(ensure_rfp_downloaded, str(notice_id), sol_num)
@@ -1218,14 +1251,28 @@ def ensure_rfp_downloaded(notice_id: str, solicitation_number: str) -> None:
         return
 
     raw_opp = None
+    tender_source = "SAM.gov"
+    raw_ch_data = None
     if _mysql_available:
         try:
             with get_sync_db_session() as db:
                 row = db.execute(select(SQL_Tender).where(SQL_Tender.id == notice_id)).scalar_one_or_none()
-                if row and getattr(row, "raw_sam_data", None):
-                    raw_opp = row.raw_sam_data
+                if row:
+                    tender_source = getattr(row, "source", "") or "SAM.gov"
+                    if getattr(row, "raw_sam_data", None):
+                        raw_opp = row.raw_sam_data
+                    if getattr(row, "raw_companies_house_data", None):
+                        raw_ch_data = row.raw_companies_house_data
         except Exception as e:
             logger.warning(f"Failed to query tender raw data from MySQL: {e}")
+
+    # Companies House / UK Find a Tender path — previously this branch didn't
+    # exist at all, so no document was ever fetched for a Companies
+    # House-sourced tender (the function silently no-op'd past the SAM.gov
+    # search, which naturally finds nothing for a UK OCID).
+    if tender_source == "Companies House":
+        _ensure_ch_rfp_downloaded(solicitation_number, raw_ch_data, str(downloads_path))
+        return
 
     from app.sam_gov.opportunities import SAMOpportunitiesClient
     opp_client = SAMOpportunitiesClient()
@@ -1254,6 +1301,53 @@ def ensure_rfp_downloaded(notice_id: str, solicitation_number: str) -> None:
             logger.error(f"[Tenders] Error downloading RFP documents: {e}")
 
 
+def _ensure_ch_rfp_downloaded(solicitation_number: str, raw_ch_data: Optional[dict], rfp_docs_dir: str) -> None:
+    """
+    Download the real UK Find a Tender / Companies House documents for a
+    tender, into the SAME rfp_docs directory layout used for SAM.gov, so the
+    existing /documents endpoints and frontend viewer work identically for
+    both sources with no extra branching on the client.
+    """
+    if not raw_ch_data or not isinstance(raw_ch_data, dict):
+        logger.warning(f"[Tenders] No Companies House raw data available for {solicitation_number} — cannot locate documents.")
+        return
+
+    release = raw_ch_data.get("ocds_release") or {}
+    tender_obj = release.get("tender") or {}
+    awards = release.get("awards") or []
+
+    links: list[str] = []
+    for doc in (tender_obj.get("documents") or []):
+        url = doc.get("url") if isinstance(doc, dict) else None
+        if url:
+            links.append(url)
+    for award in awards:
+        for doc in (award.get("documents") or []):
+            url = doc.get("url") if isinstance(doc, dict) else None
+            if url:
+                links.append(url)
+
+    if not links:
+        logger.info(f"[Tenders] No document links found in OCDS release for {solicitation_number}.")
+        return
+
+    from app.sam_gov.document_parser import DocumentParser
+    # DocumentParser is generic (plain HTTP GET + retry + PDF/HTML/OCR
+    # parsing) — the SAM.gov-specific bit is only the optional api_key
+    # injection, which is a harmless no-op for non-sam.gov URLs.
+    parser = DocumentParser()
+
+    os.makedirs(rfp_docs_dir, exist_ok=True)
+    for link in links[:20]:
+        try:
+            save_result = parser.download_and_save_to_path(link, rfp_docs_dir)
+            if save_result["status"] != "success":
+                logger.warning(f"[Tenders] Failed to download CH/UK tender document {link}: {save_result['status']}")
+        except Exception as e:
+            logger.error(f"[Tenders] Error downloading CH/UK tender document {link}: {e}")
+
+    logger.info(f"[Tenders] Companies House document download complete for {solicitation_number}")
+
 
 @router.get("/{notice_id}/documents")
 async def list_tender_documents(
@@ -1261,17 +1355,34 @@ async def list_tender_documents(
     current_user: dict = Depends(get_current_user),
 ):
     sol_num = notice_id
+    tender_row = None
     if _mysql_available:
         try:
             async for db in get_db_session():
                 stmt = select(SQL_Tender).where(SQL_Tender.id == notice_id)
-                tender = (await db.execute(stmt)).scalar_one_or_none()
-                if tender:
-                    sol_num = _sanitize_path_component(str(getattr(tender, "solicitation_number", "") or notice_id))
+                tender_row = (await db.execute(stmt)).scalar_one_or_none()
+                if tender_row:
+                    sol_num = _sanitize_path_component(str(getattr(tender_row, "solicitation_number", "") or notice_id))
         except Exception:
             pass
 
-    rfp_docs_dir = Path("downloads") / "opportunities" / sol_num / "rfp_docs"
+    # Resolve from project root so CWD differences don't break document listing
+    project_root = Path(__file__).resolve().parent.parent.parent
+    rfp_docs_dir = project_root / "downloads" / "opportunities" / sol_num / "rfp_docs"
+    if not rfp_docs_dir.exists():
+        # fallback relative to CWD (legacy layout)
+        rfp_docs_dir = Path("downloads") / "opportunities" / sol_num / "rfp_docs"
+
+    # If no local docs yet, try to download from SAM / Companies House once
+    if (not rfp_docs_dir.exists() or not any(rfp_docs_dir.iterdir() if rfp_docs_dir.exists() else [])) and tender_row is not None:
+        try:
+            await asyncio.to_thread(
+                ensure_rfp_downloaded,
+                notice_id,
+                str(getattr(tender_row, "solicitation_number", "") or notice_id),
+            )
+        except Exception as e:
+            logger.warning(f"[Tenders] On-demand document download failed for {notice_id}: {e}")
     
     documents = []
     if rfp_docs_dir.exists():
@@ -1293,10 +1404,16 @@ async def list_tender_documents(
                     ".html": "HTML Document",
                     ".zip": "Archive",
                 }.get(ext, "File")
-                stat = f.stat()
-                size_bytes = stat.st_size
+                size_bytes = 0
+                modified = None
+                try:
+                    stat = f.stat()
+                    size_bytes = int(stat.st_size or 0)
+                    modified = stat.st_mtime
+                except Exception:
+                    pass
                 if size_bytes > 1024 * 1024:
-                    size_str = f"{size_bytes / (1024*1024):.1f} MB"
+                    size_str = f"{size_bytes / (1024 * 1024):.1f} MB"
                 elif size_bytes > 1024:
                     size_str = f"{size_bytes / 1024:.1f} KB"
                 else:
@@ -1307,7 +1424,7 @@ async def list_tender_documents(
                     "type": file_type,
                     "size": size_str,
                     "size_bytes": size_bytes,
-                    "modified": stat.st_mtime,
+                    "modified": modified,
                     "path_key": f"opportunities/{sol_num}/rfp_docs/{f.name}",
                 })
 
@@ -1325,8 +1442,12 @@ async def serve_tender_document(
     filename: str,
     current_user: dict = Depends(get_current_user),
 ):
+    # FastAPI already URL-decodes path params; still normalize
+    from urllib.parse import unquote
+    filename = unquote(filename)
     safe_filename = Path(filename).name
-    if not safe_filename or safe_filename != filename:
+    # Reject path traversal only
+    if not safe_filename or safe_filename != filename.replace("\\", "/").split("/")[-1]:
         raise HTTPException(status_code=400, detail="Invalid filename")
 
     sol_num = notice_id
@@ -1340,8 +1461,10 @@ async def serve_tender_document(
         except Exception:
             pass
 
-
-    file_path = Path("downloads") / "opportunities" / sol_num / "rfp_docs" / safe_filename
+    project_root = Path(__file__).resolve().parent.parent.parent
+    file_path = project_root / "downloads" / "opportunities" / sol_num / "rfp_docs" / safe_filename
+    if not file_path.exists():
+        file_path = Path("downloads") / "opportunities" / sol_num / "rfp_docs" / safe_filename
 
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Document not found")

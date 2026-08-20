@@ -85,9 +85,27 @@ export default function TenderDetail() {
       console.error("Download failed:", err);
     }
   };
+
+  /** Open a tender attachment with auth (new-tab href would omit Bearer token). */
+  const handleOpenTenderDocument = async (e, filename) => {
+    e.preventDefault();
+    try {
+      const blob = await api.downloadTenderDocument(id, filename);
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener,noreferrer');
+      // Revoke after the new tab has had time to load
+      setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      console.error("Open document failed:", err);
+      notify('Document open failed', err.message || 'Could not open attachment (auth or missing file).', null);
+    }
+  };
+
   const [modeMessages, setModeMessages] = useState({});
   const [expandedMode, setExpandedMode] = useState(null); // which mode's description is open
   const [manualWinner, setManualWinner] = useState(''); // manually entered winning company name for subcontract mode
+  const [tenderDocuments, setTenderDocuments] = useState([]);
+  const [docsLoading, setDocsLoading] = useState(false);
 
   // Fetch draft requests status from database helper
   const fetchDraftRequests = useCallback(() => {
@@ -116,6 +134,14 @@ export default function TenderDetail() {
         setLoading(false);
         // Also fetch existing draft request state
         fetchDraftRequests();
+        // List SAM.gov / Companies House documents already downloaded for this RFP
+        setDocsLoading(true);
+        api.getTenderDocuments(id)
+          .then(docData => {
+            setTenderDocuments(docData?.documents || []);
+          })
+          .catch(() => setTenderDocuments([]))
+          .finally(() => setDocsLoading(false));
       })
       .catch(err => {
         if (err.message.includes('404') || err.message === 'not_found') {
@@ -258,8 +284,21 @@ export default function TenderDetail() {
   const postedDate     = tender.posted_date  || tender.postedDate;
   const closingDate    = tender.closing_date || tender.closingDate;
   const status         = tender.status;
-  const rfpUrl         = tender.rfp_url      || tender.rfpUrl;
-  const description    = tender.description;
+  const rfpUrl         = (() => {
+    const direct = tender.rfp_url || tender.rfpUrl || '';
+    if (direct) return direct;
+    const sol = tender.solicitation_number || tender.solicitationNumber || '';
+    const src = (tender.source || '').toLowerCase();
+    if (src.includes('companies') || src.includes('uk')) {
+      if (sol.startsWith('ocds-')) {
+        return `https://www.find-tender.service.gov.uk/procurement/${sol}`;
+      }
+      return `https://www.find-tender.service.gov.uk/Search/Results?Keywords=${encodeURIComponent(tender.title || sol || '')}`;
+    }
+    if (sol) return `https://sam.gov/search/?index=opp&q=${encodeURIComponent(sol)}`;
+    return '';
+  })();
+  const description    = tender.description || tender.summary || '';
   const matchScore     = tender.match || tender.matchScore || tender.match_score;
   const setAside       = tender.set_aside;
   const solicitationNumber = tender.solicitation_number;
@@ -380,7 +419,7 @@ export default function TenderDetail() {
                 rel="noreferrer"
                 className="mt-4 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-navy-900 hover:bg-slate-50 dark:border-navy-700 dark:bg-navy-800 dark:text-white dark:hover:bg-navy-700 transition-all shadow-soft"
               >
-                View original SAM.gov posting <ExternalLink size={13} />
+                View original {(tender.source || '').toLowerCase().includes('companies') ? 'Find a Tender' : 'SAM.gov'} posting <ExternalLink size={13} />
               </a>
             )}
           </Card>
@@ -414,6 +453,51 @@ export default function TenderDetail() {
               </div>
             </Card>
           )}
+
+          {/* RFP / tender documents (SAM.gov attachments + Companies House filings) */}
+          <Card>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-extrabold text-navy-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                <FileText size={15} className="text-brand-500" />
+                RFP & Filing Documents
+              </h3>
+              {docsLoading && <Loader2 size={14} className="animate-spin text-slate-400" />}
+            </div>
+            {tenderDocuments.length === 0 && !docsLoading ? (
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                No documents downloaded yet. Open the original posting or request a draft to trigger download of SAM.gov / Companies House files.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {tenderDocuments.map((doc) => (
+                  <li
+                    key={doc.filename || doc.name}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 dark:border-navy-700 dark:bg-navy-800/60"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-semibold text-navy-900 dark:text-slate-200">
+                        {doc.filename || doc.name || 'Document'}
+                      </p>
+                      {(doc.size || doc.content_type) && (
+                        <p className="text-[10px] text-slate-400">
+                          {[doc.content_type, doc.size ? `${Math.round(doc.size / 1024)} KB` : null]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => handleOpenTenderDocument(e, doc.filename || doc.name)}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-[11px] font-semibold text-brand-700 hover:bg-brand-100 dark:border-brand-800 dark:bg-brand-950/40 dark:text-brand-300"
+                    >
+                      <FileDown size={12} /> Open
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
 
           {/* Contextual Teaming / Bid Competitors profiles block */}
           <Card>

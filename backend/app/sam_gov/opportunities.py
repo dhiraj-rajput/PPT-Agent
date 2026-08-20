@@ -559,7 +559,7 @@ class SAMOpportunitiesClient:
             else:
                 save_result = parser.download_and_save_to_path(link, rfp_docs_dir)
                 if save_result["status"] == "success":
-                    parse_result = parser.parse_document(save_result["url"])
+                    parse_result = parser.parse_local_file(save_result["local_path"], url=save_result["url"])
                     return {
                         "url": link,
                         "filename": filename,
@@ -617,7 +617,7 @@ class SAMOpportunitiesClient:
             else:
                 save_result = parser.download_and_save_to_path(link, proposal_docs_dir)
                 if save_result["status"] == "success":
-                    parse_result = parser.parse_document(save_result["url"])
+                    parse_result = parser.parse_local_file(save_result["local_path"], url=save_result["url"])
                     return {
                         "url": link,
                         "filename": filename,

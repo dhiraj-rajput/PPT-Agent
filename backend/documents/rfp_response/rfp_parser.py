@@ -32,7 +32,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
 from utils.helpers import setup_logger
 from pipeline.ai.client import get_ai_client
@@ -47,18 +47,28 @@ logger = setup_logger(__name__)
 # Below this size, parse in a single call (fast path, no chunking overhead).
 SINGLE_CALL_CHAR_THRESHOLD = 55_000
 
-# Chunk size and overlap for the map-reduce path. Overlap ensures a
-# requirement/clause that straddles a chunk boundary isn't half-lost.
+# Chunk size and overlap for the map-reduce path. Prefer section-aware
+# splits first (SECTION-N, ANNEXURE-N, etc.) so Bid Evaluation Criteria,
+# Scope of Work, and Price Schedule stay intact — fixed-size only as fallback.
 CHUNK_SIZE = 45_000
 CHUNK_OVERLAP = 2_000
+# Soft target for section-aware chunks; large sections may exceed this and
+# will be sub-split with overlap so nothing is dropped.
+SECTION_TARGET_SIZE = 40_000
 
 # Output budgets per call type.
 MERGE_MAX_TOKENS = 16000
 CHUNK_MAX_TOKENS = 8192
 SINGLE_CALL_MAX_TOKENS = 12000
 
+# Structural markers common in Indian / international multi-section tenders.
+# Order matters: longer/more-specific patterns first when matching.
+_SECTION_HEADER_RE = None  # compiled lazily in _get_section_header_re()
+
 
 class RFPParser:
+    # Optional progress_callback set by parse_requirements(...)
+    _progress_cb: Optional[Callable[[int, str], None]] = None
     """Extracts text from RFP files and parses requirements/structure, chunking
     instead of truncating when the source document is large."""
 
@@ -66,6 +76,7 @@ class RFPParser:
         self.solicitation_number = solicitation_number
         self.project_root = Path(project_root)
         self.rfp_docs_dir = self.project_root / "downloads" / "opportunities" / solicitation_number / "rfp_docs"
+        self._progress_cb = None
 
     def extract_text_from_pdfs(self) -> Dict[str, str]:
         """Extracts text from all supported RFP documents in the directory."""
@@ -95,9 +106,19 @@ class RFPParser:
     # Public entry point
     # ------------------------------------------------------------------
 
-    def parse_requirements(self, doc_texts: Dict[str, str]) -> Dict[str, Any]:
+    def parse_requirements(
+        self,
+        doc_texts: Dict[str, str],
+        progress_callback: Optional[Callable[[int, str], None]] = None,
+    ) -> Dict[str, Any]:
         """Parses extracted RFP text into the full structured shape, never
-        truncating -- chunks + merges for large documents instead."""
+        truncating -- chunks + merges for large documents instead.
+
+        progress_callback(progress_0_to_100, message) is optional and used by
+        /rfp-respond/analyze so the UI can show "Chunk 12/40" instead of
+        sitting at a frozen 5%.
+        """
+        self._progress_cb = progress_callback
         combined_text = "\n\n".join(doc_texts.values())
         if not combined_text.strip():
             logger.warning("No text extracted from RFP documents. Returning empty structure.")
@@ -111,6 +132,8 @@ class RFPParser:
 
         def ai_fn() -> Dict[str, Any]:
             if char_count <= SINGLE_CALL_CHAR_THRESHOLD:
+                if self._progress_cb:
+                    self._progress_cb(12, "Parsing RFP in a single pass…")
                 result = self._parse_single_call(combined_text)
             else:
                 result = self._parse_chunked(combined_text)
@@ -152,7 +175,107 @@ class RFPParser:
     # Map-reduce path: chunk -> extract each -> merge
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _get_section_header_re():
+        """Compile once: SECTION-N, ANNEXURE-N, Part N, Schedule, Volume, etc.
+
+        Do NOT embed inline flags like (?m)/(?i) inside alternatives — Python
+        raises 'global flags not at the start of the expression' when those
+        appear mid-pattern after joining with '|'. Use re.M|re.I on compile.
+        """
+        global _SECTION_HEADER_RE
+        if _SECTION_HEADER_RE is not None:
+            return _SECTION_HEADER_RE
+        import re
+        patterns = [
+            r"^[\s]*SECTION[\s\-–—:]*\d+[A-Za-z]?",
+            r"^[\s]*ANNEXURE[\s\-–—:]*\d+[A-Za-z]?",
+            r"^[\s]*ANNEX[\s\-–—:]*\d+[A-Za-z]?",
+            r"^[\s]*SCHEDULE[\s\-–—:]*[A-Z0-9]+",
+            r"^[\s]*APPENDIX[\s\-–—:]*[A-Z0-9]+",
+            r"^[\s]*VOLUME[\s\-–—:]*[IVX0-9]+",
+            r"^[\s]*PART[\s\-–—:]*[IVX0-9]+",
+            r"^[\s]*CHAPTER[\s\-–—:]*\d+",
+            r"^[\s]*Article[\s\-–—:]*\d+",
+            r"^[\s]*INVITATION TO BID",
+            r"^[\s]*INSTRUCTIONS TO BIDDERS",
+            r"^[\s]*SCOPE OF WORK",
+            r"^[\s]*BID EVALUATION CRITERIA",
+            r"^[\s]*PRICE SCHEDULE",
+            r"^[\s]*GENERAL CONDITIONS OF CONTRACT",
+            r"^[\s]*SPECIAL CONDITIONS OF CONTRACT",
+            r"^[\s]*RESPONSIBILITY MATRIX",
+        ]
+        # Non-capturing groups avoid "too many groups" and flag-in-middle issues
+        combined = "(?:" + ")|(?:".join(patterns) + ")"
+        _SECTION_HEADER_RE = re.compile(combined, re.IGNORECASE | re.MULTILINE)
+        return _SECTION_HEADER_RE
+
     def _chunk_text(self, text: str) -> List[str]:
+        """
+        Prefer section-aware splits so multi-section tenders (ITB, SOW, BEC,
+        GCC, annexures, price schedules) stay coherent for the LLM. Fall back
+        to fixed-size overlapping windows only when no headers are found or a
+        single section exceeds the target size.
+        """
+        if not text:
+            return []
+
+        header_re = self._get_section_header_re()
+        matches = list(header_re.finditer(text))
+
+        if len(matches) >= 2:
+            # Build segments from header positions (include preamble before first header)
+            boundaries = [0] + [m.start() for m in matches] + [len(text)]
+            segments: List[str] = []
+            for i in range(len(boundaries) - 1):
+                seg = text[boundaries[i]:boundaries[i + 1]].strip()
+                if seg:
+                    segments.append(seg)
+
+            # Pack consecutive short sections together so we don't fire one LLM
+            # call per 1–2 page annexure header (was producing 60–70 chunks and
+            # making the UI look stuck for 10+ minutes).
+            packed: List[str] = []
+            buf = ""
+            min_pack = max(8_000, SECTION_TARGET_SIZE // 4)
+            for seg in segments:
+                if not buf:
+                    buf = seg
+                elif len(buf) + len(seg) + 2 <= SECTION_TARGET_SIZE:
+                    buf = buf + "\n\n" + seg
+                else:
+                    # Prefer not to leave a tiny leftover buffer
+                    if len(buf) < min_pack and packed:
+                        packed[-1] = packed[-1] + "\n\n" + buf
+                        buf = seg
+                    else:
+                        packed.append(buf)
+                        buf = seg
+            if buf:
+                if packed and len(buf) < min_pack:
+                    packed[-1] = packed[-1] + "\n\n" + buf
+                else:
+                    packed.append(buf)
+            segments = packed
+
+            # Sub-split any segment that is still huge
+            chunks: List[str] = []
+            for seg in segments:
+                if len(seg) <= SECTION_TARGET_SIZE:
+                    chunks.append(seg)
+                else:
+                    chunks.extend(self._fixed_size_chunks(seg))
+            if chunks:
+                logger.info(
+                    f"[RFPParser] Section-aware chunking: {len(matches)} header(s) → "
+                    f"{len(chunks)} chunk(s) (target ≤{SECTION_TARGET_SIZE:,} chars)."
+                )
+                return chunks
+
+        return self._fixed_size_chunks(text)
+
+    def _fixed_size_chunks(self, text: str) -> List[str]:
         chunks = []
         start = 0
         n = len(text)
@@ -167,10 +290,24 @@ class RFPParser:
     def _parse_chunked(self, text: str) -> Dict[str, Any]:
         client = get_ai_client()
         chunks = self._chunk_text(text)
-        logger.info(f"[RFPParser] Splitting into {len(chunks)} chunk(s) of ~{CHUNK_SIZE:,} chars each.")
+        total = len(chunks)
+        logger.info(f"[RFPParser] Splitting into {total} chunk(s) of ~{CHUNK_SIZE:,} chars each.")
+        if self._progress_cb:
+            self._progress_cb(
+                8,
+                f"Section-aware split: {total} chunk(s) — extracting requirements…",
+            )
 
         chunk_extracts: List[Dict[str, Any]] = []
         for idx, chunk in enumerate(chunks, start=1):
+            # Map chunk index into progress band 8 → 36 (leave room for merge)
+            pct = 8 + int(28 * (idx - 1) / max(total, 1))
+            if self._progress_cb:
+                self._progress_cb(
+                    min(36, pct),
+                    f"Parsing chunk {idx}/{total} "
+                    f"({len(chunk):,} chars)…",
+                )
             try:
                 messages = [
                     {"role": "system", "content": RFP_CHUNK_EXTRACT_PROMPT},
@@ -178,22 +315,25 @@ class RFPParser:
                         "role": "user",
                         "content": (
                             f"Solicitation Number: {self.solicitation_number}\n"
-                            f"Chunk {idx} of {len(chunks)} (in document order):\n\n{chunk}"
+                            f"Chunk {idx} of {total} (in document order):\n\n{chunk}"
                         ),
                     },
                 ]
                 extract = client.chat_json(messages, max_tokens=CHUNK_MAX_TOKENS)
                 chunk_extracts.append(extract)
                 logger.info(
-                    f"[RFPParser] Chunk {idx}/{len(chunks)}: "
+                    f"[RFPParser] Chunk {idx}/{total}: "
                     f"{len(extract.get('requirements', []))} requirement(s), "
                     f"{len(extract.get('structural_elements', []))} structural element(s)."
                 )
             except Exception as exc:
-                logger.warning(f"[RFPParser] Chunk {idx}/{len(chunks)} extraction failed, continuing: {exc}")
+                logger.warning(f"[RFPParser] Chunk {idx}/{total} extraction failed, continuing: {exc}")
 
         if not chunk_extracts:
             raise RuntimeError("All chunk extractions failed; nothing to merge.")
+
+        if self._progress_cb:
+            self._progress_cb(38, f"Merging {len(chunk_extracts)} chunk extract(s)…")
 
         merge_input = json.dumps(chunk_extracts, indent=2)
         merge_messages = [

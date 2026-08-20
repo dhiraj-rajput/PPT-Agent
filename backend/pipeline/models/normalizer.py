@@ -43,6 +43,35 @@ def _is_valid_phone(value: str) -> bool:
     return True
 
 
+def ensure_absolute_url(url: str) -> str:
+    """
+    Ensure a website URL is absolute and has a scheme so frontend <a href>
+    links open correctly in the browser. Bare domains like 'mckenziemed.com'
+    or protocol-relative '//mckenziemed.com' otherwise fail to navigate.
+    Rejects incomplete values like 'https:' or '//' with no host.
+    """
+    if not url or not isinstance(url, str):
+        return ""
+    u = url.strip().rstrip("/")
+    if not u:
+        return ""
+    if u.startswith("//"):
+        u = "https:" + u
+    if not u.startswith(("http://", "https://")):
+        u = "https://" + u.lstrip("/")
+    if u in ("http://", "https://", "http:", "https:"):
+        return ""
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(u)
+        host = (parsed.netloc or "").split("@")[-1].split(":")[0]
+        if not host or (host != "localhost" and "." not in host):
+            return ""
+    except Exception:
+        return ""
+    return u
+
+
 def clean_list(items: Optional[List[Any]], max_len: int = 150) -> List[str]:
     """Clean, strip, de-duplicate and length-filter list elements."""
     if not items:
@@ -227,7 +256,7 @@ def normalize_company_intelligence(
     )
 
     company_name = (linkedin_name or website_name).strip()
-    website = website_url.strip()
+    website = ensure_absolute_url(website_url.strip() if website_url else "")
 
     # ------------------------------------------------------------------
     # 3. Locations

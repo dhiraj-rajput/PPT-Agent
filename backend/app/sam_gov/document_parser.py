@@ -188,6 +188,40 @@ class DocumentParser:
             result["status"] = "download_failed"
             return result
 
+        return self._parse_bytes(content_bytes, filename, url=url)
+
+    def parse_local_file(self, local_path: str, url: str = "") -> Dict[str, Any]:
+        """
+        Parse a document that has already been downloaded to disk.
+
+        This must be used (instead of parse_document) after a successful
+        download_and_save_to_path() call — calling parse_document(url) again
+        at that point re-issues an HTTP GET to the *same* URL. For SAM.gov,
+        resource links often resolve through a one-time-use presigned S3
+        redirect, so a second fetch can 401/403/expire even though the file
+        was already saved successfully — silently dropping the document's
+        text content while the file itself sits fine on disk.
+        """
+        filename = _sanitize_filename(os.path.basename(local_path) or "document")
+        result = {"url": url or local_path, "filename": filename, "content": "", "status": "failed"}
+        try:
+            with open(local_path, "rb") as f:
+                content_bytes = f.read()
+        except Exception as e:
+            logger.error(f"Failed to read local file {local_path}: {e}")
+            result["status"] = "read_failed"
+            return result
+
+        if not content_bytes:
+            result["status"] = "empty_file"
+            return result
+
+        return self._parse_bytes(content_bytes, filename, url=url or local_path)
+
+    def _parse_bytes(self, content_bytes: bytes, filename: str, url: str = "") -> Dict[str, Any]:
+        """Shared parsing logic for already-downloaded document bytes."""
+        result = {"url": url, "filename": filename, "content": "", "status": "failed"}
+
         ext = Path(filename).suffix.lower()
         is_pdf = ext == ".pdf" or _is_valid_pdf(content_bytes)
 

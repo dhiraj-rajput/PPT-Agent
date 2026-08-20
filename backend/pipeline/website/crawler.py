@@ -404,7 +404,22 @@ def _score_url(url: str) -> int:
 
 
 def is_safe_url(url: str) -> bool:
-    """Validate that the URL has a safe scheme and resolves to a public, non-local IP address to prevent SSRF."""
+    """Validate that the URL has a safe scheme and does not KNOWINGLY resolve to a
+    private/local IP address (SSRF protection).
+
+    BUGFIX: this used to return False (i.e. "unsafe, block it") on ANY exception —
+    including a DNS lookup that simply timed out, failed transiently, or couldn't
+    be resolved by this host's own resolver (e.g. restrictive hosting environments,
+    IPv6-only records, temporary DNS hiccups). That silently blocked perfectly
+    legitimate company websites and made a "the crawler says a valid URL is
+    invalid" bug indistinguishable from an actual SSRF attempt. A local DNS
+    resolution failure here doesn't mean the URL is unsafe — it means we don't
+    know yet, and the actual fetch (Playwright/crawl4ai) will do its own
+    resolution and simply fail on its own if the domain is genuinely bad. So we
+    only return False when we POSITIVELY resolved to a private/local/loopback IP
+    (the real SSRF signal); any other resolution problem is logged and allowed
+    through rather than treated as a block.
+    """
     try:
         parsed = urlparse(url)
         if parsed.scheme not in ("http", "https"):
@@ -412,18 +427,32 @@ def is_safe_url(url: str) -> bool:
         hostname = parsed.hostname
         if not hostname:
             return False
+    except Exception as e:
+        logger.warning(f"[SSRF Protection] Could not parse URL {url}: {e}")
+        return False
+
+    try:
         # Resolve hostname to all possible IP addresses
         ip_info = socket.getaddrinfo(hostname, None)
-        for _, _, _, _, sockaddr in ip_info:
-            ip_str = sockaddr[0]
-            ip = ipaddress.ip_address(ip_str)
-            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast:
-                logger.warning(f"[SSRF Protection] Blocked URL resolving to private/local IP: {url} ({ip_str})")
-                return False
-        return True
     except Exception as e:
-        logger.warning(f"[SSRF Protection] Error resolving URL {url}: {e}")
-        return False
+        # DNS resolution failed on OUR end — not evidence the URL is unsafe.
+        # Let it through; the real fetch will fail cleanly if the host is bad.
+        logger.warning(
+            f"[SSRF Protection] Could not resolve {url} locally ({e}) — "
+            "allowing through rather than blocking; actual fetch will validate it."
+        )
+        return True
+
+    for _, _, _, _, sockaddr in ip_info:
+        ip_str = sockaddr[0]
+        try:
+            ip = ipaddress.ip_address(ip_str)
+        except ValueError:
+            continue
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast:
+            logger.warning(f"[SSRF Protection] Blocked URL resolving to private/local IP: {url} ({ip_str})")
+            return False
+    return True
 
 
 def crawl_website(
@@ -664,7 +693,15 @@ def _playwright_crawl_website(
                 logger.info(f"[Playwright] [{len(visited_pages)+1}/{limit_pages}] Crawling: {current_url}")
                 try:
                     response = page.goto(current_url, wait_until="domcontentloaded")
-                    page.wait_for_timeout(800)
+                    # Give client-rendered content (React/Next/Vue footers,
+                    # contact widgets, etc.) a chance to finish painting.
+                    # networkidle can hang on sites with long-polling/analytics
+                    # connections, so it's bounded and best-effort only.
+                    try:
+                        page.wait_for_load_state("networkidle", timeout=5000)
+                    except Exception:
+                        pass
+                    page.wait_for_timeout(1200)
 
                     final_url = page.url
                     if not is_safe_url(final_url):

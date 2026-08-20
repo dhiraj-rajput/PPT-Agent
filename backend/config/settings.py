@@ -269,21 +269,31 @@ class AppSettings(BaseSettings):
         description="OpenRouter API Key for fallback generation.",
     )
     OPENROUTER_MODEL: str = Field(
-        default="google/gemini-2.5-flash",
-        description="Primary OpenRouter model. Falls back through OPENROUTER_MODEL_FALLBACKS.",
+        default="openrouter/free",
+        description=(
+            "Primary OpenRouter model. Use 'openrouter/free' for $0 balance accounts "
+            "(never routes to paid models). Specific free models end with ':free'. "
+            "Avoid 'openrouter/auto' unless you have paid credits — it can pick paid models."
+        ),
     )
     OPENROUTER_MODEL_FALLBACKS: str = Field(
-        default="meta-llama/llama-3.3-70b-instruct,mistralai/mistral-large-2411,openrouter/auto",
-        description="Comma-separated OpenRouter model fallback chain, tried in order after OPENROUTER_MODEL.",
+        default="",
+        description=(
+            "Optional comma-separated OpenRouter model fallback chain after OPENROUTER_MODEL. "
+            "The client always appends 'openrouter/free' then 'openrouter/auto'. "
+            "Leave blank unless you want to force specific models first."
+        ),
     )
     OPENROUTER_BASE_URL: str = Field(
         default="https://openrouter.ai/api/v1",
         description="OpenRouter base URL.",
     )
     AI_PROVIDER_ORDER: str = Field(
-        default="gemini,openrouter,ollama",
+        default="gemini,ollama,openrouter",
         description=(
-            "Comma-separated provider preference order (default: 'gemini,openrouter,ollama')."
+            "Comma-separated provider preference order. "
+            "Default 'gemini,ollama,openrouter' puts free Gemini first and OpenRouter last "
+            "so a $0 OpenRouter balance does not block the pipeline."
         ),
     )
 

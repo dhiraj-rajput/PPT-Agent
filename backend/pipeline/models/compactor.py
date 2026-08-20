@@ -28,7 +28,7 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse, urlunparse
 
 from pipeline.models.company_schema import OptimizedCompanyProfile
-from pipeline.models.normalizer import normalize_company_intelligence
+from pipeline.models.normalizer import normalize_company_intelligence, ensure_absolute_url
 from pipeline.ai.client import get_ai_client
 from pipeline.ai.mode import run_with_fallback, AIMode
 
@@ -76,7 +76,12 @@ RULES:
   - financial_highlights must include specific figures, growth rates, or funding data with dates.
   - rfp_strengths must mention delivery track record, certifications (ISO, CMM, etc.), \
     government/enterprise client wins, or domain expertise.
-  - Do not invent details unsupported by the sources.
+  - NEVER invent, guess, or fabricate facts. If a field is not supported by the \
+    provided Website / LinkedIn / external-search sources, leave it as an empty \
+    string or empty list. Do not fill gaps with plausible-sounding content \
+    (employee counts, revenue, founded year, clients, competitors, phone/email, \
+    certifications) unless the source text states it.
+  - Prefer omitting a claim over fabricating one.
   - Use concise, document-generation-ready language.
 """
 
@@ -202,7 +207,18 @@ class BusinessIntelligenceCompactor:
             profile_dict = raw_profile
 
         # 5. Persist
-        website = profile_dict.get("website") or normalized.get("website") or ""
+        # The LLM only ever needed to COPY `normalized["website"]` into its JSON
+        # output verbatim — it never had a reason to invent or re-derive it. But a
+        # weaker/free model can truncate the URL mid-string while generating the
+        # full profile JSON (dropping the closing quote and bleeding into the next
+        # field, e.g. `"website": "https:\n"industry": "..."`), so trusting the
+        # LLM's re-stated copy is what let corrupted values reach storage/display.
+        # `normalized["website"]` was already validated by ensure_absolute_url() in
+        # normalizer.py (rejects bare/incomplete values like "https:"), so it's the
+        # trustworthy source of truth here — prefer it, and only fall back to
+        # (re-validating) the LLM's copy when normalization genuinely has nothing.
+        website = normalized.get("website") or ensure_absolute_url(profile_dict.get("website") or "")
+        profile_dict["website"] = website
         output_path = self._save_outputs(profile_dict, website)
         mongodb_stored = self._save_to_mongodb(profile_dict, company_slug=company_slug)
 
@@ -390,14 +406,9 @@ class BusinessIntelligenceCompactor:
         specialties = normalized.get("specialties", [])
         emp_count_str = _clean_field_text(normalized.get("employee_count", ""), 60)
         
-        # 1. Synthesise a description
+        # 1. Description — source text only; never invent a brochure blurb
         descriptions = normalized.get("descriptions", {})
-        description = descriptions.get("linkedin") or descriptions.get("website") or ""
-        if not description:
-            specs_str = f" specializing in {', '.join(specialties[:3])}" if specialties else ""
-            description = f"{company_name} is a professional organization operating in the {industry} sector{specs_str}. Headquarters are located in {hq or 'unknown'}."
-        
-        # Truncate/clean description — keep up to 2000 chars for quality
+        description = descriptions.get("linkedin") or descriptions.get("website") or descriptions.get("external") or ""
         description = description.strip()
         if len(description) > 2000:
             description = description[:1997] + "..."
@@ -405,20 +416,10 @@ class BusinessIntelligenceCompactor:
         # 2. Tech stack
         tech_stack = normalized.get("technology_stack", [])
 
-        # 3. Business model
+        # 3. Business model — only from sources, never template filler
         business_model = normalized.get("business_model", "")
         if not business_model:
             business_model = descriptions.get("external_business_model") or ""
-        if not business_model:
-            desc_lower = description.lower()
-            if any(x in desc_lower for x in ["saas", "software-as-a-service", "subscription", "cloud platform"]):
-                business_model = "Software-as-a-Service (SaaS) subscription model."
-            elif any(x in desc_lower for x in ["consulting", "advisory", "professional services", "custom development"]):
-                business_model = "Professional consulting and project-based service fees."
-            elif any(x in desc_lower for x in ["marketplace", "e-commerce", "transaction"]):
-                business_model = "Transaction fee and digital marketplace model."
-            else:
-                business_model = f"Provides B2B and enterprise solutions in the {industry} sector."
 
         # 4. Pricing model
         pricing_model = ""
@@ -476,14 +477,21 @@ class BusinessIntelligenceCompactor:
         # Keep max 6 competitors and add source tag
         competitors = competitors[:6]
 
-        # 7. Value proposition
-        value_prop = normalized.get("value_proposition") or descriptions.get("external_value_proposition") or normalized.get("executive_summary") or normalized.get("tagline") or ""
-        if not value_prop:
-            value_prop = f"Providing reliable, high-quality, and scalable enterprise solutions in the {industry} domain."
+        # 7. Value proposition — source only
+        value_prop = (
+            normalized.get("value_proposition")
+            or descriptions.get("external_value_proposition")
+            or normalized.get("executive_summary")
+            or normalized.get("tagline")
+            or ""
+        )
 
-        # 8. RFP Strengths
-        rfp_strengths = normalized.get("key_differentiators", []) + normalized.get("competitive_advantages", [])
-        rfp_strengths = [s.strip() for s in rfp_strengths if s.strip()]
+        # 8. RFP Strengths — only differentiators present in sources;
+        # never pad with generic marketing claims
+        rfp_strengths = list(normalized.get("key_differentiators", []) or []) + list(
+            normalized.get("competitive_advantages", []) or []
+        )
+        rfp_strengths = [s.strip() for s in rfp_strengths if s and str(s).strip()]
         seen_str = set()
         rfp_strengths_dedup = []
         for s in rfp_strengths:
@@ -491,19 +499,12 @@ class BusinessIntelligenceCompactor:
                 seen_str.add(s.lower())
                 rfp_strengths_dedup.append(s)
         rfp_strengths = rfp_strengths_dedup
-        
-        all_desc_text = " ".join(descriptions.values()).lower()
+
+        all_desc_text = " ".join(str(v) for v in descriptions.values()).lower()
         certs = ["iso 27001", "soc 2", "gdpr", "hipaa", "pci dss"]
         for c in certs:
             if c in all_desc_text:
                 rfp_strengths.append(f"Security compliance: {c.upper()} certified/compliant.")
-        
-        if len(rfp_strengths) < 3:
-            rfp_strengths.extend([
-                f"Strong domain expertise in {industry} with proven track record.",
-                "Scalable operations and robust global delivery methodologies.",
-                "Customer-first focus ensuring high satisfaction and retention rates."
-            ])
 
         # 9. RFP Weaknesses
         rfp_weaknesses = []

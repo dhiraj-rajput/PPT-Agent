@@ -373,12 +373,24 @@ def _fallback_markdown_to_pdf(
     output_pdf_path: str,
     brand_cfg: Dict[str, Any]
 ) -> str:
-    """Converts Markdown to DOCX via proposal_generator and then to PDF."""
+    """Converts Markdown to DOCX via proposal_generator and then to PDF.
+
+    On Windows without WeasyPrint / LibreOffice / Word, returns the .docx path
+    so the pipeline still completes with a downloadable artifact.
+    """
     import importlib
+    import sys
+
     try:
         from backend.scripts import proposal_generator as pg
     except ImportError:
-        pg = importlib.import_module("scripts.proposal_generator")
+        try:
+            pg = importlib.import_module("scripts.proposal_generator")
+        except ImportError:
+            backend_root = Path(__file__).resolve().parents[1]
+            if str(backend_root) not in sys.path:
+                sys.path.insert(0, str(backend_root))
+            pg = importlib.import_module("scripts.proposal_generator")
 
     out_pdf = Path(output_pdf_path)
     docx_path = out_pdf.with_suffix(".docx")

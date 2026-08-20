@@ -25,6 +25,16 @@ const cleanDescriptionText = (text) => {
     .trim();
 };
 
+/** Ensure website URLs open correctly in the browser (add https:// if missing). */
+const ensureAbsoluteUrl = (url) => {
+  if (!url || typeof url !== 'string') return '';
+  const u = url.trim();
+  if (!u) return '';
+  if (u.startsWith('http://') || u.startsWith('https://')) return u;
+  if (u.startsWith('//')) return 'https:' + u;
+  return 'https://' + u.replace(/^\/+/, '');
+};
+
 export default function CompanyDetail() {
   const { id: uei } = useParams();
   const { createAlert } = useNotifications();
@@ -624,7 +634,7 @@ export default function CompanyDetail() {
                     </span>
                   )}
                   {aiProfile.website && (
-                    <a href={aiProfile.website} target="_blank" rel="noreferrer"
+                    <a href={ensureAbsoluteUrl(aiProfile.website)} target="_blank" rel="noreferrer"
                       className="rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-600 hover:bg-brand-100 flex items-center gap-1"
                     >
                       🌐 Website <ExternalLink size={10} />

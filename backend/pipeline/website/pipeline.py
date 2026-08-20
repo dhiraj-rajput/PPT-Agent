@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from utils.helpers import setup_logger, is_valid_url
+from pipeline.models.normalizer import ensure_absolute_url
 from pipeline.website.crawler import crawl_website
 from pipeline.website.cleaner import clean_html_content, extract_raw_text
 from pipeline.website.classifier import classify_text_by_sections
@@ -75,9 +76,17 @@ class WebsitePipeline:
         """
         start_time = time.time()
 
-        if not is_valid_url(website_url):
+        # is_valid_url() requires an explicit http(s):// scheme, so a perfectly
+        # legitimate bare domain (e.g. "mckenziehealthsystem.com", which is what a
+        # search/discovery step often returns) was being rejected as "invalid" and
+        # never even attempted. ensure_absolute_url() normalizes bare domains and
+        # protocol-relative URLs to https:// (and still rejects genuine garbage —
+        # empty strings, "https:" with no host, etc.) before we give up on the URL.
+        normalized_input = ensure_absolute_url(website_url) or website_url
+        if not is_valid_url(normalized_input):
             logger.error(f"Invalid website URL: {website_url}")
             return None
+        website_url = normalized_input
 
         company_slug = _make_company_slug(website_url)
         logger.info(f"=== Website pipeline started === url='{website_url}' slug='{company_slug}'")

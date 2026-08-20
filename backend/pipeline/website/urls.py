@@ -16,10 +16,18 @@ logger = setup_logger(__name__)
 
 PRIORITY_KEYWORDS = [
     "about", "company", "product", "service", "solution",
-    "leadership", "management", "team", "contact", "career",
+    "leadership", "management", "team", "career",
     "technology", "partner", "client", "blog", "who-we-are",
-    "what-we-do", "about-us", "contact-us", "info", "people",
+    "what-we-do", "about-us", "info", "people",
     "staff", "platform", "pricing", "customer"
+]
+
+# Contact pages are where emails/phone numbers actually live. They must
+# outrank generic "priority" pages, or a busy nav (20-30 links, all tied at
+# the same priority) can exhaust max_pages before /contact is ever crawled.
+CONTACT_KEYWORDS = [
+    "contact", "contact-us", "get-in-touch", "reach-us", "reach-out",
+    "connect-with-us", "our-offices", "locations",
 ]
 
 IGNORE_KEYWORDS = [
@@ -106,7 +114,10 @@ def should_ignore_url(url: str) -> bool:
 def get_url_priority(url: str) -> int:
     """
     Score a URL's crawl priority (higher = more important).
-    Homepage = 10, priority pages = 5, others = 1.
+    Homepage = 10, contact pages = 9, other priority pages = 5, others = 1.
+    Contact pages rank just under the homepage since they're the primary
+    source of emails/phone numbers and must not lose out to generic pages
+    tied at the same score when a crawl budget is limited.
     """
     if not url:
         return 0
@@ -114,6 +125,10 @@ def get_url_priority(url: str) -> int:
     path = urlparse(url).path.lower().strip("/")
     if not path:
         return 10  # Homepage
+
+    for kw in CONTACT_KEYWORDS:
+        if kw in path:
+            return 9
 
     for kw in PRIORITY_KEYWORDS:
         if kw in path:

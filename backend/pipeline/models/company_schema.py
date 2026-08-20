@@ -85,11 +85,13 @@ class OptimizedCompanyProfile(BaseModel):
     """
 
     # --- Identity ---
-    company_name: str = Field(..., description="Normalised legal/commercial name of the company")
-    website: str = Field(..., description="Target homepage URL")
-    industry: str = Field(..., description="Consolidated industry categorisation")
-    description: str = Field(..., description="Clear, professional company description synthesising all sources")
-    headquarters: str = Field(..., description="Primary corporate headquarters location")
+    # Defaults (not required) so partial agent output never fails validation;
+    # empty strings mean "not found in sources" — never invent values to fill them.
+    company_name: str = Field("", description="Normalised legal/commercial name of the company")
+    website: str = Field("", description="Target homepage URL")
+    industry: str = Field("", description="Consolidated industry categorisation")
+    description: str = Field("", description="Clear, professional company description synthesising all sources")
+    headquarters: str = Field("", description="Primary corporate headquarters location")
     locations: List[str] = Field(default_factory=list, description="All other office locations or operating markets")
     employee_count: str = Field("", description="Estimated workforce size (e.g. from LinkedIn or Google)")
     founded_year: Optional[int] = Field(None, description="Year the company was founded")
@@ -145,4 +147,4 @@ class OptimizedCompanyProfile(BaseModel):
 
     # --- Metadata ---
     sources_used: List[str] = Field(default_factory=list, description="Sources combined (e.g. Website, LinkedIn, Google)")
-    last_updated: str = Field(..., description="ISO 8601 UTC datetime of compilation")
+    last_updated: str = Field("", description="ISO 8601 UTC datetime of compilation")

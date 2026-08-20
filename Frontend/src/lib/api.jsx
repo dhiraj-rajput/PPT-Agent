@@ -105,7 +105,22 @@ async function _upload(path, formData) {
     let errorMsg = `Upload failed (${res.status})`;
     try {
       const data = await res.json();
-      errorMsg = data.detail || data.error || errorMsg;
+      // FastAPI validation errors put an array/object in `detail` — never
+      // assign that object directly or React shows "[object Object]".
+      let rawDetail = data.detail || data.error || data.message;
+      if (Array.isArray(rawDetail)) {
+        errorMsg = rawDetail
+          .map((err) =>
+            typeof err === 'object'
+              ? err?.msg || err?.message || JSON.stringify(err)
+              : String(err)
+          )
+          .join(', ');
+      } else if (rawDetail && typeof rawDetail === 'object') {
+        errorMsg = rawDetail.msg || rawDetail.message || JSON.stringify(rawDetail);
+      } else if (rawDetail != null) {
+        errorMsg = String(rawDetail);
+      }
     } catch {}
     throw new Error(errorMsg);
   }

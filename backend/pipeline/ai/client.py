@@ -434,24 +434,44 @@ class OllamaAIClient:
         raise last_error or ValueError("All Gemini fallback models failed.")
 
     def _call_openrouter(self, messages: List[Dict[str, str]], json_mode: bool, max_tokens: int = 8192) -> str:
+        """Call OpenRouter using its native server-side `models` fallback array
+        instead of hand-looping through models client-side.
+
+        OpenRouter's /chat/completions endpoint accepts a `models: [...]` array
+        (priority order) and will itself try each one in turn — server-side, in a
+        single HTTP call — whenever a model is down, rate-limited, or refuses to
+        answer. That replaces the old client-side for-loop here, and means we no
+        longer have to hand-maintain a long, specific list of free-model slugs in
+        OPENROUTER_MODEL_FALLBACKS (those go stale as OpenRouter adds/retires free
+        models). Instead we append "openrouter/auto" — OpenRouter's own auto-router
+        — as the last entry, so when every explicit model (including a flaky
+        nvidia/nemotron primary) is unavailable, OpenRouter decides which
+        currently-available model (including free ones) handles the request,
+        rather than us guessing a static list ahead of time.
+        """
         import httpx
         api_key = getattr(self._settings, "OPENROUTER_API_KEY", "")
         base_url = getattr(self._settings, "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-        
+
         if not api_key:
             raise ValueError("OPENROUTER_API_KEY is not set.")
 
-        # Primary model + fallback chain.
-        # nvidia/nemotron frequently unavailable; google/gemma-3-27b-it:free and
-        # llama-3.3-70b are more consistently online for structured JSON output.
-        primary_model = getattr(self._settings, "OPENROUTER_MODEL", "google/gemma-3-27b-it:free")
+        # Prefer explicit free router / free models so a $0 balance still works.
+        # openrouter/auto can pick PAID models and then 402 if the account has
+        # never purchased credits. openrouter/free stays on $0 models only.
+        # See: https://openrouter.ai/docs/api_reference/limits
+        primary_model = getattr(self._settings, "OPENROUTER_MODEL", "") or "openrouter/free"
         raw_fallbacks = getattr(self._settings, "OPENROUTER_MODEL_FALLBACKS", "") or ""
-        fallback_models = [m.strip() for m in raw_fallbacks.split(",") if m.strip()] or [
-            "meta-llama/llama-3.3-70b-instruct:free",
-            "mistralai/mistral-7b-instruct:free",
-            "openrouter/auto",
-        ]
-        models_to_try = [primary_model] + [m for m in fallback_models if m != primary_model]
+        fallback_models = [m.strip() for m in raw_fallbacks.split(",") if m.strip()]
+
+        models_to_try: List[str] = [primary_model]
+        for m in fallback_models:
+            if m not in models_to_try:
+                models_to_try.append(m)
+        # Free-only catch-all first (works with $0 balance), then auto as last resort.
+        for catch_all in ("openrouter/free", "openrouter/auto"):
+            if catch_all not in models_to_try:
+                models_to_try.append(catch_all)
 
         referer = getattr(self._settings, "CLIENT_URL", "http://localhost:5173")
         headers = {
@@ -461,51 +481,65 @@ class OllamaAIClient:
             "X-Title": "OrbitAvanya",
         }
 
+        payload: Dict[str, Any] = {
+            "model": models_to_try[0],
+            "models": models_to_try,
+            "messages": messages,
+            "temperature": self.temperature,
+            "max_tokens": max_tokens,
+        }
+        if json_mode:
+            payload["response_format"] = {"type": "json_object"}
+
+        logger.info(f"[OpenRouter] -> Calling OpenRouter with model priority: {models_to_try}")
+
+        # One request: OpenRouter handles the model-level fallback server-side.
+        # A couple of light retries remain here purely for transient network
+        # errors reaching OpenRouter itself (not for cycling models — that's
+        # now OpenRouter's job).
         last_error: Exception | None = None
-        for model in models_to_try:
-            payload = {
-                "model": model,
-                "messages": messages,
-                "temperature": self.temperature,
-                "max_tokens": max_tokens,
-            }
-            if json_mode:
-                payload["response_format"] = {"type": "json_object"}
-
-            logger.info(f"[OpenRouter] -> Calling OpenRouter ({model})...")
-
+        for attempt in range(2):
             try:
                 with httpx.Client(timeout=self.timeout) as client:
                     resp = client.post(f"{base_url}/chat/completions", json=payload, headers=headers)
 
                 if resp.status_code == 429:
-                    raise RateLimitError(f"OpenRouter ({model}) rate limited (429).")
-                if resp.status_code == 503 or resp.status_code == 404:
-                    # Model unavailable or not found — try next
-                    logger.warning(f"[OpenRouter] Model {model} returned {resp.status_code} — trying next.")
-                    last_error = ValueError(f"OpenRouter ({model}) returned {resp.status_code}")
-                    continue
+                    raise RateLimitError(f"OpenRouter rate limited (429). Models tried: {models_to_try}.")
+                # 402 = insufficient credits / free-tier daily cap exhausted.
+                # Treat like a rate-limit so the outer provider cascade can
+                # fall through to Gemini or Ollama instead of hard-failing.
+                if resp.status_code == 402:
+                    raise RateLimitError(
+                        f"OpenRouter insufficient credits (402). "
+                        f"Add credits at https://openrouter.ai/settings/credits "
+                        f"or switch OPENROUTER_MODEL to openrouter/free. "
+                        f"Models tried: {models_to_try}."
+                    )
                 if not resp.is_success:
-                    raise ValueError(f"OpenRouter ({model}) returned {resp.status_code}: {resp.text}")
+                    raise ValueError(f"OpenRouter returned {resp.status_code}: {resp.text}")
 
                 res_data = resp.json()
                 choices = res_data.get("choices", [])
                 if not choices:
-                    raise ValueError(f"No choices returned from OpenRouter ({model}).")
-                
+                    raise ValueError(f"No choices returned from OpenRouter. Models tried: {models_to_try}.")
+
                 content = choices[0]["message"]["content"]
                 if not content:
-                    raise ValueError(f"OpenRouter ({model}) returned an empty response.")
+                    raise ValueError(f"OpenRouter returned an empty response. Models tried: {models_to_try}.")
+
+                served_by = res_data.get("model")
+                if served_by:
+                    logger.info(f"[OpenRouter] Response served by: {served_by}")
                 return str(content)
 
             except RateLimitError:
-                raise  # Propagate rate limit immediately
+                raise  # Propagate rate limit immediately — caller decides whether to fall back further
             except Exception as exc:
                 last_error = exc
-                logger.warning(f"[OpenRouter] Model {model} failed: {exc}. Trying next model...")
+                logger.warning(f"[OpenRouter] Attempt {attempt + 1}/2 failed: {exc}")
                 continue
 
-        raise last_error or ValueError("All OpenRouter models failed.")
+        raise last_error or ValueError("OpenRouter request failed.")
 
     def _parse_json_from_response(self, text: str) -> Dict[str, Any]:
         """Robustly parse a JSON response from an LLM.
@@ -537,9 +571,28 @@ class OllamaAIClient:
         try:
             parsed = json.loads(text_clean, strict=False)
         except json.JSONDecodeError as exc:
-            # 1. Try json_repair library if available
+            # 1. Try OUR unclosed-quote repair + inner-quote escaping FIRST.
+            #    ORDERING BUGFIX: the generic third-party `json_repair` library used
+            #    to run before this. It doesn't understand "a colon inside a
+            #    truncated value" (e.g. a cut-off URL like "https:") vs. a real JSON
+            #    key boundary, so on input like:
+            #        "website": "https:
+            #        "industry": "Healthcare / Biotechnology"
+            #    it silently produced *valid but wrong* JSON — merging "industry"
+            #    into the "website" string instead of splitting them — and since it
+            #    didn't raise, our own (correct, domain-aware) repair below never
+            #    even ran. Our repair now goes first; json_repair is only a fallback
+            #    if ours can't produce parseable JSON either.
             parsed = None
-            if _JSON_REPAIR_AVAILABLE and _json_repair_lib is not None:
+            try:
+                repaired = self._repair_unclosed_quotes(text_clean)
+                repaired = self._escape_inner_quotes(repaired)
+                parsed = json.loads(repaired, strict=False)
+            except Exception:
+                parsed = None
+
+            # 2. Fall back to the json_repair library if our repair didn't work.
+            if parsed is None and _JSON_REPAIR_AVAILABLE and _json_repair_lib is not None:
                 try:
                     repaired_str = _json_repair_lib.repair_json(text_clean, return_objects=False)
                     parsed = json.loads(repaired_str, strict=False)
@@ -547,28 +600,22 @@ class OllamaAIClient:
                     pass
 
             if parsed is None:
+                # 3. Try to extract the first JSON object or array from the text
+                match = re.search(r"(\{.*\}|\[.*\])", text_clean, re.DOTALL)
+                if not match:
+                    raise ValueError(f"No JSON found in AI response. First 500 chars: {text[:500]}") from exc
                 try:
-                    # 2. Try unclosed quote repair & escaping inner quotes
-                    repaired = self._repair_unclosed_quotes(text_clean)
-                    repaired = self._escape_inner_quotes(repaired)
-                    parsed = json.loads(repaired, strict=False)
-                except Exception:
-                    # 3. Try to extract the first JSON object or array from the text
-                    match = re.search(r"(\{.*\}|\[.*\])", text_clean, re.DOTALL)
-                    if not match:
-                        raise ValueError(f"No JSON found in AI response. First 500 chars: {text[:500]}") from exc
-                    try:
-                        repaired_match = self._repair_unclosed_quotes(match.group(1))
-                        repaired_match = self._escape_inner_quotes(repaired_match)
-                        parsed = json.loads(repaired_match, strict=False)
-                    except json.JSONDecodeError:
-                        if _JSON_REPAIR_AVAILABLE and _json_repair_lib is not None:
-                            try:
-                                parsed = _json_repair_lib.repair_json(match.group(1), return_objects=True)
-                            except Exception as inner_exc:
-                                raise ValueError(f"Extracted JSON is malformed: {inner_exc}. First 500 chars: {text[:500]}") from exc
-                        else:
-                            raise ValueError(f"Extracted JSON is malformed. First 500 chars: {text[:500]}") from exc
+                    repaired_match = self._repair_unclosed_quotes(match.group(1))
+                    repaired_match = self._escape_inner_quotes(repaired_match)
+                    parsed = json.loads(repaired_match, strict=False)
+                except json.JSONDecodeError:
+                    if _JSON_REPAIR_AVAILABLE and _json_repair_lib is not None:
+                        try:
+                            parsed = _json_repair_lib.repair_json(match.group(1), return_objects=True)
+                        except Exception as inner_exc:
+                            raise ValueError(f"Extracted JSON is malformed: {inner_exc}. First 500 chars: {text[:500]}") from exc
+                    else:
+                        raise ValueError(f"Extracted JSON is malformed. First 500 chars: {text[:500]}") from exc
         
         # Wrap arrays in a dict for backwards compatibility
         if isinstance(parsed, list):
@@ -578,16 +625,33 @@ class OllamaAIClient:
         return parsed
 
     def _repair_unclosed_quotes(self, text_str: str) -> str:
-        """Repair common LLM JSON syntax errors like unclosed quotes before newlines and truncated JSON structures."""
+        """Repair common LLM JSON syntax errors like unclosed quotes before newlines and truncated JSON structures.
+
+        BUGFIX: both patterns below used to match `"[a-zA-Z0-9_]+\\s*:\\s*"` for the
+        *key* — i.e. word-chars directly followed by a colon, with no closing quote
+        required. That's not a real JSON key, it's ANY colon. A value like a URL
+        ("https:...") contains a colon, so the old pattern matched starting at the
+        VALUE's opening quote and treated "https:" itself as a fake key. On input
+        like:
+            "website": "https:
+            "industry": "Healthcare / Biotechnology"
+        it would swallow "industry" into the "website" string instead of splitting
+        them into two fields — which is exactly the corrupted "website": "https:
+        "industry": "..." blob seen in the UI. The fix requires the key's closing
+        quote (`"[a-zA-Z0-9_]+"` instead of `"[a-zA-Z0-9_]+`) so only a real
+        `"key":` boundary can match, and inserts the comma that separates the two
+        now-independent fields (pattern 1 only — pattern 2 closes right before a
+        `}`/`]`/`,` where a comma would be invalid).
+        """
         # 1. Unclosed quote before a newline when followed by another key (e.g. "website": "https:\n"industry")
         text_str = re.sub(
-            r'("[a-zA-Z0-9_]+\s*:\s*"[^"\r\n]*?)(?=\r?\n\s*"[a-zA-Z0-9_]+\s*:)',
-            r'\1"',
+            r'("[a-zA-Z0-9_]+"\s*:\s*"[^"\r\n]*?)(?=\r?\n\s*"[a-zA-Z0-9_]+"\s*:)',
+            r'\1",',
             text_str
         )
         # 2. Unclosed quote before a newline when followed by a closing brace or comma
         text_str = re.sub(
-            r'("[a-zA-Z0-9_]+\s*:\s*"[^"\r\n]*?)(?=\r?\n\s*[\}\],])',
+            r'("[a-zA-Z0-9_]+"\s*:\s*"[^"\r\n]*?)(?=\r?\n\s*[\}\],])',
             r'\1"',
             text_str
         )

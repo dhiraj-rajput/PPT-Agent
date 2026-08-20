@@ -13,6 +13,7 @@ Endpoints:
 
 from __future__ import annotations
 
+import logging
 import tempfile
 from pathlib import Path
 
@@ -27,6 +28,7 @@ from documents.default_template import (
     clear_default_template,
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/templates", tags=["templates"])
 
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
@@ -43,28 +45,35 @@ async def upload_default_template(
     if not template_file.filename or not template_file.filename.lower().endswith(".docx"):
         raise HTTPException(400, "Default template must be a .docx file.")
 
-    # Chunked read with hard size cap \u2014 prevents OOM from oversized uploads
-    _chunks: list[bytes] = []
-    _total = 0
-    async for _chunk in template_file:
-        _total += len(_chunk)
-        if _total > MAX_FILE_SIZE:
-            raise HTTPException(413, "Template file exceeds the 10MB size limit.")
-        _chunks.append(_chunk)
-    content = b"".join(_chunks)
+    # UploadFile is not an async iterator on all Starlette versions — use .read()
+    try:
+        content = await template_file.read()
+    except Exception as exc:
+        logger.error(f"[templates] Failed to read upload: {exc}")
+        raise HTTPException(400, f"Could not read uploaded file: {exc}") from exc
+
     if not content:
         raise HTTPException(400, "Uploaded template file is empty.")
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(413, "Template file exceeds the 10MB size limit.")
 
     with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tmp:
         tmp.write(content)
         tmp_path = tmp.name
 
     try:
-        meta = set_default_template(tmp_path, template_file.filename, uploaded_by=str(current_user["id"]))
+        meta = set_default_template(
+            tmp_path,
+            template_file.filename,
+            uploaded_by=str(current_user.get("id") or current_user.get("sub") or ""),
+        )
+    except Exception as exc:
+        logger.exception("[templates] set_default_template failed")
+        raise HTTPException(500, f"Failed to save default template: {exc}") from exc
     finally:
         Path(tmp_path).unlink(missing_ok=True)
 
-    return {"status": "ok", **meta}
+    return {"status": "ok", "has_template": True, **meta}
 
 
 @router.get("/default")
@@ -84,7 +93,8 @@ async def view_default_template(current_user: dict = Depends(get_current_user)):
         raise HTTPException(404, "No default template has been uploaded yet.")
     return FileResponse(
         path,
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        media_type="application/vnd.openxmlformats.wordprocessingml.document",
+        filename=Path(path).name,
     )
 
 

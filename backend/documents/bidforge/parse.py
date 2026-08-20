@@ -11,14 +11,18 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Callable, Dict, Optional
 
 from utils.helpers import setup_logger
 
 logger = setup_logger(__name__)
 
 
-def parse_uploaded_rfp(rfp_file_paths: str, solicitation_number: str = "") -> Dict[str, Any]:
+def parse_uploaded_rfp(
+    rfp_file_paths: str,
+    solicitation_number: str = "",
+    progress_callback: Optional[Callable[[int, str], None]] = None,
+) -> Dict[str, Any]:
     """
     Parses one or more manually-uploaded RFP documents (PDF, or .txt/.docx) into the
     same structured shape RFPParser produces for SAM.gov solicitations, so
@@ -66,7 +70,7 @@ def parse_uploaded_rfp(rfp_file_paths: str, solicitation_number: str = "") -> Di
         elif old_f.is_file():
             doc_texts[old_f.name] = old_f.read_text(encoding="utf-8", errors="ignore")
 
-    parsed = parser.parse_requirements(doc_texts)
+    parsed = parser.parse_requirements(doc_texts, progress_callback=progress_callback)
     parsed["raw_text"] = "\n\n".join(doc_texts.values())
     parsed["source_filename"] = ", ".join(p.name for p in paths)
     logger.info(f"[BidForge:Parse] Parsed {len(doc_texts)} uploaded file(s) via '{parsed.get('parsed_via')}' path.")

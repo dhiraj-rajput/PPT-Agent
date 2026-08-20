@@ -29,7 +29,10 @@ from __future__ import annotations
 
 import concurrent.futures
 import json
+import os
 import re
+import shutil
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -37,10 +40,39 @@ from utils.helpers import setup_logger
 
 logger = setup_logger(__name__)
 
+
+def _safe_replace_output(src: str, dest: str) -> str:
+    """Atomically move src → dest. If dest is locked (Windows PermissionError
+    because the browser/Word has it open), write to dest with a timestamp
+    suffix so generation still succeeds and the UI can download a fresh file.
+    """
+    src_p, dest_p = Path(src), Path(dest)
+    try:
+        if dest_p.exists():
+            try:
+                dest_p.unlink()
+            except OSError:
+                pass
+        shutil.move(str(src_p), str(dest_p))
+        return str(dest_p)
+    except OSError as exc:
+        alt = dest_p.with_name(f"{dest_p.stem}_{int(time.time())}{dest_p.suffix}")
+        try:
+            shutil.move(str(src_p), str(alt))
+            logger.warning(
+                f"[BidForge:DocGen] Could not overwrite {dest_p} ({exc}); "
+                f"wrote alternate path {alt}"
+            )
+            return str(alt)
+        except OSError:
+            # Last resort: leave temp file in place
+            logger.warning(f"[BidForge:DocGen] Keeping temp output at {src_p} ({exc})")
+            return str(src_p)
+
 # Minimum acceptable length for the generated markdown. Anything shorter than
 # this almost certainly means the model returned a stub/error instead of a
 # real proposal, and we should fail loudly rather than ship it.
-MIN_MARKDOWN_LENGTH = 15000
+MIN_MARKDOWN_LENGTH = 25000
 
 # How many sections to generate concurrently. Each section is an independent
 # LLM call (same inputs, different brief) -- there is no reason to run them
@@ -83,12 +115,14 @@ def generate_final_document(
     )
     verified_company_block = _format_verified_company_block(company_profile)
     company_profile_summary = _company_profile_summary(template_path, brand_config)
+    template_sections_present = _template_sections_present(template_path)
 
     markdown_content = _generate_markdown(
         parsed_rfp, inventory, competitor_intel, strategy, company_name, wizard_config,
         company_profile_summary=company_profile_summary,
         verified_company_block=verified_company_block,
         preserving_first_page=bool(template_path),
+        template_sections_present=template_sections_present,
     )
 
     if not markdown_content or len(markdown_content.strip()) < MIN_MARKDOWN_LENGTH:
@@ -110,22 +144,45 @@ def generate_final_document(
             from documents.bidforge.first_page_preserver import build_document_with_preserved_first_page
 
             _, sections = _parse_markdown_into_sections(markdown_content)
+            # Write to a temp path first, then replace — avoids PermissionError when
+            # the UI/browser still has the previous .docx open for download/view.
+            import time
+            tmp_docx = str(Path(target_docx_path).with_suffix(f".tmp.{os.getpid()}.docx"))
             docx_path = build_document_with_preserved_first_page(
-                template_path, sections, brand_config, target_docx_path,
+                template_path, sections, brand_config, tmp_docx,
                 company_profile=company_profile,
             )
+            final_docx = _safe_replace_output(docx_path, target_docx_path)
             import importlib
             try:
                 from backend.scripts import proposal_generator as pg
             except ImportError:
-                pg = importlib.import_module("scripts.proposal_generator")
-            final_path = pg.convert_to_pdf(docx_path, str(out_dir)) or docx_path
+                try:
+                    pg = importlib.import_module("scripts.proposal_generator")
+                except ImportError:
+                    import sys
+                    backend_root = Path(__file__).resolve().parents[2]
+                    if str(backend_root) not in sys.path:
+                        sys.path.insert(0, str(backend_root))
+                    pg = importlib.import_module("scripts.proposal_generator")
+            # Prefer PDF; if conversion fails, the DOCX is still a valid deliverable
+            final_path = pg.convert_to_pdf(final_docx, str(out_dir)) or final_docx
             logger.info(
                 f"[BidForge:DocGen] Generated final document preserving template first page: {final_path} "
                 f"({len(markdown_content)} chars of markdown)"
             )
             return final_path
         except Exception as exc:
+            # If the first-page path already wrote a usable file, do NOT fall through
+            # to brand-only (that second write is what hits PermissionError when the
+            # UI already opened the docx).
+            existing = Path(target_docx_path)
+            if existing.exists() and existing.stat().st_size > 50_000:
+                logger.warning(
+                    f"[BidForge:DocGen] First-page path raised ({exc}) but a complete "
+                    f"DOCX already exists ({existing.stat().st_size} bytes) — returning it."
+                )
+                return str(existing)
             logger.warning(
                 f"[BidForge:DocGen] First-page-preserving render failed ({exc}); "
                 f"falling back to brand-only template rendering."
@@ -156,6 +213,40 @@ def _company_profile_summary(template_path: Optional[str], brand_config: Dict[st
     except Exception as exc:
         logger.debug(f"[BidForge:DocGen] Could not build company profile summary: {exc}")
         return ""
+
+
+def _template_sections_present(template_path: Optional[str]) -> List[str]:
+    """Headings already present on the template (preserved front matter + body
+    start markers). Used to avoid generating a second Executive Summary etc."""
+    if not template_path or not Path(template_path).exists():
+        return []
+    headings: List[str] = []
+    try:
+        from documents.template_analyzer import analyze_template
+        profile = analyze_template(template_path)
+        headings.extend(profile.sections or [])
+    except Exception as exc:
+        logger.debug(f"[BidForge:DocGen] template section scan: {exc}")
+    try:
+        from docx import Document
+        from documents.bidforge.first_page_preserver import (
+            find_first_page_split_index,
+            detect_preserved_headings,
+        )
+        doc = Document(template_path)
+        split = find_first_page_split_index(doc)
+        headings.extend(detect_preserved_headings(doc, split))
+    except Exception as exc:
+        logger.debug(f"[BidForge:DocGen] preserved heading scan: {exc}")
+    # De-dupe preserving order
+    seen = set()
+    out: List[str] = []
+    for h in headings:
+        key = re.sub(r"\s+", " ", h.strip().lower())
+        if key and key not in seen:
+            seen.add(key)
+            out.append(h.strip())
+    return out
 
 
 # Fields worth surfacing to the model by name, in a sensible reading order.
@@ -289,77 +380,84 @@ def _generate_markdown(
     company_profile_summary: str = "",
     verified_company_block: str = "",
     preserving_first_page: bool = False,
+    template_sections_present: Optional[List[str]] = None,
 ) -> str:
     from pipeline.ai.client import get_ai_client
     from documents.prompts import SECTION_WRITER_PROMPT
+    from documents.bidforge.outline import _dedupe_against_template
 
     buyer_name = _first_present(
         (parsed_rfp.get("metadata", {}) or {}).get("buyer_name"),
         (parsed_rfp.get("metadata", {}) or {}).get("issuing_agency"),
         "Prospective Client",
     )
+    template_sections_present = template_sections_present or []
 
     config = _decode_wizard_config(wizard_config)
     sections = config.get("sections") if isinstance(config, dict) else None
     
-    # If no sections are configured in the wizard config, fallback to default standard outline
+    # Load sections from the wizard config (preferred — this is the AI-designed outline
+    # produced specifically for THIS RFP during the analysis/wizard phase, so it already
+    # matches the actual document structure the RFP requires).
+    # Fall back to the adaptive outline generator (which reads the parsed RFP's own
+    # structural_elements, requirements, and compliance clauses) if no wizard outline exists.
+    # Never use a static hardcoded skeleton — any hardcoded template biases output toward
+    # a specific industry regardless of what the actual RFP is about.
     if not isinstance(sections, list) or not sections:
-        sections = [
-            {
-                "key": "executive_summary",
-                "title": "1. Executive Summary",
-                "word_budget": 600,
-                "included": True,
-                "key_points": [
-                    "Understanding of Agency mission & critical objectives",
-                    "Summary of proposed solution & key discriminators",
-                    "Commitment to schedule & compliance"
+        # Try to extract outline from wizard_config (stored by the clarify endpoint)
+        outline_from_wizard = None
+        if isinstance(config, dict):
+            outline_data = config.get("outline") or config.get("rfp_outline") or {}
+            if isinstance(outline_data, dict):
+                outline_from_wizard = outline_data.get("sections")
+            elif isinstance(outline_data, list):
+                outline_from_wizard = outline_data
+
+        if isinstance(outline_from_wizard, list) and outline_from_wizard:
+            logger.info(
+                f"[BidForge:DocGen] Using AI outline from wizard_config "
+                f"({len(outline_from_wizard)} section(s))."
+            )
+            sections = outline_from_wizard
+        else:
+            # Fall back to the adaptive outline builder which reads the parsed RFP
+            logger.info(
+                "[BidForge:DocGen] No wizard outline found — building adaptive outline "
+                "from parsed RFP structural_elements/requirements."
+            )
+            try:
+                from documents.bidforge.outline import _adaptive_fallback_outline
+                sections = _adaptive_fallback_outline(parsed_rfp)
+                logger.info(
+                    f"[BidForge:DocGen] Adaptive fallback outline: {len(sections)} section(s)."
+                )
+            except Exception as exc:
+                logger.warning(f"[BidForge:DocGen] Adaptive outline failed ({exc}); using minimal fallback.")
+                sections = [
+                    {"key": "executive_summary", "title": "1. Executive Summary", "word_budget": 1200,
+                     "included": True, "key_points": ["Overview of understanding and proposed response"]},
+                    {"key": "understanding_requirements", "title": "2. Understanding of Requirements & Scope",
+                     "word_budget": 2000, "included": True,
+                     "key_points": ["Restate full scope from the RFP", "Assumptions and exclusions"]},
+                    {"key": "technical_approach", "title": "3. Technical Approach & Methodology",
+                     "word_budget": 2000, "included": True,
+                     "key_points": ["Detailed methodology aligned to full RFP scope"]},
+                    {"key": "technical_qualification", "title": "4. Technical Qualification & Past Performance",
+                     "word_budget": 1800, "included": True,
+                     "key_points": ["Evidence against RFP technical criteria", "Project reference table"]},
+                    {"key": "compliance_matrix", "title": "5. Compliance Matrix",
+                     "word_budget": 1500, "included": True, "key_points": ["Clause-by-clause compliance table"]},
+                    {"key": "commercial_proposal", "title": "6. Commercial Proposal",
+                     "word_budget": 1500, "included": True,
+                     "key_points": ["Pricing following RFP schedule format", "Payment terms"]},
+                    {"key": "terms_conditions", "title": "7. Terms & Conditions",
+                     "word_budget": 800, "included": True,
+                     "key_points": ["Validity, payment, deviations"]},
                 ]
-            },
-            {
-                "key": "scope_of_work",
-                "title": "2. Scope of Work",
-                "word_budget": 1200,
-                "included": True,
-                "key_points": [
-                    "Detailed description of proposed services",
-                    "Specific delivery methods & methodology",
-                    "Quality assurance & compliance"
-                ]
-            },
-            {
-                "key": "pricing_table",
-                "title": "3. Pricing Proposal & Deliverables",
-                "word_budget": 500,
-                "included": True,
-                "key_points": [
-                    "Breakdown of pricing by service/product item",
-                    "Volume discounts or bundle incentives"
-                ]
-            },
-            {
-                "key": "implementation_timeline",
-                "title": "4. Implementation & Schedule",
-                "word_budget": 500,
-                "included": True,
-                "key_points": [
-                    "Milestones and delivery dates",
-                    "Resource allocation plan"
-                ]
-            },
-            {
-                "key": "terms_conditions",
-                "title": "5. Terms and Conditions",
-                "word_budget": 400,
-                "included": True,
-                "key_points": [
-                    "Payment schedule & SLA parameters",
-                    "Proposal validity period"
-                ]
-            }
-        ]
+
 
     # SECTION 1 -- full parsed RFP requirements. raw_text trimmed from 25k to
+
     # 15k chars: this whole block gets repeated verbatim in every section's
     # own call, so trimming it cuts real latency/cost per call across N
     # sections without losing much (the structured requirements/compliance
@@ -414,7 +512,21 @@ page, a "Prepared for / Prepared by" block, or restate registration/company
 details. Start directly with the first section's substantive content.
 """
 
-    # Prepare common background for all calls
+    template_sections_note = ""
+    if template_sections_present:
+        template_sections_note = (
+            "\nSECTIONS ALREADY PRESENT IN TEMPLATE (do not regenerate full "
+            "duplicates; improve only if this brief explicitly asks):\n"
+            + "\n".join(f"  - {s}" for s in template_sections_present)
+            + "\n"
+        )
+
+    # Human answers from the clarify wizard are authoritative — inject them
+    # into every section call so Bid Bond bank, marine partner, insurance,
+    # Case I/II strategy, etc. actually appear instead of [BIDDER TO INSERT].
+    answers_block = _clarifying_answers_block(config)
+    quality_block = _quality_directives_block(parsed_rfp, company_name, config)
+
     common_context = f"""=======================================================
 RFP CONTEXT & INPUTS
 =======================================================
@@ -426,7 +538,16 @@ SECTION 2: EXPLORE OUTPUT (Inventory & Competitor Data):
 
 SECTION 3: SUMMARISE OUTPUT (Strategic Pricing Decisions):
 {section3}
-{company_profile_block}{cover_page_note}"""
+{company_profile_block}{cover_page_note}{template_sections_note}
+{answers_block}
+{quality_block}"""
+
+    # Drop brochure sections the template already covers (safety net even if
+    # outline stage ran without template context).
+    sections = _dedupe_against_template(
+        [s for s in sections if isinstance(s, dict)],
+        template_sections_present,
+    )
 
     included_sections = [
         s for s in sections
@@ -439,10 +560,18 @@ SECTION 3: SUMMARISE OUTPUT (Strategic Pricing Decisions):
         key_points = section.get("key_points") or []
         if isinstance(key_points, str):
             key_points = [line.strip() for line in key_points.splitlines() if line.strip()]
+        mode = str(section.get("mode") or "write_new").lower()
 
         section_number = _extract_section_number(title)
 
         brief = f"SECTION BRIEF to generate:\n- Section Title: {title}\n"
+        if mode == "improve_existing":
+            brief += (
+                "- MODE: improve_existing — the company template already has this "
+                "topic. Do NOT rewrite from scratch or invent a parallel section. "
+                "Produce a concise RFP-tailored refinement that maps existing "
+                "claims to THIS solicitation only.\n"
+            )
         if section_number:
             brief += (
                 f"- This section's number is \"{section_number}\". If you write any "
@@ -456,16 +585,23 @@ SECTION 3: SUMMARISE OUTPUT (Strategic Pricing Decisions):
         if key_points:
             brief += "- Key Points to address:\n"
             for kp in key_points:
-                # Defensively strip any pre-existing "N.N " numbering from an
-                # upstream-generated key_point string before it reaches the
-                # model -- if the outline stage itself produced a wrongly
-                # -numbered point (e.g. "12.1 Labor Category Mapping..."),
-                # echoing it verbatim into the brief is exactly how that
-                # wrong number ends up copied straight into the section's
-                # own subheadings.
                 cleaned_kp = re.sub(r"^\s*\d+(?:\.\d+)*\s+", "", str(kp))
                 brief += f"    * {cleaned_kp}\n"
-        brief += f"- Target Length: {section.get('word_budget', 500)} words."
+        budget = int(section.get("word_budget") or 1200)
+        budget = max(budget, 800)  # never write stub-length sections
+        brief += (
+            f"- Target Length: AT LEAST {budget} words. "
+            f"Write full professional prose with subsections, tables where useful, "
+            f"and concrete RFP clause references. Do NOT write a short summary.\n"
+        )
+        if section.get("is_mandatory_form"):
+            brief += (
+                "- This is a MANDATORY FORM / ANNEXURE response. Structure it as a "
+                "filled response to each annexure item (tables, declarations, "
+                "checklists). Mark unknown bidder-specific fields as "
+                "[BIDDER TO INSERT: …] rather than inventing false data.\n"
+            )
+        brief += _section_quality_brief(section)
 
         user_message = f"""{common_context}
 =======================================================
@@ -480,7 +616,13 @@ INSTRUCTIONS FOR THIS CALL
         ]
 
         logger.info(f"[BidForge:DocGen] Generating section: {title}...")
-        section_content = get_ai_client().chat_text(messages, json_mode=False)
+        # Request enough output tokens for long tender sections
+        try:
+            section_content = get_ai_client().chat_text(
+                messages, json_mode=False, max_tokens=max(4096, budget * 2)
+            )
+        except TypeError:
+            section_content = get_ai_client().chat_text(messages, json_mode=False)
         if not section_content:
             return ""
         section_content = section_content.strip()
@@ -611,6 +753,259 @@ def _wizard_instructions(wizard_config: Optional[str | Dict[str, Any]]) -> str:
     if len(lines) == 1:
         return ""
     return "\n".join(lines)
+
+
+def _clarifying_answers_block(config: Dict[str, Any]) -> str:
+    """Pull human answers from wizard_config into the prompt context."""
+    if not isinstance(config, dict):
+        return ""
+    answers = (
+        config.get("clarifying_answers")
+        or config.get("answers")
+        or config.get("answered")
+        or []
+    )
+    if not answers:
+        return ""
+    try:
+        from documents.bidforge.clarify import answers_to_context_block
+        block = answers_to_context_block(answers if isinstance(answers, list) else [])
+        if block:
+            return (
+                "\n=======================================================\n"
+                "HUMAN-CONFIRMED CLARIFYING ANSWERS (AUTHORITATIVE)\n"
+                "=======================================================\n"
+                f"{block}\n"
+                "Use these exact facts wherever relevant (Bid Bond bank/amount, "
+                "marine partner name, insurance status, Case I/II strategy, "
+                "prime vs subcontractor role, financial thresholds). Do NOT "
+                "leave [BIDDER TO INSERT] for any field that appears above.\n"
+            )
+    except Exception as exc:
+        logger.debug(f"[BidForge:DocGen] answers block failed: {exc}")
+    # Fallback plain render
+    lines = ["HUMAN-CONFIRMED ANSWERS:"]
+    for a in answers if isinstance(answers, list) else []:
+        if not isinstance(a, dict):
+            continue
+        q = str(a.get("question") or a.get("id") or "").strip()
+        ans = a.get("answer")
+        if isinstance(ans, list):
+            ans = ", ".join(str(x) for x in ans)
+        ans = str(ans or "").strip()
+        if q and ans:
+            lines.append(f"- Q: {q}\n  A: {ans}")
+    if len(lines) == 1:
+        return ""
+    return "\n" + "\n".join(lines) + "\n"
+
+
+def _quality_directives_block(
+    parsed_rfp: Dict[str, Any],
+    company_name: str,
+    config: Dict[str, Any],
+) -> str:
+    """Global quality rules — adapts to the actual RFP domain instead of
+    hardcoding marine/offshore instructions for every proposal."""
+    rfp_type = str(parsed_rfp.get("rfp_type") or "")
+    summary = str(parsed_rfp.get("summary") or parsed_rfp.get("parsed_content") or "").lower()
+    metadata = parsed_rfp.get("metadata") or {}
+    structural = parsed_rfp.get("structural_elements") or []
+
+    # Detect domain-specific features from the actual parsed RFP content
+    is_offshore = any(
+        k in summary for k in (
+            "offshore", "wellhead", "platform", "marine", "t&i", "piling",
+            "vessel", "dg shipping", "installation at sea", "subsea",
+        )
+    )
+    is_construction = any(k in summary for k in (
+        "construction", "civil", "epc", "infrastructure", "site", "earthwork",
+        "building", "structural", "lump sum", "schedule of rates",
+    ))
+    is_it_software = any(k in summary for k in (
+        "software", "saas", "cloud", "cybersecurity", "it services", "erp",
+        "application", "api", "database", "devops", "data center",
+    ))
+    is_healthcare = any(k in summary for k in (
+        "healthcare", "medical", "clinical", "hospital", "pharma",
+        "diagnostic", "patient", "fda", "cdsco",
+    ))
+
+    # Detect whether bid bond / bank guarantee is required from structural elements
+    has_bid_security = any(
+        "bid" in str(s.get("type", "")).lower() or
+        "bid_security" in str(s.get("type", "")).lower() or
+        "bank guarantee" in str(s.get("description", "")).lower()
+        for s in structural if isinstance(s, dict)
+    )
+
+    # Detect pricing format (multiple cases, BoQ, rate schedule)
+    has_price_cases = any(
+        "case" in str(s.get("description", "")).lower() or
+        "rate schedule" in str(s.get("description", "")).lower() or
+        "boq" in str(s.get("description", "")).lower() or
+        "schedule of rates" in str(s.get("description", "")).lower()
+        for s in structural if isinstance(s, dict)
+    )
+
+    lines = [
+        "",
+        "=======================================================",
+        "QUALITY & COMPLIANCE DIRECTIVES (MANDATORY)",
+        "=======================================================",
+        "1. CONTACT IDENTITY: Use ONLY the verified company profile contact "
+        "(name, email, phone, address). Never invent alternate phone numbers "
+        "or mix signatories inconsistently across sections.",
+        "2. TABLES REQUIRED where the brief asks — past-performance table, "
+        "financial year-wise turnover, compliance matrix, price schedule, "
+        "experience list, checklists.",
+        "3. CONCRETE CONTENT: Use real figures from the data and human answers. "
+        "For figures that cannot be known (sealed bids, project-specific pricing), "
+        "use clearly labelled ILLUSTRATIVE/DEMO figures — not empty '[To be discussed]' "
+        "for every line.",
+        "4. ANNEXURES: For each RFP annexure, produce a structured response "
+        "(table or filled proforma narrative). Checklist items must show status.",
+        "5. CAPABILITY CLAIMS: Never claim capabilities the company profile does "
+        "not support without stating the delivery model (subcontractor / consortium / JV).",
+        "6. Never contradict the human-confirmed answers — they are authoritative "
+        "inputs from the actual bidder.",
+    ]
+
+    if has_bid_security:
+        lines.append(
+            "BID SECURITY: Include amount, currency, validity period, and issuing bank "
+            "from HUMAN-CONFIRMED ANSWERS when provided. Do not leave blank if answers supplied them."
+        )
+
+    if has_price_cases:
+        lines.append(
+            "PRICING FORMAT: If the RFP defines multiple pricing cases or a rate schedule, "
+            "include a Markdown table for each case with columns matching the RFP's structure. "
+            "Use illustrative demo figures if finals are in a sealed envelope — label as such."
+        )
+
+    if is_offshore:
+        lines += [
+            "",
+            "OFFSHORE / MARINE DOMAIN DETECTED:",
+            f"- {company_name} must be framed as the contractual prime / integrator "
+            "when that matches answers, with named marine subcontractor(s) for heavy-lift, "
+            "vessels, and offshore installation.",
+            "- Include vessel/equipment table: Name | Type | Classification | Flag | Role.",
+            "- Reference applicable maritime regulations (DG Shipping, IMO, SOLAS, MARPOL) "
+            "with how compliance is evidenced.",
+            "- Do NOT imply the responding entity alone owns/operates heavy marine assets "
+            "unless the company profile confirms it.",
+        ]
+
+    if is_construction:
+        lines += [
+            "",
+            "CONSTRUCTION / EPC DOMAIN DETECTED:",
+            "- Address methodology phase-by-phase (mobilization → civil → MEP → commissioning).",
+            "- Include resource plan: key personnel, equipment, QC hold-points.",
+            "- Compliance matrix must cover IS codes, safety standards, and local authority "
+            "approvals relevant to the project.",
+        ]
+
+    if is_it_software:
+        lines += [
+            "",
+            "IT / SOFTWARE DOMAIN DETECTED:",
+            "- Address SLAs, uptime guarantees, data security (ISO 27001, GDPR/IT Act "
+            "as applicable), and support tiers explicitly.",
+            "- Include an implementation timeline: discovery → configuration → UAT → go-live.",
+            "- Technical architecture section should describe integration points and scalability.",
+        ]
+
+    if is_healthcare:
+        lines += [
+            "",
+            "HEALTHCARE DOMAIN DETECTED:",
+            "- Reference applicable regulatory approvals (FDA, CDSCO, CE, ISO 13485 "
+            "as applicable) when making product/service claims.",
+            "- Clinical evidence or validation data should be cited where the RFP "
+            "requires proof of efficacy.",
+        ]
+
+    return "\n".join(lines) + "\n"
+
+
+def _section_quality_brief(section: Dict[str, Any]) -> str:
+    """Per-section structural requirements — generic across industries.
+    Detects relevant section types from the section's key/title and injects
+    appropriate, domain-neutral quality rules."""
+    key = str(section.get("key") or "").lower()
+    title = str(section.get("title") or "").lower()
+    blob = f"{key} {title}"
+
+    rules: List[str] = []
+
+    if any(x in blob for x in ("technical_qual", "past performance", "qualification", "experience", "similar works")):
+        rules.append(
+            "MUST include a Markdown table of past projects/engagements with columns: "
+            "# | Project/Contract Name | Client/Buyer | Year | Scope Summary | Contract Value | Role. "
+            "Minimum rows should match the RFP's stated experience requirement. "
+            "Use HUMAN-CONFIRMED project list if provided; otherwise use demo rows clearly labelled as illustrative."
+        )
+
+    if any(x in blob for x in ("financial", "turnover", "net worth", "balance sheet")):
+        rules.append(
+            "MUST include a year-wise financial table: Financial Year | Revenue/Turnover | "
+            "Net Worth | Auditor/Status — covering the last 3 financial years (or as required by RFP). "
+            "State CA-certified or audited statements will be provided as attachments."
+        )
+
+    if any(x in blob for x in ("commercial", "pricing", "price schedule", "price_schedule", "boq", "rate schedule")):
+        rules.append(
+            "MUST include a Markdown price table matching the RFP's own schedule format. "
+            "Columns at minimum: Item | Description | Unit | Qty | Rate | Amount. "
+            "If the RFP defines multiple pricing cases or variants, include a table for each. "
+            "Use illustrative demo figures for sealed/final commercial figures — label them clearly."
+        )
+
+    if any(x in blob for x in ("annexure", "mandatory_form", "proforma", "checklist", "form")):
+        rules.append(
+            "Structure as annexure-by-annexure responses. For each annexure, fill every "
+            "available field from HUMAN-CONFIRMED ANSWERS and verified company profile. "
+            "For checklist items: Item | Requirement | Status. "
+            "Mark only genuinely unknown bidder-specific data as [BIDDER TO INSERT: ...]."
+        )
+
+    if any(x in blob for x in ("hse", "safety", "environment", "ehs")):
+        rules.append(
+            "Include: HSE/EHS policy summary, risk assessment process (HAZID/JSA), "
+            "emergency response plan, incident reporting, and compliance evidence list "
+            "for applicable safety standards (ISO 45001, OHSAS, local regulatory bodies)."
+        )
+
+    if any(x in blob for x in ("compliance", "matrix", "evaluation criteria", "bec")):
+        rules.append(
+            "MUST be a Markdown table: RFP Clause/Ref | Requirement Summary | "
+            "Compliant (Y/N/Partial) | Evidence/Response Location. Cover all evaluation "
+            "criteria areas: technical, financial, compliance/certifications, submission format."
+        )
+
+    if any(x in blob for x in ("executive", "cover", "transmittal", "letter")):
+        rules.append(
+            "Clearly state: what is being proposed, to whom, for which solicitation reference, "
+            "and the responding entity's delivery model (prime / consortium / JV if applicable). "
+            "Use verified contact information only."
+        )
+
+    if any(x in blob for x in ("technical approach", "methodology", "implementation", "solution")):
+        rules.append(
+            "Describe the execution approach phase-by-phase, matching the RFP's own scope structure. "
+            "Include key resources, quality control measures, and how each major requirement is addressed."
+        )
+
+    if not rules:
+        return ""
+    return "- SECTION QUALITY REQUIREMENTS:\n" + "\n".join(f"    * {r}" for r in rules) + "\n"
+
+
+
 
 
 def _decode_wizard_config(wizard_config: Optional[str | Dict[str, Any]]) -> Dict[str, Any]:

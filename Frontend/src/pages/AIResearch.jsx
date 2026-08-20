@@ -21,6 +21,16 @@ const cleanDescriptionText = (text) => {
     .trim();
 };
 
+/** Ensure website URLs open correctly in the browser (add https:// if missing). */
+const ensureAbsoluteUrl = (url) => {
+  if (!url || typeof url !== 'string') return '';
+  const u = url.trim();
+  if (!u) return '';
+  if (u.startsWith('http://') || u.startsWith('https://')) return u;
+  if (u.startsWith('//')) return 'https:' + u;
+  return 'https://' + u.replace(/^\/+/, '');
+};
+
 export default function AIResearch() {
   const [companiesList, setCompaniesList] = useState([]);
   const [profiles, setProfiles] = useState([]);
@@ -607,7 +617,7 @@ export default function AIResearch() {
                       </div>
                       <p className="text-xs text-slate-500">
                         {selectedProfile.website && (
-                          <a href={selectedProfile.website} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-brand-600 hover:underline">
+                          <a href={ensureAbsoluteUrl(selectedProfile.website)} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-brand-600 hover:underline">
                             {selectedProfile.website} <ExternalLink size={10} />
                           </a>
                         )}

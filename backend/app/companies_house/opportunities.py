@@ -113,11 +113,17 @@ class CompaniesHouseTendersClient:
             # Supplier matching
             supplier_name = ""
             supplier_num = ""
+            award_amount = 0.0
+            award_date = ""
             if awards:
                 suppliers = awards[0].get("suppliers", [])
                 if suppliers:
                     supplier_name = suppliers[0].get("name", "")
                     supplier_num = suppliers[0].get("id", "").replace("GB-COH-", "")
+                award_val = awards[0].get("value") or {}
+                if isinstance(award_val, dict):
+                    award_amount = float(award_val.get("amount") or 0.0)
+                award_date = (awards[0].get("date") or awards[0].get("datePublished") or "")[:10]
 
             ch_profile = None
             if supplier_name or supplier_num:
@@ -131,10 +137,48 @@ class CompaniesHouseTendersClient:
                 closing_date = posted_date or "2026-09-01"
 
             tags = [t.lower() for t in rel.get("tag", [])]
-            status = "Won" if ("award" in tags or awards) else "Open"
+            has_award = bool("award" in tags or awards)
+            status = "Won" if has_award else "Open"
 
             classification = tender_obj.get("classification", {})
             cpv_code = classification.get("id") if isinstance(classification, dict) else "62020"
+
+            # Resource links — OCDS 'documents' arrays (tender + award level)
+            resource_links = []
+            notice_html_url = None
+            for doc in (tender_obj.get("documents") or []):
+                if not isinstance(doc, dict):
+                    continue
+                doc_url = doc.get("url")
+                if not doc_url:
+                    continue
+                resource_links.append(doc_url)
+                fmt = (doc.get("format") or "").lower()
+                dtype = (doc.get("documentType") or "").lower()
+                if not notice_html_url and ("html" in fmt or "notice" in dtype or "tenderNotice" in dtype):
+                    notice_html_url = doc_url
+            for award in awards:
+                for doc in (award.get("documents") or []):
+                    if not isinstance(doc, dict):
+                        continue
+                    doc_url = doc.get("url")
+                    if doc_url:
+                        resource_links.append(doc_url)
+
+            # Public notice URL for "View original" — prefer explicit notice HTML,
+            # then Find a Tender procurement page by OCID, then Contracts Finder.
+            if notice_html_url:
+                public_url = notice_html_url
+            elif ocid:
+                public_url = f"https://www.find-tender.service.gov.uk/procurement/{ocid}"
+            else:
+                public_url = f"https://www.contractsfinder.service.gov.uk/Search/Results?Keywords={title[:80]}"
+
+            description = (
+                tender_obj.get("description")
+                or (awards[0].get("description") if awards else None)
+                or "Official UK public sector tender release from Contracts Finder / Find a Tender service."
+            )
 
             tender_dict = {
                 "id": f"ch_{notice_id}",
@@ -151,11 +195,19 @@ class CompaniesHouseTendersClient:
                 "status": status,
                 "urgency": "normal",
                 "value": float(val_num or 250000.0),
-                "summary": tender_obj.get("description") or "Official UK public sector tender release from Contracts Finder / Find a Tender service.",
+                "summary": description if isinstance(description, str) else str(description or ""),
                 "source": "Companies House",
+                "rfp_url": public_url,
+                "uiLink": public_url,
+                "has_award": has_award,
+                "award_amount": award_amount,
+                "award_date": award_date,
+                "award_awardee": supplier_name,
+                "resource_links": list(dict.fromkeys(resource_links)),  # de-dupe, preserve order
                 "raw_companies_house_data": {
                     "ocds_release": rel,
-                    "company_profile": ch_profile or {}
+                    "company_profile": ch_profile or {},
+                    "resource_links": list(dict.fromkeys(resource_links)),
                 }
             }
             enriched_tenders.append(tender_dict)
