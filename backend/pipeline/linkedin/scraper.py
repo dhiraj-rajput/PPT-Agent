@@ -23,30 +23,29 @@ Design goals:
   - The output is always a valid LinkedInCompanyData object (may have None fields if data was unavailable)
 """
 
-import asyncio
 import time
-from typing import Optional
+
+from utils.helpers import setup_logger
 
 from pipeline.linkedin.authenticated_scraper import AuthenticatedLinkedInScraper
+from pipeline.linkedin.bi_extractor import BIExtractor
+from pipeline.linkedin.browser_scraper import BrowserLinkedInScraper
 from pipeline.linkedin.constants import (
     SCRAPE_LAYER_AUTHENTICATED,
     SCRAPE_LAYER_BROWSER,
     SCRAPE_LAYER_PUBLIC,
-    build_company_page_url,
     build_company_about_url,
     build_company_jobs_url,
+    build_company_page_url,
     build_company_people_url,
     build_company_posts_url,
 )
-from pipeline.linkedin.browser_scraper import BrowserLinkedInScraper
 from pipeline.linkedin.data_cleaner import DataCleaner
-from pipeline.linkedin.bi_extractor import BIExtractor
 from pipeline.linkedin.input_resolver import InputResolver
-from pipeline.linkedin.rules_structurer import RulesStructurer
 from pipeline.linkedin.models import LinkedInCompanyData
 from pipeline.linkedin.public_scraper import PublicLinkedInScraper
+from pipeline.linkedin.rules_structurer import RulesStructurer
 from pipeline.linkedin.storage import LinkedInStorage
-from utils.helpers import setup_logger
 
 logger = setup_logger(__name__)
 

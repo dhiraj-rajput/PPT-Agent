@@ -12,16 +12,20 @@ Entry point:
 
 import time
 from datetime import datetime, timezone
-from typing import Optional
 
-from utils.helpers import setup_logger, is_valid_url
+from utils.helpers import is_valid_url, setup_logger
+
 from pipeline.models.normalizer import ensure_absolute_url
-from pipeline.website.crawler import crawl_website
-from pipeline.website.cleaner import clean_html_content, extract_raw_text
 from pipeline.website.classifier import classify_text_by_sections
-from pipeline.website.extractor import extract_company_intelligence, identify_role_pages, enrich_website_data_with_ai
-from pipeline.website.parser import parse_html_metadata, extract_contact_info
-from pipeline.website.models import WebsiteData, RawWebsiteScrapedData
+from pipeline.website.cleaner import clean_html_content, extract_raw_text
+from pipeline.website.crawler import crawl_website
+from pipeline.website.extractor import (
+    enrich_website_data_with_ai,
+    extract_company_intelligence,
+    identify_role_pages,
+)
+from pipeline.website.models import RawWebsiteScrapedData, WebsiteData
+from pipeline.website.parser import extract_contact_info, parse_html_metadata
 from pipeline.website.storage import WebsiteStorage
 from pipeline.website.urls import get_domain
 
@@ -61,7 +65,7 @@ class WebsitePipeline:
         max_pages: int | None = None,
         timeout_ms: int | None = None,
         force_rescrape: bool = False,
-    ) -> Optional[WebsiteData]:
+    ) -> WebsiteData | None:
         """
         Run the full website scraping pipeline.
 

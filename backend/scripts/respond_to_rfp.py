@@ -7,9 +7,7 @@ Refactored to route everything through ProposalGenerator.
 
 import argparse
 import sys
-import logging
 from pathlib import Path
-from datetime import datetime
 
 # Setup stdout UTF-8
 if hasattr(sys.stdout, "reconfigure"):
@@ -20,8 +18,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from documents.rfp_response.rfp_parser import RFPParser
 from documents.unified_generator import ProposalGenerator
+from utils.db_client import get_collection
 from utils.helpers import setup_logger
-from utils.db_client import get_collection, close_connection
 
 logger = setup_logger("respond_to_rfp")
 

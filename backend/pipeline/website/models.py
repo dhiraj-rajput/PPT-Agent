@@ -8,8 +8,8 @@ and are stored in the 'raw_website' and 'structured_website' MongoDB collections
 """
 
 from datetime import datetime
-from typing import List, Optional, Dict
-from pydantic import BaseModel, Field, ConfigDict
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class WebsiteData(BaseModel):
@@ -26,26 +26,26 @@ class WebsiteData(BaseModel):
 
     # --- Location ---
     headquarters: str = Field(default="", description="Primary headquarters location")
-    locations: List[str] = Field(default_factory=list, description="All office/branch locations mentioned")
+    locations: list[str] = Field(default_factory=list, description="All office/branch locations mentioned")
 
     # --- Offerings ---
-    products: List[str] = Field(default_factory=list, description="Products offered by the company")
-    services: List[str] = Field(default_factory=list, description="Services offered by the company")
-    industries_served: List[str] = Field(default_factory=list, description="Industries/verticals the company serves")
+    products: list[str] = Field(default_factory=list, description="Products offered by the company")
+    services: list[str] = Field(default_factory=list, description="Services offered by the company")
+    industries_served: list[str] = Field(default_factory=list, description="Industries/verticals the company serves")
 
     # --- People ---
-    leadership: List[str] = Field(default_factory=list, description="Key leadership/executive names found on the site")
-    technology_stack: List[str] = Field(default_factory=list, description="Technologies / frameworks detected")
+    leadership: list[str] = Field(default_factory=list, description="Key leadership/executive names found on the site")
+    technology_stack: list[str] = Field(default_factory=list, description="Technologies / frameworks detected")
 
     # --- Partnerships ---
-    clients: List[str] = Field(default_factory=list, description="Notable customers or clients mentioned")
-    partners: List[str] = Field(default_factory=list, description="Business partners mentioned")
+    clients: list[str] = Field(default_factory=list, description="Notable customers or clients mentioned")
+    partners: list[str] = Field(default_factory=list, description="Business partners mentioned")
 
     # --- Contact & Socials ---
-    emails: List[str] = Field(default_factory=list, description="Contact email addresses found")
-    phone_numbers: List[str] = Field(default_factory=list, description="Phone numbers found")
-    social_links: List[str] = Field(default_factory=list, description="Social media profile links")
-    linkedin_url: Optional[str] = Field(default=None, description="LinkedIn company page URL if found on the website")
+    emails: list[str] = Field(default_factory=list, description="Contact email addresses found")
+    phone_numbers: list[str] = Field(default_factory=list, description="Phone numbers found")
+    social_links: list[str] = Field(default_factory=list, description="Social media profile links")
+    linkedin_url: str | None = Field(default=None, description="LinkedIn company page URL if found on the website")
 
     # --- Key Pages ---
     careers_page: str = Field(default="", description="URL of the careers/jobs page")
@@ -61,7 +61,7 @@ class WebsiteData(BaseModel):
     scraped_at: datetime = Field(description="UTC timestamp when the scrape was completed")
     scrape_status: str = Field(default="success", description="'success', 'partial', or 'failed'")
     pages_crawled: int = Field(default=0, description="Number of pages successfully crawled")
-    visited_urls: List[str] = Field(default_factory=list, description="List of all crawled URLs")
+    visited_urls: list[str] = Field(default_factory=list, description="List of all crawled URLs")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -72,14 +72,14 @@ class RawWebsiteScrapedData(BaseModel):
     """
     company_slug: str
     page_url: str
-    raw_html: Optional[str] = Field(default=None, description="Raw HTML (first 100KB)")
-    raw_text: Optional[str] = Field(default=None, description="Extracted raw visible text")
-    clean_text: Optional[str] = Field(default=None, description="Cleaned main body text")
-    page_title: Optional[str] = Field(default=None, description="Page <title> content")
-    meta_description: Optional[str] = Field(default=None, description="Meta description content")
+    raw_html: str | None = Field(default=None, description="Raw HTML (first 100KB)")
+    raw_text: str | None = Field(default=None, description="Extracted raw visible text")
+    clean_text: str | None = Field(default=None, description="Cleaned main body text")
+    page_title: str | None = Field(default=None, description="Page <title> content")
+    meta_description: str | None = Field(default=None, description="Meta description content")
     scraped_at: datetime
     scrape_success: bool = Field(default=True)
-    error_message: Optional[str] = Field(default=None)
+    error_message: str | None = Field(default=None)
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -89,4 +89,4 @@ class CrawlMetadata(BaseModel):
     pages_visited: int = Field(default=0)
     crawl_duration_seconds: float = Field(default=0.0)
     status: str = Field(default="pending")
-    visited_urls: List[str] = Field(default_factory=list)
+    visited_urls: list[str] = Field(default_factory=list)

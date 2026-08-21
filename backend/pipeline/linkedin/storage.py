@@ -13,11 +13,10 @@ Collections used:
   - scrape_logs:         Audit trail of all scraping operations
 """
 
-from datetime import datetime
-from typing import Optional
 
-from bson import ObjectId
 from pymongo import DESCENDING
+from utils.db_client import get_collection
+from utils.helpers import get_utc_now, setup_logger
 
 from pipeline.linkedin.constants import (
     COLLECTION_RAW_LINKEDIN,
@@ -25,8 +24,6 @@ from pipeline.linkedin.constants import (
     COLLECTION_STRUCTURED_LINKEDIN,
 )
 from pipeline.linkedin.models import LinkedInCompanyData, RawLinkedInScrapedData
-from utils.db_client import get_collection
-from utils.helpers import get_utc_now, setup_logger
 
 logger = setup_logger(__name__)
 
@@ -119,7 +116,7 @@ class LinkedInStorage:
     def get_structured_company_data(
         self,
         company_slug: str,
-    ) -> Optional[LinkedInCompanyData]:
+    ) -> LinkedInCompanyData | None:
         """
         Retrieves the latest structured company data for a given slug.
 
@@ -169,7 +166,7 @@ class LinkedInStorage:
         scrape_status: str,
         layers_used: list[str],
         duration_seconds: float,
-        error_message: Optional[str] = None,
+        error_message: str | None = None,
     ) -> None:
         """
         Records an audit log entry for a scraping operation.

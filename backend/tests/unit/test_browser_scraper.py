@@ -10,10 +10,9 @@ Focuses on:
 """
 
 import json
+
 import pytest
-
 from pipeline.linkedin.browser_scraper import BrowserLinkedInScraper
-
 
 # ---------------------------------------------------------------------------
 # Fixture

@@ -7,7 +7,6 @@ Uses MySQL for relational companies and task status databases, and MongoDB for c
 
 from __future__ import annotations
 
-import asyncio
 import codecs
 import csv
 import io
@@ -17,33 +16,55 @@ import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, UploadFile, File, Form
-from pydantic import BaseModel
-
-from app.core.auth import get_current_user
-from utils.db_client import (
-    get_async_collection,
-    get_collection,
-    update_task_status,
-    get_task_status_db,
-    get_db_session,
-    get_sync_db_session,
-    _mysql_available,
+from config.settings import settings
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    UploadFile,
 )
 from models.sql_models import (
     Company as SQL_Company,
+)
+from models.sql_models import (
     Lead as SQL_Lead,
-    Report as SQL_Report,
+)
+from models.sql_models import (
     Meeting as SQL_Meeting,
-    Tender as SQL_Tender,
+)
+from models.sql_models import (
     NaicsCode as SQL_NaicsCode,
-    TaskStatus as SQL_TaskStatus,
+)
+from models.sql_models import (
+    Report as SQL_Report,
+)
+from models.sql_models import (
     SystemSettings as SQL_SystemSettings,
 )
-from sqlalchemy import select, insert, update, delete, func, or_, and_
-from config.settings import settings
+from models.sql_models import (
+    TaskStatus as SQL_TaskStatus,
+)
+from models.sql_models import (
+    Tender as SQL_Tender,
+)
+from pydantic import BaseModel
+from sqlalchemy import and_, func, insert, or_, select, update
+from utils.db_client import (
+    _mysql_available,
+    get_async_collection,
+    get_collection,
+    get_db_session,
+    get_sync_db_session,
+    get_task_status_db,
+    update_task_status,
+)
+
+from app.core.auth import get_current_user
 from app.core.match_engine import compute_company_match_score
 
 logger = logging.getLogger(__name__)
@@ -148,8 +169,8 @@ class SendCompanyEmailBody(BaseModel):
     to_email: str
     subject: str
     body: str
-    proposal_filename: Optional[str] = None
-    rfp_filename: Optional[str] = None
+    proposal_filename: str | None = None
+    rfp_filename: str | None = None
 
 
 @router.get("/attachments")
@@ -204,7 +225,6 @@ async def send_company_email(body: SendCompanyEmailBody, current_user: dict = De
         raise HTTPException(status_code=400, detail="Recipient email is required.")
     
     attachments_list = []
-    from pathlib import Path
     def _safe_attachment_path(base_dir: Path, fname: str) -> Path:
         resolved = (base_dir / fname).resolve()
         if not str(resolved).startswith(str(base_dir.resolve())):
@@ -258,7 +278,7 @@ async def send_company_email(body: SendCompanyEmailBody, current_user: dict = De
             attachments=attachments_list
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {e!s}")
         
     return {"ok": True, "message": "Email sent successfully!"}
 
@@ -278,7 +298,7 @@ def extract_keywords(description: str) -> list[str]:
     return list(dict.fromkeys(keywords))
 
 
-def _iso(dt: Any) -> Optional[str]:
+def _iso(dt: Any) -> str | None:
     return dt.isoformat() if dt and hasattr(dt, "isoformat") else None
 
 
@@ -317,12 +337,12 @@ def _format_company(c: SQL_Company) -> dict:
 
 @router.get("")
 async def get_companies(
-    query: Optional[str] = None,
-    size: Optional[str] = None,
-    naics: Optional[str] = None,
-    researched: Optional[str] = None,
-    match_company_description: Optional[bool] = False,
-    custom_description: Optional[str] = None,
+    query: str | None = None,
+    size: str | None = None,
+    naics: str | None = None,
+    researched: str | None = None,
+    match_company_description: bool | None = False,
+    custom_description: str | None = None,
     page: int = 1,
     limit: int = 20,
     current_user: dict = Depends(get_current_user),
@@ -505,33 +525,33 @@ async def get_companies(
 class CompanyCreateBody(BaseModel):
     uei: str
     name: str
-    dba_name: Optional[str] = ""
-    cage_code: Optional[str] = ""
-    status: Optional[str] = "Active"
-    registration_date: Optional[str] = ""
-    expiration_date: Optional[str] = ""
-    address: Optional[str] = ""
-    location: Optional[str] = ""
-    city: Optional[str] = ""
-    state: Optional[str] = ""
-    zip: Optional[str] = ""
-    country: Optional[str] = ""
-    entity_structure: Optional[str] = ""
-    is_small_business: Optional[str] = ""
-    is_minority_owned: Optional[str] = ""
-    is_women_owned: Optional[str] = ""
-    is_veteran_owned: Optional[str] = ""
-    primary_naics: Optional[str] = ""
-    primary_naics_desc: Optional[str] = ""
-    secondary_naics: Optional[str] = ""
-    contact: Optional[str] = "N/A"
-    contact_role: Optional[str] = ""
-    email: Optional[str] = ""
-    phone: Optional[str] = ""
-    revenue: Optional[str] = ""
-    size: Optional[str] = "Small"
-    industry: Optional[str] = "Other"
-    matchScore: Optional[int] = None
+    dba_name: str | None = ""
+    cage_code: str | None = ""
+    status: str | None = "Active"
+    registration_date: str | None = ""
+    expiration_date: str | None = ""
+    address: str | None = ""
+    location: str | None = ""
+    city: str | None = ""
+    state: str | None = ""
+    zip: str | None = ""
+    country: str | None = ""
+    entity_structure: str | None = ""
+    is_small_business: str | None = ""
+    is_minority_owned: str | None = ""
+    is_women_owned: str | None = ""
+    is_veteran_owned: str | None = ""
+    primary_naics: str | None = ""
+    primary_naics_desc: str | None = ""
+    secondary_naics: str | None = ""
+    contact: str | None = "N/A"
+    contact_role: str | None = ""
+    email: str | None = ""
+    phone: str | None = ""
+    revenue: str | None = ""
+    size: str | None = "Small"
+    industry: str | None = "Other"
+    matchScore: int | None = None
 
 
 @router.post("")
@@ -548,7 +568,7 @@ async def add_company(
         import hashlib
         c_name = (company_data.name or "Company").strip()
         c_loc = (company_data.location or company_data.city or "USA").strip()
-        uei = f"GEN-{hashlib.md5(f'{c_name}_{c_loc}'.encode('utf-8')).hexdigest()[:12].upper()}"
+        uei = f"GEN-{hashlib.md5(f'{c_name}_{c_loc}'.encode()).hexdigest()[:12].upper()}"
 
     try:
         async for db in get_db_session():
@@ -620,7 +640,7 @@ async def import_companies(payload: dict, current_user: dict = Depends(get_curre
                         import hashlib
                         c_name = (validated_item.name or "Company").strip()
                         c_loc = (validated_item.location or "").strip()
-                        uei = f"GEN-{hashlib.md5(f'{c_name}_{c_loc}'.encode('utf-8')).hexdigest()[:12].upper()}"
+                        uei = f"GEN-{hashlib.md5(f'{c_name}_{c_loc}'.encode()).hexdigest()[:12].upper()}"
 
                     stmt = select(SQL_Company).where(SQL_Company.uei == uei)
                     existing = (await db.execute(stmt)).scalar_one_or_none()
@@ -664,7 +684,7 @@ async def import_companies(payload: dict, current_user: dict = Depends(get_curre
                         imported_count += 1
                 await db.commit()
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid JSON format: {str(e)}")
+            raise HTTPException(status_code=400, detail=f"Invalid JSON format: {e!s}")
     elif format_type == "csv":
         try:
             raw_str = (raw_data or "").replace("\x00", "").strip()
@@ -673,7 +693,7 @@ async def import_companies(payload: dict, current_user: dict = Depends(get_curre
             imported_count = await _process_csv_stream(io.StringIO(raw_str))
         except Exception as e:
             logger.error(f"CSV import failed: {e}")
-            raise HTTPException(status_code=400, detail=f"Invalid CSV format: {str(e)}")
+            raise HTTPException(status_code=400, detail=f"Invalid CSV format: {e!s}")
 
     return {"status": "success", "count": imported_count}
 
@@ -694,7 +714,7 @@ async def import_companies_file(
         imported_count = await _process_csv_stream(text_stream)
     except Exception as e:
         logger.error(f"CSV file import failed: {e}", exc_info=True)
-        raise HTTPException(status_code=400, detail=f"CSV processing failed: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"CSV processing failed: {e!s}")
     finally:
         await file.close()
 
@@ -752,7 +772,7 @@ async def _process_csv_stream(text_stream) -> int:
             state = (row.get("Phys_State_Province") or row.get("state") or "").strip().upper()
             country = (row.get("Phys_Country") or row.get("country") or "").strip().upper()
             loc_str = f"{city}, {state}" if city and state else (city or state or country or "USA")
-            uei = f"GEN-{hashlib.md5(f'{name}_{loc_str}'.encode('utf-8')).hexdigest()[:12].upper()}"
+            uei = f"GEN-{hashlib.md5(f'{name}_{loc_str}'.encode()).hexdigest()[:12].upper()}"
 
         if uei in seen_ueis_in_file:
             continue
@@ -822,7 +842,7 @@ async def _process_csv_stream(text_stream) -> int:
     return imported_count
 
 
-def update_research_task(task_key: str, progress: int, status: str, message: str, started_at: Optional[str] = None, resolved_slug: Optional[str] = None):
+def update_research_task(task_key: str, progress: int, status: str, message: str, started_at: str | None = None, resolved_slug: str | None = None):
     extra = {}
     if resolved_slug:
         extra["resolved_slug"] = resolved_slug
@@ -841,7 +861,7 @@ def update_research_task(task_key: str, progress: int, status: str, message: str
 
 def run_company_research_sync(company_input: str, force_rescrape: bool = False):
     import subprocess
-    import sys
+
     from utils.helpers import get_python_executable
     
     task_key = company_input.strip()
@@ -935,7 +955,7 @@ def run_company_research_sync(company_input: str, force_rescrape: bool = False):
         else:
             update_research_task(task_key, 0, "failed", f"Research pipeline exited with code {p.returncode}. Please check server logs.")
     except Exception as e:
-        update_research_task(task_key, 0, "failed", f"Pipeline failed: {str(e)}")
+        update_research_task(task_key, 0, "failed", f"Pipeline failed: {e!s}")
 
 
 @router.post("/research")
@@ -1280,6 +1300,11 @@ async def update_own_company_profile(
         upsert=True,
         return_document=True,
     )
+    try:
+        from documents.company_profile import clear_company_profile_cache
+        clear_company_profile_cache()
+    except Exception:
+        pass
     if res and "_id" in res:
         res["id"] = str(res["_id"])
         del res["_id"]

@@ -8,15 +8,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, HTTPException
+
+from fastapi import APIRouter, Depends
+from models.sql_models import Tender as SQL_Tender
+from pipeline.ai.client import get_ai_client
 from pydantic import BaseModel, Field
+from sqlalchemy import or_, select
+from utils.db_client import _mysql_available, get_collection, get_db_session
 
 from app.core.auth import get_current_user
-from utils.db_client import get_db_session, get_collection, _mysql_available
-from pipeline.ai.client import get_ai_client
-from models.sql_models import Tender as SQL_Tender
-from sqlalchemy import select, or_
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/preview", tags=["preview"])
@@ -25,7 +25,7 @@ router = APIRouter(prefix="/preview", tags=["preview"])
 class QuestionOption(BaseModel):
     id: str
     label: str
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class WizardQuestion(BaseModel):
@@ -33,8 +33,8 @@ class WizardQuestion(BaseModel):
     question: str
     category: str
     is_multi_select: bool = False
-    options: List[QuestionOption]
-    recommended_option_id: Optional[str] = None
+    options: list[QuestionOption]
+    recommended_option_id: str | None = None
 
 
 class OutlineSection(BaseModel):
@@ -42,27 +42,27 @@ class OutlineSection(BaseModel):
     title: str
     word_budget: int
     included: bool = True
-    key_points: List[str] = Field(default_factory=list)
+    key_points: list[str] = Field(default_factory=list)
 
 
 class QuestionResponse(BaseModel):
     question_id: str
-    selected_option_ids: List[str]
+    selected_option_ids: list[str]
 
 
 class CustomAnswersPayload(BaseModel):
-    tender_id: Optional[str] = None
-    solicitation_number: Optional[str] = None
+    tender_id: str | None = None
+    solicitation_number: str | None = None
     proposal_type: str = "Prime RFP Response"
-    answers: List[QuestionResponse] = Field(default_factory=list)
-    custom_sections: Optional[List[OutlineSection]] = None
-    company_profile: Optional[dict] = None
+    answers: list[QuestionResponse] = Field(default_factory=list)
+    custom_sections: list[OutlineSection] | None = None
+    company_profile: dict | None = None
 
 
 @router.get("/questions")
 async def get_wizard_questions(
-    tender_id: Optional[str] = None,
-    solicitation_number: Optional[str] = None,
+    tender_id: str | None = None,
+    solicitation_number: str | None = None,
     proposal_type: str = "Prime RFP Response",
     current_user: dict = Depends(get_current_user),
 ):
@@ -135,7 +135,7 @@ Output MUST be a JSON object with a 'questions' array. Each question must have:
 """
         res = await asyncio.to_thread(client.chat_json, [{"role": "user", "content": prompt}])
         questions = res.get("questions", default_questions)
-    except Exception as e:
+    except Exception:
         questions = default_questions
 
     return {
@@ -263,7 +263,7 @@ Output MUST be a JSON object with a 'sections' array. Each section must have:
 """
         res = await asyncio.to_thread(client.chat_json, [{"role": "user", "content": prompt}])
         sections = res.get("sections", default_sections)
-    except Exception as e:
+    except Exception:
         sections = default_sections
 
     total_words = sum(s.get("word_budget", 500) for s in sections if s.get("included", True))

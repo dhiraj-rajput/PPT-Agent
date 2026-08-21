@@ -7,13 +7,16 @@ All MongoDB calls are mocked using unittest.mock.
 No real database is needed to run these tests.
 """
 
-import pytest
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
-from pipeline.linkedin.models import CompanyIdentity, LinkedInCompanyData, RawLinkedInScrapedData
+import pytest
+from pipeline.linkedin.models import (
+    CompanyIdentity,
+    LinkedInCompanyData,
+    RawLinkedInScrapedData,
+)
 from pipeline.linkedin.storage import LinkedInStorage
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

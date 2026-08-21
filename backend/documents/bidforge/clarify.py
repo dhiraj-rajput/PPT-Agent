@@ -16,7 +16,7 @@ MAX_ROUNDS to guarantee the loop terminates.
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from utils.helpers import setup_logger
 
@@ -26,11 +26,11 @@ MAX_ROUNDS = 3
 
 
 def build_clarifying_questions(
-    parsed_rfp: Dict[str, Any],
+    parsed_rfp: dict[str, Any],
     company_context: str = "",
-    answered: Optional[List[Dict[str, Any]]] = None,
+    answered: list[dict[str, Any]] | None = None,
     round_number: int = 1,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Returns {"questions": [...], "round": n, "is_final_round": bool, "generated_via": "ai|rule_based"}.
 
     An empty `questions` list means the pipeline has everything it needs and
@@ -38,12 +38,13 @@ def build_clarifying_questions(
     """
     from pipeline.ai.client import get_ai_client
     from pipeline.ai.mode import run_with_fallback
+
     from documents.prompts import CLARIFYING_QUESTIONS_PROMPT
 
     answered = answered or []
     is_final_round = round_number >= MAX_ROUNDS
 
-    def ai_fn() -> Dict[str, Any]:
+    def ai_fn() -> dict[str, Any]:
         client = get_ai_client()
         payload = {
             "missing_fields": parsed_rfp.get("missing_fields", []),
@@ -74,7 +75,7 @@ def build_clarifying_questions(
         questions = res.get("questions") or []
         return {"questions": _sanitize_questions(questions)}
 
-    def rule_fn() -> Dict[str, Any]:
+    def rule_fn() -> dict[str, Any]:
         logger.warning("[BidForge:Clarify] Using rule-based fallback: surfacing missing_fields verbatim.")
         answered_ids = {a.get("id") for a in answered if isinstance(a, dict)}
         questions = []
@@ -104,7 +105,7 @@ def build_clarifying_questions(
     return result
 
 
-def _sanitize_questions(questions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _sanitize_questions(questions: list[dict[str, Any]]) -> list[dict[str, Any]]:
     cleaned = []
     seen_ids = set()
     for i, q in enumerate(questions[:8]):
@@ -143,7 +144,7 @@ def _sanitize_questions(questions: List[Dict[str, Any]]) -> List[Dict[str, Any]]
     return cleaned
 
 
-def answers_to_context_block(answers: List[Dict[str, Any]]) -> str:
+def answers_to_context_block(answers: list[dict[str, Any]]) -> str:
     """Renders resolved Q&A into a plain-text block the document generator's
     prompts can use directly as authoritative, human-confirmed context."""
     if not answers:

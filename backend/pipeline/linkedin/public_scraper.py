@@ -20,21 +20,22 @@ the request is not authenticated. The Crawl4AI layer handles the rest.
 
 import json
 import random
-from typing import Optional
 
 import requests
 from bs4 import BeautifulSoup
+from utils.helpers import (
+    get_utc_now,
+    retry_on_network_error,
+    setup_logger,
+    wait_random_delay,
+)
 
 from pipeline.linkedin.constants import (
-    LINKEDIN_COMPANY_BASE_URL,
     PUBLIC_REQUEST_HEADERS,
     SCRAPE_LAYER_PUBLIC,
     USER_AGENT_POOL,
-    build_company_about_url,
-    build_company_page_url,
 )
 from pipeline.linkedin.models import CompanyIdentity, RawLinkedInScrapedData
-from utils.helpers import get_utc_now, retry_on_network_error, setup_logger, wait_random_delay
 
 logger = setup_logger(__name__)
 
@@ -62,7 +63,7 @@ class PublicLinkedInScraper:
         self,
         company_slug: str,
         linkedin_url: str,
-    ) -> tuple[RawLinkedInScrapedData, Optional[CompanyIdentity]]:
+    ) -> tuple[RawLinkedInScrapedData, CompanyIdentity | None]:
         """
         Fetches and parses public data from the LinkedIn company page.
 
@@ -131,7 +132,7 @@ class PublicLinkedInScraper:
     # ---------------------------------------------------------------------------
 
     @retry_on_network_error(max_attempts=3)
-    def _fetch_page_html(self, url: str) -> tuple[Optional[str], Optional[str]]:
+    def _fetch_page_html(self, url: str) -> tuple[str | None, str | None]:
         """
         Fetches the HTML content of a page via HTTP GET.
 
@@ -181,7 +182,7 @@ class PublicLinkedInScraper:
     # JSON-LD Extraction
     # ---------------------------------------------------------------------------
 
-    def _extract_json_ld(self, soup: BeautifulSoup) -> Optional[dict]:
+    def _extract_json_ld(self, soup: BeautifulSoup) -> dict | None:
         """
         Extracts structured JSON-LD data from the page.
 
@@ -263,9 +264,9 @@ class PublicLinkedInScraper:
         self,
         company_slug: str,
         linkedin_url: str,
-        json_ld_data: Optional[dict],
+        json_ld_data: dict | None,
         meta_tags: dict[str, str],
-    ) -> Optional[CompanyIdentity]:
+    ) -> CompanyIdentity | None:
         """
         Builds a partial CompanyIdentity object from JSON-LD and meta tags.
 
@@ -324,7 +325,7 @@ class PublicLinkedInScraper:
             industry=industry,
         )
 
-    def _extract_logo_from_json_ld(self, json_ld_data: dict) -> Optional[str]:
+    def _extract_logo_from_json_ld(self, json_ld_data: dict) -> str | None:
         """
         Extracts the company logo URL from JSON-LD data.
 

@@ -5,17 +5,21 @@ Unit tests for Google Search discovery, Website agent components,
 and the LangGraph orchestrator routing logic.
 """
 
-import pytest
+from typing import cast
+
 from pipeline.google_search.search_client import CompanyDiscovery
+from pipeline.orchestrator.graph import build_graph
+from pipeline.orchestrator.nodes import classify_input
+from pipeline.orchestrator.state import AgentState
 from pipeline.website.classifier import classify_text_by_sections
 from pipeline.website.extractor import extract_company_intelligence, identify_role_pages
 from pipeline.website.models import WebsiteData
-from pipeline.website.urls import normalize_url, is_internal_link, should_ignore_url, get_url_priority
-from typing import Any, cast
-from pipeline.orchestrator.state import AgentState
-from pipeline.orchestrator.nodes import classify_input
-from pipeline.orchestrator.graph import build_graph
-
+from pipeline.website.urls import (
+    get_url_priority,
+    is_internal_link,
+    normalize_url,
+    should_ignore_url,
+)
 
 # ===========================================================================
 # 1. Google Search / Discovery Tests
@@ -192,7 +196,11 @@ def test_discover_external_news_node_skips_when_missing():
 # 5. Routing and Edge-case Tests
 # ===========================================================================
 
-from pipeline.orchestrator.graph import _route_after_classify, _route_after_website_discovery
+from pipeline.orchestrator.graph import (
+    _route_after_classify,
+    _route_after_website_discovery,
+)
+
 
 def test_routing_logic():
     # Test routing after classification

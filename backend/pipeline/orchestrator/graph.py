@@ -17,25 +17,26 @@ Usage:
     result = run_pipeline("https://linkedin.com/company/infosys")
 """
 
-from typing import Any, Optional
-from langgraph.graph import StateGraph, END
+from typing import Any
 
-from pipeline.orchestrator.state import AgentState
+from langgraph.graph import END, StateGraph
+from utils.helpers import setup_logger
+
 from pipeline.orchestrator.nodes import (
     classify_input,
-    discover_website,
-    discover_linkedin,
-    discover_from_website,
-    run_website_agent,
-    run_linkedin_agent,
-    merge_results,
-    trigger_scrapers,
     discover_external_news,
-    run_compactor,
+    discover_from_website,
+    discover_linkedin,
+    discover_website,
     generate_pitch_proposal,
     generate_rfp_response,
+    merge_results,
+    run_compactor,
+    run_linkedin_agent,
+    run_website_agent,
+    trigger_scrapers,
 )
-from utils.helpers import setup_logger
+from pipeline.orchestrator.state import AgentState
 
 logger = setup_logger(__name__)
 
@@ -168,8 +169,8 @@ def _get_app():
 
 def run_pipeline(
     user_input: str,
-    solicitation_number: Optional[str] = None,
-    rfp_response_mode: Optional[str] = None,
+    solicitation_number: str | None = None,
+    rfp_response_mode: str | None = None,
     force: bool = False,
     **kwargs: Any,
 ) -> dict:

@@ -19,7 +19,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -27,28 +27,28 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Identifier patterns (layout-agnostic; match labels in any order)
 # ---------------------------------------------------------------------------
-_ID_PATTERNS: List[Tuple[str, re.Pattern]] = [
-    ("sap_anid", re.compile(r"\bANID[:\s]*([A-Z0-9]{8,})\b", re.I)),
-    ("sap_anid", re.compile(r"\bSAP\s*(?:Business\s*)?Network\s*(?:ID|ANID)?[:\s]*([A-Z0-9]{8,})\b", re.I)),
-    ("duns", re.compile(r"\bD[\-\s]?U[\-\s]?N[\-\s]?S[®\s]*(?:Number)?[:\s]*([0-9]{8,9})\b", re.I)),
-    ("duns", re.compile(r"\b([0-9]{9})\b(?=[^\n]{0,40}D[\-\s]?U[\-\s]?N)", re.I)),
-    ("sam_uei", re.compile(r"\b(?:SAM\.?gov\s*)?(?:Unique\s*Entity\s*ID|UEI)[:\s]*([A-Z0-9]{9,12})\b", re.I)),
-    ("ncage", re.compile(r"\b(?:NCAGE|NATO\s*Supplier\s*Code|CAGE)[:\s]*([A-Z0-9]{4,6})\b", re.I)),
-    ("ungm", re.compile(r"\bUNGM[:\s]*(?:Registration\s*ID)?[:\s]*([0-9]{5,})\b", re.I)),
-    ("gem_seller", re.compile(r"\bGeM\s*(?:Seller\s*)?ID[:\s]*([A-Z0-9]{8,})\b", re.I)),
-    ("msme_udyam", re.compile(r"\b(?:MSME\s*)?Udyam[:\s]*([A-Z0-9\-]{10,})\b", re.I)),
-    ("dpiit", re.compile(r"\bDPIIT[:\s]*(?:DIPP)?[:\s]*([A-Z0-9]{6,})\b", re.I)),
-    ("llpin", re.compile(r"\b(?:LLPIN|Corporate\s*Identity)[:\s]*([A-Z]{3}\-?[0-9]{4,})\b", re.I)),
-    ("pan", re.compile(r"\bPAN[:\s]*([A-Z]{5}[0-9]{4}[A-Z])\b", re.I)),
-    ("gstin", re.compile(r"\bGSTIN[:\s]*([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][A-Z0-9]Z[A-Z0-9])\b", re.I)),
-    ("tan", re.compile(r"\bTAN[:\s]*([A-Z]{4}[0-9]{5}[A-Z])\b", re.I)),
-    ("iec", re.compile(r"\bIEC[:\s]*([A-Z0-9]{8,12})\b", re.I)),
-    ("iso_9001", re.compile(r"\bISO\s*9001(?::[0-9]{4})?\b[^\n]{0,80}", re.I)),
-    ("iso_27001", re.compile(r"\bISO(?:/IEC)?\s*27001(?::[0-9]{4})?\b[^\n]{0,80}", re.I)),
-    ("iso_45001", re.compile(r"\bISO\s*45001(?::[0-9]{4})?\b[^\n]{0,80}", re.I)),
-    ("cmmi", re.compile(r"\bCMMI\s*(?:LEVEL\s*)?([1-5])\b[^\n]{0,60}", re.I)),
-    ("soc2", re.compile(r"\bSOC\s*2\b[^\n]{0,60}", re.I)),
-    ("gdpr", re.compile(r"\bGDPR\b[^\n]{0,60}", re.I)),
+_ID_PATTERNS: list[tuple[str, re.Pattern]] = [
+    ("sap_anid", re.compile(r"\bANID[:\s]*([A-Z0-9]{8,})\b", re.IGNORECASE)),
+    ("sap_anid", re.compile(r"\bSAP\s*(?:Business\s*)?Network\s*(?:ID|ANID)?[:\s]*([A-Z0-9]{8,})\b", re.IGNORECASE)),
+    ("duns", re.compile(r"\bD[\-\s]?U[\-\s]?N[\-\s]?S[®\s]*(?:Number)?[:\s]*([0-9]{8,9})\b", re.IGNORECASE)),
+    ("duns", re.compile(r"\b([0-9]{9})\b(?=[^\n]{0,40}D[\-\s]?U[\-\s]?N)", re.IGNORECASE)),
+    ("sam_uei", re.compile(r"\b(?:SAM\.?gov\s*)?(?:Unique\s*Entity\s*ID|UEI)[:\s]*([A-Z0-9]{9,12})\b", re.IGNORECASE)),
+    ("ncage", re.compile(r"\b(?:NCAGE|NATO\s*Supplier\s*Code|CAGE)[:\s]*([A-Z0-9]{4,6})\b", re.IGNORECASE)),
+    ("ungm", re.compile(r"\bUNGM[:\s]*(?:Registration\s*ID)?[:\s]*([0-9]{5,})\b", re.IGNORECASE)),
+    ("gem_seller", re.compile(r"\bGeM\s*(?:Seller\s*)?ID[:\s]*([A-Z0-9]{8,})\b", re.IGNORECASE)),
+    ("msme_udyam", re.compile(r"\b(?:MSME\s*)?Udyam[:\s]*([A-Z0-9\-]{10,})\b", re.IGNORECASE)),
+    ("dpiit", re.compile(r"\bDPIIT[:\s]*(?:DIPP)?[:\s]*([A-Z0-9]{6,})\b", re.IGNORECASE)),
+    ("llpin", re.compile(r"\b(?:LLPIN|Corporate\s*Identity)[:\s]*([A-Z]{3}\-?[0-9]{4,})\b", re.IGNORECASE)),
+    ("pan", re.compile(r"\bPAN[:\s]*([A-Z]{5}[0-9]{4}[A-Z])\b", re.IGNORECASE)),
+    ("gstin", re.compile(r"\bGSTIN[:\s]*([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][A-Z0-9]Z[A-Z0-9])\b", re.IGNORECASE)),
+    ("tan", re.compile(r"\bTAN[:\s]*([A-Z]{4}[0-9]{5}[A-Z])\b", re.IGNORECASE)),
+    ("iec", re.compile(r"\bIEC[:\s]*([A-Z0-9]{8,12})\b", re.IGNORECASE)),
+    ("iso_9001", re.compile(r"\bISO\s*9001(?::[0-9]{4})?\b[^\n]{0,80}", re.IGNORECASE)),
+    ("iso_27001", re.compile(r"\bISO(?:/IEC)?\s*27001(?::[0-9]{4})?\b[^\n]{0,80}", re.IGNORECASE)),
+    ("iso_45001", re.compile(r"\bISO\s*45001(?::[0-9]{4})?\b[^\n]{0,80}", re.IGNORECASE)),
+    ("cmmi", re.compile(r"\bCMMI\s*(?:LEVEL\s*)?([1-5])\b[^\n]{0,60}", re.IGNORECASE)),
+    ("soc2", re.compile(r"\bSOC\s*2\b[^\n]{0,60}", re.IGNORECASE)),
+    ("gdpr", re.compile(r"\bGDPR\b[^\n]{0,60}", re.IGNORECASE)),
 ]
 
 
@@ -76,11 +76,11 @@ class BrandProfile:
     bottom_margin_inches: float = 0.9
 
     # Logo (extracted to bytes so it can be embedded in new doc)
-    logo_bytes: Optional[bytes] = None
+    logo_bytes: bytes | None = None
     logo_width_inches: float = 1.2
 
     # Cover graphic
-    cover_graphic_bytes: Optional[bytes] = None
+    cover_graphic_bytes: bytes | None = None
 
     # Company info extracted from template
     company_name: str = "OrbitAvanya Tech LLP"
@@ -91,7 +91,7 @@ class BrandProfile:
     email: str = ""
 
     # Leadership names/titles found in the template
-    leadership: List[Dict[str, str]] = field(default_factory=list)
+    leadership: list[dict[str, str]] = field(default_factory=list)
 
     # Header/footer text patterns
     header_text: str = ""
@@ -104,20 +104,20 @@ class BrandProfile:
     # Full plain-text dump (paragraphs + tables) for AI context
     full_text: str = ""
     # Ordered section headings discovered in the doc
-    sections: List[str] = field(default_factory=list)
+    sections: list[str] = field(default_factory=list)
     # Tables as list of {headers, rows, markdown}
-    tables: List[Dict[str, Any]] = field(default_factory=list)
+    tables: list[dict[str, Any]] = field(default_factory=list)
     # Key identifiers / certifications extracted via patterns
-    identifiers: Dict[str, str] = field(default_factory=dict)
+    identifiers: dict[str, str] = field(default_factory=dict)
     # Bullet / product lines under major headings
-    competencies: List[str] = field(default_factory=list)
+    competencies: list[str] = field(default_factory=list)
     # Core product / solution suite lines
-    products: List[str] = field(default_factory=list)
+    products: list[str] = field(default_factory=list)
 
     # Source: 'template' | 'default' | 'default_fallback'
     source: str = "default"
 
-    def to_brand_config_dict(self) -> Dict[str, Any]:
+    def to_brand_config_dict(self) -> dict[str, Any]:
         """Convert to the brand config dict format used by proposal_generator."""
         out_dir = Path("downloads") / "extracted"
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -168,7 +168,7 @@ class BrandProfile:
         """Plain-language summary of everything extracted from the template,
         meant for AI prompts so the model uses real contact / cert / product
         data instead of inventing or contradicting it."""
-        lines: List[str] = []
+        lines: list[str] = []
         if self.company_name:
             lines.append(f"Company name: {self.company_name}")
         if self.website:
@@ -280,7 +280,7 @@ class TemplateAnalyzer:
     # ------------------------------------------------------------------ fonts
     def _extract_fonts(self, doc, profile: BrandProfile):
         try:
-            font_counts: Dict[str, int] = {}
+            font_counts: dict[str, int] = {}
             for para in doc.paragraphs[:80]:
                 for run in para.runs:
                     fn = run.font.name
@@ -414,9 +414,9 @@ class TemplateAnalyzer:
         """Extract every table as headers + rows + markdown. Critical for
         accreditation matrices and similar capability-statement layouts."""
         try:
-            tables_out: List[Dict[str, Any]] = []
+            tables_out: list[dict[str, Any]] = []
             for table in doc.tables:
-                rows_raw: List[List[str]] = []
+                rows_raw: list[list[str]] = []
                 for row in table.rows:
                     cells = []
                     for cell in row.cells:
@@ -467,10 +467,10 @@ class TemplateAnalyzer:
         """Discover section headings and collect bullets under product /
         competency style sections without hardcoding fixed templates."""
         try:
-            sections: List[str] = []
-            competencies: List[str] = []
-            products: List[str] = []
-            current_bucket: Optional[str] = None
+            sections: list[str] = []
+            competencies: list[str] = []
+            products: list[str] = []
+            current_bucket: str | None = None
 
             product_keys = (
                 "product", "solution", "suite", "offering", "service",
@@ -549,12 +549,12 @@ class TemplateAnalyzer:
         r"(?:Mumbai|Delhi|Bangalore|Hyderabad|Pune|Chennai|London|Dubai|"
         r"Riyadh|Houston|New York|California|Maharashtra|India|UK|USA|"
         r"United Kingdom|United States)[^\n]{0,40})",
-        re.I,
+        re.IGNORECASE,
     )
 
-    def _all_text_sources(self, doc) -> List[str]:
+    def _all_text_sources(self, doc) -> list[str]:
         """Paragraphs + table cells + headers/footers — full document surface."""
-        texts: List[str] = []
+        texts: list[str] = []
         for p in doc.paragraphs:
             if p.text and p.text.strip():
                 texts.append(p.text)
@@ -632,7 +632,7 @@ class TemplateAnalyzer:
     # ------------------------------------------------------------ leadership
     def _extract_leadership(self, doc, profile: BrandProfile):
         try:
-            leadership: List[Dict[str, str]] = []
+            leadership: list[dict[str, str]] = []
             seen = set()
             for text in self._all_text_sources(doc):
                 title_match = self._LEADERSHIP_TITLE_RE.search(text)
@@ -681,7 +681,7 @@ class TemplateAnalyzer:
         """Pull certifications and registry IDs from any layout (tables or prose)."""
         try:
             all_text = "\n".join(self._all_text_sources(doc))
-            found: Dict[str, str] = {}
+            found: dict[str, str] = {}
             for key, pattern in _ID_PATTERNS:
                 if key in found:
                     continue
@@ -705,7 +705,7 @@ class TemplateAnalyzer:
                 r"(?:Legal\s*Entity\s*Name|Company\s*Name|Organisation\s*Name)[:\s|]*"
                 r"([A-Z][A-Za-z0-9 &.\-]{3,80}(?:LLP|Ltd|Limited|PLC|Inc|LLC|Pvt\.?\s*Ltd)?)",
                 all_text,
-                re.I,
+                re.IGNORECASE,
             )
             if m:
                 profile.company_name = m.group(1).strip(" |*")
@@ -730,7 +730,9 @@ class TemplateAnalyzer:
     # -------------------------------------------------------- first page text
     def _extract_first_page_text(self, doc, profile: BrandProfile):
         try:
-            from documents.bidforge.first_page_preserver import iter_first_page_paragraph_texts
+            from documents.bidforge.first_page_preserver import (
+                iter_first_page_paragraph_texts,
+            )
             texts = list(iter_first_page_paragraph_texts(doc))
             # Append first table markdown so accreditation matrix on page 1 is kept
             table_bits = []

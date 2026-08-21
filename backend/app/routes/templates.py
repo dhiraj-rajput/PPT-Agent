@@ -17,16 +17,16 @@ import logging
 import tempfile
 from pathlib import Path
 
+from documents.default_template import (
+    clear_default_template,
+    get_default_template_meta,
+    get_default_template_path,
+    set_default_template,
+)
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from app.core.auth import get_current_user
-from documents.default_template import (
-    set_default_template,
-    get_default_template_path,
-    get_default_template_meta,
-    clear_default_template,
-)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/templates", tags=["templates"])

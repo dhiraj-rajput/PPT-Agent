@@ -5,10 +5,9 @@ Classify cleaned page text into named business sections using keyword scoring.
 Used downstream by the extractor to assign meaning to raw text blocks.
 """
 
-from typing import Dict, List
 import re
 
-SECTION_KEYWORDS: Dict[str, List[str]] = {
+SECTION_KEYWORDS: dict[str, list[str]] = {
     "Company Overview": [
         "about", "overview", "who we are", "what we do", "mission", "vision", "our story",
         "history", "founded", "profile", "about us", "background", "purpose", "value"
@@ -60,7 +59,7 @@ SECTION_KEYWORDS: Dict[str, List[str]] = {
 }
 
 
-def classify_text_by_sections(clean_text: str) -> Dict[str, List[str]]:
+def classify_text_by_sections(clean_text: str) -> dict[str, list[str]]:
     """
     Classify lines/paragraphs of clean text into distinct business sections.
     Uses keyword matching and context tracking to assign meaning.
@@ -71,7 +70,7 @@ def classify_text_by_sections(clean_text: str) -> Dict[str, List[str]]:
     Returns:
         Dict mapping section name → list of matching paragraphs.
     """
-    classified_data: Dict[str, List[str]] = {sec: [] for sec in SECTION_KEYWORDS}
+    classified_data: dict[str, list[str]] = {sec: [] for sec in SECTION_KEYWORDS}
     if not clean_text:
         return classified_data
 

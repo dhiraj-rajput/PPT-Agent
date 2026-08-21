@@ -5,10 +5,9 @@ Exports the full MongoDB database into a compressed zip archive (company_scraper
 so that another developer/friend can restore the exact same database state.
 """
 
-import os
-import zipfile
 import shutil
 import sys
+import zipfile
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent

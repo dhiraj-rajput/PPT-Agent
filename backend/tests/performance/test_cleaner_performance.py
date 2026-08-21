@@ -12,19 +12,16 @@ Run with:
 """
 
 import time
-import pytest
 from datetime import datetime, timezone
 
 from pipeline.linkedin.data_cleaner import DataCleaner, clean_raw_text_for_llm
 from pipeline.linkedin.models import (
     CompanyIdentity,
     CompanyPost,
-    EmployeeInsights,
     JobPosting,
     LeadershipMember,
     LinkedInCompanyData,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

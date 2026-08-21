@@ -6,11 +6,9 @@ Business Intelligence (BI) extraction engine.
 Uses high-performance, cost-free, deterministic rule-based regex parsing.
 """
 
-import json
-import asyncio
-from typing import Optional
 
-from config.settings import settings
+from utils.helpers import setup_logger
+
 from pipeline.linkedin.models import (
     BIProfile,
     BusinessChallenge,
@@ -21,7 +19,6 @@ from pipeline.linkedin.models import (
     StrategicInitiative,
     TechStackProfile,
 )
-from utils.helpers import setup_logger
 
 logger = setup_logger(__name__)
 
@@ -34,7 +31,6 @@ class BIExtractor:
 
     def __init__(self):
         """Initializes the BI extractor."""
-        pass
 
     async def extract_bi_profile(self, company_data: LinkedInCompanyData) -> BIProfile:
         """
@@ -60,11 +56,12 @@ class BIExtractor:
         instead of keyword matching."""
         from pipeline.ai.client import get_ai_client
 
-        about_text = getattr(getattr(company_data, "description", None), "about_us", "") or ""
+        desc_obj = getattr(company_data, "description", None)
+        about_text = (getattr(desc_obj, "about_text", None) or getattr(desc_obj, "about_us", "")) or ""
         posts = getattr(company_data, "recent_posts", None) or []
         jobs = getattr(company_data, "job_postings", None) or []
-        posts_text = "\n".join(f"- {getattr(p, 'content', '') or getattr(p, 'text', '')}" for p in posts[:8])
-        jobs_text = "\n".join(f"- {getattr(j, 'title', '')}" for j in jobs[:10])
+        posts_text = "\n".join(f"- {getattr(p, 'post_text', '') or getattr(p, 'content', '') or getattr(p, 'text', '')}" for p in posts[:8])
+        jobs_text = "\n".join(f"- {getattr(j, 'job_title', '') or getattr(j, 'title', '')}" for j in jobs[:10])
 
         messages = [
             {
@@ -94,43 +91,73 @@ class BIExtractor:
         ]
         result = get_ai_client().chat_json(messages)
 
-        return BIProfile(
-            key_differentiators=result.get("key_differentiators", []) or [],
-            competitive_advantages=result.get("competitive_advantages", []) or [],
-            identified_competitors=[
-                CompetitorMention(
+        raw_competitors = result.get("identified_competitors", []) or []
+        competitors = []
+        for c in raw_competitors:
+            if isinstance(c, dict) and c.get("competitor_name"):
+                competitors.append(CompetitorMention(
                     competitor_name=c.get("competitor_name", ""),
                     relationship_type=c.get("relationship_type"),
                     source="ai_inferred",
-                )
-                for c in result.get("identified_competitors", []) or []
-                if c.get("competitor_name")
-            ],
-            strategic_initiatives=[
-                StrategicInitiative(
-                    initiative_name=s.get("initiative_name", ""),
-                    description=s.get("description", ""),
+                ))
+            elif isinstance(c, str) and c.strip():
+                competitors.append(CompetitorMention(
+                    competitor_name=c.strip(),
+                    relationship_type="Direct Competitor",
+                    source="ai_inferred",
+                ))
+
+        raw_initiatives = result.get("strategic_initiatives", []) or []
+        initiatives = []
+        for s in raw_initiatives:
+            if isinstance(s, dict) and (s.get("initiative_name") or s.get("description")):
+                initiatives.append(StrategicInitiative(
+                    initiative_name=s.get("initiative_name") or s.get("description", "")[:50],
+                    description=s.get("description") or s.get("initiative_name", ""),
                     priority_level=s.get("priority_level"),
-                )
-                for s in result.get("strategic_initiatives", []) or []
-                if s.get("initiative_name")
-            ],
-            growth_signals=[
-                GrowthSignal(
+                ))
+            elif isinstance(s, str) and s.strip():
+                initiatives.append(StrategicInitiative(
+                    initiative_name=s.strip()[:50],
+                    description=s.strip(),
+                    priority_level="High",
+                ))
+
+        raw_signals = result.get("growth_signals", []) or []
+        signals = []
+        for g in raw_signals:
+            if isinstance(g, dict) and (g.get("description") or g.get("signal_type")):
+                signals.append(GrowthSignal(
                     signal_type=g.get("signal_type", "Product Launch"),
-                    description=g.get("description", ""),
-                )
-                for g in result.get("growth_signals", []) or []
-                if g.get("description")
-            ],
-            business_challenges=[
-                BusinessChallenge(
-                    challenge_area=b.get("challenge_area", ""),
-                    description=b.get("description", ""),
-                )
-                for b in result.get("business_challenges", []) or []
-                if b.get("description")
-            ],
+                    description=g.get("description") or g.get("signal_type", ""),
+                ))
+            elif isinstance(g, str) and g.strip():
+                signals.append(GrowthSignal(
+                    signal_type="Expansion",
+                    description=g.strip(),
+                ))
+
+        raw_challenges = result.get("business_challenges", []) or []
+        challenges = []
+        for b in raw_challenges:
+            if isinstance(b, dict) and (b.get("description") or b.get("challenge_area")):
+                challenges.append(BusinessChallenge(
+                    challenge_area=b.get("challenge_area") or "Operational",
+                    description=b.get("description") or b.get("challenge_area", ""),
+                ))
+            elif isinstance(b, str) and b.strip():
+                challenges.append(BusinessChallenge(
+                    challenge_area="Operational",
+                    description=b.strip(),
+                ))
+
+        return BIProfile(
+            key_differentiators=result.get("key_differentiators", []) or [],
+            competitive_advantages=result.get("competitive_advantages", []) or [],
+            identified_competitors=competitors,
+            strategic_initiatives=initiatives,
+            growth_signals=signals,
+            business_challenges=challenges,
         )
 
     # ---------------------------------------------------------------------------
@@ -320,8 +347,8 @@ class BIExtractor:
                 ))
         if not growth:
             growth = [
-                GrowthSignal(signal_type="Partnership", description=f"Collaboration with key industry platforms to drive business model innovation.", significance="High"),
-                GrowthSignal(signal_type="Market Expansion", description=f"Expanding business development teams across operational hubs.", significance="Medium")
+                GrowthSignal(signal_type="Partnership", description="Collaboration with key industry platforms to drive business model innovation.", significance="High"),
+                GrowthSignal(signal_type="Market Expansion", description="Expanding business development teams across operational hubs.", significance="Medium")
             ]
 
         # 8. Business Challenges
@@ -346,7 +373,7 @@ class BIExtractor:
                     challenge_area=area,
                     description=sent,
                     evidence="Derived from description text",
-                    opportunity_for_us=f"Offer specialized analytics, data integration, and strategy consulting to mitigate this challenge."
+                    opportunity_for_us="Offer specialized analytics, data integration, and strategy consulting to mitigate this challenge."
                 ))
         if not challenges:
             challenges = [
@@ -435,7 +462,7 @@ class BIExtractor:
         sales_talking_points = [
             f"Discuss how our analytics and data warehousing services can accelerate {name}'s capabilities in {specialties[0] if specialties else industry}.",
             f"Highlight our compatibility with their core tech stack tools (like {', '.join(tech_profile.data_technologies[:2])}).",
-            f"Reference their strategic focus on growth and international markets to explore collaborative co-selling."
+            "Reference their strategic focus on growth and international markets to explore collaborative co-selling."
         ]
 
         # 14. Recommended Approach

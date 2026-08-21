@@ -6,7 +6,9 @@ import { api } from '../lib/api.jsx';
 import PreGenerationWizard from '../components/PreGenerationWizard.jsx';
 import DefaultTemplateUploader from '../components/DefaultTemplateUploader.jsx';
 import { useNotifications } from '../context/NotificationContext.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 export default function ProposalBuilder() {
+  const { user } = useAuth();
   const { createAlert } = useNotifications();
   const notify = (title, message, link) => createAlert(title, message, link).catch(() => {});
   const [tab, setTab] = useState('all');
@@ -516,19 +518,19 @@ export default function ProposalBuilder() {
               <button
                 onClick={() => {
                   setEditForm({
-                    name: companyProfile?.name || 'OrbitAvanya Tech LLP',
+                    name: companyProfile?.name || companyProfile?.company_name || 'My Company',
                     description: companyProfile?.description || '',
-                    uei: companyProfile?.uei || 'ORBIT1234567',
-                    cage_code: companyProfile?.cage_code || '8A9B0',
-                    primary_naics: companyProfile?.primary_naics || '541512',
-                    primary_naics_desc: companyProfile?.primary_naics_desc || 'Computer Systems Design Services',
-                    city: companyProfile?.city || 'Dallas',
-                    state: companyProfile?.state || 'TX',
+                    uei: companyProfile?.uei || '',
+                    cage_code: companyProfile?.cage_code || '',
+                    primary_naics: companyProfile?.primary_naics || '',
+                    primary_naics_desc: companyProfile?.primary_naics_desc || '',
+                    city: companyProfile?.city || '',
+                    state: companyProfile?.state || '',
                     country: companyProfile?.country || 'USA',
-                    email: companyProfile?.email || 'prasannadhamal982005@gmail.com',
-                    phone: companyProfile?.phone || '+1-214-555-0199',
+                    email: companyProfile?.email || user?.email || '',
+                    phone: companyProfile?.phone || '',
                     size: companyProfile?.size || 'Small',
-                    certifications: companyProfile?.certifications?.join(', ') || 'SBA 8(a), WOSB, HUBZone',
+                    certifications: companyProfile?.certifications?.join(', ') || '',
                   });
                   setShowEditCompanyModal(true);
                 }}

@@ -8,14 +8,13 @@ and extracts this intelligence using 100% rule-based and pattern-based regex.
 No AI or LLM models are used.
 """
 
-import logging
 import re
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
-import requests
+from typing import Any
 
 from config.settings import settings
 from utils.helpers import setup_logger
+
 from app.sam_gov.document_parser import DocumentParser
 
 logger = setup_logger(__name__)
@@ -82,8 +81,8 @@ class CompetitorExtractor:
         self,
         solicitation_number: str,
         use_mock: bool = False,
-        limit: Optional[int] = None,
-    ) -> List[Dict[str, Any]]:
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Discover bidders and bid responses for a solicitation using web search + rule-based parsing.
         """
@@ -222,7 +221,7 @@ class CompetitorExtractor:
 
         return competitors
 
-    def _tavily_search(self, query: str) -> List[Dict[str, Any]]:
+    def _tavily_search(self, query: str) -> list[dict[str, Any]]:
         """Run Tavily search client."""
         try:
             from tavily import TavilyClient
@@ -239,7 +238,7 @@ class CompetitorExtractor:
             logger.error(f"Tavily search failed for '{query}': {e}")
             return []
 
-    def _extract_competitors_rule_based(self, sol_num: str, snippets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _extract_competitors_rule_based(self, sol_num: str, snippets: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """
         100% rule-based and regex-based information extraction.
         Parses company names, bid prices, technical ratings, and protest status.

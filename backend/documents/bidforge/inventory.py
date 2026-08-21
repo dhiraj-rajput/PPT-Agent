@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from utils.helpers import setup_logger
 
@@ -25,7 +25,7 @@ logger = setup_logger(__name__)
 _PROFILE_PATH = Path(__file__).resolve().parent.parent.parent / "private" / "orbit_avanya_detailed_profiles.json"
 
 
-def _load_our_catalog() -> List[Dict[str, Any]]:
+def _load_our_catalog() -> list[dict[str, Any]]:
     """Loads our product catalog from app.core.company_catalog (Ingests private/OrbitAvanya_Services_ADD.xlsx)."""
     try:
         from app.core.company_catalog import get_catalog_products
@@ -47,7 +47,7 @@ def _load_our_catalog() -> List[Dict[str, Any]]:
                 if not isinstance(entry, dict):
                     continue
                 tech_stack = entry.get("technology_stack", {})
-                flat_tech: List[str] = []
+                flat_tech: list[str] = []
                 if isinstance(tech_stack, dict):
                     for items in tech_stack.values():
                         if isinstance(items, list):
@@ -92,7 +92,7 @@ def _load_our_catalog() -> List[Dict[str, Any]]:
     }]
 
 
-def analyze_inventory(parsed_rfp: Dict[str, Any]) -> Dict[str, Any]:
+def analyze_inventory(parsed_rfp: dict[str, Any]) -> dict[str, Any]:
     """
     Returns a dict: {"items": [{name, present, our_price, availability,
     features_matched, features_missing, notes}], "generated_via": "ai"|"rule_based"}
@@ -110,7 +110,7 @@ def analyze_inventory(parsed_rfp: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 
-def _requested_items(parsed_rfp: Dict[str, Any]) -> List[str]:
+def _requested_items(parsed_rfp: dict[str, Any]) -> list[str]:
     comps = parsed_rfp.get("identified_components", {}) or {}
     items = list(comps.get("technical", [])) + list(comps.get("layout", []))
     if not items:
@@ -126,7 +126,7 @@ def _requested_items(parsed_rfp: Dict[str, Any]) -> List[str]:
     return items[:20]
 
 
-def _analyze_inventory_ai(parsed_rfp: Dict[str, Any], our_catalog: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _analyze_inventory_ai(parsed_rfp: dict[str, Any], our_catalog: list[dict[str, Any]]) -> dict[str, Any]:
     from pipeline.ai.client import get_ai_client
 
     # Was capped at 8k/6k chars -- for anything but a trivial RFP this cut
@@ -159,10 +159,10 @@ def _analyze_inventory_ai(parsed_rfp: Dict[str, Any], our_catalog: List[Dict[str
     return result
 
 
-def _analyze_inventory_rules(parsed_rfp: Dict[str, Any], our_catalog: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _analyze_inventory_rules(parsed_rfp: dict[str, Any], our_catalog: list[dict[str, Any]]) -> dict[str, Any]:
     logger.info("[BidForge:Inventory] Running rule-based inventory match.")
     # Flatten catalog into a searchable (product_name, keyword) index
-    keyword_index: List[tuple] = []
+    keyword_index: list[tuple] = []
     for product in our_catalog:
         pool = [product.get("product_name", "")] + product.get("features", []) + product.get("tech_stack", [])
         for kw in pool:

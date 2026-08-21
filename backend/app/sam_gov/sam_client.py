@@ -6,10 +6,9 @@ Allows retrieving structured registration and profile details about any register
 Includes high-quality mock data fallbacks.
 """
 
-import logging
-from typing import Any, Dict, Optional
-import requests
+from typing import Any
 
+import requests
 from config.settings import settings
 from utils.helpers import setup_logger
 
@@ -206,7 +205,7 @@ class SAMEntityClient:
     Falls back to high-quality mock data when an API key is not configured or fails.
     """
 
-    def __init__(self, api_key: Optional[str] = None) -> None:
+    def __init__(self, api_key: str | None = None) -> None:
         self.api_key = api_key or settings.SAM_GOV_API_KEY
         if not self.api_key or "your_" in self.api_key or self.api_key == "SAM_GOV_API_KEY":
             self.api_key = None
@@ -215,7 +214,7 @@ class SAMEntityClient:
         """Returns True if a valid API key is configured."""
         return self.api_key is not None
 
-    def get_entity_details(self, uei: str, use_mock: bool = False) -> Optional[Dict[str, Any]]:
+    def get_entity_details(self, uei: str, use_mock: bool = False) -> dict[str, Any] | None:
         """
         Query SAM.gov for registration details of an entity by Unique Entity Identifier (UEI).
         """
@@ -255,7 +254,7 @@ class SAMEntityClient:
             logger.error(f"SAM.gov entity lookup failed: {exc}. Falling back to mock data.")
             return self._get_mock_entity(uei_clean)
 
-    def _get_mock_entity(self, uei: str) -> Optional[Dict[str, Any]]:
+    def _get_mock_entity(self, uei: str) -> dict[str, Any] | None:
         """Lookup mock entity data locally."""
         # Check direct match
         if uei in MOCK_ENTITIES:

@@ -1,11 +1,9 @@
-import os
 import json
 from pathlib import Path
-from typing import Dict, List, Any
-from datetime import datetime, timezone
+from typing import Any
 
-from utils.helpers import setup_logger
 from utils.db_client import get_collection, get_database
+from utils.helpers import setup_logger
 
 logger = setup_logger(__name__)
 
@@ -19,7 +17,7 @@ class PitchCompiler:
     def __init__(self, project_root: str = str(Path(__file__).resolve().parent.parent.parent)):
         self.project_root = Path(project_root)
 
-    def load_winner_profile(self, winner_name: str) -> Dict[str, Any]:
+    def load_winner_profile(self, winner_name: str) -> dict[str, Any]:
         """Loads the winning contractor's cached profile from MongoDB."""
         logger.info(f"Loading winning contractor profile for: {winner_name}")
         profile = None
@@ -60,42 +58,65 @@ class PitchCompiler:
             del profile["_id"]
         return profile
 
-    def load_orbit_avanya_profile(self, domain_keyword: str) -> Dict[str, Any]:
-        """Loads the best matching Orbit Avanya product profile from MongoDB based on domain keywords."""
-        logger.info(f"Searching Orbit Avanya product profile matching domain: '{domain_keyword}'")
-        db = get_database()
-        orbit_col = db["orbit-avanya"]
+    def load_orbit_avanya_profile(self, domain_keyword: str) -> dict[str, Any]:
+        """Loads our company profile and the best matching product profile dynamically from DB."""
+        from documents.company_profile import (
+            get_company_name,
+            get_company_short_name,
+            get_full_company_profile,
+        )
+        company_name = get_company_name()
+        company_short = get_company_short_name()
+        full_profile = get_full_company_profile()
+
+        logger.info(f"Searching {company_name} product profile matching domain: '{domain_keyword}'")
         
         # Rule-based mapping from domain keyword to company_slug
-        slug = "orbit-avanya-ai-analytics-dashboard" # default
+        slug = f"{company_short.lower()}-ai-analytics-dashboard"
         
         keyword_lower = domain_keyword.lower()
         if any(x in keyword_lower for x in ["health", "hms", "medical", "operating", "clinical", "hospital", "6515"]):
-            slug = "orbit-avanya-hms"
+            slug = f"{company_short.lower()}-hms"
         elif any(x in keyword_lower for x in ["education", "lms", "learning", "school", "course"]):
-            slug = "orbit-avanya-lms"
+            slug = f"{company_short.lower()}-lms"
         elif any(x in keyword_lower for x in ["financial", "analytics", "predictive", "dashboard", "modeling", "data", "database"]):
-            slug = "orbit-avanya-ai-analytics-dashboard"
+            slug = f"{company_short.lower()}-ai-analytics-dashboard"
         elif any(x in keyword_lower for x in ["erp", "operations", "enterprise", "resource"]):
-            slug = "orbit-avanya-erp"
+            slug = f"{company_short.lower()}-erp"
         elif any(x in keyword_lower for x in ["support", "helpdesk", "portal", "ticket"]):
-            slug = "orbit-avanya-help-desk-portal"
+            slug = f"{company_short.lower()}-help-desk-portal"
         elif any(x in keyword_lower for x in ["agri", "farm", "crop", "agriculture"]):
-            slug = "orbit-avanya-agriculture-portal"
+            slug = f"{company_short.lower()}-agriculture-portal"
         elif any(x in keyword_lower for x in ["sales", "crm", "lead", "client"]):
-            slug = "orbit-avanya-crm"
+            slug = f"{company_short.lower()}-crm"
         elif any(x in keyword_lower for x in ["hr", "hrms", "employee", "payroll", "salary"]):
-            slug = "orbit-avanya-hrms"
+            slug = f"{company_short.lower()}-hrms"
             
-        logger.info(f"Selected Orbit Avanya profile slug: '{slug}'")
         profile = None
         
+        # 1. Try company_catalog from core
         try:
-            profile = orbit_col.find_one({"company_slug": slug})
+            from app.core.company_catalog import get_catalog_products
+            products = get_catalog_products()
+            for p in products:
+                if any(kw in domain_keyword.lower() for kw in p.get("key_features", [])) or p.get("industry_domain", "").lower() in domain_keyword.lower():
+                    profile = p
+                    break
+            if not profile and products:
+                profile = products[0]
         except Exception as e:
-            logger.warning(f"Failed to query MongoDB orbit-avanya collection: {e}")
+            logger.debug(f"Could not load products from company catalog: {e}")
 
-        # Fallback to local JSON if MongoDB fails
+        # 2. Try querying Mongo own_company_profile or company_profiles
+        if not profile:
+            try:
+                db = get_database()
+                if "orbit-avanya" in db.list_collection_names():
+                    profile = db["orbit-avanya"].find_one({"$or": [{"company_slug": slug}, {"company_slug": {"$regex": slug.split("-")[-1], "$options": "i"}}]})
+            except Exception as e:
+                logger.debug(f"Failed to query MongoDB collection: {e}")
+
+        # 3. Fallback to local JSON if present
         if not profile:
             json_path = self.project_root / "private" / "orbit_avanya_detailed_profiles.json"
             if json_path.exists():
@@ -103,35 +124,35 @@ class PitchCompiler:
                     with open(json_path, "r", encoding="utf-8") as f:
                         profiles = json.load(f)
                         for p in profiles:
-                            if p.get("company_slug") == slug:
+                            if p.get("company_slug") == slug or slug.split("-")[-1] in p.get("company_slug", ""):
                                 profile = p
                                 break
                 except Exception as e:
-                    logger.error(f"Failed to read local profiles JSON: {e}")
+                    logger.debug(f"Failed to read local profiles JSON: {e}")
 
         if not profile:
-            # Minimal hardcoded fallback
+            # Dynamic fallback based on company profile
             profile = {
                 "company_slug": slug,
-                "company_name": "Orbit Avanya LLP",
-                "industry_domain": "AI & Analytics",
-                "product_name": "AI Analytics Dashboard",
-                "about_text": "Orbit Avanya LLP delivers AI Analytics Dashboards designed for executive insights and predictive modeling.",
+                "company_name": company_name,
+                "industry_domain": "AI & Enterprise Software",
+                "product_name": f"{company_short} Enterprise Platform",
+                "about_text": f"{company_name} delivers enterprise AI dashboards, cloud integration, and custom workflow automation.",
                 "technology_stack": {
                     "frontend": ["React", "Next.js"],
                     "backend": ["Python", "FastAPI"],
-                    "database": ["PostgreSQL"],
-                    "cloud": ["AWS"]
+                    "database": ["PostgreSQL", "MongoDB"],
+                    "cloud": ["AWS", "Azure"]
                 },
-                "key_features": ["Analytics Dashboard", "Workflow Automation", "API Integration", "AI-driven Insights"],
-                "security_and_compliance": ["ISO 27001 Ready", "Role Based Security", "Audit Logs"]
+                "key_features": full_profile.get("capabilities", ["Analytics Dashboard", "Workflow Automation", "API Integration", "AI-driven Insights"]),
+                "security_and_compliance": ["ISO 27001 Ready", "SOC 2 Type II", "Role Based Security", "Audit Logs"]
             }
 
         if "_id" in profile:
             del profile["_id"]
         return profile
 
-    def compile_teaming_proposal(self, rfp_data: Dict[str, Any], winner_name: str, workshare_pct: float = 15.0) -> Dict[str, Any]:
+    def compile_teaming_proposal(self, rfp_data: dict[str, Any], winner_name: str, workshare_pct: float = 15.0) -> dict[str, Any]:
         """
         Aligns RFP requirements, Winner profile, and Orbit Avanya profile,
         generating a highly detailed structure with all custom B2B proposal details
@@ -331,7 +352,7 @@ class PitchCompiler:
             },
             {
                 "requirement": "Custom Software Development",
-                "prime_role": f"Oversee architectural guidelines and validate requirements.",
+                "prime_role": "Oversee architectural guidelines and validate requirements.",
                 "subcontractor_role": "Develop custom REST APIs, Python predictive analytics code, and Next.js visual dashboard UI components.",
                 "workshare_share_split": "70% Prime / 30% Sub"
             },

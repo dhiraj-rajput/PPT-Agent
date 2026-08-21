@@ -28,10 +28,10 @@ Usage:
 from __future__ import annotations
 
 import json
+import logging
 import re
 import time
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +107,7 @@ class OllamaAIClient:
 
         raw_fallbacks = getattr(_settings, "OLLAMA_MODEL_FALLBACKS", "") or ""
         parsed_fallbacks = [m.strip() for m in raw_fallbacks.split(",") if m.strip()]
-        self.fallback_models: List[str] = parsed_fallbacks or list(self.DEFAULT_FALLBACKS)
+        self.fallback_models: list[str] = parsed_fallbacks or list(self.DEFAULT_FALLBACKS)
 
     def _is_direct_cloud_host(self) -> bool:
         """True when self.host points straight at ollama.com (no local Ollama
@@ -133,7 +133,7 @@ class OllamaAIClient:
         try:
             if not _OLLAMA_AVAILABLE or _ollama_lib is None:
                 return False
-            client_kwargs: Dict[str, Any] = {"timeout": self.timeout}
+            client_kwargs: dict[str, Any] = {"timeout": self.timeout}
             if self.host:
                 client_kwargs["host"] = self.host
             if self.api_key:
@@ -154,8 +154,8 @@ class OllamaAIClient:
 
     def chat_text(
         self,
-        messages: List[Dict[str, str]],
-        model: Optional[str] = None,
+        messages: list[dict[str, str]],
+        model: str | None = None,
         max_retries: int = 3,
         json_mode: bool = False,
         max_tokens: int = 8192,
@@ -176,7 +176,7 @@ class OllamaAIClient:
             RateLimitError:      every model attempted returned a 429.
             AIUnavailableError:  models failed for other reasons.
         """
-        models_to_try: List[str] = []
+        models_to_try: list[str] = []
         primary_model = model or self.model
 
         gemini_api_key = getattr(self._settings, "GEMINI_API_KEY", "")
@@ -210,7 +210,7 @@ class OllamaAIClient:
         if not models_to_try:
             raise AIUnavailableError("No AI providers (Ollama, Gemini, or OpenRouter) are configured/available.")
 
-        last_error: Optional[Exception] = None
+        last_error: Exception | None = None
         saw_rate_limit = False
         all_rate_limited = True
 
@@ -294,11 +294,11 @@ class OllamaAIClient:
 
     def chat_json(
         self,
-        messages: List[Dict[str, str]],
-        model: Optional[str] = None,
+        messages: list[dict[str, str]],
+        model: str | None = None,
         max_retries: int = 3,
         max_tokens: int = 8192,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Same as chat_text, but parses the response as a JSON object.
 
         max_tokens previously had no way to be raised for this call, so every
@@ -314,9 +314,9 @@ class OllamaAIClient:
     # Internals
     # ------------------------------------------------------------------
 
-    def _call_ollama(self, messages: List[Dict[str, str]], model: str, json_mode: bool, max_tokens: int = 8192) -> str:
+    def _call_ollama(self, messages: list[dict[str, str]], model: str, json_mode: bool, max_tokens: int = 8192) -> str:
         model = self._normalize_model_for_host(model)
-        client_kwargs: Dict[str, Any] = {"timeout": self.timeout}
+        client_kwargs: dict[str, Any] = {"timeout": self.timeout}
         if self.host:
             client_kwargs["host"] = self.host
         headers = {}
@@ -324,7 +324,7 @@ class OllamaAIClient:
             headers["Authorization"] = f"Bearer {self.api_key}"
             client_kwargs["headers"] = headers
 
-        chat_kwargs: Dict[str, Any] = {
+        chat_kwargs: dict[str, Any] = {
             "model": model,
             "messages": messages,
             "options": {
@@ -352,7 +352,7 @@ class OllamaAIClient:
             raise ValueError(f"Ollama ({model}) returned an empty response.")
         return str(content)
 
-    def _call_gemini(self, messages: List[Dict[str, str]], json_mode: bool, max_tokens: int = 8192) -> str:
+    def _call_gemini(self, messages: list[dict[str, str]], json_mode: bool, max_tokens: int = 8192) -> str:
         import httpx
         api_key = getattr(self._settings, "GEMINI_API_KEY", "")
         if not api_key:
@@ -391,13 +391,13 @@ class OllamaAIClient:
                         "parts": [{"text": content}]
                     })
 
-            payload: Dict[str, Any] = {
+            payload: dict[str, Any] = {
                 "contents": contents
             }
             if system_instruction:
                 payload["systemInstruction"] = system_instruction
 
-            generation_config: Dict[str, Any] = {
+            generation_config: dict[str, Any] = {
                 "temperature": self.temperature,
                 "maxOutputTokens": max_tokens
             }
@@ -433,7 +433,7 @@ class OllamaAIClient:
             raise RateLimitError(f"All Gemini models rate-limited. Last error: {last_error}")
         raise last_error or ValueError("All Gemini fallback models failed.")
 
-    def _call_openrouter(self, messages: List[Dict[str, str]], json_mode: bool, max_tokens: int = 8192) -> str:
+    def _call_openrouter(self, messages: list[dict[str, str]], json_mode: bool, max_tokens: int = 8192) -> str:
         """Call OpenRouter using its native server-side `models` fallback array
         instead of hand-looping through models client-side.
 
@@ -464,7 +464,7 @@ class OllamaAIClient:
         raw_fallbacks = getattr(self._settings, "OPENROUTER_MODEL_FALLBACKS", "") or ""
         fallback_models = [m.strip() for m in raw_fallbacks.split(",") if m.strip()]
 
-        models_to_try: List[str] = [primary_model]
+        models_to_try: list[str] = [primary_model]
         for m in fallback_models:
             if m not in models_to_try:
                 models_to_try.append(m)
@@ -481,7 +481,7 @@ class OllamaAIClient:
             "X-Title": "OrbitAvanya",
         }
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "model": models_to_try[0],
             "models": models_to_try,
             "messages": messages,
@@ -541,7 +541,7 @@ class OllamaAIClient:
 
         raise last_error or ValueError("OpenRouter request failed.")
 
-    def _parse_json_from_response(self, text: str) -> Dict[str, Any]:
+    def _parse_json_from_response(self, text: str) -> dict[str, Any]:
         """Robustly parse a JSON response from an LLM.
         
         Handles common LLM output quirks:
@@ -730,7 +730,7 @@ class OllamaAIClient:
         return "".join(result)
 
 
-_client_singleton: Optional[OllamaAIClient] = None
+_client_singleton: OllamaAIClient | None = None
 
 
 def get_ai_client() -> OllamaAIClient:

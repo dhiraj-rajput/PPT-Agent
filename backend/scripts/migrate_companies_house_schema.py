@@ -3,14 +3,16 @@ Database Migration Script — Companies House Schema Update
 Applies schema updates (new columns & new tables) idempotently for Companies House integration.
 """
 
-import sys
 import os
+import sys
+
 from sqlalchemy import text
 
 # Ensure backend root is in sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from utils.mysql_client import get_sync_db_session
+
 
 def run_migration():
     print("[MIGRATION] Starting Companies House schema migration...")

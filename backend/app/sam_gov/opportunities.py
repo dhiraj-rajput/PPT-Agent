@@ -7,16 +7,16 @@ Groups and merges solicitation and award notices by solicitation number.
 Downloads RFP documents and winning proposal documents locally.
 """
 
-import logging
 import os
 import re
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
-import requests
+from typing import Any
 
+import requests
 from config.settings import settings
 from utils.helpers import setup_logger
+
 from app.sam_gov.document_parser import DocumentParser
 
 logger = setup_logger(__name__)
@@ -33,7 +33,7 @@ def _generate_minimal_pdf(title: str, text: str) -> bytes:
         b"/F1 14 Tf",
         b"50 730 Td",
         b"16 TL",
-        f"({escaped_title}) Tj T*".encode("utf-8"),
+        f"({escaped_title}) Tj T*".encode(),
         b"/F1 10 Tf",
         b"0 -10 Td",
     ]
@@ -41,7 +41,7 @@ def _generate_minimal_pdf(title: str, text: str) -> bytes:
         escaped_line = line.replace("(", "\\(").replace(")", "\\)")
         chunks = [escaped_line[i:i+80] for i in range(0, len(escaped_line), 80)]
         for chunk in chunks:
-            stream_parts.append(f"({chunk}) Tj T*".encode("utf-8"))
+            stream_parts.append(f"({chunk}) Tj T*".encode())
     stream_parts.append(b"ET")
     stream_bytes = b"\n".join(stream_parts)
     
@@ -49,7 +49,7 @@ def _generate_minimal_pdf(title: str, text: str) -> bytes:
     obj2 = b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n"
     obj3 = b"3 0 obj\n<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> /MediaBox [0 0 612 792] /Contents 5 0 R >>\nendobj\n"
     obj4 = b"4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>\nendobj\n"
-    obj5 = f"5 0 obj\n<< /Length {len(stream_bytes)} >>\nstream\n".encode("utf-8") + stream_bytes + b"\nendstream\nendobj\n"
+    obj5 = f"5 0 obj\n<< /Length {len(stream_bytes)} >>\nstream\n".encode() + stream_bytes + b"\nendstream\nendobj\n"
     
     pdf_header = b"%PDF-1.4\n"
     offset1 = len(pdf_header)
@@ -67,9 +67,9 @@ def _generate_minimal_pdf(title: str, text: str) -> bytes:
         f"{offset3:010d} 00000 n \n"
         f"{offset4:010d} 00000 n \n"
         f"{offset5:010d} 00000 n \n"
-    ).encode("utf-8")
+    ).encode()
     
-    trailer = f"trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n".encode("utf-8")
+    trailer = f"trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n".encode()
     return pdf_header + obj1 + obj2 + obj3 + obj4 + obj5 + xref + trailer
 
 
@@ -243,7 +243,7 @@ class SAMOpportunitiesClient:
     Interacts with the SAM.gov Opportunities API to query RFPs and merge notices.
     """
 
-    def __init__(self, api_key: Optional[str] = None) -> None:
+    def __init__(self, api_key: str | None = None) -> None:
         self.api_key = api_key or settings.SAM_GOV_API_KEY
         if not self.api_key or "your_" in self.api_key or self.api_key == "SAM_GOV_API_KEY":
             self.api_key = None
@@ -258,9 +258,9 @@ class SAMOpportunitiesClient:
         posted_days: int = 90,
         limit: int = 100,
         offset: int = 0,
-        naics_code: Optional[str] = None,
+        naics_code: str | None = None,
         use_mock: bool = False
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Search for contract opportunities on SAM.gov and group/merge them by solicitation number.
         """
@@ -280,7 +280,7 @@ class SAMOpportunitiesClient:
             posted_from = start_date.strftime("%m/%d/%Y")
             posted_to = end_date.strftime("%m/%d/%Y")
 
-            params: Dict[str, Any] = {
+            params: dict[str, Any] = {
                 "api_key": self.api_key,
                 "postedFrom": posted_from,
                 "postedTo": posted_to,
@@ -308,7 +308,7 @@ class SAMOpportunitiesClient:
         merged_opportunities = self._merge_notices_by_solicitation(raw_notices)
         return merged_opportunities
 
-    def _filter_mock_notices(self, query: str, naics_code: Optional[str] = None) -> List[Dict[str, Any]]:
+    def _filter_mock_notices(self, query: str, naics_code: str | None = None) -> list[dict[str, Any]]:
         """Filters mock notices by query and NAICS code."""
         filtered = []
         q_lower = query.lower() if query else ""
@@ -327,11 +327,11 @@ class SAMOpportunitiesClient:
         # If no local mock items matched, return all mock notices for testing
         return filtered if filtered else MOCK_NOTICES
 
-    def _merge_notices_by_solicitation(self, notices: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _merge_notices_by_solicitation(self, notices: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """
         Groups notices by solicitationNumber and merges them.
         """
-        groups: Dict[str, List[Dict[str, Any]]] = {}
+        groups: dict[str, list[dict[str, Any]]] = {}
         for notice in notices:
             sol_num = notice.get("solicitationNumber") or notice.get("solnum") or ""
             sol_num = sol_num.strip()
@@ -373,7 +373,7 @@ class SAMOpportunitiesClient:
 
         return merged_list
 
-    def structure_rfp_profile(self, opp: Dict[str, Any]) -> Dict[str, Any]:
+    def structure_rfp_profile(self, opp: dict[str, Any]) -> dict[str, Any]:
         """
         Structures a merged opportunity JSON into a clean, normalized RFP dict.
         Downloads RFP and award documents to local directories and parses their contents.
@@ -492,7 +492,7 @@ class SAMOpportunitiesClient:
                 logger.warning(f"Failed to query related notices for {sol_num}: {e}")
 
         # Prioritize key documents (e.g. PWS, solicitation, spreadsheets, attachments) and cap at 20 files max
-        def prioritize_and_cap_links(links: List[str]) -> List[str]:
+        def prioritize_and_cap_links(links: list[str]) -> list[str]:
             primary = []
             secondary = []
             for link in links:

@@ -30,9 +30,10 @@ Usage:
 from __future__ import annotations
 
 import logging
-from contextlib import asynccontextmanager, contextmanager
-from typing import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Generator
+from contextlib import contextmanager
 
+from config.settings import settings
 from sqlalchemy import create_engine, text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -40,8 +41,6 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
-
-from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +51,6 @@ logger = logging.getLogger(__name__)
 
 class Base(DeclarativeBase):
     """SQLAlchemy ORM declarative base shared by all MySQL table models."""
-    pass
 
 
 # ---------------------------------------------------------------------------

@@ -10,25 +10,35 @@ import asyncio
 import json
 import logging
 import time
-from pathlib import Path
 from datetime import datetime
-from typing import Optional, Any
+from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
-
-from utils.db_client import get_db_session, get_sync_db_session, _mysql_available
-from app.core.auth import get_current_user
+from models.sql_models import (
+    DraftRequest as SQL_DraftRequest,
+)
+from models.sql_models import (
+    EmailLog as SQL_EmailLog,
+)
+from models.sql_models import (
+    Lead as SQL_Lead,
+)
 from models.sql_models import (
     Report as SQL_Report,
-    DraftRequest as SQL_DraftRequest,
-    Tender as SQL_Tender,
-    EmailLog as SQL_EmailLog,
-    Lead as SQL_Lead,
+)
+from models.sql_models import (
     TaskStatus as SQL_TaskStatus,
 )
-from sqlalchemy import select, update, insert, delete, func, or_, and_
+from models.sql_models import (
+    Tender as SQL_Tender,
+)
+from pydantic import BaseModel
+from sqlalchemy import insert, or_, select, update
+from utils.db_client import _mysql_available, get_db_session, get_sync_db_session
+
+from app.core.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -39,7 +49,7 @@ LAST_SYNC_TIME = 0.0
 SYNC_COOLDOWN = 60.0
 
 
-def _iso(dt: Any) -> Optional[str]:
+def _iso(dt: Any) -> str | None:
     return dt.isoformat() if dt and hasattr(dt, "isoformat") else None
 
 
@@ -281,8 +291,8 @@ _format_report_dict = _format_report
 
 @router.get("")
 async def get_reports(
-    source: Optional[str] = None,
-    mode: Optional[str] = None,
+    source: str | None = None,
+    mode: str | None = None,
     current_user: dict = Depends(get_current_user)
 ):
     """Retrieve all reports synced with MySQL sorted by date descending with optional source/mode filters."""
@@ -348,7 +358,7 @@ class SendReportEmailBody(BaseModel):
     to_email: str
     subject: str
     body: str
-    company_name: Optional[str] = None
+    company_name: str | None = None
 
 
 @router.post("/send-email")
@@ -376,7 +386,7 @@ async def send_report_email(
             attachments=attachments_list
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {e!s}")
 
     # Update report status to Sent in MySQL reports table
     if _mysql_available:

@@ -17,9 +17,10 @@ Usage:
     ...
 """
 
-from typing import Any, Union
+from typing import Any
+
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field, field_validator, AliasChoices
 
 
 class AppSettings(BaseSettings):
@@ -416,7 +417,7 @@ class AppSettings(BaseSettings):
     )
     PORT: int = Field(default=5050, description="Port to run the API server on.")
     ENV: str = Field(default="dev", description="Environment mode: dev | prod.")
-    CORS_ORIGINS: Union[list[str], str] = Field(
+    CORS_ORIGINS: list[str] | str = Field(
         default=[
             "http://localhost:5173",
             "http://127.0.0.1:5173",

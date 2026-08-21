@@ -4,16 +4,17 @@ app/routes/sic.py
 UK SIC 2007 classification codes endpoints for Companies House integration.
 """
 
-from fastapi import APIRouter, Depends, Query, UploadFile, File, HTTPException
-from typing import Optional, List
-from pydantic import BaseModel
-import json
 import csv
 import io
-from utils.db_client import get_db_session, get_sync_db_session, _mysql_available
-from app.core.auth import get_current_user
+import json
+
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from models.sql_models import SicCode as SQL_SicCode
-from sqlalchemy import select, update, insert, delete, func, or_, and_
+from pydantic import BaseModel
+from sqlalchemy import and_, func, insert, or_, select, update
+from utils.db_client import _mysql_available, get_db_session, get_sync_db_session
+
+from app.core.auth import get_current_user
 
 router = APIRouter(prefix="/sic", tags=["sic"])
 
@@ -49,7 +50,7 @@ def ensure_sic_populated():
 
 @router.get("")
 async def list_sic_codes(
-    search: Optional[str] = None,
+    search: str | None = None,
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=100),
     current_user: dict = Depends(get_current_user)
@@ -105,7 +106,7 @@ async def list_sic_codes(
 class SicCodeCreateBody(BaseModel):
     code: str
     title: str
-    description: Optional[str] = ""
+    description: str | None = ""
 
 
 @router.post("")

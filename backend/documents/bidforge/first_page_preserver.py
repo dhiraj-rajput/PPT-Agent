@@ -33,9 +33,10 @@ from __future__ import annotations
 import re
 import shutil
 import tempfile
+from collections.abc import Iterator
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any
 
 from utils.helpers import setup_logger
 
@@ -115,7 +116,7 @@ def _looks_like_body_start_heading(text: str) -> bool:
     return any(norm == pat or norm.startswith(pat) for pat in _BODY_START_HEADING_PATTERNS)
 
 
-def find_first_page_split_index(doc) -> Optional[int]:
+def find_first_page_split_index(doc) -> int | None:
     """Return the index (into doc.element.body's <w:p>/<w:tbl> children) of
     the paragraph where the template's true cover/front-matter ends, or None
     if the whole template should be treated as front matter (no signal
@@ -134,7 +135,7 @@ def find_first_page_split_index(doc) -> Optional[int]:
          Executive Summary) to be preserved wholesale.
     """
     body = doc.element.body
-    candidates: List[int] = []
+    candidates: list[int] = []
     for idx, child in enumerate(body):
         tag = child.tag.rsplit("}", 1)[-1]
         if tag != "p":
@@ -171,14 +172,14 @@ def find_first_page_split_index(doc) -> Optional[int]:
     return min(candidates)
 
 
-def detect_preserved_headings(doc, split_idx: Optional[int]) -> List[str]:
+def detect_preserved_headings(doc, split_idx: int | None) -> list[str]:
     """Returns normalized heading text for every heading-styled paragraph
     that WILL be kept in the preserved region (index <= split_idx, or the
     whole document if split_idx is None). Used by document_generator.py to
     tell the section-writer prompt which section titles already exist in the
     template so it doesn't author a second copy of them."""
     body = doc.element.body
-    headings: List[str] = []
+    headings: list[str] = []
     for idx, child in enumerate(body):
         if split_idx is not None and idx > split_idx:
             break
@@ -232,14 +233,14 @@ _DATE_PATTERNS = [
 ]
 
 
-def _safe_date(year: int, month: int, day: int) -> Optional[date]:
+def _safe_date(year: int, month: int, day: int) -> date | None:
     try:
         return date(year, month, day)
     except ValueError:
         return None
 
 
-def _parse_matched_date(match: "re.Match", pattern_index: int) -> Optional[date]:
+def _parse_matched_date(match: re.Match, pattern_index: int) -> date | None:
     groups = match.groups()
     try:
         if pattern_index == 0:  # Month D, YYYY
@@ -257,7 +258,7 @@ def _parse_matched_date(match: "re.Match", pattern_index: int) -> Optional[date]
     return None
 
 
-def _format_like(pattern_index: int, match: "re.Match", today: date) -> str:
+def _format_like(pattern_index: int, match: re.Match, today: date) -> str:
     groups = match.groups()
     if pattern_index == 0:  # "Month D, YYYY" (keep month name + optional ordinal + comma style)
         month_name = _MONTHS[today.month - 1]
@@ -285,7 +286,7 @@ def _update_stale_dates_in_text(text: str, today: date) -> str:
         return text
 
     for pattern_index, pattern in enumerate(_DATE_PATTERNS):
-        def _replacer(match: "re.Match") -> str:
+        def _replacer(match: re.Match) -> str:
             parsed = _parse_matched_date(match, pattern_index)
             if parsed is None or parsed == today:
                 return match.group(0)
@@ -300,7 +301,7 @@ _PHONE_RE = re.compile(r"(?<!\d)(\+?\d[\d\-\s().]{7,}\d)(?!\d)")
 _WEBSITE_RE = re.compile(r"\b(?:https?://)?(?:www\.)?[A-Za-z0-9\-]+\.(?:com|net|org|io|co|tech|in)\b(?:/[^\s]*)?", re.IGNORECASE)
 
 
-def _update_company_identity_in_preserved_region(doc, split_idx: Optional[int], profile: Dict[str, Any]) -> int:
+def _update_company_identity_in_preserved_region(doc, split_idx: int | None, profile: dict[str, Any]) -> int:
     """Same one-run-at-a-time safety pattern as _update_dates_in_preserved_region
     above, but for stale bidder-identity fields (email, phone, website) on the
     preserved cover/contact page instead of dates.
@@ -374,7 +375,7 @@ def _update_company_identity_in_preserved_region(doc, split_idx: Optional[int], 
     return changed
 
 
-def _update_dates_in_preserved_region(doc, split_idx: Optional[int], today: Optional[date] = None) -> int:
+def _update_dates_in_preserved_region(doc, split_idx: int | None, today: date | None = None) -> int:
     """Walk every paragraph in the preserved first-page region and patch
     stale dates in place, run by run. Only touches a run when the *entire*
     matched date lives inside that single run's text, so formatting/runs that
@@ -433,7 +434,7 @@ def _ensure_required_styles(doc) -> None:
 # Public entry point
 # ---------------------------------------------------------------------------
 
-def get_preserved_headings(template_path: str) -> List[str]:
+def get_preserved_headings(template_path: str) -> list[str]:
     """Preview-only helper: opens the template read-only and returns the
     heading titles that would be preserved verbatim, WITHOUT writing
     anything. document_generator.py calls this before running any section
@@ -451,8 +452,8 @@ def get_preserved_headings(template_path: str) -> List[str]:
 
 
 def dedupe_sections_against_preserved(
-    sections: List[Dict[str, Any]], preserved_headings: List[str]
-) -> List[Dict[str, Any]]:
+    sections: list[dict[str, Any]], preserved_headings: list[str]
+) -> list[dict[str, Any]]:
     """Drops any outline/generated section whose title normalizes to the same
     thing as a heading already present in the preserved template region.
     Belt-and-suspenders alongside telling the LLM up front -- if the model
@@ -473,10 +474,10 @@ def dedupe_sections_against_preserved(
 
 def build_document_with_preserved_first_page(
     template_path: str,
-    sections: List[Dict[str, Any]],
-    brand_cfg: Dict[str, Any],
+    sections: list[dict[str, Any]],
+    brand_cfg: dict[str, Any],
     output_docx_path: str,
-    company_profile: Optional[Dict[str, Any]] = None,
+    company_profile: dict[str, Any] | None = None,
 ) -> str:
     """
     Build the final proposal .docx by:
@@ -494,9 +495,10 @@ def build_document_with_preserved_first_page(
 
     Returns the path to the generated .docx.
     """
-    from docx import Document
     import importlib
     import sys
+
+    from docx import Document
     try:
         from backend.scripts import proposal_generator as pg
     except ImportError:

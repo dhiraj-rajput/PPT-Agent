@@ -9,20 +9,20 @@ Modules:
     compactor       — Rule-based compactor that produces the final OptimizedCompanyProfile
 """
 
+from pipeline.models.compactor import BusinessIntelligenceCompactor
 from pipeline.models.company_schema import (
     CompanyIntelligence,
-    CrawlMetadata,
     CompanyMongoRecord,
+    CrawlMetadata,
     OptimizedCompanyProfile,
 )
 from pipeline.models.normalizer import normalize_company_intelligence
-from pipeline.models.compactor import BusinessIntelligenceCompactor
 
 __all__ = [
+    "BusinessIntelligenceCompactor",
     "CompanyIntelligence",
-    "CrawlMetadata",
     "CompanyMongoRecord",
+    "CrawlMetadata",
     "OptimizedCompanyProfile",
     "normalize_company_intelligence",
-    "BusinessIntelligenceCompactor",
 ]

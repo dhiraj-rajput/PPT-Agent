@@ -1,37 +1,58 @@
 """
 app/core/company_catalog.py
 ----------------------------
-Loads and indexes the authoritative OrbitAvanya services and add-ons catalog.
+Loads and indexes the authoritative services and add-ons catalog for whichever
+company this deployment represents (see documents/company_profile.py).
 
 Read order:
-  1. MongoDB collection `company_catalog` (document _id="orbitavanya") — the
-     live source of truth once `scripts/import_company_catalog.py` has been run.
-  2. private/OrbitAvanya_Services_ADD.xlsx, if present, as a one-time seed source.
-  3. A tiny hardcoded stub, only so the pipeline never hard-fails.
+  1. MongoDB collection `company_catalog` (document _id=<company id, e.g.
+     "orbitavanya" derived from the configured company name, or
+     COMPANY_CATALOG_ID if set explicitly>) — the live source of truth once
+     `scripts/import_company_catalog.py` has been run.
+  2. private/<CompanyShortName>_Services_ADD.xlsx (env COMPANY_CATALOG_XLSX
+     overrides the filename), if present, as a one-time seed source.
+  3. A tiny generic hardcoded stub, only so the pipeline never hard-fails.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-EXCEL_PATH = PROJECT_ROOT / "private" / "OrbitAvanya_Services_ADD.xlsx"
 MONGO_COLLECTION = "company_catalog"
-MONGO_DOC_ID = "orbitavanya"
-
-_cached_catalog: Optional[Dict[str, Any]] = None
 
 
-def _load_from_mongo() -> Optional[Dict[str, Any]]:
+def _excel_path() -> Path:
+    override = os.environ.get("COMPANY_CATALOG_XLSX")
+    if override:
+        p = Path(override)
+        return p if p.is_absolute() else PROJECT_ROOT / p
+    from documents.company_profile import get_company_short_name
+    short = get_company_short_name().replace(" ", "") or "Company"
+    return PROJECT_ROOT / "private" / f"{short}_Services_ADD.xlsx"
+
+
+def _mongo_doc_id() -> str:
+    if os.environ.get("COMPANY_CATALOG_ID"):
+        return os.environ["COMPANY_CATALOG_ID"]
+    from documents.company_profile import get_company_id
+    return get_company_id()
+
+
+_cached_catalog: dict[str, Any] | None = None
+
+
+def _load_from_mongo() -> dict[str, Any] | None:
     try:
         from utils.db_client import get_collection
-        doc = get_collection(MONGO_COLLECTION).find_one({"_id": MONGO_DOC_ID})
+        doc = get_collection(MONGO_COLLECTION).find_one({"_id": _mongo_doc_id()})
         if doc and doc.get("services"):
-            categories: Dict[str, List[Dict[str, Any]]] = {}
+            categories: dict[str, list[dict[str, Any]]] = {}
             for item in doc["services"]:
                 categories.setdefault(item.get("category", "General"), []).append(item)
             logger.info(
@@ -48,7 +69,7 @@ def _load_from_mongo() -> Optional[Dict[str, Any]]:
     return None
 
 
-def _parse_excel_workbook(path: Path) -> Optional[Dict[str, Any]]:
+def _parse_excel_workbook(path: Path) -> dict[str, Any] | None:
     """Parses both sheets ('Services' and 'Premium Enterprise Add-ons') into the
     same shape as _load_from_mongo(). Shared by the fallback path here and by
     scripts/import_company_catalog.py when seeding MongoDB."""
@@ -58,9 +79,9 @@ def _parse_excel_workbook(path: Path) -> Optional[Dict[str, Any]]:
         import openpyxl
         wb = openpyxl.load_workbook(str(path), data_only=True)
 
-        services: List[Dict[str, Any]] = []
-        addons: List[Dict[str, Any]] = []
-        categories: Dict[str, List[Dict[str, Any]]] = {}
+        services: list[dict[str, Any]] = []
+        addons: list[dict[str, Any]] = []
+        categories: dict[str, list[dict[str, Any]]] = {}
 
         if "Services" in wb.sheetnames:
             ws = wb["Services"]
@@ -102,7 +123,7 @@ def _parse_excel_workbook(path: Path) -> Optional[Dict[str, Any]]:
         return None
 
 
-def load_services_catalog(force_refresh: bool = False) -> Dict[str, Any]:
+def load_services_catalog(force_refresh: bool = False) -> dict[str, Any]:
     """
     Loads and caches the company catalog.
     
@@ -114,18 +135,20 @@ def load_services_catalog(force_refresh: bool = False) -> Dict[str, Any]:
     if _cached_catalog is not None and not force_refresh:
         return _cached_catalog
 
-    catalog = _load_from_mongo() or _parse_excel_workbook(EXCEL_PATH)
+    catalog = _load_from_mongo() or _parse_excel_workbook(_excel_path())
 
     if not catalog or not catalog.get("services"):
         # Last-resort stub so the pipeline never hard-fails — this should not be
         # reached once the MongoDB catalog is seeded via the import script.
+        # Generic on purpose: real catalog data should come from Mongo/Excel,
+        # not from a hardcoded product line baked into this file.
         stub_services = [
             {"id": 1, "naics_code": "541511", "category": "AI Solutions", "service_name": "AI Chatbot & RAG", "description": "Enterprise RAG & Conversational AI"},
             {"id": 2, "naics_code": "541511", "category": "Custom Software", "service_name": "ERP & CRM Development", "description": "Enterprise ERP, CRM & HRMS Systems"},
             {"id": 3, "naics_code": "541511", "category": "Web Development", "service_name": "Government Portal", "description": "Secure Citizen Portals & CMS"},
             {"id": 4, "naics_code": "541511", "category": "Mobile Apps", "service_name": "Flutter & Native Apps", "description": "iOS & Android Cross-Platform Applications"},
         ]
-        categories: Dict[str, List[Dict[str, Any]]] = {}
+        categories: dict[str, list[dict[str, Any]]] = {}
         for item in stub_services:
             categories.setdefault(item["category"], []).append(item)
         catalog = {"services": stub_services, "addons": [], "categories": categories}
@@ -136,20 +159,24 @@ def load_services_catalog(force_refresh: bool = False) -> Dict[str, Any]:
     return _cached_catalog
 
 
-def get_catalog_products() -> List[Dict[str, Any]]:
+def get_catalog_products() -> list[dict[str, Any]]:
     """Returns a list of structured product profiles matching the format expected by generators."""
+    from documents.company_profile import get_company_name, get_company_short_name
+    company_name = get_company_name()
+    company_short = get_company_short_name()
+
     catalog = load_services_catalog()
-    products: List[Dict[str, Any]] = []
+    products: list[dict[str, Any]] = []
 
     for cat_name, cat_items in catalog["categories"].items():
         features = [item["service_name"] for item in cat_items]
         descriptions = " ".join(item["description"] for item in cat_items if item["description"])
         
         products.append({
-            "product_name": f"OrbitAvanya {cat_name}",
-            "company_name": "OrbitAvanya Tech LLP",
+            "product_name": f"{company_short} {cat_name}",
+            "company_name": company_name,
             "industry_domain": cat_name,
-            "about_text": f"OrbitAvanya's {cat_name} suite provides: {descriptions[:300]}...",
+            "about_text": f"{company_short}'s {cat_name} suite provides: {descriptions[:300]}...",
             "key_features": features,
             "technology_stack": {
                 "frontend": ["React", "Next.js", "Flutter"],
@@ -169,7 +196,7 @@ def get_catalog_summary_for_prompt(max_services: int = 40, max_addons: int = 20)
     prompt — grouped by category so the AI can pick genuinely relevant services
     for the solicitation at hand instead of inventing capabilities."""
     catalog = load_services_catalog()
-    lines: List[str] = []
+    lines: list[str] = []
     count = 0
     for category, items in catalog["categories"].items():
         if count >= max_services:

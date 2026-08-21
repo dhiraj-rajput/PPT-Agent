@@ -10,8 +10,9 @@ by the global AI_MODE toggle) instead of re-implementing PDF parsing here.
 from __future__ import annotations
 
 import shutil
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any
 
 from utils.helpers import setup_logger
 
@@ -21,8 +22,8 @@ logger = setup_logger(__name__)
 def parse_uploaded_rfp(
     rfp_file_paths: str,
     solicitation_number: str = "",
-    progress_callback: Optional[Callable[[int, str], None]] = None,
-) -> Dict[str, Any]:
+    progress_callback: Callable[[int, str], None] | None = None,
+) -> dict[str, Any]:
     """
     Parses one or more manually-uploaded RFP documents (PDF, or .txt/.docx) into the
     same structured shape RFPParser produces for SAM.gov solicitations, so
@@ -81,7 +82,13 @@ def _extract_docx_text(path: Path) -> str:
     try:
         import docx  # python-docx
         d = docx.Document(str(path))
-        return "\n".join(p.text for p in d.paragraphs)
+        lines = [p.text for p in d.paragraphs if p.text]
+        for table in d.tables:
+            for row in table.rows:
+                row_cells = [c.text.strip() for c in row.cells if c.text.strip()]
+                if row_cells:
+                    lines.append(" | ".join(row_cells))
+        return "\n".join(lines)
     except Exception as exc:
         logger.warning(f"[BidForge:Parse] Failed to extract text from docx {path.name}: {exc}")
         return ""

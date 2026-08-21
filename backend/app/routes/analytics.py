@@ -6,24 +6,39 @@ Analytics aggregates and dashboards — using MySQL.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List, Optional
 import logging
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime, timedelta
+from typing import Any
 
-from app.core.auth import get_current_user
-from utils.db_client import get_db_session, _mysql_available
+from fastapi import APIRouter, Depends, HTTPException
+from models.sql_models import (
+    Campaign as SQL_Campaign,
+)
 from models.sql_models import (
     Company as SQL_Company,
-    Person as SQL_Person,
+)
+from models.sql_models import (
     Lead as SQL_Lead,
-    Report as SQL_Report,
+)
+from models.sql_models import (
     Meeting as SQL_Meeting,
+)
+from models.sql_models import (
+    Person as SQL_Person,
+)
+from models.sql_models import (
+    Report as SQL_Report,
+)
+from models.sql_models import (
     Tender as SQL_Tender,
-    Campaign as SQL_Campaign,
+)
+from models.sql_models import (
     WebsiteEvent as SQL_WebsiteEvent,
 )
-from sqlalchemy import select, func, and_, or_, cast, String
+from sqlalchemy import String, cast, func, select
+from utils.db_client import _mysql_available, get_db_session
+
+from app.core.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/analytics", tags=["analytics"])
@@ -52,7 +67,7 @@ def _calculate_rates(stats: dict) -> dict:
 
 @router.get("/dashboard")
 async def get_dashboard_data(
-    source: Optional[str] = None,
+    source: str | None = None,
     current_user: dict = Depends(get_current_user)
 ):
     """Fetch aggregated real metrics for the dashboard from MySQL with optional source filter."""
@@ -81,7 +96,6 @@ async def get_dashboard_data(
     seven_days_ago = now - timedelta(days=7)
     fourteen_days_ago = now - timedelta(days=14)
 
-    import asyncio
 
     if _mysql_available:
         try:
@@ -423,7 +437,7 @@ async def get_weekly_trends(current_user: dict = Depends(get_current_user)):
                     res_leads = await db.execute(stmt_leads)
                     leads = res_leads.all()
 
-                    def bump(dt: Optional[datetime], field: str):
+                    def bump(dt: datetime | None, field: str):
                         if not dt:
                             return
                         key = dt.isoformat()[:10]
@@ -498,9 +512,9 @@ async def get_people_summary(current_user: dict = Depends(get_current_user)):
     by_status: dict = {}
     top_country: str = ""
     top_seniority: str = ""
-    by_country: List[Dict[str, Any]] = []
-    by_seniority: List[Dict[str, Any]] = []
-    by_source: List[Dict[str, Any]] = []
+    by_country: list[dict[str, Any]] = []
+    by_seniority: list[dict[str, Any]] = []
+    by_source: list[dict[str, Any]] = []
 
     if _mysql_available:
         try:
@@ -566,9 +580,9 @@ async def get_companies_summary(current_user: dict = Depends(get_current_user)):
     by_status: dict = {}
     top_country: str = ""
     top_naics: str = ""
-    by_country: List[Dict[str, Any]] = []
-    by_naics: List[Dict[str, Any]] = []
-    by_size: List[Dict[str, Any]] = []
+    by_country: list[dict[str, Any]] = []
+    by_naics: list[dict[str, Any]] = []
+    by_size: list[dict[str, Any]] = []
 
     if _mysql_available:
         try:

@@ -7,29 +7,35 @@ Tenders API — SAM.gov Opportunities v2 integration with MySQL cache.
 from __future__ import annotations
 
 import asyncio
-import logging
-import re
-import httpx
 import json
-from datetime import datetime, timezone, timedelta
-from typing import Optional, Any
-from pathlib import Path
-
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
-from fastapi.responses import FileResponse
-
+import logging
 import os
-from utils.db_client import get_db_session, get_sync_db_session, _mysql_available
+import re
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any
+
+import httpx
 from config.settings import settings
-from app.core.auth import get_current_user
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from models.sql_models import (
-    Tender as SQL_Tender,
     DraftRequest as SQL_DraftRequest,
-    SystemSettings as SQL_SystemSettings,
-    User as SQLUser,
+)
+from models.sql_models import (
     Integration as SQL_Integration,
 )
-from sqlalchemy import select, update, insert, delete, func, or_, and_
+from models.sql_models import (
+    SystemSettings as SQL_SystemSettings,
+)
+from models.sql_models import (
+    Tender as SQL_Tender,
+)
+from sqlalchemy import and_, func, or_, select, update
+from utils.db_client import _mysql_available, get_db_session, get_sync_db_session
+from utils.encryption import decrypt_data
+
+from app.core.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/tenders", tags=["tenders"])
@@ -360,13 +366,13 @@ async def get_tenders_meta(current_user: dict = Depends(get_current_user)):
 
 @router.get("")
 async def get_tenders(
-    q: Optional[str] = None,
-    naics: Optional[str] = None,
-    set_aside: Optional[str] = None,
-    status: Optional[str] = None,
-    urgency: Optional[str] = None,
-    source: Optional[str] = None,
-    has_award: Optional[bool] = None,
+    q: str | None = None,
+    naics: str | None = None,
+    set_aside: str | None = None,
+    status: str | None = None,
+    urgency: str | None = None,
+    source: str | None = None,
+    has_award: bool | None = None,
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     current_user: dict = Depends(get_current_user),
@@ -458,7 +464,7 @@ async def get_tenders(
     }
 
 
-async def _get_sam_api_key(user_id: Optional[int] = None) -> str:
+async def _get_sam_api_key(user_id: int | None = None) -> str:
     """Retrieve SAM.gov API key from user integration, env, or settings."""
     if user_id and _mysql_available:
         try:
@@ -487,7 +493,7 @@ async def _get_sam_api_key(user_id: Optional[int] = None) -> str:
     return ""
 
 
-async def _get_companies_house_api_key(user_id: Optional[int] = None) -> str:
+async def _get_companies_house_api_key(user_id: int | None = None) -> str:
     """Retrieve Companies House API key from user integration, env, or settings."""
     if user_id and _mysql_available:
         try:
@@ -532,8 +538,8 @@ async def sync_tenders_from_sam(
     api_source = (payload.get("api_source") or payload.get("source") or "sam_gov").lower()
     if api_source in ("companies_house_uk", "companies_house", "ch"):
         ch_key = await _get_companies_house_api_key(uid)
-        from app.companies_house.opportunities import CompaniesHouseTendersClient
         from app.companies_house.ch_client import CompaniesHouseClient
+        from app.companies_house.opportunities import CompaniesHouseTendersClient
 
         ch_client_obj = CompaniesHouseClient(api_key=ch_key)
         tenders_client = CompaniesHouseTendersClient(ch_client=ch_client_obj)
@@ -1301,7 +1307,7 @@ def ensure_rfp_downloaded(notice_id: str, solicitation_number: str) -> None:
             logger.error(f"[Tenders] Error downloading RFP documents: {e}")
 
 
-def _ensure_ch_rfp_downloaded(solicitation_number: str, raw_ch_data: Optional[dict], rfp_docs_dir: str) -> None:
+def _ensure_ch_rfp_downloaded(solicitation_number: str, raw_ch_data: Any | None, rfp_docs_dir: str) -> None:
     """
     Download the real UK Find a Tender / Companies House documents for a
     tender, into the SAME rfp_docs directory layout used for SAM.gov, so the

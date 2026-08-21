@@ -8,28 +8,32 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
-from typing import List, Optional, Any
+from datetime import datetime
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from pydantic import BaseModel, Field
-
-from app.core.auth import get_current_user
-from app.core.mailer import send_meeting_invite_email, send_meeting_cancelled_email
-from app.core.video_rooms import create_video_room
-from utils.db_client import get_db_session, _mysql_available
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from models.sql_models import (
     Meeting as SQL_Meeting,
-    User as SQLUser,
+)
+from models.sql_models import (
     Notification as SQL_Notification,
 )
-from sqlalchemy import select, insert, update, delete
+from models.sql_models import (
+    User as SQLUser,
+)
+from pydantic import BaseModel, Field
+from sqlalchemy import select, update
+from utils.db_client import _mysql_available, get_db_session
+
+from app.core.auth import get_current_user
+from app.core.mailer import send_meeting_cancelled_email, send_meeting_invite_email
+from app.core.video_rooms import create_video_room
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/meetings", tags=["meetings"])
 
 
-def _iso(dt: Any) -> Optional[str]:
+def _iso(dt: Any) -> str | None:
     return dt.isoformat() if dt and hasattr(dt, "isoformat") else None
 
 
@@ -66,7 +70,7 @@ def _to_public_meeting(m: SQL_Meeting) -> dict:
     }
 
 
-async def _resolve_attendees(raw_attendees: List[dict]) -> List[dict]:
+async def _resolve_attendees(raw_attendees: list[dict]) -> list[dict]:
     """Normalize the mixed user-id / email attendees list (batch query) from MySQL."""
     if not raw_attendees:
         return []
@@ -109,7 +113,7 @@ async def _resolve_attendees(raw_attendees: List[dict]) -> List[dict]:
     return list(by_email.values())
 
 
-async def _push_notifications_async(user_ids: List[str], notif_type: str, title: str, message: str, link: str, related_id: str) -> None:
+async def _push_notifications_async(user_ids: list[str], notif_type: str, title: str, message: str, link: str, related_id: str) -> None:
     if not _mysql_available:
         return
     try:
@@ -135,20 +139,20 @@ async def _push_notifications_async(user_ids: List[str], notif_type: str, title:
 
 
 class AttendeeInput(BaseModel):
-    userId: Optional[str] = None
-    email: Optional[str] = None
-    name: Optional[str] = ""
+    userId: str | None = None
+    email: str | None = None
+    name: str | None = ""
 
 
 class CreateMeetingBody(BaseModel):
     title: str
-    with_: Optional[str] = None
+    with_: str | None = None
     date: str
     time: str
-    type: Optional[str] = "Video Call"
-    location: Optional[str] = ""
-    provider: Optional[str] = "jitsi"
-    attendees: Optional[List[AttendeeInput]] = Field(default_factory=list)
+    type: str | None = "Video Call"
+    location: str | None = ""
+    provider: str | None = "jitsi"
+    attendees: list[AttendeeInput] | None = Field(default_factory=list)
 
     class Config:
         populate_by_name = True

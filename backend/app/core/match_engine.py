@@ -9,7 +9,7 @@ against OrbitAvanya_Services_ADD.xlsx services and add-ons.
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Optional
+
 from app.core.company_catalog import load_services_catalog
 
 

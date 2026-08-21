@@ -16,17 +16,17 @@ import re
 import secrets
 from datetime import datetime, timezone
 from enum import Enum
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
 import bcrypt
+from fastapi import APIRouter, Depends, HTTPException
+from models.sql_models import User as SQLUser
 from pydantic import BaseModel
-from typing import Optional, Any
+from sqlalchemy import delete, insert, select, update
+from utils.db_client import _mysql_available, get_db_session
 
 from app.core.auth import get_current_user, require_admin
 from app.core.mailer import send_invite_email
-from utils.db_client import get_db_session, _mysql_available
-from models.sql_models import User as SQLUser
-from sqlalchemy import select, insert, update, delete
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -43,7 +43,7 @@ class ValidRoles(str, Enum):
     VIEWER = "Viewer"
 
 
-def _to_public_user(u: Optional[dict]) -> dict:
+def _to_public_user(u: dict | None) -> dict:
     if not u:
         return {}
     uid = u.get("_id") or u.get("id")
@@ -94,9 +94,9 @@ async def list_users(current_user: dict = Depends(get_current_user)):
 
 
 class InviteBody(BaseModel):
-    name: Optional[str] = None
+    name: str | None = None
     email: str
-    role: Optional[ValidRoles] = ValidRoles.TEAM_MEMBER
+    role: ValidRoles | None = ValidRoles.TEAM_MEMBER
 
 
 @router.post("/invite", status_code=201)
@@ -276,6 +276,7 @@ async def resend_invite(
         raise HTTPException(400, "Invalid user ID.")
 
     user_dict = {}
+    temp_password = secrets.token_urlsafe(9)
     if _mysql_available:
         try:
             async for db in get_db_session():
@@ -285,7 +286,6 @@ async def resend_invite(
                 if not user:
                     raise HTTPException(404, "User not found.")
 
-                temp_password = secrets.token_urlsafe(9)
                 pw_hash = await asyncio.to_thread(_hash_pw_sync, temp_password)
 
                 await db.execute(

@@ -23,18 +23,17 @@ import re
 from urllib.parse import urlparse
 
 from config.settings import settings
-from pipeline.linkedin.constants import (
-    LINKEDIN_BASE_URL,
-    LINKEDIN_COMPANY_BASE_URL,
-    TAVILY_LINKEDIN_SEARCH_QUERY_TEMPLATE,
-    TAVILY_MAX_SEARCH_RESULTS,
-    build_company_page_url,
-)
 from utils.helpers import (
     extract_company_slug_from_url,
     is_valid_url,
     normalize_linkedin_company_url,
     setup_logger,
+)
+
+from pipeline.linkedin.constants import (
+    TAVILY_LINKEDIN_SEARCH_QUERY_TEMPLATE,
+    TAVILY_MAX_SEARCH_RESULTS,
+    build_company_page_url,
 )
 
 logger = setup_logger(__name__)

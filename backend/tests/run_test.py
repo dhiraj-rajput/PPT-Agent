@@ -36,11 +36,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from config.settings import settings
-from pipeline.linkedin import scrape_company, LinkedInStorage, LinkedInCompanyData
-from pipeline.linkedin.data_cleaner import DataCleaner
+from pipeline.linkedin import LinkedInCompanyData, LinkedInStorage, scrape_company
 from pipeline.linkedin.bi_extractor import BIExtractor
-from utils.db_client import get_database, ensure_indexes, close_connection
-from utils.helpers import safe_json_dumps, setup_logger
+from pipeline.linkedin.data_cleaner import DataCleaner
+from utils.db_client import close_connection, ensure_indexes, get_database
+from utils.helpers import setup_logger
 
 logger = setup_logger(__name__)
 
@@ -98,7 +98,15 @@ async def run_simulation():
     storage = LinkedInStorage()
 
     # Build Pydantic model manually from simulated parts
-    from pipeline.linkedin.models import CompanyIdentity, CompanyDescription, EmployeeInsights, LeadershipMember, CompanyPost, JobPosting, CompanyLocation
+    from pipeline.linkedin.models import (
+        CompanyDescription,
+        CompanyIdentity,
+        CompanyLocation,
+        CompanyPost,
+        EmployeeInsights,
+        JobPosting,
+        LeadershipMember,
+    )
 
     identity = CompanyIdentity(**simulated_raw_identity)
     description = CompanyDescription(
@@ -186,7 +194,13 @@ async def run_simulation():
     bi_extractor = BIExtractor()
     bi_profile = await bi_extractor.extract_bi_profile(cleaned_company_data)
 
-    from pipeline.linkedin.models import BIProfile, TechStackProfile, BusinessChallenge, CompetitorMention, StrategicInitiative, GrowthSignal
+    from pipeline.linkedin.models import (
+        BIProfile,
+        BusinessChallenge,
+        CompetitorMention,
+        GrowthSignal,
+        StrategicInitiative,
+    )
     mock_bi = BIProfile(
         key_differentiators=["Customized bespoke tactical products", "Niche user targeting (predators)"],
         competitive_advantages=["70+ years of product blueprint repository", "Unmatched field test iterations"],

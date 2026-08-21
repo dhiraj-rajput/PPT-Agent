@@ -7,20 +7,20 @@ Ported from original BidForge's SUMMARISER_PROMPT.
 """
 
 import json
-import logging
-from typing import Dict, Any
+from typing import Any
 
-from utils.helpers import setup_logger
 from pipeline.ai.client import get_ai_client
+from utils.helpers import setup_logger
+
 from documents.prompts import SUMMARISER_PROMPT
 
 logger = setup_logger(__name__)
 
 def summarise_pricing_strategy(
-    parsed_rfp: Dict[str, Any],
-    inventory: Dict[str, Any],
-    competitor_intel: Dict[str, Any],
-) -> Dict[str, Any]:
+    parsed_rfp: dict[str, Any],
+    inventory: dict[str, Any],
+    competitor_intel: dict[str, Any],
+) -> dict[str, Any]:
     """Generates pricing options and strategic reasoning per product/service item."""
     ai_client = get_ai_client()
 
@@ -39,14 +39,14 @@ def summarise_pricing_strategy(
 
     from pipeline.ai.mode import run_with_fallback
 
-    def ai_fn() -> Dict[str, Any]:
+    def ai_fn() -> dict[str, Any]:
         res = ai_client.chat_json(messages)
         if not res.get("items"):
             raise ValueError("AI summarise returned empty items array")
         return res
 
-    def rule_fn() -> Dict[str, Any]:
-        logger.warning(f"[BidForge:Summarise] Using rule fallback for pricing strategy synthesis.")
+    def rule_fn() -> dict[str, Any]:
+        logger.warning("[BidForge:Summarise] Using rule fallback for pricing strategy synthesis.")
         return _summarise_fallback(inventory, competitor_intel)
 
     result, path_used = run_with_fallback("bidforge_summarise", ai_fn, rule_fn)
@@ -54,7 +54,7 @@ def summarise_pricing_strategy(
     return result
 
 
-def _summarise_fallback(inventory: Dict[str, Any], competitor_intel: Dict[str, Any]) -> Dict[str, Any]:
+def _summarise_fallback(inventory: dict[str, Any], competitor_intel: dict[str, Any]) -> dict[str, Any]:
     items = []
     comp_map = {c.get("item_name"): c for c in competitor_intel.get("items", [])}
 

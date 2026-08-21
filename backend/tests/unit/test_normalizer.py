@@ -5,13 +5,12 @@ Unit tests for models/normalizer.py to verify data cleaning,
 garbage filtering, phone validation, and pre-merge normalisation logic.
 """
 
-import pytest
 from pipeline.models.normalizer import (
-    normalize_company_intelligence,
-    _is_valid_phone,
     _is_nav_garbage,
+    _is_valid_phone,
     clean_list,
     merge_lists,
+    normalize_company_intelligence,
 )
 
 

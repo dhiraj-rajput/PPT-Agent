@@ -7,24 +7,20 @@ Uses high-performance, cost-free, deterministic rule-based regex parsing.
 """
 
 import re
-import json
-import asyncio
-from typing import Any, Optional
 
-from config.settings import settings
+from utils.db_client import get_collection
+from utils.helpers import get_utc_now, setup_logger
+
 from pipeline.linkedin.models import (
     CompanyDescription,
     CompanyIdentity,
+    CompanyLocation,
     CompanyPost,
     EmployeeInsights,
     FundingInfo,
-    JobPosting,
     LeadershipMember,
     LinkedInCompanyData,
-    CompanyLocation,
 )
-from utils.helpers import get_utc_now, setup_logger
-from utils.db_client import get_collection
 
 logger = setup_logger(__name__)
 
@@ -37,13 +33,12 @@ class RulesStructurer:
 
     def __init__(self):
         """Initializes the structurer."""
-        pass
 
     async def structure_company_data(
         self,
         company_slug: str,
         linkedin_url: str,
-        layer1_partial_identity: Optional[CompanyIdentity],
+        layer1_partial_identity: CompanyIdentity | None,
         layer2_extracted_data: dict,
         layer3_extracted_data: dict,
         scrape_layers_used: list[str],
@@ -63,17 +58,21 @@ class RulesStructurer:
         self,
         company_slug: str,
         linkedin_url: str,
-        layer1_partial_identity: Optional[CompanyIdentity],
+        layer1_partial_identity: CompanyIdentity | None,
         scrape_layers_used: list[str],
         source_urls: list[str],
     ) -> LinkedInCompanyData:
         col = get_collection("raw_linkedin")
-        raw_doc = col.find_one(
-            {"company_slug": company_slug, "scrape_layer": "public"},
+        raw_docs = list(col.find(
+            {"company_slug": company_slug},
             sort=[("scraped_at", -1)]
-        )
-        raw_text = (raw_doc.get("raw_text") if raw_doc else "") or ""
-        meta_tags = (raw_doc.get("meta_tags") or {}) if raw_doc else {}
+        ).limit(5))
+        raw_text_pieces = [d.get("raw_text", "") for d in raw_docs if d.get("raw_text")]
+        raw_text = "\n\n".join(raw_text_pieces)
+        meta_tags = {}
+        for d in raw_docs:
+            if d.get("meta_tags"):
+                meta_tags.update(d["meta_tags"])
 
         structured_identity = self._structure_company_identity_rules(
             company_slug=company_slug,
@@ -131,9 +130,9 @@ class RulesStructurer:
         self,
         company_slug: str,
         linkedin_url: str,
-        layer1_partial_identity: Optional[CompanyIdentity],
+        layer1_partial_identity: CompanyIdentity | None,
         raw_text: str,
-        meta_tags: Optional[dict] = None,
+        meta_tags: dict | None = None,
     ) -> CompanyIdentity:
         raw_text = raw_text or ""
         meta_tags = meta_tags or {}
@@ -185,7 +184,7 @@ class RulesStructurer:
             if web_match:
                 website_url = web_match.group(1).strip()
 
-        def _clean(val: Optional[str], max_len: int = 100) -> Optional[str]:
+        def _clean(val: str | None, max_len: int = 100) -> str | None:
             if not val:
                 return None
             stop_terms = [
@@ -251,7 +250,7 @@ class RulesStructurer:
             stock_exchange=stock_exchange,
         )
 
-    def _structure_company_description_rules(self, raw_text: str, tagline: Optional[str]) -> CompanyDescription:
+    def _structure_company_description_rules(self, raw_text: str, tagline: str | None) -> CompanyDescription:
         about_text = None
         about_idx = raw_text.find("About us")
         if about_idx != -1:
@@ -343,7 +342,7 @@ class RulesStructurer:
                     ))
         return posts
 
-    def _structure_funding_info_rules(self, raw_text: str, about_text: Optional[str]) -> Optional[FundingInfo]:
+    def _structure_funding_info_rules(self, raw_text: str, about_text: str | None) -> FundingInfo | None:
         funding_text = about_text or ""
         round_match = re.search(r"(Series [A-F]|Seed|Pre-seed|Angel|Series\s+[A-F])", funding_text, re.IGNORECASE)
         amount_match = re.search(r"(\$\d+(?:\.\d+)?\s*(?:Million|Billion|M|B|K))", funding_text, re.IGNORECASE)
@@ -370,7 +369,7 @@ class RulesStructurer:
                     parts = part.split(",")
                     if len(parts) >= 2:
                         city = parts[-2].strip()
-                        country = parts[-1].split("\n")[0].split(" ")[0].strip()
+                        country = parts[-1].split("\n")[0].strip()
                     office_locations.append(CompanyLocation(
                         city=city,
                         country=country,

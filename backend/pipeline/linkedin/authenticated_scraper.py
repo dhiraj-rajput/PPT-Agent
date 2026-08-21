@@ -26,13 +26,12 @@ How to get your li_at cookie:
 """
 
 import asyncio
-from typing import Optional
-
-from playwright.async_api import BrowserContext, Page, async_playwright
 
 from config.settings import settings
+from playwright.async_api import BrowserContext, Page, async_playwright
+from utils.helpers import get_utc_now, setup_logger
+
 from pipeline.linkedin.constants import (
-    LINKEDIN_BASE_URL,
     SCRAPE_LAYER_AUTHENTICATED,
     build_company_about_url,
     build_company_page_url,
@@ -40,13 +39,9 @@ from pipeline.linkedin.constants import (
     build_company_posts_url,
 )
 from pipeline.linkedin.models import (
-    CompanyPost,
-    EmployeeInsights,
-    FundingInfo,
     LeadershipMember,
     RawLinkedInScrapedData,
 )
-from utils.helpers import get_utc_now, setup_logger, wait_random_delay
 
 logger = setup_logger(__name__)
 
@@ -253,7 +248,7 @@ class AuthenticatedLinkedInScraper:
         self,
         browser_context: BrowserContext,
         company_slug: str,
-    ) -> tuple[Optional[dict], RawLinkedInScrapedData]:
+    ) -> tuple[dict | None, RawLinkedInScrapedData]:
         """
         Scrapes the main company page while authenticated.
         Extracts follower count, about text preview, specialties, and company type.
@@ -311,9 +306,9 @@ class AuthenticatedLinkedInScraper:
         except Exception as scrape_error:
             if "ERR_TOO_MANY_REDIRECTS" in str(scrape_error) or "redirect" in str(scrape_error).lower():
                 logger.error(
-                    f"[Layer 3] LinkedIn authentication failed (Too Many Redirects). "
-                    f"Your LINKEDIN_LI_AT session cookie is likely invalid, expired, or blocked. "
-                    f"Skipping Layer 3."
+                    "[Layer 3] LinkedIn authentication failed (Too Many Redirects). "
+                    "Your LINKEDIN_LI_AT session cookie is likely invalid, expired, or blocked. "
+                    "Skipping Layer 3."
                 )
             else:
                 logger.error(
@@ -335,7 +330,7 @@ class AuthenticatedLinkedInScraper:
         self,
         browser_context: BrowserContext,
         company_slug: str,
-    ) -> tuple[Optional[dict], RawLinkedInScrapedData]:
+    ) -> tuple[dict | None, RawLinkedInScrapedData]:
         """
         Scrapes the /people page for leadership team members and employee insights.
         This page requires authentication to show meaningful data.
@@ -403,7 +398,7 @@ class AuthenticatedLinkedInScraper:
         self,
         browser_context: BrowserContext,
         company_slug: str,
-    ) -> tuple[Optional[list], RawLinkedInScrapedData]:
+    ) -> tuple[list | None, RawLinkedInScrapedData]:
         """
         Scrapes the company posts feed while authenticated to get full
         engagement data (reactions, comments, reshares).
@@ -461,7 +456,7 @@ class AuthenticatedLinkedInScraper:
         self,
         browser_context: BrowserContext,
         company_slug: str,
-    ) -> tuple[Optional[dict], RawLinkedInScrapedData]:
+    ) -> tuple[dict | None, RawLinkedInScrapedData]:
         """
         Scrapes the /about page while authenticated to get funding info
         and affiliated company details that are hidden behind login.
@@ -588,7 +583,7 @@ class AuthenticatedLinkedInScraper:
 
         return leadership_members
 
-    def _extract_followers_count_from_text(self, page_text: str) -> Optional[int]:
+    def _extract_followers_count_from_text(self, page_text: str) -> int | None:
         """
         Parses the followers count from raw page text using pattern matching.
 

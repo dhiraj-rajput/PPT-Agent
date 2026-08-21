@@ -650,6 +650,9 @@ RULES
     * Always close bold/italic markers on the same line ("**bold**"); never
       leave a stray unmatched "*" or "_".
     * Use "---" on its own line only for an intentional visual divider.
+    * NEVER DRAW ASCII BOX ART OR TEXT DIAGRAMS: Do NOT use "+---", "|", "-->",
+      "^", or "v" to draw text diagrams. Use standard Markdown tables or numbered lists.
+    * TABLE FORMATTING: Keep table headers and cell values clean plain text. Do not wrap entire cell values in "**".
 - If a COMPANY PROFILE block (website, email, phone, leadership) is provided
   in the context, use those exact details — never invent alternates.
 - The document should be ready to convert to PDF
@@ -721,6 +724,13 @@ RULES
     * Always close bold/italic markers on the same line: "**bold**", not "**bold" open.
     * Use "---" on its own line only for an intentional visual divider.
     * Use "> " for a genuine callout/quote, not for regular body text.
+    * NEVER DRAW ASCII BOX ART OR TEXT DIAGRAMS: Do NOT use "+---", "|", "-->",
+      "^", or "v" to draw diagrams or flow charts. Proportional fonts in PDF
+      and Word documents destroy ASCII art. For lifecycles, execution models,
+      or workflows, ALWAYS use standard numbered lists (e.g. "1. **Phase 1: Engineering**: ...")
+      or standard Markdown tables.
+    * TABLE FORMATTING: Keep table headers and cell values clean plain text.
+      Do NOT wrap entire cell values in double asterisks like "**Parameter**".
 - Do NOT include internal notes, competitor names by name, or strategic reasoning —
   this is a customer-facing document.
 - Replace any COMPANY_NAME placeholder with the actual responding company name.
@@ -807,15 +817,15 @@ Do NOT output JSON. Output the full proposal as Markdown text directly.
 
 
 # ---------------------------------------------------------------------------
-# Subcontract Proposal — Orbit Avanya as subcontractor to a prime
+# Subcontract Proposal — Dynamic Proposing Company as subcontractor to a prime
 # Uses prime contractor profile + RFP requirements + our capabilities
 # ---------------------------------------------------------------------------
 
 SUBCONTRACT_PROPOSAL_PROMPT = """\
 You are an expert business development writer preparing a professional teaming/subcontracting
-proposal on behalf of Orbit Avanya LLP (AvanyaEdge).
+proposal on behalf of the proposing company described in "OUR COMPANY PROFILE".
 
-The goal is to persuade the prime contractor to team with Orbit Avanya as a subcontractor on
+The goal is to persuade the prime contractor to team with the proposing company as a subcontractor on
 the described contract. Write this as a compelling business development letter + proposal.
 
 =======================================================
@@ -824,15 +834,15 @@ DOCUMENT STRUCTURE
 
 1. COVER LETTER (Dear [Prime Name])
    - Congratulate on the award (if awarded) or express interest in teaming on this bid
-   - State clearly what Orbit Avanya brings to this engagement
+   - State clearly what our company brings to this engagement
    - State the proposed workshare percentage
 
-2. ABOUT ORBIT AVANYA
-   - Company overview based on the OUR COMPANY PROFILE provided
+2. ABOUT OUR COMPANY
+   - Company overview based strictly on the OUR COMPANY PROFILE provided
    - Key capabilities relevant to THIS specific contract
 
 3. PROPOSED SCOPE OF WORK (Our Portion)
-   - What specifically Orbit Avanya will deliver
+   - What specifically our company will deliver
    - How our capabilities complement the prime's strengths
    - Workshare breakdown by task area
 
@@ -856,14 +866,14 @@ DOCUMENT STRUCTURE
 
 8. NEXT STEPS
    - Proposed meeting / discussion
-   - Contact information
+   - Contact information from OUR COMPANY PROFILE
 
 =======================================================
 OUTPUT FORMAT
 =======================================================
 Produce the FULL proposal as a well-structured Markdown document.
 Write in a professional, persuasive tone — this is a business development document.
-The proposing company is Orbit Avanya LLP (AvanyaEdge).
+The proposing company is identified in OUR COMPANY PROFILE.
 The proposed workshare percentage will be provided in the data.
 
 Do NOT output JSON. Output the full proposal as Markdown text directly.
@@ -877,7 +887,7 @@ Do NOT output JSON. Output the full proposal as Markdown text directly.
 
 PARTNERSHIP_PROPOSAL_PROMPT = """\
 You are an expert business development writer preparing a professional B2B partnership
-proposal on behalf of Orbit Avanya LLP (AvanyaEdge).
+proposal on behalf of the proposing company described in "OUR COMPANY PROFILE".
 
 The goal is to propose a strategic partnership or joint go-to-market agreement with the
 target company described in "PARTNER COMPANY PROFILE" below.
@@ -891,7 +901,7 @@ DOCUMENT STRUCTURE
    - Why these two companies are a natural fit
    - Headline value proposition for both parties
 
-2. ABOUT ORBIT AVANYA
+2. ABOUT OUR COMPANY
    - Company overview based on OUR COMPANY PROFILE
    - Core products, capabilities, and market position
    - Why we're seeking this specific partnership
@@ -929,7 +939,7 @@ DOCUMENT STRUCTURE
 
 9. NEXT STEPS
    - Proposed meeting / workshop agenda
-   - Contact information
+   - Contact information from OUR COMPANY PROFILE
    - Proposed timeline to finalize partnership agreement
 
 =======================================================
@@ -937,7 +947,7 @@ OUTPUT FORMAT
 =======================================================
 Produce the FULL proposal as a well-structured Markdown document.
 Write in a professional, collaborative, and enthusiastic tone.
-The proposing company is Orbit Avanya LLP (AvanyaEdge).
+The proposing company is identified in OUR COMPANY PROFILE.
 Do NOT invent financial figures — use ranges and frameworks only.
 
 Do NOT output JSON. Output the full proposal as Markdown text directly.

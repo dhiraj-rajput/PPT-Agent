@@ -6,23 +6,26 @@ In-app notification endpoints — using MySQL.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Optional, Any
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from datetime import datetime
+from typing import Any
 
-from app.core.auth import get_current_user
-from utils.db_client import get_db_session, _mysql_available
+from fastapi import APIRouter, Depends, HTTPException
 from models.sql_models import (
     Notification as SQL_Notification,
+)
+from models.sql_models import (
     User as SQLUser,
 )
-from sqlalchemy import select, insert, update, delete, func
+from pydantic import BaseModel
+from sqlalchemy import delete, func, select, update
+from utils.db_client import _mysql_available, get_db_session
+
+from app.core.auth import get_current_user
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 
-def _iso(dt: Any) -> Optional[str]:
+def _iso(dt: Any) -> str | None:
     return dt.isoformat() if dt and hasattr(dt, "isoformat") else None
 
 
@@ -67,10 +70,10 @@ async def list_notifications(current_user: dict = Depends(get_current_user)):
 
 class CreateNotifBody(BaseModel):
     title: str
-    message: Optional[str] = ""
-    link: Optional[str] = ""
-    userId: Optional[str] = None
-    type: Optional[str] = "custom"
+    message: str | None = ""
+    link: str | None = ""
+    userId: str | None = None
+    type: str | None = "custom"
 
 
 @router.post("", status_code=201)

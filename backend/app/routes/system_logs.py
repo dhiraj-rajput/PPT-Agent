@@ -7,23 +7,24 @@ Admin-only "Server Logs" endpoints — using MySQL.
 from __future__ import annotations
 
 import asyncio
-import os
-import json
 import logging
-from datetime import datetime, timezone, timedelta
+from collections.abc import AsyncGenerator
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import AsyncGenerator, Optional, Any
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
-
-from app.core.auth import require_admin
-from utils.db_client import get_db_session, _mysql_available
 from models.sql_models import (
     ErrorLog as SQL_ErrorLog,
+)
+from models.sql_models import (
     User as SQLUser,
 )
-from sqlalchemy import select, update, insert, delete, func, or_, and_, desc
+from sqlalchemy import and_, delete, desc, func, or_, select, update
+from utils.db_client import _mysql_available, get_db_session
+
+from app.core.auth import require_admin
 
 logger = logging.getLogger(__name__)
 
@@ -34,16 +35,17 @@ VALID_LEVELS = {"WARNING", "ERROR", "CRITICAL"}
 _LOG_FILE = Path(__file__).resolve().parent.parent.parent / "logs" / "app.log"
 
 
-def _iso(dt: Any) -> Optional[str]:
+def _iso(dt: Any) -> str | None:
     return dt.isoformat() if dt and hasattr(dt, "isoformat") else None
 
 
 async def _require_admin_sse(
     request: Request,
-    token: Optional[str] = Query(None, description="JWT token for SSE"),
+    token: str | None = Query(None, description="JWT token for SSE"),
 ) -> dict:
-    from jose import JWTError, jwt as _jwt
     from config.settings import settings as _settings
+    from jose import JWTError
+    from jose import jwt as _jwt
 
     exc = HTTPException(
         status_code=401,
@@ -176,11 +178,11 @@ async def stream_logs(_admin: dict = Depends(_require_admin_sse)):
 
 @router.get("")
 async def list_logs(
-    level: Optional[str] = Query(None, description="Comma-separated levels"),
-    resolved: Optional[bool] = Query(None),
-    q: Optional[str] = Query(None, description="Search text"),
-    source: Optional[str] = Query(None),
-    since: Optional[str] = Query(None),
+    level: str | None = Query(None, description="Comma-separated levels"),
+    resolved: bool | None = Query(None),
+    q: str | None = Query(None, description="Search text"),
+    source: str | None = Query(None),
+    since: str | None = Query(None),
     page: int = Query(1, ge=1),
     limit: int = Query(25, ge=1, le=200),
     _admin: dict = Depends(require_admin),
@@ -293,7 +295,7 @@ async def logs_summary(_admin: dict = Depends(require_admin)):
 
 @router.get("/poll")
 async def poll_new_errors(
-    since: Optional[str] = Query(None),
+    since: str | None = Query(None),
     _admin: dict = Depends(require_admin),
 ):
     new_logs = []

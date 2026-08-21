@@ -916,7 +916,7 @@ export default function CompanyDetail() {
             <form onSubmit={handleSendEmail} className="p-5 space-y-4 overflow-y-auto flex-1 text-left">
               {emailSuccess && (
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
-                  Email outreach dispatched successfully via prasannadhamal982005@gmail.com!
+                  Email outreach dispatched successfully!
                 </div>
               )}
               {emailError && (

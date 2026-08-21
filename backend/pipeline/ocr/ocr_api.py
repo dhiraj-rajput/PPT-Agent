@@ -24,12 +24,10 @@ Usage:
 
 from __future__ import annotations
 
-import io
 import logging
 import os
-import time
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Any
 
 import httpx
 
@@ -72,8 +70,8 @@ class OCRSpaceClient:
     # ------------------------------------------------------------------
 
     def extract_text(
-        self, file_path: Union[str, Path], use_table_mode: bool = False
-    ) -> Dict[str, object]:
+        self, file_path: str | Path, use_table_mode: bool = False
+    ) -> dict[str, object]:
         """
         Extract text from a document file using OCR.space API.
 
@@ -160,14 +158,15 @@ class OCRSpaceClient:
 
     def _process_large_pdf(
         self, file_path: Path, page_count: int, use_table_mode: bool
-    ) -> Dict[str, object]:
+    ) -> dict[str, object]:
         """Split PDF into 3-page chunks, process in parallel, and merge."""
-        import fitz
         import tempfile
         from concurrent.futures import ThreadPoolExecutor
 
+        import fitz
+
         doc = fitz.open(str(file_path))
-        chunks: List[Path] = []
+        chunks: list[Path] = []
         max_pages = 3
 
         logger.info(f"[OCRSpace] Splitting {page_count}-page PDF '{file_path.name}' into 3-page chunks...")
@@ -197,7 +196,7 @@ class OCRSpaceClient:
         finally:
             doc.close()
 
-        results: List[Dict[str, Any]] = [None] * len(chunks) # type: ignore
+        results: list[dict[str, Any]] = [None] * len(chunks) # type: ignore
 
         def _worker(idx: int, path: Path):
             try:
@@ -259,7 +258,7 @@ class OCRSpaceClient:
 
     def extract_from_bytes(
         self, content: bytes, filename: str = "document.pdf"
-    ) -> Dict[str, object]:
+    ) -> dict[str, object]:
         """
         Extract text from raw bytes by sending directly to OCR.space.
         """
@@ -283,7 +282,7 @@ class OCRSpaceClient:
 
     def _call_api(
         self, file_path: Path, use_table_mode: bool = False
-    ) -> Dict[str, object]:
+    ) -> dict[str, object]:
         """
         POST the file to the OCR.space API and parse the response.
         """
@@ -338,7 +337,7 @@ class OCRSpaceClient:
 
     def _parse_response(
         self, data: dict, filename: str
-    ) -> Dict[str, object]:
+    ) -> dict[str, object]:
         """Parse the OCR.space JSON response into our standard result format."""
 
         is_error = data.get("IsErroredOnProcessing", False)
@@ -366,7 +365,7 @@ class OCRSpaceClient:
                 "error": "No parsed results returned",
             }
 
-        page_texts: List[str] = []
+        page_texts: list[str] = []
         for page_result in parsed_results:
             page_text = page_result.get("ParsedText", "") or ""
             page_texts.append(page_text)

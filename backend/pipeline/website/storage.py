@@ -10,11 +10,11 @@ Collections used:
 """
 
 from datetime import datetime, timezone
-from typing import Optional
 
 from utils.db_client import get_collection
 from utils.helpers import setup_logger
-from pipeline.website.models import WebsiteData, RawWebsiteScrapedData
+
+from pipeline.website.models import RawWebsiteScrapedData, WebsiteData
 
 logger = setup_logger(__name__)
 
@@ -64,7 +64,7 @@ class WebsiteStorage:
         logger.info(f"Saved website data | slug='{data.company_slug}' id='{doc_id}'")
         return doc_id
 
-    def get_website_data(self, company_slug: str) -> Optional[WebsiteData]:
+    def get_website_data(self, company_slug: str) -> WebsiteData | None:
         """Retrieve structured website data for a company_slug. Returns None if not found."""
         collection = get_collection(COLLECTION_STRUCTURED_WEBSITE)
         document = collection.find_one({"company_slug": company_slug})
@@ -84,7 +84,7 @@ class WebsiteStorage:
         source: str,
         scrape_status: str,
         duration_seconds: float,
-        error_message: Optional[str] = None,
+        error_message: str | None = None,
     ) -> None:
         """Append an audit log entry to the shared 'scrape_logs' collection."""
         collection = get_collection(COLLECTION_SCRAPE_LOGS)

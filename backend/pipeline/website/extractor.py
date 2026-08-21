@@ -10,10 +10,10 @@ Output: WebsiteData Pydantic model.
 
 import re
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
 from urllib.parse import urlparse
 
 from utils.helpers import setup_logger
+
 from pipeline.website.models import WebsiteData
 
 logger = setup_logger(__name__)
@@ -56,10 +56,10 @@ def _is_garbage(text: str) -> bool:
     return False
 
 
-def _filter_business_items(items: List[str], max_len: int = 120) -> List[str]:
+def _filter_business_items(items: list[str], max_len: int = 120) -> list[str]:
     """Filter a list to keep only real business content items."""
     seen: set = set()
-    result: List[str] = []
+    result: list[str] = []
     for item in items:
         item = item.strip()
         if not item or len(item) > max_len or len(item) < 3:
@@ -104,7 +104,7 @@ def get_domain(url: str) -> str:
     """Extract bare domain from URL (no www prefix)."""
     try:
         domain = urlparse(url).netloc
-        return domain[4:] if domain.startswith("www.") else domain
+        return domain.removeprefix("www.")
     except Exception:
         return ""
 
@@ -112,14 +112,14 @@ def get_domain(url: str) -> str:
 def extract_company_intelligence(
     homepage_url: str,
     company_slug: str,
-    page_metadata: Dict[str, Dict[str, str]],
+    page_metadata: dict[str, dict[str, str]],
     combined_clean_text: str,
     combined_raw_text: str,
-    classified_sections: Dict[str, List[str]],
-    aggregated_contacts: Dict,
-    discovered_pages: Dict[str, str],
-    social_links: List[str],
-    visited_urls: List[str],
+    classified_sections: dict[str, list[str]],
+    aggregated_contacts: dict,
+    discovered_pages: dict[str, str],
+    social_links: list[str],
+    visited_urls: list[str],
     crawl_duration: float,
 ) -> WebsiteData:
     """
@@ -244,8 +244,8 @@ def enrich_website_data_with_ai(website_data, combined_clean_text: str):
     Returns the (possibly enriched) website_data object, plus the path used
     ("ai" or "rule_based") for logging/telemetry.
     """
-    from pipeline.ai.mode import run_with_fallback
     from pipeline.ai.client import get_ai_client
+    from pipeline.ai.mode import run_with_fallback
 
     def _rule_fn():
         # No-op: keep the rule-based extraction exactly as-is.
@@ -284,7 +284,7 @@ def enrich_website_data_with_ai(website_data, combined_clean_text: str):
     return website_data, path_used
 
 
-def _merge_unique(existing: List[str], new_items) -> List[str]:
+def _merge_unique(existing: list[str], new_items) -> list[str]:
     if not isinstance(new_items, list):
         return existing
     seen = {item.strip().lower() for item in existing}
@@ -300,7 +300,7 @@ def _merge_unique(existing: List[str], new_items) -> List[str]:
 # Private helpers
 # ---------------------------------------------------------------------------
 
-def _infer_industry(text: str, overview_paragraphs: List[str]) -> str:
+def _infer_industry(text: str, overview_paragraphs: list[str]) -> str:
     """Infer industry from text keywords."""
     combined = (text + " ".join(overview_paragraphs)).lower()
     if any(w in combined for w in ["finance", "fintech", "payment", "banking", "transaction"]):
@@ -318,7 +318,7 @@ def _infer_industry(text: str, overview_paragraphs: List[str]) -> str:
     return "Technology"
 
 
-def _extract_locations(classified_sections: Dict[str, List[str]]) -> tuple:
+def _extract_locations(classified_sections: dict[str, list[str]]) -> tuple:
     """Extract headquarters and location list from classified section text."""
     loc_text = " ".join(
         classified_sections.get("Locations", []) +
@@ -342,7 +342,7 @@ def _extract_locations(classified_sections: Dict[str, List[str]]) -> tuple:
     return headquarters, locations
 
 
-def _detect_tech_stack(text: str) -> List[str]:
+def _detect_tech_stack(text: str) -> list[str]:
     """Scan text for known technology keywords."""
     found = []
     for tech in TECH_KEYWORDS:
@@ -352,7 +352,7 @@ def _detect_tech_stack(text: str) -> List[str]:
     return found
 
 
-def _extract_leadership(classified_sections: Dict[str, List[str]]) -> List[str]:
+def _extract_leadership(classified_sections: dict[str, list[str]]) -> list[str]:
     """Extract executive names from leadership section text."""
     leadership = []
     role_kws = ["ceo", "cto", "cfo", "founder", "president", "director",
@@ -369,7 +369,7 @@ def _extract_leadership(classified_sections: Dict[str, List[str]]) -> List[str]:
     return leadership
 
 
-def identify_role_pages(urls: List[str]) -> Dict[str, str]:
+def identify_role_pages(urls: list[str]) -> dict[str, str]:
     """Classify page URLs by their business roles (about, contact, careers, blog)."""
     roles = {"careers": "", "blog": "", "about": "", "contact": ""}
     for url in urls:

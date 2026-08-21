@@ -11,12 +11,11 @@ import logging
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
-from utils.db_client import get_db_session, _mysql_available
 from config.settings import settings
 from models.sql_models import Integration as SQL_Integration
 from sqlalchemy import select
+from utils.db_client import _mysql_available, get_db_session
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +90,7 @@ async def _create_zoom_meeting(title: str, date: str, time: str) -> str:
 
 
 async def _create_google_meet(
-    user_id: Optional[str],
+    user_id: str | None,
     title: str,
     date: str,
     time: str,
@@ -105,21 +104,16 @@ async def _create_google_meet(
         raise ValueError("Google OAuth client ID is not configured.")
 
     doc = None
-    if _mysql_available:
+    if _mysql_available and user_id:
         try:
             async for db in get_db_session():
-                if user_id:
-                    stmt = select(SQL_Integration).where(SQL_Integration.service == "google", SQL_Integration.user_id == int(user_id))
-                    doc = (await db.execute(stmt)).scalar_one_or_none()
-                if not doc:
-                    stmt = select(SQL_Integration).where(SQL_Integration.service == "google")
-                    res = await db.execute(stmt)
-                    doc = res.scalars().first()
+                stmt = select(SQL_Integration).where(SQL_Integration.service == "google", SQL_Integration.user_id == int(user_id))
+                doc = (await db.execute(stmt)).scalar_one_or_none()
         except Exception as e:
             logger.warning(f"Error fetching Google integration from MySQL: {e}")
 
     if not doc or not getattr(doc, "connected", False) or not getattr(doc, "refresh_token", None):
-        raise ValueError("Google Meet integration is not connected. Connect in Settings > Integrations.")
+        raise ValueError("Google Meet integration is not connected for your account. Please connect Google Calendar in Settings > Integrations.")
 
 
     access_token_val = doc.access_token
@@ -201,8 +195,8 @@ async def create_video_room(
     title: str,
     date: str,
     time: str,
-    attendee_emails: Optional[list[str]] = None,
-    user_id: Optional[str] = None,
+    attendee_emails: list[str] | None = None,
+    user_id: str | None = None,
 ) -> dict:
     """
     Returns {provider, meeting_link, warning?}.

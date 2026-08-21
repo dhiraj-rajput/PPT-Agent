@@ -21,16 +21,18 @@ import json
 import logging
 import re
 import sys
-import time
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 from urllib.parse import urlparse, urlunparse
 
-from pipeline.models.company_schema import OptimizedCompanyProfile
-from pipeline.models.normalizer import normalize_company_intelligence, ensure_absolute_url
 from pipeline.ai.client import get_ai_client
-from pipeline.ai.mode import run_with_fallback, AIMode
+from pipeline.ai.mode import AIMode, run_with_fallback
+from pipeline.models.company_schema import OptimizedCompanyProfile
+from pipeline.models.normalizer import (
+    ensure_absolute_url,
+    normalize_company_intelligence,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +46,7 @@ def _ensure_directory(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
-def _save_json_file(data: Dict[str, Any], path: Path) -> None:
+def _save_json_file(data: dict[str, Any], path: Path) -> None:
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(data, fh, indent=2, ensure_ascii=False, default=str)
     logger.info(f"Saved JSON to {path}")
@@ -143,12 +145,12 @@ class BusinessIntelligenceCompactor:
 
     def compact_from_dicts(
         self,
-        website_data: Dict[str, Any],
-        linkedin_data: Dict[str, Any],
-        google_data: Dict[str, Any],
-        external_insights: Optional[Dict[str, Any]] = None,
-        company_slug: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        website_data: dict[str, Any],
+        linkedin_data: dict[str, Any],
+        google_data: dict[str, Any],
+        external_insights: dict[str, Any] | None = None,
+        company_slug: str | None = None,
+    ) -> dict[str, Any]:
         """
         Compact all three agent outputs (+ optional external insights) into an
         OptimizedCompanyProfile and persist it.
@@ -189,7 +191,7 @@ class BusinessIntelligenceCompactor:
 
         # 3. Inject metadata
         raw_profile["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
-        sources: List[str] = []
+        sources: list[str] = []
         if website_data:
             sources.append("Website")
         if linkedin_data:
@@ -232,12 +234,12 @@ class BusinessIntelligenceCompactor:
 
     def compact(
         self,
-        website_path: Optional[str] = None,
-        linkedin_path: Optional[str] = None,
-        google_path: Optional[str] = None,
-        domain: Optional[str] = None,
-        company_name: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        website_path: str | None = None,
+        linkedin_path: str | None = None,
+        google_path: str | None = None,
+        domain: str | None = None,
+        company_name: str | None = None,
+    ) -> dict[str, Any]:
         """
         CLI-oriented entry point: loads JSON files from disk, then compacts.
         """
@@ -245,7 +247,7 @@ class BusinessIntelligenceCompactor:
         json_dir = Path(PROJECT_ROOT / "output" / "json")
         raw_dir = Path(PROJECT_ROOT / "models" / "input")
 
-        def _load_json(explicit: Optional[str], fallbacks: List[Path]) -> Dict[str, Any]:
+        def _load_json(explicit: str | None, fallbacks: list[Path]) -> dict[str, Any]:
             candidates = ([Path(explicit)] if explicit else []) + fallbacks
             for p in candidates:
                 if p and p.exists():
@@ -278,7 +280,7 @@ class BusinessIntelligenceCompactor:
     # LLM call
     # ------------------------------------------------------------------
 
-    def _run_llm_compaction(self, normalized_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _run_llm_compaction(self, normalized_data: dict[str, Any]) -> dict[str, Any]:
         """
         Call the shared Ollama Cloud client with the normalised payload and
         return parsed JSON. Model fallback chain + retries + 429 detection
@@ -291,7 +293,7 @@ class BusinessIntelligenceCompactor:
     # JSON parsing
     # ------------------------------------------------------------------
 
-    def _parse_json_from_response(self, text: str) -> Dict[str, Any]:
+    def _parse_json_from_response(self, text: str) -> dict[str, Any]:
         text = text.strip()
         # Strip markdown fences
         fenced = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
@@ -324,7 +326,7 @@ class BusinessIntelligenceCompactor:
     # Persistence
     # ------------------------------------------------------------------
 
-    def _save_outputs(self, profile: Dict[str, Any], website: str) -> Path:
+    def _save_outputs(self, profile: dict[str, Any], website: str) -> Path:
         output_dir = PROJECT_ROOT / "output"
         _ensure_directory(output_dir)
 
@@ -339,7 +341,7 @@ class BusinessIntelligenceCompactor:
 
         return main_path
 
-    def _save_to_mongodb(self, profile: Dict[str, Any], company_slug: Optional[str] = None) -> bool:
+    def _save_to_mongodb(self, profile: dict[str, Any], company_slug: str | None = None) -> bool:
         if self.db is None:
             logger.warning("[Compactor] MongoDB not available — skipping save.")
             return False
@@ -375,7 +377,7 @@ class BusinessIntelligenceCompactor:
             logger.error(f"[Compactor] MongoDB save failed: {exc}")
             return False
 
-    def _run_rules_compaction(self, normalized: Dict[str, Any]) -> Dict[str, Any]:
+    def _run_rules_compaction(self, normalized: dict[str, Any]) -> dict[str, Any]:
         """
         Produce a schema-compliant OptimizedCompanyProfile using rule-based/pattern-based
         heuristics directly from the normalized dictionary.
@@ -416,10 +418,20 @@ class BusinessIntelligenceCompactor:
         # 2. Tech stack
         tech_stack = normalized.get("technology_stack", [])
 
-        # 3. Business model — only from sources, never template filler
+        # 3. Business model — infer from sources when not explicitly given
         business_model = normalized.get("business_model", "")
         if not business_model:
             business_model = descriptions.get("external_business_model") or ""
+        if not business_model:
+            lower_desc = f"{description} {' '.join(str(v) for v in descriptions.values())}".lower()
+            if "saas" in lower_desc or "software as a service" in lower_desc:
+                business_model = "B2B SaaS (Software-as-a-Service)"
+            elif "consulting" in lower_desc or "advisory" in lower_desc:
+                business_model = "Professional Services / Consulting"
+            elif "marketplace" in lower_desc:
+                business_model = "Digital Marketplace"
+            elif "e-commerce" in lower_desc or "retail" in lower_desc:
+                business_model = "E-Commerce / Direct-to-Consumer"
 
         # 4. Pricing model
         pricing_model = ""
@@ -540,7 +552,7 @@ class BusinessIntelligenceCompactor:
         
         if len(opportunities) < 2:
             opportunities.extend([
-                f"Expansion of service offerings into emerging technology areas (e.g., Generative AI integration).",
+                "Expansion of service offerings into emerging technology areas (e.g., Generative AI integration).",
                 f"Expanding market share in the growing {industry} sector globally.",
                 "Strategic partnerships with major hyperscalers and platforms to drive mutual sales."
             ])
@@ -609,7 +621,7 @@ class BusinessIntelligenceCompactor:
 # Message builder
 # ---------------------------------------------------------------------------
 
-def _build_messages(normalized_data: Dict[str, Any]) -> List[Dict[str, str]]:
+def _build_messages(normalized_data: dict[str, Any]) -> list[dict[str, str]]:
     schema_json = json.dumps(OptimizedCompanyProfile.model_json_schema(), indent=2, ensure_ascii=False)
 
     # Limit raw_website_text in the prompt to avoid huge payloads
@@ -649,8 +661,7 @@ def _domain_key(value: str) -> str:
     if not value:
         return ""
     host = urlparse(_canonical_website(value)).netloc or value
-    if host.startswith("www."):
-        host = host[4:]
+    host = host.removeprefix("www.")
     return re.sub(r"[^a-zA-Z0-9]+", "_", host).strip("_")
 
 

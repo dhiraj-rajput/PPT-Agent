@@ -6,9 +6,9 @@ Integration settings endpoints — using MySQL.
 
 from __future__ import annotations
 
-import os
 import logging
-from typing import Optional
+import os
+
 try:
     from filelock import FileLock as _FileLock
     _ENV_LOCK = _FileLock(".env.lock", timeout=10)
@@ -19,21 +19,23 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Request
+from datetime import datetime
 
-from fastapi.responses import RedirectResponse
-from pydantic import BaseModel
-
-from app.core.auth import get_current_user
-from utils.db_client import get_db_session, _mysql_available
-from utils.encryption import encrypt_data, decrypt_data
 from config.settings import settings
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import RedirectResponse
 from models.sql_models import (
     Integration as SQL_Integration,
+)
+from models.sql_models import (
     OAuthState as SQL_OAuthState,
 )
-from sqlalchemy import select, insert, update, delete
+from pydantic import BaseModel
+from sqlalchemy import delete, select, update
+from utils.db_client import _mysql_available, get_db_session
+from utils.encryption import decrypt_data, encrypt_data
+
+from app.core.auth import get_current_user
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
 
@@ -85,7 +87,7 @@ async def _get_google_auth_url_async(user_id: str) -> str:
     flow.redirect_uri = _GOOGLE_REDIRECT_URI
     
     import secrets
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta
     state_token = secrets.token_urlsafe(32)
     auth_url, _ = flow.authorization_url(access_type="offline", prompt="consent", state=state_token)
     
@@ -108,7 +110,7 @@ async def _get_google_auth_url_async(user_id: str) -> str:
     return auth_url
 
 
-async def _handle_google_callback_async(code: str, state: Optional[str] = None) -> None:
+async def _handle_google_callback_async(code: str, state: str | None = None) -> None:
     _GOOGLE_CLIENT_ID, _GOOGLE_CLIENT_SECRET, _GOOGLE_REDIRECT_URI = _google_config()
     if not _is_google_client_id_configured(_GOOGLE_CLIENT_ID):
         raise HTTPException(400, "Google OAuth is not configured.")
@@ -233,7 +235,7 @@ async def google_auth_url(current_user: dict = Depends(get_current_user)):
 
 
 @router.get("/google/callback")
-async def google_callback(request: Request, code: Optional[str] = None, state: Optional[str] = None, error: Optional[str] = None):
+async def google_callback(request: Request, code: str | None = None, state: str | None = None, error: str | None = None):
     if error:
         logger.error(f"Google OAuth callback received error from Google: {error}")
         return RedirectResponse(f"{_CLIENT_URL}/integrations?google=error")

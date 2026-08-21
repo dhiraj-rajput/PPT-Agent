@@ -6,20 +6,20 @@ Handles ObjectId-to-Integer mappings, foreign-key safety, and JSON serialization
 Verifies data counts post-migration and cleans up local Mongo relational collections.
 """
 
-import os
-import sys
 import json
 import logging
-import asyncio
+import os
+import sys
 from datetime import datetime, timezone
+
 from pymongo import MongoClient
 
 # Add project root to sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config.settings import settings
-from utils.db_client import get_sync_db_session, _mysql_available
 import models.sql_models as sql
+from config.settings import settings
+from utils.db_client import _mysql_available, get_sync_db_session
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("migration")
@@ -131,9 +131,9 @@ def run_migration():
 
     logger.info("Initializing MySQL database schema...")
     try:
-        from utils.mysql_client import _get_sync_engine, Base
         import models.sql_models  # noqa: F401
         from sqlalchemy import text
+        from utils.mysql_client import Base, _get_sync_engine
         sync_engine = _get_sync_engine()
         if sync_engine is None:
             logger.error("Failed to acquire synchronous MySQL engine.")
@@ -159,7 +159,7 @@ def run_migration():
     logger.info(f"Connected to MongoDB database: {settings.MONGO_DB_NAME}")
 
     with get_sync_db_session() as session:
-        from sqlalchemy import delete, insert, func
+        from sqlalchemy import delete, func, insert
         
         # 1. Clear target tables in correct dependency order
         logger.info("Clearing target MySQL tables for a clean migration...")

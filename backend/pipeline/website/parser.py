@@ -5,9 +5,9 @@ HTML parsing utilities: metadata extraction, link extraction, and contact info e
 """
 
 import re
-from typing import List, Dict, Any
-from bs4 import BeautifulSoup
+from typing import Any
 
+from bs4 import BeautifulSoup
 from utils.helpers import setup_logger
 
 logger = setup_logger(__name__)
@@ -56,10 +56,9 @@ def is_valid_email(email: str) -> bool:
 
 def ensure_company_contact_fallback(domain: str, contacts: dict):
     """Strictly do not generate synthetic emails — only authentic scraped emails are kept."""
-    pass
 
 
-def parse_html_metadata(html_content: str) -> Dict[str, str]:
+def parse_html_metadata(html_content: str) -> dict[str, str]:
     """Extract title and meta description from an HTML page."""
     metadata = {"title": "", "description": ""}
     if not html_content:
@@ -82,7 +81,7 @@ def parse_html_metadata(html_content: str) -> Dict[str, str]:
     return metadata
 
 
-def extract_links(html_content: str) -> List[str]:
+def extract_links(html_content: str) -> list[str]:
     """Extract all <a href> targets from HTML."""
     links = []
     if not html_content:
@@ -96,7 +95,7 @@ def extract_links(html_content: str) -> List[str]:
     return links
 
 
-def extract_contact_info(html_content: str, text_content: str = "") -> Dict[str, List[str]]:
+def extract_contact_info(html_content: str, text_content: str = "") -> dict[str, list[str]]:
     """
     Extract emails, phone numbers, and social media links from HTML.
 
@@ -146,8 +145,8 @@ def extract_contact_info(html_content: str, text_content: str = "") -> Dict[str,
 
         # Cloudflare also renders a <span class="__cf_email__" data-cfemail="...">
         # in place of the visible email text on the page (no <a> tag involved).
-        for tag in soup.find_all(attrs={"data-cfemail": True}):
-            decoded = _decode_cf_email(str(tag["data-cfemail"]))
+        for tag in soup.select("[data-cfemail]"):
+            decoded = _decode_cf_email(str(tag.get("data-cfemail", "")))
             if decoded:
                 contacts["emails"].append(decoded)
 

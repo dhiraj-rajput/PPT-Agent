@@ -22,7 +22,7 @@ a completely RFP-blind 5-fixed-section list.
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from utils.helpers import setup_logger
 
@@ -35,24 +35,26 @@ MAX_SECTIONS = 40
 
 
 def build_outline(
-    parsed_rfp: Dict[str, Any],
+    parsed_rfp: dict[str, Any],
     company_context: str = "",
-    template_sections_present: Optional[List[str]] = None,
-) -> Dict[str, Any]:
+    template_sections_present: list[str] | None = None,
+) -> dict[str, Any]:
     """Returns {"sections": [...], "notes": "...", "generated_via": "ai|rule_based"}.
 
     template_sections_present: headings already on the uploaded company
     template (will be preserved). Outline will skip or mark improve_existing
     so generation does not double-write Executive Summary etc.
     """
+    import json
+
     from pipeline.ai.client import get_ai_client
     from pipeline.ai.mode import run_with_fallback
+
     from documents.prompts import OUTLINE_ARCHITECT_PROMPT
-    import json
 
     template_sections_present = template_sections_present or []
 
-    def ai_fn() -> Dict[str, Any]:
+    def ai_fn() -> dict[str, Any]:
         client = get_ai_client()
         payload = {
             "rfp_type": parsed_rfp.get("rfp_type", "capability_tender"),
@@ -102,7 +104,7 @@ def build_outline(
             sections = _sanitize_sections(sections)[:MAX_SECTIONS]
         return {"sections": sections, "notes": res.get("notes", "")}
 
-    def rule_fn() -> Dict[str, Any]:
+    def rule_fn() -> dict[str, Any]:
         logger.warning("[BidForge:Outline] Using rule-based adaptive outline fallback.")
         return {"sections": _adaptive_fallback_outline(parsed_rfp), "notes": ""}
 
@@ -113,7 +115,7 @@ def build_outline(
 
 
 def _normalize_title(title: str) -> str:
-    t = re.sub(r"^\s*(section\s+)?\d+[\.\)\:]?\s*", "", title.strip(), flags=re.I)
+    t = re.sub(r"^\s*(section\s+)?\d+[\.\)\:]?\s*", "", title.strip(), flags=re.IGNORECASE)
     t = re.sub(r"[^a-z0-9 ]", "", t.lower()).strip()
     return re.sub(r"\s+", " ", t)
 
@@ -133,9 +135,9 @@ def _titles_overlap(a: str, b: str) -> bool:
 
 
 def _dedupe_against_template(
-    sections: List[Dict[str, Any]],
-    template_sections: List[str],
-) -> List[Dict[str, Any]]:
+    sections: list[dict[str, Any]],
+    template_sections: list[str],
+) -> list[dict[str, Any]]:
     """Drop or demote outline sections that would duplicate template headings.
 
     - Brochure-style topics already on the template are omitted (cover/exec
@@ -151,7 +153,7 @@ def _dedupe_against_template(
         "accreditation", "certification", "contact", "capability statement",
         "corporate", "dossier",
     }
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     for s in sections:
         title = s.get("title") or ""
         mode = str(s.get("mode") or "write_new").lower()
@@ -179,7 +181,7 @@ def _dedupe_against_template(
     return out
 
 
-def _sanitize_sections(sections: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _sanitize_sections(sections: list[dict[str, Any]]) -> list[dict[str, Any]]:
     cleaned = []
     seen_keys = set()
     for i, s in enumerate(sections[:MAX_SECTIONS]):
@@ -218,12 +220,12 @@ def _sanitize_sections(sections: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return cleaned
 
 
-def _adaptive_fallback_outline(parsed_rfp: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _adaptive_fallback_outline(parsed_rfp: dict[str, Any]) -> list[dict[str, Any]]:
     """Used only if the AI outline call fails outright. Still adapts to the
     RFP's own structural_elements/requirements instead of a fixed list, just
     without AI-authored key_points/word-budget tuning."""
     summary = parsed_rfp.get("summary") or "Overview of our understanding and proposed response."
-    sections: List[Dict[str, Any]] = [
+    sections: list[dict[str, Any]] = [
         {
             "key": "cover_letter",
             "title": "1. Cover Letter / Letter of Transmittal",

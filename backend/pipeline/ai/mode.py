@@ -21,10 +21,11 @@ carve-out you asked for) consistent everywhere.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from enum import Enum
-from typing import Any, Callable, Optional, TypeVar
+from typing import TypeVar
 
-from pipeline.ai.client import RateLimitError, AIUnavailableError
+from pipeline.ai.client import AIUnavailableError, RateLimitError
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +72,7 @@ def get_ai_mode() -> AIMode:
     mode_result = None
 
     try:
-        from utils.db_client import get_sync_db_session, _mysql_available
+        from utils.db_client import _mysql_available, get_sync_db_session
         if _mysql_available:
             from models.sql_models import SystemSettings as SQL_SystemSettings
             from sqlalchemy import select
@@ -108,7 +109,7 @@ def run_with_fallback(
     ai_fn: Callable[[], T],
     rule_fn: Callable[[], T],
     *,
-    force_mode: Optional[AIMode] = None,
+    force_mode: AIMode | None = None,
 ) -> tuple[T, str]:
     """
     Run `ai_fn()` if the AI_MODE allows it, otherwise (or on failure)

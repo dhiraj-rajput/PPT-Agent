@@ -6,11 +6,9 @@ Uses WeasyPrint when available, with a full-featured fallback parser that extrac
 tables, subheadings, bullet lists, and template styling.
 """
 
-import os
 import re
-import logging
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Any
 
 try:
     from utils.helpers import setup_logger
@@ -25,6 +23,7 @@ try:
     import weasyprint
     _WEASYPRINT_AVAILABLE = True
 except Exception:
+    weasyprint = None  # type: ignore
     _WEASYPRINT_AVAILABLE = False
 
 
@@ -145,10 +144,11 @@ code {
 def render_markdown_to_pdf(
     markdown_content: str,
     output_pdf_path: str,
-    template_path: Optional[str] = None,
-    brand_override: Optional[Dict[str, Any]] = None
+    template_path: str | None = None,
+    brand_override: dict[str, Any] | None = None
 ) -> str:
     """Converts a Markdown string to a PDF using markdown + WeasyPrint or docx fallback."""
+    markdown_content = sanitize_proposal_markdown(markdown_content)
     output_pdf = Path(output_pdf_path)
     output_pdf.parent.mkdir(parents=True, exist_ok=True)
 
@@ -196,6 +196,97 @@ def render_markdown_to_pdf(
     return _fallback_markdown_to_pdf(markdown_content, str(output_pdf), brand_cfg)
 
 
+_ASCII_BORDER_RE = re.compile(r"^\s*\+[-+=|]+\+\s*$")
+_ASCII_CONNECTOR_RE = re.compile(r"^\s*[\|v\^V│↓↑→←]+\s*$|^\s*\|\s*[vV\^↓↑]\s*$|^\s*\\\s*/\s*$|^\s*/\s*\\\s*$")
+_ASCII_BOX_LINE_RE = re.compile(r"^\s*\|\s*(.*?)\s*\|\s*$")
+_ARROW_RE = re.compile(r"\s*(?:-->|->|==>|=>)\s*")
+
+
+def sanitize_proposal_markdown(markdown_content: str) -> str:
+    """Sanitizes raw LLM-generated Markdown to remove ASCII box art, convert
+    broken text-diagrams into clean typography/lists, and fix raw formatting."""
+    if not markdown_content:
+        return ""
+
+    lines = markdown_content.splitlines()
+    sanitized_lines: list[str] = []
+
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+
+        # 1. Skip pure ASCII box borders (+------+ or +======+)
+        if _ASCII_BORDER_RE.match(stripped):
+            i += 1
+            continue
+
+        # 2. Skip pure ASCII diagram connectors (lone |, v, ^, | v |)
+        if _ASCII_CONNECTOR_RE.match(stripped):
+            i += 1
+            continue
+
+        # 3. Check if this is a single-cell ASCII box line (e.g. |  TEXT  | or | - Item |)
+        box_match = _ASCII_BOX_LINE_RE.match(line)
+        if box_match:
+            inner_content = box_match.group(1).strip()
+            # Check if this line is part of a real multi-column markdown table
+            is_multi_col = bool(re.search(r"(?<!\\)\|", inner_content))
+
+            if not is_multi_col:
+                if not inner_content:
+                    i += 1
+                    continue
+
+                # Check for lifecycle with arrows: e.g. "1. ENGINEERING --> 2. FABRICATION --> ..."
+                if _ARROW_RE.search(inner_content):
+                    parts = _ARROW_RE.split(inner_content)
+                    cleaned_parts = [re.sub(r"^\d+\.\s*", "", p.strip()).title() for p in parts if p.strip()]
+                    formatted_steps = " → ".join(f"**{p}**" for p in cleaned_parts)
+                    sanitized_lines.append(f"\n{formatted_steps}\n")
+                    i += 1
+                    continue
+
+                # Check if it starts with a bullet (- item or * item)
+                bullet_m = re.match(r"^[-*•]\s*(.*)$", inner_content)
+                if bullet_m:
+                    sanitized_lines.append(f"- {bullet_m.group(1).strip()}")
+                    i += 1
+                    continue
+
+                # Check if it's parenthesized subtitle e.g. (Prime Contractor ...)
+                paren_m = re.match(r"^\((.*?)\)$", inner_content)
+                if paren_m:
+                    sanitized_lines.append(f"*({paren_m.group(1).strip()})*")
+                    i += 1
+                    continue
+
+                # Check if it's a major title in all caps
+                if inner_content.isupper() and len(inner_content) > 3:
+                    sanitized_lines.append(f"\n**{inner_content.title()}**\n")
+                    i += 1
+                    continue
+
+                # Default for single cell box: unwrap the text
+                sanitized_lines.append(inner_content)
+                i += 1
+                continue
+
+        # 4. Clean arrows in regular lines (e.g. Phase 1 --> Phase 2 -> Phase 1 → Phase 2)
+        if "-->" in line or " -> " in line or "==>" in line:
+            if not re.match(r"^\s*\|?[\s:-]+\|?$", stripped):
+                line = re.sub(r"\s*(?:-->|->|==>)\s*", " → ", line)
+
+        # 5. Clean double asterisks inside heading lines: e.g. "### **2.2 Scope**" -> "### 2.2 Scope"
+        if re.match(r"^#{1,6}\s+", line):
+            line = re.sub(r"\*\*(.*?)\*\*", r"\1", line)
+
+        sanitized_lines.append(line)
+        i += 1
+
+    return "\n".join(sanitized_lines)
+
+
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
 _THEMATIC_BREAK_RE = re.compile(r"^(-{3,}|\*{3,}|_{3,})$")
 _BULLET_RE = re.compile(r"^([-\*+])\s+(.*)$")
@@ -203,19 +294,16 @@ _NUMBERED_RE = re.compile(r"^\d+[.)]\s+(.*)$")
 _BLOCKQUOTE_RE = re.compile(r"^>\s?(.*)$")
 
 
-def _parse_markdown_into_sections(markdown_content: str) -> tuple[str, List[Dict[str, Any]]]:
+def _parse_markdown_into_sections(markdown_content: str) -> tuple[str, list[dict[str, Any]]]:
     """Robust Markdown parser for converting arbitrary Markdown into proposal_generator
-    sections/blocks. Handles heading levels 1-6, thematic breaks (---), and blockquotes
-    (> ...) as their own block types instead of leaking the raw markdown characters into
-    the rendered document, and leaves inline formatting (**bold**, *italic*, `code`)
-    untouched so it can be rendered consistently downstream by proposal_generator's
-    shared inline-formatting tokenizer -- the same one used for bullets and tables."""
+    sections/blocks."""
+    markdown_content = sanitize_proposal_markdown(markdown_content)
     lines = markdown_content.splitlines()
     doc_title = "RFP Response Proposal"
-    sections: List[Dict[str, Any]] = []
-    current_section: Dict[str, Any] = {"title": "Executive Summary", "page_break_before": False, "blocks": []}
-    table_buffer: List[str] = []
-    quote_buffer: List[str] = []
+    sections: list[dict[str, Any]] = []
+    current_section: dict[str, Any] = {"title": "Executive Summary", "page_break_before": False, "blocks": []}
+    table_buffer: list[str] = []
+    quote_buffer: list[str] = []
 
     def flush_table():
         nonlocal table_buffer
@@ -347,7 +435,7 @@ def _parse_markdown_into_sections(markdown_content: str) -> tuple[str, List[Dict
     # near-blank page in the final document. A truly contentless heading
     # contributes nothing worth a page of its own regardless of why it
     # appeared, so it's dropped here rather than rendered.
-    def _is_effectively_empty(section: Dict[str, Any]) -> bool:
+    def _is_effectively_empty(section: dict[str, Any]) -> bool:
         blocks = section.get("blocks") or []
         if not blocks:
             return True
@@ -371,7 +459,7 @@ def _parse_markdown_into_sections(markdown_content: str) -> tuple[str, List[Dict
 def _fallback_markdown_to_pdf(
     markdown_content: str,
     output_pdf_path: str,
-    brand_cfg: Dict[str, Any]
+    brand_cfg: dict[str, Any]
 ) -> str:
     """Converts Markdown to DOCX via proposal_generator and then to PDF.
 

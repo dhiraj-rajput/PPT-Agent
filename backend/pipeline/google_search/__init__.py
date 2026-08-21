@@ -13,6 +13,10 @@ Usage:
     # result = {"website_url": "https://infosys.com", "linkedin_url": "https://linkedin.com/company/infosys"}
 """
 
-from pipeline.google_search.search_client import CompanyDiscovery, ExternalSearchClient, SearchResult
+from pipeline.google_search.search_client import (
+    CompanyDiscovery,
+    ExternalSearchClient,
+    SearchResult,
+)
 
 __all__ = ["CompanyDiscovery", "ExternalSearchClient", "SearchResult"]

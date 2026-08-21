@@ -6,9 +6,8 @@ OrbitAvanya — FastAPI backend entry point using MySQL as the primary database.
 
 from __future__ import annotations
 
-import sys
 import asyncio
-
+import sys
 
 # ── Windows: switch to ProactorEventLoop BEFORE uvicorn/asyncio start ────────
 # On Windows, the default SelectorEventLoop cannot spawn subprocesses, which
@@ -31,52 +30,53 @@ def proactor_loop_factory(use_subprocess: bool = False):
     return asyncio.ProactorEventLoop()
 # ─────────────────────────────────────────────────────────────────────────────
 
-import os
-import uvicorn
 import logging
+import os
+
+import uvicorn
 from dotenv import load_dotenv
 
 load_dotenv()
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from utils.db_client import (
-    close_connection,
-    init_motor_client,
-    close_motor_client,
-    _mysql_available,
-)
-
-# ---- Core feature routes ----
-from app.routes.companies import router as companies_router
-from app.routes.people import router as people_router
-from app.routes.reports import router as reports_router
-from app.routes.proposals import router as proposals_router
-from app.routes.tenders import router as tenders_router
-
-# ---- Auth & user management ----
-from app.routes.auth import router as auth_router
-from app.routes.users import router as users_router
-from app.routes.tasks import router as tasks_router
-from app.routes.meetings import router as meetings_router
-from app.routes.notifications import router as notifications_router
-from app.routes.integrations import router as integrations_router
-
-# ---- RFP Auto-Respond ----
-from app.routes.rfp_respond import router as rfp_respond_router
-from app.routes.templates import router as templates_router
-
-# ---- Preview / Pre-generation wizard ----
-from app.routes.preview import router as preview_router
 
 # ---- Analytics (retained — read-only, no outreach engine) ----
 from app.routes.analytics import router as analytics_router
+
+# ---- Auth & user management ----
+from app.routes.auth import router as auth_router
+
+# ---- Core feature routes ----
+from app.routes.companies import router as companies_router
+from app.routes.integrations import router as integrations_router
+from app.routes.meetings import router as meetings_router
 from app.routes.naics import router as naics_router
+from app.routes.notifications import router as notifications_router
+from app.routes.people import router as people_router
+
+# ---- Preview / Pre-generation wizard ----
+from app.routes.preview import router as preview_router
+from app.routes.proposals import router as proposals_router
+from app.routes.reports import router as reports_router
+
+# ---- RFP Auto-Respond ----
+from app.routes.rfp_respond import router as rfp_respond_router
 from app.routes.sic import router as sic_router
 
 # ---- Admin: Server Logs ----
 from app.routes.system_logs import router as system_logs_router
+from app.routes.tasks import router as tasks_router
+from app.routes.templates import router as templates_router
+from app.routes.tenders import router as tenders_router
+from app.routes.users import router as users_router
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from utils.db_client import (
+    _mysql_available,
+    close_connection,
+    close_motor_client,
+    init_motor_client,
+)
 
 _log = logging.getLogger("server")
 
@@ -88,7 +88,7 @@ _log = logging.getLogger("server")
 # completion so that cannot happen.
 _bg_tasks: set = set()
 
-def _spawn_task(coro_or_future) -> "asyncio.Task":
+def _spawn_task(coro_or_future) -> asyncio.Task:
     """Create an asyncio task and keep a strong reference to it."""
     task = asyncio.ensure_future(coro_or_future)
     _bg_tasks.add(task)
@@ -142,11 +142,17 @@ async def lifespan(app: FastAPI):
                 from utils.db_client import _mysql_available
                 if _mysql_available:
                     def _do_cleanup():
-                        from utils.db_client import get_sync_db_session
-                        from models.sql_models import ActiveLease, TaskStatus, ErrorLog, OTP
-                        from sqlalchemy import delete
-                        from datetime import datetime, timedelta, timezone
                         import logging
+                        from datetime import datetime, timedelta, timezone
+
+                        from models.sql_models import (
+                            OTP,
+                            ActiveLease,
+                            ErrorLog,
+                            TaskStatus,
+                        )
+                        from sqlalchemy import delete
+                        from utils.db_client import get_sync_db_session
                         log = logging.getLogger("ttl_cleanup")
                         now = datetime.now(timezone.utc)
                         with get_sync_db_session() as db:
@@ -266,9 +272,9 @@ if getattr(settings, "DEBUG_LOGIN_DIAGNOSTIC", False):
                 if _mysql_available:
                     def _diag_check():
                         import bcrypt as _bcrypt
-                        from utils.db_client import get_sync_db_session
                         from models.sql_models import User as SQLUser
                         from sqlalchemy import select
+                        from utils.db_client import get_sync_db_session
                         with get_sync_db_session() as db:
                             user = db.execute(
                                 select(SQLUser).where(SQLUser.email == email.lower().strip())
@@ -294,8 +300,8 @@ if getattr(settings, "DEBUG_LOGIN_DIAGNOSTIC", False):
 # ---------------------------------------------------------------------------
 # Global error logging
 # ---------------------------------------------------------------------------
-from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from utils.helpers import setup_logger as _setup_logger
 
@@ -371,6 +377,7 @@ app.include_router(system_logs_router, prefix="/api")
 
 # Serve downloaded tender documents statically
 from pathlib import Path
+
 from fastapi.staticfiles import StaticFiles
 
 _downloads_dir = Path("downloads")

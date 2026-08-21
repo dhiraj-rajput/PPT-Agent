@@ -25,8 +25,9 @@ What this module does:
 import re
 import unicodedata
 from html import unescape
-from typing import Optional
 from urllib.parse import urlparse, urlunparse
+
+from utils.helpers import is_valid_url, setup_logger
 
 from pipeline.linkedin.models import (
     CompanyLocation,
@@ -34,9 +35,7 @@ from pipeline.linkedin.models import (
     EmployeeInsights,
     JobPosting,
     LinkedInCompanyData,
-    RawLinkedInScrapedData,
 )
-from utils.helpers import is_valid_url, setup_logger
 
 logger = setup_logger(__name__)
 
@@ -564,16 +563,14 @@ class DataCleaner:
             unicode_category = unicodedata.category(char)
             # Keep: letters (L), numbers (N), punctuation (P), spaces (Z), symbols (S)
             # Remove: 'So' (Other Symbol = emojis), 'Cf' (Format chars), etc.
-            if unicode_category.startswith(("L", "N", "P", "Z")):
-                cleaned_chars.append(char)
-            elif char in ("-", "_", "+", "=", "/", "\\", "@", "#", "$", "%", "&"):
+            if unicode_category.startswith(("L", "N", "P", "Z")) or char in ("-", "_", "+", "=", "/", "\\", "@", "#", "$", "%", "&"):
                 cleaned_chars.append(char)
             else:
                 cleaned_chars.append(" ")  # Replace emoji with space
 
         return re.sub(r" +", " ", "".join(cleaned_chars)).strip()
 
-    def _clean_url(self, url: str) -> Optional[str]:
+    def _clean_url(self, url: str) -> str | None:
         """
         Cleans a URL by removing tracking parameters and normalizing format.
 
@@ -601,7 +598,7 @@ class DataCleaner:
         clean = urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", ""))
         return clean.rstrip("/")
 
-    def _clean_linkedin_url(self, url: str) -> Optional[str]:
+    def _clean_linkedin_url(self, url: str) -> str | None:
         """
         Cleans a LinkedIn-specific URL by removing tracking parameters (?trk=...).
         """
@@ -620,7 +617,7 @@ class DataCleaner:
 
         return url.rstrip("/")
 
-    def _parse_count_string(self, count_str) -> Optional[int]:
+    def _parse_count_string(self, count_str) -> int | None:
         """
         Parses a count string into an integer.
 

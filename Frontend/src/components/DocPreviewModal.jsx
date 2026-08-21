@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { X, Download, FileText, Loader2, AlertTriangle } from 'lucide-react';
 
 /**
@@ -24,6 +24,11 @@ export default function DocPreviewModal({ title, subtitle, filename, blob, fetch
   const isDocx = (filename || '').toLowerCase().endsWith('.docx');
   const isPdf = (filename || '').toLowerCase().endsWith('.pdf');
 
+  const fetchBlobRef = useRef(fetchBlob);
+  useEffect(() => {
+    fetchBlobRef.current = fetchBlob;
+  }, [fetchBlob]);
+
   useEffect(() => {
     let cancelled = false;
     let localUrl = null;
@@ -32,7 +37,7 @@ export default function DocPreviewModal({ title, subtitle, filename, blob, fetch
       setLoading(true);
       setError(null);
       try {
-        const fileBlob = blob || (fetchBlob ? await fetchBlob() : null);
+        const fileBlob = blob || (fetchBlobRef.current ? await fetchBlobRef.current() : null);
         if (!fileBlob) throw new Error('No file available to preview');
         if (cancelled) return;
 
@@ -62,8 +67,7 @@ export default function DocPreviewModal({ title, subtitle, filename, blob, fetch
       cancelled = true;
       if (localUrl) URL.revokeObjectURL(localUrl);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [blob, fetchBlob, filename]);
+  }, [blob, filename, isDocx]);
 
   return (
     <div

@@ -7,8 +7,8 @@ Usage:
     python scripts/migrate_mongo_local_to_atlas.py
 """
 
-import sys
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -16,10 +16,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-import pymongo
 from pymongo import MongoClient
 from pymongo.errors import BulkWriteError
-
 
 try:
     import certifi
@@ -37,11 +35,8 @@ from config.settings import settings
 
 LOCAL_DB_NAMES = ["company_scraper", "ppt_agent_db", "orbitai", "winbidai"]
 
-ATLAS_URI = settings.MONGO_URI if settings.MONGO_URI.startswith("mongodb+srv://") else (
-    "mongodb+srv://orbitavanyatech_db_user:GyuNyuCfTVRRezKM"
-    "@orbitavanya-cluster.1w6jibs.mongodb.net/winbidai?retryWrites=true&w=majority"
-)
-ATLAS_DB_NAME = getattr(settings, "MONGO_DB_NAME", "winbidai")
+ATLAS_URI = os.environ.get("ATLAS_MONGO_URI") or settings.MONGO_URI
+ATLAS_DB_NAME = os.environ.get("ATLAS_MONGO_DB_NAME") or getattr(settings, "MONGO_DB_NAME", "winbidai")
 
 BATCH_SIZE = 500
 

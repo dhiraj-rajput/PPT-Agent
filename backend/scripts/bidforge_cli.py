@@ -44,7 +44,7 @@ def main():
             parsed_rfp_json_path=args.parsed_rfp_json,
         )
         print(f"\nSUCCESS: {final_path}")
-    except Exception as exc:
+    except Exception:
         import traceback
         traceback.print_exc()
         sys.exit(1)

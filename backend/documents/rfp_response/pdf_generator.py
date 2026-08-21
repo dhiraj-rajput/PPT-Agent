@@ -14,7 +14,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ class PDFGenerator:
     def __init__(self, project_root: str = str(Path(__file__).resolve().parent.parent.parent)):
         self.project_root = Path(project_root)
 
-    def calculate_match_scores(self, rfp_data: Dict[str, Any], profiles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def calculate_match_scores(self, rfp_data: dict[str, Any], profiles: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """
         Dynamic weighted rule engine to score all Orbit Avanya products against the RFP.
         Matches features, domain mappings, compliance regulations, and tech stack components.
@@ -129,7 +129,11 @@ class PDFGenerator:
         with open(json_path, "r", encoding="utf-8") as f:
             proposal = json.load(f)
 
-        from documents.brand_config import get_brand_config, DEFAULT_CONFIDENTIALITY_TEXT, is_mock_solicitation
+        from documents.brand_config import (
+            DEFAULT_CONFIDENTIALITY_TEXT,
+            get_brand_config,
+            is_mock_solicitation,
+        )
 
         brand = get_brand_config()
         confidentiality_text = DEFAULT_CONFIDENTIALITY_TEXT
@@ -138,12 +142,15 @@ class PDFGenerator:
         title_text = "Teaming & Collaboration Proposal" if is_mock else "Teaming & Subcontracting Proposal"
         safe_ref_suffix = proposal["prime_contractor"].get("company_name", "PARTNER").upper().replace(" ", "_") if is_mock else solicitation_number.upper()
         
+        company_full_name = brand.get("company_name", "Our Company")
+        company_short_name = brand.get("company_short", "Company")
+        
         proposal_meta = {
             "title": title_text,
             "subtitle": proposal["metadata"].get("project_title", "IT Services Engagement"),
             "prepared_for": proposal["prime_contractor"].get("company_name", "Prime Contractor"),
-            "prepared_by": "Ranjeet Kumar — Founder & CEO, OrbitAvanya Tech LLP (AvanyaEdge)",
-            "engagement_ref": f"OAT-CES-2026-{safe_ref_suffix}-PITCH",
+            "prepared_by": f"Executive Leadership — {company_full_name}",
+            "engagement_ref": f"{company_short_name.upper()}-CES-2026-{safe_ref_suffix}-PITCH",
             "proposal_date": proposal["proposal_settings"].get("proposal_date", datetime.now().strftime("%B %d, %Y")),
             "validity": "90 days from proposal date",
             "confidentiality_text": confidentiality_text
@@ -162,14 +169,14 @@ class PDFGenerator:
         else:
             exec_blocks.append({
                 "type": "paragraph",
-                "text": "OrbitAvanya Tech LLP is pleased to present this teaming proposal as a subcontractor partner."
+                "text": f"{company_full_name} is pleased to present this teaming proposal as a subcontractor partner."
             })
 
         exec_blocks.append({
             "type": "signature",
-            "name": "Ranjeet Kumar Singh",
-            "title": "Founder & CEO",
-            "company": "OrbitAvanya Tech LLP (AvanyaEdge)"
+            "name": brand.get("signatory_name", "Authorized Representative"),
+            "title": brand.get("signatory_title", "Executive Leadership"),
+            "company": company_full_name
         })
 
         sections_list.append({
@@ -245,9 +252,9 @@ class PDFGenerator:
         # Section 3: Work Share Breakdown
         share_blocks = []
         share_text = (
-            f"OrbitAvanya Tech LLP proposes a work share allocation of {proposal['proposal_settings'].get('proposed_workshare_pct', 15.0)}% of the total project scope. The breakdown is structured as follows:"
+            f"{company_full_name} proposes a work share allocation of {proposal['proposal_settings'].get('proposed_workshare_pct', 15.0)}% of the total project scope. The breakdown is structured as follows:"
             if is_mock else
-            f"OrbitAvanya Tech LLP proposes a work share allocation of {proposal['proposal_settings'].get('proposed_workshare_pct', 15.0)}% of the total contract value. The breakdown is structured as follows:"
+            f"{company_full_name} proposes a work share allocation of {proposal['proposal_settings'].get('proposed_workshare_pct', 15.0)}% of the total contract value. The breakdown is structured as follows:"
         )
         share_blocks.append({
             "type": "paragraph",
@@ -264,7 +271,7 @@ class PDFGenerator:
                 "type": "table",
                 "headers": headers,
                 "rows": rows,
-                "col_widths": [4.5, 2.2]
+                "col_widths": [4.0, 3.0]
             })
 
         sections_list.append({
@@ -273,9 +280,12 @@ class PDFGenerator:
             "blocks": share_blocks
         })
 
-        # Section 4: Outreach & Contacts
+        # Section 4: Strategic Outreach
         outreach_blocks = []
-        outreach_blocks.append({"type": "subheading", "text": "Strategic Contact Point"})
+        outreach_blocks.append({
+            "type": "paragraph",
+            "text": f"Recipient: {proposal['prime_contractor'].get('contact_person', 'Executive Leadership')} ({proposal['prime_contractor'].get('company_name', 'Prime Contractor')})"
+        })
         outreach_blocks.append({
             "type": "paragraph",
             "text": f"Subject: {proposal.get('pitch_outreach', {}).get('subject', 'Teaming Partnership Inquiry')}"
@@ -317,7 +327,7 @@ class PDFGenerator:
         # Convert to PDF
         try:
             pdf_path = proposal_generator.convert_to_pdf(docx_path)
-            return Path(pdf_path)
+            return Path(pdf_path) if pdf_path else Path(docx_path)
         except Exception as e:
             logger.warning(f"LibreOffice PDF conversion failed: {e}. Fallback to docx.")
             return Path(docx_path)
@@ -335,43 +345,45 @@ class PDFGenerator:
         with open(json_path, "r", encoding="utf-8") as f:
             proposal = json.load(f)
 
-        profiles_json_path = self.project_root / "private" / "orbit_avanya_detailed_profiles.json"
-        if not profiles_json_path.exists():
-            raise FileNotFoundError(f"Product profiles JSON not found at: {profiles_json_path}")
-            
-        with open(profiles_json_path, "r", encoding="utf-8") as f:
-            profiles = json.load(f)
+        profiles = []
+        try:
+            from app.core.company_catalog import get_catalog_products
+            profiles = get_catalog_products()
+        except Exception as e:
+            logger.debug(f"Could not load products from catalog: {e}")
+
+        if not profiles:
+            profiles_json_path = self.project_root / "private" / "orbit_avanya_detailed_profiles.json"
+            if profiles_json_path.exists():
+                with open(profiles_json_path, "r", encoding="utf-8") as f:
+                    profiles = json.load(f)
+
+        if not profiles:
+            from documents.company_profile import (
+                get_company_name,
+                get_company_short_name,
+            )
+            c_name = get_company_name()
+            c_short = get_company_short_name()
+            profiles = [{
+                "product_name": f"{c_short} Enterprise Suite",
+                "company_name": c_name,
+                "industry_domain": "AI & Software",
+                "about_text": f"{c_name} Enterprise Solutions",
+                "key_features": ["Analytics", "Cloud", "Integration"],
+                "security_and_compliance": ["ISO 27001", "SOC 2"]
+            }]
 
         # Run dynamic scoring rule-engine
         ranked_products = self.calculate_match_scores(proposal, profiles)
         top_product = ranked_products[0]
 
-        brand = {
-            "company_name": "OrbitAvanya Tech LLP",
-            "company_short": "OrbitAvanya",
-            "logo_path": "assets/logo.png",
-            "cover_graphic_path": "assets/cover_graphic.png",
-            "body_font": "Fira Sans Light",
-            "heading_font": "Fira Sans SemiBold",
-            "accent_color": "1F3864",
-            "muted_color": "595959",
-            "address_line1": "13352 Kettle Camp Rd",
-            "address_line2": "Frisco, Texas 75035",
-            "phone": "+917021950643",
-            "website": "www.orbitavanyatech.com"
-        }
-
-        confidentiality_text = (
-            "This document contains confidential information of OrbitAvanya Tech LLP and its affiliates and/or licensors "
-            "(“OrbitAvanya”), which may include trade secrets, proprietary methodology, and business information. "
-            "The recipient acknowledges that this information has been developed by OrbitAvanya as valuable trade secrets "
-            "and shall remain its exclusive property, to be disclosed only to persons who have a need to know. "
-            "The recipient agrees not to copy or reproduce any information supplied herein without prior written permission "
-            "from an authorized representative of OrbitAvanya.\n\n"
-            "Reciprocally, OrbitAvanya acknowledges that information shared by the recipient during proposal review "
-            "and any subsequent engagement constitutes confidential information of the recipient, and agrees to protect "
-            "it to the same standard and to use it solely for the purposes of the engagement contemplated herein."
+        from documents.brand_config import (
+            DEFAULT_CONFIDENTIALITY_TEXT,
+            get_brand_config,
         )
+        brand = get_brand_config()
+        confidentiality_text = DEFAULT_CONFIDENTIALITY_TEXT
 
         is_mock = (
             not solicitation_number 
@@ -491,7 +503,7 @@ class PDFGenerator:
         # Convert to PDF
         try:
             pdf_path = proposal_generator.convert_to_pdf(docx_path)
-            return Path(pdf_path)
+            return Path(pdf_path) if pdf_path else Path(docx_path)
         except Exception as e:
             logger.warning(f"LibreOffice PDF conversion failed: {e}. Fallback to docx.")
             return Path(docx_path)

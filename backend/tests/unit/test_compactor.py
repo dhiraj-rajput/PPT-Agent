@@ -5,7 +5,6 @@ Unit tests for models/compactor.py, verifying URL helpers,
 rule-based compaction logic, and end-to-end compaction wrapper.
 """
 
-import pytest
 from pipeline.models.compactor import (
     BusinessIntelligenceCompactor,
     _canonical_website,

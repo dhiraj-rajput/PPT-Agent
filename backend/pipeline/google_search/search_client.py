@@ -15,16 +15,16 @@ All results are cached in MongoDB ('search_cache' collection) to avoid
 redundant API calls.
 """
 
-import re
-import time
 import asyncio
-import requests
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Optional, Any
+from typing import Any
 from urllib.parse import urlparse, urlsplit, urlunsplit
 
+import requests
 from config.settings import settings
+
 
 class ConfigurationError(Exception):
     pass
@@ -174,7 +174,7 @@ class CompanyDiscovery:
 
         return len(matches) / len(distinctive_tokens) >= 0.5
 
-    def find_official_website(self, company_name: str) -> Optional[str]:
+    def find_official_website(self, company_name: str) -> str | None:
         """
         Search for a company's official website using Tavily.
 
@@ -205,7 +205,7 @@ class CompanyDiscovery:
         logger.warning(f"Could not find official website for: {company_name}")
         return None
 
-    def find_linkedin_url(self, company_name: str) -> Optional[str]:
+    def find_linkedin_url(self, company_name: str) -> str | None:
         """
         Search for a company's LinkedIn page URL using Tavily.
 
@@ -236,7 +236,7 @@ class CompanyDiscovery:
         logger.warning(f"Could not find LinkedIn URL for: {company_name}")
         return None
 
-    def find_linkedin_from_website(self, website_url: str) -> Optional[str]:
+    def find_linkedin_from_website(self, website_url: str) -> str | None:
         """
         Find a company's LinkedIn page by searching with the website domain.
 
@@ -320,7 +320,7 @@ class CompanyDiscovery:
         clean_path = parsed.path.rstrip("/")
         return f"https://www.linkedin.com{clean_path}"
 
-    def _extract_name_from_linkedin_url(self, url: str) -> Optional[str]:
+    def _extract_name_from_linkedin_url(self, url: str) -> str | None:
         """Extract company slug from a linkedin.com/company/<slug> URL and humanize it."""
         parsed = urlparse(url)
         parts = [p for p in parsed.path.split("/") if p]
@@ -333,7 +333,7 @@ class CompanyDiscovery:
         """Return the bare domain (no www) from a URL."""
         try:
             domain = urlparse(url).netloc
-            return domain[4:] if domain.startswith("www.") else domain
+            return domain.removeprefix("www.")
         except Exception:
             return ""
 
@@ -341,7 +341,7 @@ class CompanyDiscovery:
     # MongoDB cache helpers
     # ---------------------------------------------------------------------------
 
-    def _get_cached(self, query: str) -> Optional[dict]:
+    def _get_cached(self, query: str) -> dict | None:
         """Look up a cached search result by query string."""
         try:
             collection = get_collection(COLLECTION_SEARCH_CACHE)
@@ -554,7 +554,7 @@ def _normalize_result_url(url: str) -> str:
 def _host_without_www(url_or_host: str) -> str:
     parsed = urlsplit(url_or_host if "://" in url_or_host else f"https://{url_or_host}")
     host = (parsed.hostname or "").lower()
-    return host[4:] if host.startswith("www.") else host
+    return host.removeprefix("www.")
 
 
 def _is_same_or_subdomain(host: str, root_host: str) -> bool:

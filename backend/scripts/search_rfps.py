@@ -10,26 +10,25 @@ Usage:
 """
 
 import argparse
-import json
 import sys
 from datetime import datetime, timezone
 
 # Reconfigure stdout/stderr to use UTF-8 to avoid encoding errors on Windows console
-if hasattr(sys.stdout, 'reconfigure'):
-    getattr(sys.stdout, 'reconfigure')(encoding='utf-8')
-if hasattr(sys.stderr, 'reconfigure'):
-    getattr(sys.stderr, 'reconfigure')(encoding='utf-8')
+if hasattr(sys.stdout, "reconfigure"):
+    getattr(sys.stdout, "reconfigure")(encoding="utf-8")
+if hasattr(sys.stderr, "reconfigure"):
+    getattr(sys.stderr, "reconfigure")(encoding="utf-8")
 
 from pathlib import Path
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.sam_gov.opportunities import SAMOpportunitiesClient
-from app.sam_gov.sam_client import SAMEntityClient
-from app.sam_gov.competitors import CompetitorExtractor
 from app.sam_gov.competitor_profiler import CompetitorProfiler
+from app.sam_gov.competitors import CompetitorExtractor
+from app.sam_gov.opportunities import SAMOpportunitiesClient
 from config.settings import settings
-from utils.db_client import ensure_all_indexes, close_connection, get_collection
+from utils.db_client import close_connection, ensure_all_indexes, get_collection
 from utils.helpers import setup_logger
 
 logger = setup_logger("search_rfps")
@@ -336,7 +335,7 @@ def profile_single_opportunity(selected_opp: dict, opp_client: SAMOpportunitiesC
             {"$set": rfp_profile},
             upsert=True
         )
-        logger.info(f"RFP details saved to MongoDB 'rfps' collection.")
+        logger.info("RFP details saved to MongoDB 'rfps' collection.")
     except Exception as e:
         logger.warning(f"Could not save RFP details to MongoDB: {e}")
 
@@ -368,9 +367,10 @@ def profile_single_opportunity(selected_opp: dict, opp_client: SAMOpportunitiesC
             # Run proposal compiler & PDF generator fast-path for mock mode
             try:
                 from pathlib import Path
-                from documents.rfp_response.rfp_parser import RFPParser
-                from documents.rfp_response.pitch_compiler import PitchCompiler
+
                 from documents.rfp_response.pdf_generator import PDFGenerator
+                from documents.rfp_response.pitch_compiler import PitchCompiler
+                from documents.rfp_response.rfp_parser import RFPParser
 
                 proj_root = Path(__file__).resolve().parent.parent
                 print("\n  [Mock Mode] Generating mock B2B proposal JSON & PDF...")
@@ -441,7 +441,7 @@ def profile_single_opportunity(selected_opp: dict, opp_client: SAMOpportunitiesC
                                 },
                                 upsert=True
                             )
-                            logger.info(f"Saved winner's company profile to MongoDB.")
+                            logger.info("Saved winner's company profile to MongoDB.")
                     except Exception as e:
                         logger.warning(f"Could not cache scraped winner profile: {e}")
             except Exception as e:

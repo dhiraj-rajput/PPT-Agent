@@ -6,9 +6,9 @@ cPanel Phusion Passenger / LiteSpeed WSGI entry point for OrbitAvanya FastAPI ba
 Provides a thread-safe WSGI adapter for FastAPI on LiteSpeed/Passenger.
 """
 
-import sys
-import os
 import asyncio
+import os
+import sys
 
 # Ensure backend root directory is in sys.path
 sys.path.insert(0, os.path.dirname(__file__))
@@ -60,9 +60,9 @@ except Exception as err:
             'server': (environ.get('SERVER_NAME', 'localhost'), int(environ.get('SERVER_PORT', 80) or 80)),
         }
 
-        if 'CONTENT_TYPE' in environ and environ['CONTENT_TYPE']:
+        if environ.get('CONTENT_TYPE'):
             scope['headers'].append((b'content-type', environ['CONTENT_TYPE'].encode('latin1')))
-        if 'CONTENT_LENGTH' in environ and environ['CONTENT_LENGTH']:
+        if environ.get('CONTENT_LENGTH'):
             scope['headers'].append((b'content-length', environ['CONTENT_LENGTH'].encode('latin1')))
 
         body_bytes = b''

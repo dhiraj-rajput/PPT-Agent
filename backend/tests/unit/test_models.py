@@ -10,17 +10,14 @@ Verifies that Pydantic models:
   - Serialize/deserialize correctly from dict → model → dict round-trip
 """
 
-import pytest
 from datetime import datetime, timezone
 
-from pydantic import ValidationError
-
+import pytest
 from pipeline.linkedin.models import (
     BIProfile,
     BusinessChallenge,
     CompanyDescription,
     CompanyIdentity,
-    CompanyLocation,
     CompanyPost,
     CompetitorMention,
     EmployeeInsights,
@@ -29,12 +26,10 @@ from pipeline.linkedin.models import (
     JobPosting,
     LeadershipMember,
     LinkedInCompanyData,
-    ProductOrService,
     RawLinkedInScrapedData,
     StrategicInitiative,
-    TechStackProfile,
 )
-
+from pydantic import ValidationError
 
 # ---------------------------------------------------------------------------
 # Helper: build a minimal valid LinkedInCompanyData
@@ -56,7 +51,7 @@ def make_company_data(**overrides) -> LinkedInCompanyData:
 class TestCompanyIdentity:
     def test_required_fields_must_be_provided(self):
         with pytest.raises(ValidationError):
-            CompanyIdentity(**{})  # Missing company_name, linkedin_url, company_slug
+            CompanyIdentity.model_validate({})  # Missing company_name, linkedin_url, company_slug
 
     def test_minimal_valid_identity(self):
         identity = CompanyIdentity(
@@ -146,7 +141,7 @@ class TestCompanyPost:
 class TestJobPosting:
     def test_job_title_required(self):
         with pytest.raises(ValidationError):
-            JobPosting(**{})  # job_title is required
+            JobPosting.model_validate({})  # job_title is required
 
     def test_minimal_valid_job(self):
         job = JobPosting(job_title="Senior Software Engineer")
@@ -174,7 +169,7 @@ class TestJobPosting:
 class TestLeadershipMember:
     def test_required_fields(self):
         with pytest.raises(ValidationError):
-            LeadershipMember(**{})  # full_name and job_title required
+            LeadershipMember.model_validate({})  # full_name and job_title required
 
     def test_minimal_leader(self):
         leader = LeadershipMember(full_name="Salil Parekh", job_title="CEO")
@@ -273,7 +268,7 @@ class TestBIProfile:
 class TestLinkedInCompanyData:
     def test_requires_company_slug_and_scraped_at(self):
         with pytest.raises(ValidationError):
-            LinkedInCompanyData(**{})  # Both required fields missing
+            LinkedInCompanyData.model_validate({})  # Both required fields missing
 
     def test_minimal_valid_company_data(self):
         data = make_company_data()
@@ -354,7 +349,7 @@ class TestRawLinkedInScrapedData:
 class TestGrowthSignal:
     def test_required_fields(self):
         with pytest.raises(ValidationError):
-            GrowthSignal(**{})  # signal_type and description required
+            GrowthSignal.model_validate({})  # signal_type and description required
 
     def test_minimal_signal(self):
         signal = GrowthSignal(

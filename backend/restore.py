@@ -4,11 +4,11 @@ restore.py
 Restores the complete MongoDB database state from company_scraper_db.zip.
 """
 
+import shutil
 import zipfile
 from pathlib import Path
-from bson import json_util
-import shutil
 
+from bson import json_util
 from config.settings import settings
 
 
@@ -17,9 +17,10 @@ def restore_database():
         from utils.db_client import get_database
         db = get_database()
         db_name = db.name
-    except Exception as e:
-        import pymongo
+    except Exception:
         from urllib.parse import urlparse
+
+        import pymongo
         _parsed = urlparse(settings.MONGO_URI)
         _safe_uri = f"{_parsed.scheme}://***:***@{_parsed.hostname}"
         print(f"[INFO] Using direct PyMongo connection to {_safe_uri}")

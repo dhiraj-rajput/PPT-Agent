@@ -13,8 +13,6 @@ from __future__ import annotations
 import asyncio
 import html as _html
 import logging
-import os
-from typing import Optional
 
 from config.settings import settings
 
@@ -33,9 +31,10 @@ async def _send(to_email: str, subject: str, html: str) -> None:
         )
         return
     try:
-        import aiosmtplib
         from email.mime.multipart import MIMEMultipart
         from email.mime.text import MIMEText
+
+        import aiosmtplib
 
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
@@ -141,7 +140,7 @@ async def send_otp_email(to_email: str, otp: str, purpose: str) -> None:
     try:
         await _send(to_email, copy["subject"], html)
     except Exception as exc:
-        logger.warning("🔑 [FALLBACK OTP] Delivery to %s failed: %s. Use OTP code: %s", to_email, exc, otp)
+        logger.error("Failed to deliver security OTP email to %s: %s", to_email, exc)
 
 
 # ---------------------------------------------------------------------------
@@ -152,7 +151,7 @@ async def send_invite_email(
     to_email: str,
     invitee_name: str,
     role: str,
-    inviter_name: Optional[str],
+    inviter_name: str | None,
     temp_password: str,
 ) -> None:
     login_link = f"{settings.CLIENT_URL}/login"
@@ -195,9 +194,9 @@ async def send_task_assigned_email(
     to_email: str,
     assignee_name: str,
     task_title: str,
-    due: Optional[str],
+    due: str | None,
     priority: str,
-    assigner_name: Optional[str],
+    assigner_name: str | None,
 ) -> None:
     tasks_link = f"{settings.CLIENT_URL}/tasks"
     # HTML-escape all user-controlled inputs
@@ -236,9 +235,9 @@ async def send_meeting_invite_email(
     date: str,
     time: str,
     meeting_type: str,
-    meeting_link: Optional[str],
-    location: Optional[str],
-    organizer_name: Optional[str],
+    meeting_link: str | None,
+    location: str | None,
+    organizer_name: str | None,
 ) -> None:
     meetings_link = f"{settings.CLIENT_URL}/meetings"
     # HTML-escape user-controlled values
@@ -285,17 +284,21 @@ async def send_meeting_cancelled_email(
     title: str,
     date: str,
     time: str,
-    organizer_name: Optional[str],
+    organizer_name: str | None,
 ) -> None:
+    safe_org = _html.escape(organizer_name or "A teammate")
+    safe_title = _html.escape(title or "Meeting")
+    safe_date = _html.escape(date or "")
+    safe_time = _html.escape(time or "")
     html = _shell(
         "Meeting cancelled",
         f"""
       <p style="color:#374151; font-size: 14px;">
-        {organizer_name or 'A teammate'} has cancelled the following meeting on OrbitAvanya:
+        {safe_org} has cancelled the following meeting on OrbitAvanya:
       </p>
       <p style="font-size: 14px; color:#111827; background:#f3f4f6; padding: 12px 16px; border-radius: 8px;">
-        <strong>{title}</strong><br/>
-        Was scheduled for {date} at {time}
+        <strong>{safe_title}</strong><br/>
+        Was scheduled for {safe_date} at {safe_time}
       </p>
       <p style="color:#374151; font-size: 14px;">No action is needed on your end.</p>
         """,
@@ -316,21 +319,20 @@ async def send_company_email_with_attachments(
     to_email: str,
     subject: str,
     body_html: str,
-    attachments: Optional[list[dict]] = None
+    attachments: list[dict[str, str]] | None = None,
 ) -> None:
-    """Send a custom email to a company with optional attachments (non-blocking file reads)."""
-    if attachments is None:
-        attachments = []
-    if not _is_smtp_configured():
-        logger.warning(
-            f"[Mailer] SMTP not configured — skipping email to {to_email}: {subject}"
-        )
+    """Sends a transactional email with optional file attachments (e.g. proposals, reports)."""
+    if not settings.SMTP_HOST or not settings.SMTP_USER:
+        logger.info(f"[Mailer:MOCK] send_company_email_with_attachments to={to_email} subject='{subject}'")
         return
+
     try:
-        import aiosmtplib
+        from email.mime.application import MIMEApplication
         from email.mime.multipart import MIMEMultipart
         from email.mime.text import MIMEText
-        from email.mime.application import MIMEApplication
+        from pathlib import Path
+
+        import aiosmtplib
 
         msg = MIMEMultipart("mixed")
         msg["Subject"] = subject
@@ -341,16 +343,20 @@ async def send_company_email_with_attachments(
         msg.attach(MIMEText(body_html, "html"))
 
         if attachments:
+            project_root = Path(__file__).resolve().parent.parent.parent
             for attach in attachments:
-                path = attach.get("path")
+                raw_path = attach.get("path")
                 filename = attach.get("filename")
-                if path and os.path.exists(path):
-                    content = await asyncio.to_thread(_read_file_sync, path)
-                    part = MIMEApplication(content, Name=filename)
-                    part['Content-Disposition'] = f'attachment; filename="{filename}"'
-                    msg.attach(part)
-                else:
-                    logger.warning(f"[Mailer] Attachment file not found: {path}")
+                if raw_path:
+                    p = Path(raw_path).resolve()
+                    # Security check: must exist and be within the project directory
+                    if p.exists() and (p.is_relative_to(project_root) or p.is_relative_to(Path(settings.UPLOAD_DIR).resolve())):
+                        content = await asyncio.to_thread(_read_file_sync, str(p))
+                        part = MIMEApplication(content, Name=filename or p.name)
+                        part['Content-Disposition'] = f'attachment; filename="{filename or p.name}"'
+                        msg.attach(part)
+                    else:
+                        logger.warning(f"[Mailer] Unauthorized or missing attachment file path: {raw_path}")
 
         await aiosmtplib.send(
             msg,
@@ -360,6 +366,7 @@ async def send_company_email_with_attachments(
             password=settings.SMTP_PASS,
             use_tls=(settings.SMTP_PORT == 465),
             start_tls=(settings.SMTP_PORT == 587),
+            timeout=30,
         )
         logger.info(f"[Mailer] Sent '{subject}' to {to_email} with attachments")
     except Exception as exc:

@@ -9,9 +9,9 @@ and 404 errors completely. The raw text/markdown is still collected and saved.
 """
 
 import asyncio
-from typing import Optional
 
-from crawl4ai import AsyncWebCrawler, CacheMode, CrawlerRunConfig, BrowserConfig
+from crawl4ai import AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig
+from utils.helpers import get_utc_now, setup_logger
 
 from pipeline.linkedin.constants import (
     SCRAPE_LAYER_BROWSER,
@@ -22,7 +22,6 @@ from pipeline.linkedin.constants import (
     build_company_posts_url,
 )
 from pipeline.linkedin.models import RawLinkedInScrapedData
-from utils.helpers import get_utc_now, setup_logger
 
 logger = setup_logger(__name__)
 
@@ -36,7 +35,6 @@ class BrowserLinkedInScraper:
 
     def __init__(self):
         """Initializes the scraper."""
-        pass
 
     async def scrape(
         self,
@@ -226,10 +224,10 @@ class BrowserLinkedInScraper:
 
     def _parse_extracted_content(
         self,
-        extracted_content: Optional[str],
+        extracted_content: str | None,
         page_label: str,
         company_slug: str,
-    ) -> Optional[dict | list]:
+    ) -> dict | list | None:
         """
         Parses the JSON string returned by the Crawl4AI extraction strategy.
         Normalizes the output: unwraps single-element lists containing a dict.

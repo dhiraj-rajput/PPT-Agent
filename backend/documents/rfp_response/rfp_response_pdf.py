@@ -18,24 +18,28 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 def generate_rfp_response_pdf(
     solicitation_number: str,
     mode: str,
-    sections: Dict[str, Any],
+    sections: dict[str, Any],
     agency_name: str = "Issuing Agency",
     proposal_title: str = "Technical & Management Proposal",
-    winner_name: Optional[str] = None,
-    project_root: Optional[str] = None,
+    winner_name: str | None = None,
+    project_root: str | None = None,
 ) -> str:
     """
     Generates a DOCX using proposal_generator.py and then converts it to PDF via LibreOffice.
     """
     root_path = Path(project_root) if project_root else Path(__file__).resolve().parent.parent.parent
-    from documents.brand_config import get_brand_config, DEFAULT_CONFIDENTIALITY_TEXT, is_mock_solicitation
+    from documents.brand_config import (
+        DEFAULT_CONFIDENTIALITY_TEXT,
+        get_brand_config,
+        is_mock_solicitation,
+    )
 
     is_mock = is_mock_solicitation(solicitation_number)
 
@@ -368,8 +372,6 @@ def generate_rfp_response_pdf(
         from backend.scripts import proposal_generator
     except ImportError:
         proposal_generator = importlib.import_module("scripts.proposal_generator")
-    import shutil
-    import subprocess
     
     if mode == "prime":
         suffix = "prime_proposal"
@@ -392,7 +394,7 @@ def generate_rfp_response_pdf(
     if sys.platform == "win32":
         try:
             import comtypes.client
-            logger.info(f"[RFPResponsePDF] Attempting Word COM conversion to PDF...")
+            logger.info("[RFPResponsePDF] Attempting Word COM conversion to PDF...")
             word = comtypes.client.CreateObject('Word.Application')
             word.Visible = False
             word.DisplayAlerts = 0 # Suppress popups
@@ -446,5 +448,5 @@ def generate_rfp_response_pdf(
             logger.warning(f"[RFPResponsePDF] Could not delete temporary DOCX: {e}")
         return pdf_path
     else:
-        logger.warning(f"[RFPResponsePDF] All PDF conversion methods failed. Returning DOCX path.")
+        logger.warning("[RFPResponsePDF] All PDF conversion methods failed. Returning DOCX path.")
         return docx_path

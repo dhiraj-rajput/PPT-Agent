@@ -9,23 +9,19 @@ Unified entry point for proposal generation supporting 4 modes:
 """
 
 import json
-import logging
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Any
 
 from pipeline.ai.client import get_ai_client
+from utils.helpers import setup_logger
+
+from documents.markdown_renderer import render_markdown_to_pdf
 from documents.prompts import (
-    RFP_PARSER_PROMPT,
-    INVENTORY_STATS_PROMPT,
-    COMPETITOR_PRICING_PROMPT,
-    SUMMARISER_PROMPT,
     FINAL_DOCUMENT_PROMPT,
+    PARTNERSHIP_PROPOSAL_PROMPT,
     PRIME_PROPOSAL_PROMPT,
     SUBCONTRACT_PROPOSAL_PROMPT,
-    PARTNERSHIP_PROPOSAL_PROMPT
 )
-from documents.markdown_renderer import render_markdown_to_pdf
-from utils.helpers import setup_logger
 
 logger = setup_logger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -33,11 +29,11 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 class ProposalGenerator:
     """Unified Orchestrator for all proposal generation workflows."""
 
-    def __init__(self, project_root: Optional[str] = None):
+    def __init__(self, project_root: str | None = None):
         self.project_root = Path(project_root) if project_root else PROJECT_ROOT
         self.ai_client = get_ai_client()
 
-    def generate(self, mode: str, rfp_data: Dict[str, Any], output_path: str, **kwargs) -> str:
+    def generate(self, mode: str, rfp_data: dict[str, Any], output_path: str, **kwargs) -> str:
         """Main entry point to execute the appropriate generation mode."""
         logger.info(f"[ProposalGenerator] Generating proposal in mode '{mode}' -> {output_path}")
 
@@ -57,7 +53,7 @@ class ProposalGenerator:
         pdf_path = render_markdown_to_pdf(markdown, output_path, template_path=template_path)
         return pdf_path
 
-    def _generate_prime(self, rfp_data: Dict[str, Any], **kwargs) -> str:
+    def _generate_prime(self, rfp_data: dict[str, Any], **kwargs) -> str:
         """Generates Prime proposal via LLM."""
         company_profile = self._load_company_profile()
         user_content = f"OUR COMPANY PROFILE:\n{json.dumps(company_profile, indent=2)}\n\nSOLICITATION / RFP DATA:\n{json.dumps(rfp_data, indent=2)}"
@@ -68,7 +64,7 @@ class ProposalGenerator:
         ]
         return self.ai_client.chat_text(messages)
 
-    def _generate_subcontract(self, rfp_data: Dict[str, Any], **kwargs) -> str:
+    def _generate_subcontract(self, rfp_data: dict[str, Any], **kwargs) -> str:
         """Generates Subcontract Teaming proposal via LLM."""
         winner_name = kwargs.get("winner_name", "Prime Contractor")
         workshare = kwargs.get("workshare", 15.0)
@@ -89,7 +85,7 @@ class ProposalGenerator:
         ]
         return self.ai_client.chat_text(messages)
 
-    def _generate_partnership(self, rfp_data: Dict[str, Any], **kwargs) -> str:
+    def _generate_partnership(self, rfp_data: dict[str, Any], **kwargs) -> str:
         """Generates B2B Partnership proposal via LLM."""
         partner_profile = kwargs.get("partner_profile", {})
         company_profile = self._load_company_profile()
@@ -105,7 +101,7 @@ class ProposalGenerator:
         ]
         return self.ai_client.chat_text(messages)
 
-    def _generate_bidforge(self, rfp_data: Dict[str, Any], **kwargs) -> str:
+    def _generate_bidforge(self, rfp_data: dict[str, Any], **kwargs) -> str:
         """Executes full BidForge pipeline on uploaded RFP data."""
         inventory = kwargs.get("inventory", {})
         competitor_intel = kwargs.get("competitor_intel", {})
@@ -123,8 +119,16 @@ class ProposalGenerator:
         ]
         return self.ai_client.chat_text(messages)
 
-    def _load_company_profile(self) -> Dict[str, Any]:
+    def _load_company_profile(self) -> dict[str, Any]:
         """Loads company profile data dynamically from MongoDB 'own_company_profile' or private files."""
+        try:
+            from documents.company_profile import get_full_company_profile
+            profile = get_full_company_profile()
+            if profile:
+                return profile
+        except Exception as e:
+            logger.debug(f"Could not load dynamic company profile: {e}")
+
         try:
             from utils.db_client import get_collection
             col = get_collection("own_company_profile")
@@ -141,10 +145,13 @@ class ProposalGenerator:
             except Exception as e:
                 logger.warning(f"Failed to load company profile from {profile_path}: {e}")
 
-        # Fallback profile
+        # Dynamic fallback based on company profile identity
+        from documents.company_profile import get_company_name, get_company_short_name
+        c_name = get_company_name()
+        c_short = get_company_short_name()
         return {
-            "company_name": "OrbitAvanya Tech LLP",
-            "product_name": "AvanyaEdge AI Platform",
-            "about_text": "OrbitAvanya delivers enterprise AI, custom cloud solutions, and full-stack software development.",
+            "company_name": c_name,
+            "product_name": f"{c_short} Enterprise AI Platform",
+            "about_text": f"{c_name} delivers enterprise AI, custom cloud solutions, and full-stack software development.",
             "key_features": ["Enterprise Systems", "AI/ML Integration", "Cloud Infrastructure", "Cybersecurity Compliance"]
         }

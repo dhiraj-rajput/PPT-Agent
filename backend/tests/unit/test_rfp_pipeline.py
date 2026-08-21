@@ -5,13 +5,12 @@ Unit tests for the SAM.gov Opportunities, Entity Management,
 competitor extraction, and profiling modules.
 """
 
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
+from app.sam_gov.competitor_profiler import CompetitorProfiler
+from app.sam_gov.competitors import CompetitorExtractor
 from app.sam_gov.opportunities import SAMOpportunitiesClient
 from app.sam_gov.sam_client import SAMEntityClient
-from app.sam_gov.competitors import CompetitorExtractor
-from app.sam_gov.competitor_profiler import CompetitorProfiler
 
 
 class TestSAMOpportunitiesClient:
@@ -129,4 +128,50 @@ class TestDocumentParser:
         text = parser.extract_text_from_html(html)
         assert "Title" in text
         assert "This is a test paragraph." in text
+
+
+class TestMarkdownSanitizer:
+    def test_sanitizes_ascii_box_art_and_arrows(self):
+        from documents.markdown_renderer import sanitize_proposal_markdown
+
+        raw_md = """\
+## 2.2 Turnkey Scope of Work & Key Deliverables
+
++-------------------------------------------------------------+
+|                  TURNKEY EXECUTION LIFECYCLE                |
++-------------------------------------------------------------+
+| 1. ENGINEERING  --> 2. FABRICATION  --> 3. LOGISTICS  --> 4. OFFSHORE |
+
++-------------------------------------------------------------+
+|                    ORBITAVANYA TECH LLP                     |
+|           (Prime Contractor & Turnkey Systems Integrator)   |
+| - Overall Project Management & Engineering Governance       |
+| - Quality Assurance, HSE Management & Regulatory Compliance |
++-------------------------------------------------------------+
+|
+v
++-------------------------------------------------------------+
+|          Pre-Qualified Tier-1 Marine Subcontractors         |
+| - Heavy Lift Vessel (HLV) & Marine Spread Operations        |
++-------------------------------------------------------------+
+
+| Commitment Parameter | Compliance Detail |
+|---|---|
+| **Bid Security (Bid Bond)** | INR 80,00,000 (Indian Bidder) |
+| **Bid Validity** | 180 days from the closing date |
+"""
+        cleaned = sanitize_proposal_markdown(raw_md)
+
+        # Asserts no stray ASCII box borders or arrows remain
+        assert "+-------------------------------------------------------------+" not in cleaned
+        assert "+---" not in cleaned
+        assert "\nv\n" not in cleaned
+        assert "-->" not in cleaned
+        assert "→" in cleaned
+        assert "- Overall Project Management & Engineering Governance" in cleaned
+        assert "- Heavy Lift Vessel (HLV) & Marine Spread Operations" in cleaned
+        # Asserts valid markdown table is preserved
+        assert "| Commitment Parameter | Compliance Detail |" in cleaned
+        assert "|---|---|" in cleaned
+        assert "| **Bid Security (Bid Bond)** | INR 80,00,000 (Indian Bidder) |" in cleaned
 

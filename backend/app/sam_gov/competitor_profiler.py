@@ -6,10 +6,9 @@ No AI, LLM, OpenAI, or Ollama models are used.
 Includes caching in MongoDB to avoid duplicate scraping.
 """
 
-import logging
 import re
-from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from config.settings import settings
 from utils.helpers import setup_logger
@@ -34,7 +33,7 @@ class CompetitorProfiler:
         except Exception as exc:
             logger.warning(f"MongoDB database connection failed in CompetitorProfiler: {exc}")
 
-    def profile_competitors(self, competitor_list: List[Dict[str, Any]], use_mock: bool = False) -> List[Dict[str, Any]]:
+    def profile_competitors(self, competitor_list: list[dict[str, Any]], use_mock: bool = False) -> list[dict[str, Any]]:
         """
         Takes a list of competitor dicts and profiles each one, returning a list of their intelligence profiles.
         Strictly limits the processing to the first self.limit competitors.
@@ -44,7 +43,7 @@ class CompetitorProfiler:
 
         import concurrent.futures
 
-        def _profile_single(comp: dict) -> Optional[dict]:
+        def _profile_single(comp: dict) -> dict | None:
             name = comp.get("company_name", "").strip()
             if not name:
                 return None
@@ -76,7 +75,7 @@ class CompetitorProfiler:
 
         return profiles
 
-    def _get_cached_profile(self, company_name: str) -> Optional[Dict[str, Any]]:
+    def _get_cached_profile(self, company_name: str) -> dict[str, Any] | None:
         """Retrieve profile from 'company_profiles' if it exists and is fresh."""
         if self.db is None:
             return None
@@ -100,7 +99,7 @@ class CompetitorProfiler:
 
         return None
 
-    def _save_profile_to_cache(self, profile: Dict[str, Any]) -> None:
+    def _save_profile_to_cache(self, profile: dict[str, Any]) -> None:
         """Saves a profile to the 'company_profiles' MongoDB collection."""
         if self.db is None:
             return
@@ -117,7 +116,7 @@ class CompetitorProfiler:
         except Exception as e:
             logger.warning(f"Failed to cache company profile: {e}")
 
-    def _extract_profile_via_search(self, company_name: str, use_mock: bool = False) -> Dict[str, Any]:
+    def _extract_profile_via_search(self, company_name: str, use_mock: bool = False) -> dict[str, Any]:
         """
         Runs a Tavily search for the company and extracts its profile fields using rules and regex.
         """
@@ -223,7 +222,7 @@ class CompetitorProfiler:
 
         return profile
 
-    def _get_mock_profile(self, company_name: str) -> Dict[str, Any]:
+    def _get_mock_profile(self, company_name: str) -> dict[str, Any]:
         """Provides mock profiles for testing/fallback."""
         name_lower = company_name.lower()
         if "booz allen" in name_lower:

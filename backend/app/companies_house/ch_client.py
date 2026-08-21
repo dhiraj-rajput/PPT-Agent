@@ -4,10 +4,11 @@ Handles HTTP Basic authentication, rate-limiting (600 req / 5 min), ETag caching
 and fallback mock dataset.
 """
 
-import time
 import logging
+import time
+from typing import Any
+
 import requests
-from typing import Dict, Any, Optional, List, Tuple
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -55,7 +56,7 @@ class RateLimiter:
     def __init__(self, max_requests: int = 580, window_seconds: int = 300):
         self.max_requests = max_requests
         self.window_seconds = window_seconds
-        self.timestamps: List[float] = []
+        self.timestamps: list[float] = []
 
     def acquire(self):
         now = time.time()
@@ -74,15 +75,15 @@ class ETagCache:
     MAX_SIZE = 1000
 
     def __init__(self):
-        self._cache: Dict[str, Dict[str, Any]] = {}
+        self._cache: dict[str, dict[str, Any]] = {}
 
-    def get(self, url: str) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+    def get(self, url: str) -> tuple[str | None, dict[str, Any] | None]:
         item = self._cache.get(url)
         if item:
             return item.get("etag"), item.get("data")
         return None, None
 
-    def set(self, url: str, etag: str, data: Dict[str, Any]):
+    def set(self, url: str, etag: str, data: dict[str, Any]):
         if url not in self._cache and len(self._cache) >= self.MAX_SIZE:
             # Evict oldest entry (FIFO approximation)
             oldest_key = next(iter(self._cache))
@@ -96,8 +97,9 @@ etag_cache = ETagCache()
 
 import os
 
+
 class CompaniesHouseClient:
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str | None = None):
         self.api_key = api_key or os.environ.get("COMPANIES_HOUSE_KEY", "") or getattr(settings, "COMPANIES_HOUSE_KEY", "")
         self.base_url = getattr(settings, "COMPANIES_HOUSE_API_URL", "https://api.company-information.service.gov.uk").rstrip("/")
         self.force_mock = getattr(settings, "FORCE_MOCK_COMPANIES_HOUSE", False)
@@ -106,7 +108,7 @@ class CompaniesHouseClient:
         # HTTP Basic Auth: API Key as username, empty password
         return (self.api_key, "")
 
-    def _make_request(self, endpoint: str, params: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+    def _make_request(self, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any] | None:
         if self.force_mock or not self.api_key:
             logger.info("[CompaniesHouseClient] Using mock fallback (no key or force_mock=True).")
             return None
@@ -143,7 +145,7 @@ class CompaniesHouseClient:
                     return None
 
                 if response.status_code == 401:
-                    logger.error(f"[CompaniesHouseClient] 401 Unauthorized: Invalid API key.")
+                    logger.error("[CompaniesHouseClient] 401 Unauthorized: Invalid API key.")
                     return None
 
                 if response.status_code == 429:
@@ -168,7 +170,7 @@ class CompaniesHouseClient:
     # ------------------------------------------------------------------
     # Public Data API Methods
     # ------------------------------------------------------------------
-    def get_company_profile(self, company_number: str) -> Dict[str, Any]:
+    def get_company_profile(self, company_number: str) -> dict[str, Any]:
         """Fetch full company profile by registration number."""
         clean_number = company_number.strip().zfill(8)
         data = self._make_request(f"company/{clean_number}")
@@ -188,38 +190,38 @@ class CompaniesHouseClient:
             "registered_office_address": {"address_line_1": "1 Main St", "locality": "London", "postal_code": "EC1A 1BB"}
         }
 
-    def get_registered_office_address(self, company_number: str) -> Optional[Dict[str, Any]]:
+    def get_registered_office_address(self, company_number: str) -> dict[str, Any] | None:
         clean_number = company_number.strip().zfill(8)
         return self._make_request(f"company/{clean_number}/registered-office-address")
 
-    def get_officers(self, company_number: str) -> Optional[Dict[str, Any]]:
+    def get_officers(self, company_number: str) -> dict[str, Any] | None:
         clean_number = company_number.strip().zfill(8)
         return self._make_request(f"company/{clean_number}/officers")
 
-    def get_filing_history(self, company_number: str) -> Optional[Dict[str, Any]]:
+    def get_filing_history(self, company_number: str) -> dict[str, Any] | None:
         clean_number = company_number.strip().zfill(8)
         return self._make_request(f"company/{clean_number}/filing-history")
 
-    def get_psc(self, company_number: str) -> Optional[Dict[str, Any]]:
+    def get_psc(self, company_number: str) -> dict[str, Any] | None:
         clean_number = company_number.strip().zfill(8)
         return self._make_request(f"company/{clean_number}/persons-with-significant-control")
 
-    def get_charges(self, company_number: str) -> Optional[Dict[str, Any]]:
+    def get_charges(self, company_number: str) -> dict[str, Any] | None:
         clean_number = company_number.strip().zfill(8)
         return self._make_request(f"company/{clean_number}/charges")
 
-    def get_insolvency(self, company_number: str) -> Optional[Dict[str, Any]]:
+    def get_insolvency(self, company_number: str) -> dict[str, Any] | None:
         clean_number = company_number.strip().zfill(8)
         return self._make_request(f"company/{clean_number}/insolvency")
 
-    def search_companies(self, q: str, items_per_page: int = 20, start_index: int = 0) -> Dict[str, Any]:
+    def search_companies(self, q: str, items_per_page: int = 20, start_index: int = 0) -> dict[str, Any]:
         """Free-text search for companies by name or keyword."""
         res = self._make_request("search/companies", params={"q": q, "items_per_page": items_per_page, "start_index": start_index})
         if res:
             return res
         return {"items": [], "total_results": 0}
 
-    def search_companies_advanced(self, sic_codes: Optional[List[str]] = None, company_status: Optional[str] = None, items_per_page: int = 20) -> Dict[str, Any]:
+    def search_companies_advanced(self, sic_codes: list[str] | None = None, company_status: str | None = None, items_per_page: int = 20) -> dict[str, Any]:
         params = {"items_per_page": items_per_page}
         if sic_codes:
             params["sic_codes"] = ",".join(sic_codes)
@@ -228,9 +230,9 @@ class CompaniesHouseClient:
         res = self._make_request("advanced-search/companies", params=params)
         return res or {"items": [], "total_results": 0}
 
-    def search_companies_alphabetical(self, q: str) -> Dict[str, Any]:
+    def search_companies_alphabetical(self, q: str) -> dict[str, Any]:
         res = self._make_request("alphabetical-search/companies", params={"q": q})
         return res or {"items": [], "total_results": 0}
 
-    def get_officer_appointments(self, officer_id: str) -> Optional[Dict[str, Any]]:
+    def get_officer_appointments(self, officer_id: str) -> dict[str, Any] | None:
         return self._make_request(f"officers/{officer_id}/appointments")

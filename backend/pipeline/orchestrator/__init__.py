@@ -11,6 +11,6 @@ Usage:
     result = run_pipeline("https://linkedin.com/company/infosys")
 """
 
-from pipeline.orchestrator.graph import run_pipeline, build_graph
+from pipeline.orchestrator.graph import build_graph, run_pipeline
 
-__all__ = ["run_pipeline", "build_graph"]
+__all__ = ["build_graph", "run_pipeline"]

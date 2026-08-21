@@ -13,14 +13,14 @@ fallback that just surfaces the raw search snippets without AI synthesis.
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict, List
+from typing import Any
 
 from utils.helpers import setup_logger
 
 logger = setup_logger(__name__)
 
 
-def gather_competitor_intel(parsed_rfp: Dict[str, Any], inventory: Dict[str, Any]) -> Dict[str, Any]:
+def gather_competitor_intel(parsed_rfp: dict[str, Any], inventory: dict[str, Any]) -> dict[str, Any]:
     """
     Returns {"items": [{item_name, competitors: [{name, price, notes}], avg_price, generated_via}]}
     """
@@ -59,10 +59,10 @@ def gather_competitor_intel(parsed_rfp: Dict[str, Any], inventory: Dict[str, Any
     return result
 
 
-async def _search_market_pricing(item_names: List[str]) -> Dict[str, List[Dict[str, str]]]:
+async def _search_market_pricing(item_names: list[str]) -> dict[str, list[dict[str, str]]]:
     """Uses the existing external search client to look up live market/competitor
     pricing signals for each requested item concurrently via asyncio.gather."""
-    results: Dict[str, List[Dict[str, str]]] = {}
+    results: dict[str, list[dict[str, str]]] = {}
     try:
         from config.settings import settings
         from pipeline.google_search.search_client import ExternalSearchClient
@@ -71,7 +71,7 @@ async def _search_market_pricing(item_names: List[str]) -> Dict[str, List[Dict[s
         logger.warning(f"[BidForge:Competitor] Could not initialize search client: {exc}")
         return results
 
-    async def _search_single_item(item: str) -> tuple[str, List[Dict[str, str]]]:
+    async def _search_single_item(item: str) -> tuple[str, list[dict[str, str]]]:
         try:
             found = await client.search_company_sources(
                 company_name="",
@@ -92,8 +92,8 @@ async def _search_market_pricing(item_names: List[str]) -> Dict[str, List[Dict[s
 
 
 def _synthesize_competitor_pricing_ai(
-    parsed_rfp: Dict[str, Any], snippets_by_item: Dict[str, List[Dict[str, str]]]
-) -> Dict[str, Any]:
+    parsed_rfp: dict[str, Any], snippets_by_item: dict[str, list[dict[str, str]]]
+) -> dict[str, Any]:
     from pipeline.ai.client import get_ai_client
 
     blocks = []
@@ -121,7 +121,7 @@ def _synthesize_competitor_pricing_ai(
     return result
 
 
-def _synthesize_competitor_pricing_rules(snippets_by_item: Dict[str, List[Dict[str, str]]]) -> Dict[str, Any]:
+def _synthesize_competitor_pricing_rules(snippets_by_item: dict[str, list[dict[str, str]]]) -> dict[str, Any]:
     logger.info("[BidForge:Competitor] Running rule-based competitor snippet passthrough.")
     items = []
     for item, snippets in snippets_by_item.items():

@@ -7,9 +7,9 @@ Covers URL validation, slug extraction, datetime helpers,
 and the count-string parser utilities.
 """
 
-import pytest
 from datetime import datetime, timezone
 
+import pytest
 from utils.helpers import (
     extract_company_slug_from_url,
     format_datetime_for_display,
@@ -18,7 +18,6 @@ from utils.helpers import (
     normalize_linkedin_company_url,
     safe_json_dumps,
 )
-
 
 # ---------------------------------------------------------------------------
 # is_valid_url

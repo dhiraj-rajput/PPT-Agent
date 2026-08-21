@@ -12,7 +12,6 @@ same way api/routes/proposals.py does for the existing pipelines.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Optional
 
 from utils.helpers import setup_logger
 
@@ -23,9 +22,9 @@ def run_bidforge_pipeline(
     rfp_file_path: str,
     output_name: str,
     solicitation_number: str = "",
-    template_path: Optional[str] = None,
-    wizard_config: Optional[str] = None,
-    parsed_rfp_json_path: Optional[str] = None,
+    template_path: str | None = None,
+    wizard_config: str | None = None,
+    parsed_rfp_json_path: str | None = None,
 ) -> str:
     """
     parsed_rfp_json_path: if the caller already ran parse_uploaded_rfp for
@@ -36,11 +35,11 @@ def run_bidforge_pipeline(
     dozens of chunked LLM calls; there is no reason to pay that cost twice
     for the same upload.
     """
-    from documents.bidforge.parse import parse_uploaded_rfp
-    from documents.bidforge.inventory import analyze_inventory
     from documents.bidforge.competitor_intel import gather_competitor_intel
-    from documents.bidforge.summarise import summarise_pricing_strategy
     from documents.bidforge.document_generator import generate_final_document
+    from documents.bidforge.inventory import analyze_inventory
+    from documents.bidforge.parse import parse_uploaded_rfp
+    from documents.bidforge.summarise import summarise_pricing_strategy
 
     if parsed_rfp_json_path and Path(parsed_rfp_json_path).exists():
         import json as _json

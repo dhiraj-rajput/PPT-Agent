@@ -30,16 +30,17 @@ This version:
 from __future__ import annotations
 
 import json
-import logging
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
-from utils.helpers import setup_logger
 from pipeline.ai.client import get_ai_client
+from utils.helpers import setup_logger
+
 from documents.prompts import (
-    RFP_PARSER_PROMPT,
     RFP_CHUNK_EXTRACT_PROMPT,
     RFP_MERGE_SYNTHESIS_PROMPT,
+    RFP_PARSER_PROMPT,
 )
 
 logger = setup_logger(__name__)
@@ -68,7 +69,7 @@ _SECTION_HEADER_RE = None  # compiled lazily in _get_section_header_re()
 
 class RFPParser:
     # Optional progress_callback set by parse_requirements(...)
-    _progress_cb: Optional[Callable[[int, str], None]] = None
+    _progress_cb: Callable[[int, str], None] | None = None
     """Extracts text from RFP files and parses requirements/structure, chunking
     instead of truncating when the source document is large."""
 
@@ -78,7 +79,7 @@ class RFPParser:
         self.rfp_docs_dir = self.project_root / "downloads" / "opportunities" / solicitation_number / "rfp_docs"
         self._progress_cb = None
 
-    def extract_text_from_pdfs(self) -> Dict[str, str]:
+    def extract_text_from_pdfs(self) -> dict[str, str]:
         """Extracts text from all supported RFP documents in the directory."""
         extracted_text = {}
         if not self.rfp_docs_dir.exists():
@@ -108,9 +109,9 @@ class RFPParser:
 
     def parse_requirements(
         self,
-        doc_texts: Dict[str, str],
-        progress_callback: Optional[Callable[[int, str], None]] = None,
-    ) -> Dict[str, Any]:
+        doc_texts: dict[str, str],
+        progress_callback: Callable[[int, str], None] | None = None,
+    ) -> dict[str, Any]:
         """Parses extracted RFP text into the full structured shape, never
         truncating -- chunks + merges for large documents instead.
 
@@ -130,7 +131,7 @@ class RFPParser:
         logger.info(f"[RFPParser] Parsing {char_count:,} chars of extracted RFP text "
                     f"({'single-call' if char_count <= SINGLE_CALL_CHAR_THRESHOLD else 'chunked'} path).")
 
-        def ai_fn() -> Dict[str, Any]:
+        def ai_fn() -> dict[str, Any]:
             if char_count <= SINGLE_CALL_CHAR_THRESHOLD:
                 if self._progress_cb:
                     self._progress_cb(12, "Parsing RFP in a single pass…")
@@ -140,7 +141,7 @@ class RFPParser:
             result["raw_text"] = combined_text
             return result
 
-        def rule_fn() -> Dict[str, Any]:
+        def rule_fn() -> dict[str, Any]:
             logger.warning("[RFPParser] Using rule fallback for RFP parsing.")
             return self._rule_fallback(combined_text)
 
@@ -152,7 +153,7 @@ class RFPParser:
     # Fast path: single call for documents under the threshold
     # ------------------------------------------------------------------
 
-    def _parse_single_call(self, text: str) -> Dict[str, Any]:
+    def _parse_single_call(self, text: str) -> dict[str, Any]:
         client = get_ai_client()
         messages = [
             {"role": "system", "content": RFP_PARSER_PROMPT},
@@ -211,7 +212,7 @@ class RFPParser:
         _SECTION_HEADER_RE = re.compile(combined, re.IGNORECASE | re.MULTILINE)
         return _SECTION_HEADER_RE
 
-    def _chunk_text(self, text: str) -> List[str]:
+    def _chunk_text(self, text: str) -> list[str]:
         """
         Prefer section-aware splits so multi-section tenders (ITB, SOW, BEC,
         GCC, annexures, price schedules) stay coherent for the LLM. Fall back
@@ -227,7 +228,7 @@ class RFPParser:
         if len(matches) >= 2:
             # Build segments from header positions (include preamble before first header)
             boundaries = [0] + [m.start() for m in matches] + [len(text)]
-            segments: List[str] = []
+            segments: list[str] = []
             for i in range(len(boundaries) - 1):
                 seg = text[boundaries[i]:boundaries[i + 1]].strip()
                 if seg:
@@ -236,7 +237,7 @@ class RFPParser:
             # Pack consecutive short sections together so we don't fire one LLM
             # call per 1–2 page annexure header (was producing 60–70 chunks and
             # making the UI look stuck for 10+ minutes).
-            packed: List[str] = []
+            packed: list[str] = []
             buf = ""
             min_pack = max(8_000, SECTION_TARGET_SIZE // 4)
             for seg in segments:
@@ -260,7 +261,7 @@ class RFPParser:
             segments = packed
 
             # Sub-split any segment that is still huge
-            chunks: List[str] = []
+            chunks: list[str] = []
             for seg in segments:
                 if len(seg) <= SECTION_TARGET_SIZE:
                     chunks.append(seg)
@@ -275,7 +276,7 @@ class RFPParser:
 
         return self._fixed_size_chunks(text)
 
-    def _fixed_size_chunks(self, text: str) -> List[str]:
+    def _fixed_size_chunks(self, text: str) -> list[str]:
         chunks = []
         start = 0
         n = len(text)
@@ -287,7 +288,7 @@ class RFPParser:
             start = end - CHUNK_OVERLAP
         return chunks
 
-    def _parse_chunked(self, text: str) -> Dict[str, Any]:
+    def _parse_chunked(self, text: str) -> dict[str, Any]:
         client = get_ai_client()
         chunks = self._chunk_text(text)
         total = len(chunks)
@@ -298,7 +299,7 @@ class RFPParser:
                 f"Section-aware split: {total} chunk(s) — extracting requirements…",
             )
 
-        chunk_extracts: List[Dict[str, Any]] = []
+        chunk_extracts: list[dict[str, Any]] = []
         for idx, chunk in enumerate(chunks, start=1):
             # Map chunk index into progress band 8 → 36 (leave room for merge)
             pct = 8 + int(28 * (idx - 1) / max(total, 1))
@@ -366,7 +367,7 @@ class RFPParser:
     # Fallbacks
     # ------------------------------------------------------------------
 
-    def _empty_parse_structure(self) -> Dict[str, Any]:
+    def _empty_parse_structure(self) -> dict[str, Any]:
         return {
             "solicitation_number": self.solicitation_number,
             "parsed_content": "No content extracted.",
@@ -380,7 +381,7 @@ class RFPParser:
             "raw_text": "",
         }
 
-    def _rule_fallback(self, text: str) -> Dict[str, Any]:
+    def _rule_fallback(self, text: str) -> dict[str, Any]:
         return {
             "solicitation_number": self.solicitation_number,
             "parsed_content": text[:2000],

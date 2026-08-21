@@ -7,9 +7,9 @@ Tests every cleaning function in isolation without hitting any external services
 All inputs are hand-crafted strings that simulate real LinkedIn page noise.
 """
 
-import pytest
 from datetime import datetime, timezone
 
+import pytest
 from pipeline.linkedin.data_cleaner import DataCleaner, clean_raw_text_for_llm
 from pipeline.linkedin.models import (
     CompanyIdentity,
@@ -20,7 +20,6 @@ from pipeline.linkedin.models import (
     LeadershipMember,
     LinkedInCompanyData,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

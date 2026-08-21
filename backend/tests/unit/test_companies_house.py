@@ -4,10 +4,11 @@ Tests CompaniesHouseClient, CompaniesHouseTendersClient, DocumentParser, and Com
 """
 
 import unittest
+
 from app.companies_house.ch_client import CompaniesHouseClient
-from app.companies_house.opportunities import CompaniesHouseTendersClient
-from app.companies_house.document_parser import CompaniesHouseDocumentParser
 from app.companies_house.competitor_profiler import CompaniesHouseCompetitorProfiler
+from app.companies_house.document_parser import CompaniesHouseDocumentParser
+from app.companies_house.opportunities import CompaniesHouseTendersClient
 
 
 class TestCompaniesHouseIntegration(unittest.TestCase):

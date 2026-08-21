@@ -23,13 +23,8 @@ WHY THIS APPROACH (not the old "inject content into template" approach):
 
 from __future__ import annotations
 
-import io
-import logging
-import re
-import tempfile
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from utils.helpers import setup_logger
 
@@ -61,7 +56,7 @@ _SECTION_ORDER = [
 ]
 
 
-def fill_template(template_path: str, sections: Dict[str, Any], output_path: str) -> str:
+def fill_template(template_path: str, sections: dict[str, Any], output_path: str) -> str:
     """
     Generate a professional proposal document using branding from an uploaded template.
 
@@ -122,13 +117,15 @@ def fill_template(template_path: str, sections: Dict[str, Any], output_path: str
 # Brand extraction
 # ---------------------------------------------------------------------------
 
-def _extract_brand(template_path: str) -> Dict[str, Any]:
+def _extract_brand(template_path: str) -> dict[str, Any]:
     """
     Extract brand assets from the template using TemplateAnalyzer.
     Falls back to the default OrbitAvanya brand if extraction fails.
     """
     try:
-        from documents.template_analyzer import TemplateAnalyzer, get_default_brand_profile
+        from documents.template_analyzer import (
+            TemplateAnalyzer,
+        )
         analyzer = TemplateAnalyzer(template_path)
         profile = analyzer.analyze()
         brand = profile.to_brand_config_dict()
@@ -149,7 +146,7 @@ def _extract_brand(template_path: str) -> Dict[str, Any]:
 # Proposal metadata
 # ---------------------------------------------------------------------------
 
-def _build_proposal_meta(sections: Dict[str, Any], brand: Dict[str, Any]) -> Dict[str, Any]:
+def _build_proposal_meta(sections: dict[str, Any], brand: dict[str, Any]) -> dict[str, Any]:
     """Build the proposal-level metadata block for proposal_generator."""
     from documents.brand_config import DEFAULT_CONFIDENTIALITY_TEXT
     return {
@@ -168,7 +165,7 @@ def _build_proposal_meta(sections: Dict[str, Any], brand: Dict[str, Any]) -> Dic
 # Section blocks builder
 # ---------------------------------------------------------------------------
 
-def _build_sections_list(sections: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _build_sections_list(sections: dict[str, Any]) -> list[dict[str, Any]]:
     """
     Convert the AI/rule-based sections dict into the block-list format
     expected by proposal_generator.add_section().
@@ -209,9 +206,9 @@ def _build_sections_list(sections: Dict[str, Any]) -> List[Dict[str, Any]]:
     return result
 
 
-def _content_to_blocks(key: str, content: Any) -> List[Dict[str, Any]]:
+def _content_to_blocks(key: str, content: Any) -> list[dict[str, Any]]:
     """Convert a section's content to a list of proposal_generator block dicts."""
-    blocks: List[Dict[str, Any]] = []
+    blocks: list[dict[str, Any]] = []
 
     # Pricing table dict
     if isinstance(content, dict) and "headers" in content and "rows" in content:

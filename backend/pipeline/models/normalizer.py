@@ -18,8 +18,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Dict, List, Optional
-
+from typing import Any
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -72,12 +71,12 @@ def ensure_absolute_url(url: str) -> str:
     return u
 
 
-def clean_list(items: Optional[List[Any]], max_len: int = 150) -> List[str]:
+def clean_list(items: list[Any] | None, max_len: int = 150) -> list[str]:
     """Clean, strip, de-duplicate and length-filter list elements."""
     if not items:
         return []
     seen: set = set()
-    cleaned: List[str] = []
+    cleaned: list[str] = []
     for item in items:
         if not item:
             continue
@@ -188,9 +187,9 @@ def clean_linkedin_garbage(text: str) -> str:
     return cleaned
 
 
-def merge_lists(*lists: Optional[List[str]], max_len: int = 150) -> List[str]:
+def merge_lists(*lists: list[str] | None, max_len: int = 150) -> list[str]:
     """Merge multiple lists, clean and de-duplicate."""
-    combined: List[str] = []
+    combined: list[str] = []
     for lst in lists:
         if lst:
             combined.extend(lst)
@@ -202,11 +201,11 @@ def merge_lists(*lists: Optional[List[str]], max_len: int = 150) -> List[str]:
 # ---------------------------------------------------------------------------
 
 def normalize_company_intelligence(
-    website_data: Dict[str, Any],
-    linkedin_data: Dict[str, Any],
-    google_data: Dict[str, Any],
-    external_insights: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    website_data: dict[str, Any],
+    linkedin_data: dict[str, Any],
+    google_data: dict[str, Any],
+    external_insights: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """
     Normalise and pre-merge data from Website, LinkedIn, Google Search, and external insights.
 
@@ -225,20 +224,20 @@ def normalize_company_intelligence(
     # ------------------------------------------------------------------
 
     # Website data can be a CompanyMongoRecord (with nested company_data) or a flat WebsiteData dict
-    w_intel: Dict[str, Any] = (
+    w_intel: dict[str, Any] = (
         website_data.get("company_data", website_data)
         if isinstance(website_data.get("company_data"), dict)
         else website_data
     )
 
     # LinkedIn identity lives under the "identity" key in LinkedInCompanyData
-    li_identity: Dict[str, Any] = linkedin_data.get("identity") or {}
-    li_bi: Dict[str, Any] = linkedin_data.get("bi_profile") or {}
-    li_desc: Dict[str, Any] = linkedin_data.get("description") or {}
+    li_identity: dict[str, Any] = linkedin_data.get("identity") or {}
+    li_bi: dict[str, Any] = linkedin_data.get("bi_profile") or {}
+    li_desc: dict[str, Any] = linkedin_data.get("description") or {}
 
     # External insights (LLM-structured search profile)
-    ext: Dict[str, Any] = external_insights or {}
-    ext_insights_list: List[Dict[str, Any]] = ext.get("insights") or []
+    ext: dict[str, Any] = external_insights or {}
+    ext_insights_list: list[dict[str, Any]] = ext.get("insights") or []
 
     # ------------------------------------------------------------------
     # 2. Company name & website
@@ -261,10 +260,10 @@ def normalize_company_intelligence(
     # ------------------------------------------------------------------
     # 3. Locations
     # ------------------------------------------------------------------
-    website_locs: List[str] = w_intel.get("locations", [])
+    website_locs: list[str] = w_intel.get("locations", [])
     website_hq = w_intel.get("headquarters") or ""
     linkedin_locs_raw = linkedin_data.get("office_locations") or []
-    linkedin_locs: List[str] = []
+    linkedin_locs: list[str] = []
     if isinstance(linkedin_locs_raw, list):
         for loc in linkedin_locs_raw:
             if isinstance(loc, dict):
@@ -293,16 +292,16 @@ def normalize_company_intelligence(
     # ------------------------------------------------------------------
     # LinkedIn products live under bi_profile.products_and_services
     li_products_raw = li_bi.get("products_and_services") or []
-    li_product_names: List[str] = [
+    li_product_names: list[str] = [
         p.get("name", "") for p in li_products_raw if isinstance(p, dict) and p.get("name")
     ]
 
     # External insights products_and_services
     ext_products_raw = ext.get("products_and_services") or []
-    ext_product_names: List[str] = [
+    ext_product_names: list[str] = [
         p.get("name", "") for p in ext_products_raw if isinstance(p, dict) and p.get("name")
     ]
-    ext_service_names: List[str] = [
+    ext_service_names: list[str] = [
         p.get("description", "") for p in ext_products_raw
         if isinstance(p, dict) and p.get("description") and len(p.get("description", "")) < 120
     ]
@@ -344,7 +343,7 @@ def normalize_company_intelligence(
     # 6. Leadership
     # ------------------------------------------------------------------
     li_leadership_raw = linkedin_data.get("leadership_team") or []
-    li_leadership: List[str] = [
+    li_leadership: list[str] = [
         m.get("full_name", "") for m in li_leadership_raw
         if isinstance(m, dict) and m.get("full_name")
     ]
@@ -393,7 +392,7 @@ def normalize_company_intelligence(
     # ------------------------------------------------------------------
     # 9. Google search snippets (raw results list)
     # ------------------------------------------------------------------
-    google_snippets: List[str] = []
+    google_snippets: list[str] = []
     results_list = (
         google_data.get("results", [])
         if isinstance(google_data, dict)
@@ -452,7 +451,7 @@ def normalize_company_intelligence(
     tagline = li_identity.get("tagline") or ""
 
     # Founded year — correct path: identity.founded_year
-    founded_year: Optional[int] = None
+    founded_year: int | None = None
     raw_founded = (
         li_identity.get("founded_year")
         or linkedin_data.get("founded_year")
@@ -469,7 +468,7 @@ def normalize_company_intelligence(
     # ------------------------------------------------------------------
     # 12. Competitors (from external search insights)
     # ------------------------------------------------------------------
-    competitors: List[str] = []
+    competitors: list[str] = []
     for insight in ext_insights_list:
         cat = str(insight.get("category", "")).lower()
         desc = str(insight.get("description", ""))
@@ -484,7 +483,7 @@ def normalize_company_intelligence(
     # ------------------------------------------------------------------
     # 13. Financial highlights (from external search insights)
     # ------------------------------------------------------------------
-    financial_highlights: List[str] = []
+    financial_highlights: list[str] = []
     for insight in ext_insights_list:
         cat = str(insight.get("category", "")).lower()
         if any(kw in cat for kw in ["financial", "revenue", "profit", "growth", "funding", "capital"]):
@@ -494,7 +493,7 @@ def normalize_company_intelligence(
     # ------------------------------------------------------------------
     # 14. Recent news headlines
     # ------------------------------------------------------------------
-    recent_news: List[str] = []
+    recent_news: list[str] = []
     for res in results_list[:8]:
         if isinstance(res, dict):
             title = res.get("title", "").strip()

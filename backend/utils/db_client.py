@@ -29,18 +29,21 @@ Usage (sync — scripts / pipeline):
 
 import json
 import re
-from typing import Optional, Any
 import threading
+from typing import Any
 
 import pymongo
+from config.settings import settings
+from motor.motor_asyncio import (
+    AsyncIOMotorClient,
+    AsyncIOMotorCollection,
+    AsyncIOMotorDatabase,
+)
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
 from pymongo.errors import PyMongoError
 
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase, AsyncIOMotorCollection
-
-from config.settings import settings
 from utils.helpers import setup_logger
 
 logger = setup_logger(__name__)
@@ -55,8 +58,8 @@ def _is_tls_uri(uri: str) -> bool:
 # Sync singleton (scripts, pipeline, tests)
 # ---------------------------------------------------------------------------
 
-_mongo_client: Optional[MongoClient] = None
-_mongo_database: Optional[Database] = None
+_mongo_client: MongoClient | None = None
+_mongo_database: Database | None = None
 
 
 def get_database() -> Database:
@@ -114,17 +117,15 @@ def close_connection() -> None:
 # ---------------------------------------------------------------------------
 
 from utils.mysql_client import (
-    get_sync_db_session,
     get_db_session,
+    get_sync_db_session,
 )
-
-
 
 _mysql_available = True
 
 
-_motor_client: Optional[AsyncIOMotorClient] = None
-_motor_database: Optional[AsyncIOMotorDatabase] = None
+_motor_client: AsyncIOMotorClient | None = None
+_motor_database: AsyncIOMotorDatabase | None = None
 
 
 def get_motor_client() -> AsyncIOMotorClient:
@@ -321,11 +322,19 @@ def ensure_all_indexes() -> None:
 # Both work identically.
 
 try:
-    from utils.mysql_client import (  # noqa: F401 — re-exported for convenience
+    from utils.mysql_client import (
         get_db_session as get_db_session,
+    )
+    from utils.mysql_client import (
         get_sync_db_session as get_sync_db_session,
+    )
+    from utils.mysql_client import (
         init_mysql as init_mysql,
+    )
+    from utils.mysql_client import (
         ping_mysql as ping_mysql,
+    )
+    from utils.mysql_client import (
         ping_mysql_sync as ping_mysql_sync,
     )
     _mysql_available = True
@@ -362,8 +371,8 @@ def update_task_status(
     progress: int,
     status: str,
     message: str,
-    filename: Optional[str] = None,
-    extra: Optional[dict] = None,
+    filename: str | None = None,
+    extra: dict | None = None,
 ) -> None:
     """
     Upsert background task progress/status.
@@ -419,7 +428,7 @@ def update_task_status(
             logger.error(f"[mysql] update_task_status MySQL failed: {e}")
 
 
-def get_task_status_db(task_id: str) -> Optional[dict]:
+def get_task_status_db(task_id: str) -> dict | None:
     """
     Retrieve background task status by task_id.
     MySQL only.
@@ -467,8 +476,8 @@ async def update_task_status_async(
     progress: int,
     status: str,
     message: str,
-    filename: Optional[str] = None,
-    extra: Optional[dict] = None,
+    filename: str | None = None,
+    extra: dict | None = None,
 ) -> None:
     """
     Async upsert of background task progress/status.
@@ -524,7 +533,7 @@ async def update_task_status_async(
             logger.error(f"[mysql] update_task_status_async MySQL failed: {e}")
 
 
-async def get_task_status_async(task_id: str) -> Optional[dict]:
+async def get_task_status_async(task_id: str) -> dict | None:
     """
     Async get task status. MySQL only.
     """

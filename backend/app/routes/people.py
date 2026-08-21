@@ -12,18 +12,17 @@ from __future__ import annotations
 
 import codecs
 import csv
-import io
 import logging
-from datetime import datetime, date, timezone
-from typing import Any, Dict, List, Optional
+from datetime import date, datetime
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from models.sql_models import Person as SQL_Person
 from pydantic import BaseModel
+from sqlalchemy import and_, func, insert, or_, select
+from utils.db_client import _mysql_available, get_db_session
 
 from app.core.auth import get_current_user
-from utils.db_client import get_db_session, _mysql_available
-from models.sql_models import Person as SQL_Person
-from sqlalchemy import select, insert, func, or_, and_
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/people", tags=["people"])
@@ -46,7 +45,7 @@ REQUIRED_COLUMNS = [
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _iso(dt: Any) -> Optional[str]:
+def _iso(dt: Any) -> str | None:
     return dt.isoformat() if dt and hasattr(dt, "isoformat") else None
 
 
@@ -96,24 +95,24 @@ def _format_person(p: SQL_Person) -> dict:
 
 
 class PersonCreateBody(BaseModel):
-    source: Optional[str] = "Manual Entry"
-    status: Optional[str] = "Pending"
-    organization_name: Optional[str] = ""
-    first_name: Optional[str] = ""
-    last_name: Optional[str] = ""
-    full_name: Optional[str] = ""
-    title: Optional[str] = ""
-    function_name: Optional[str] = ""
-    seniority: Optional[str] = ""
-    email: Optional[str] = ""
-    email_status: Optional[str] = ""
-    email_confidence: Optional[float] = None
-    phone: Optional[str] = ""
-    linkedin_url: Optional[str] = ""
-    city: Optional[str] = ""
-    state: Optional[str] = ""
-    country: Optional[str] = ""
-    job_start_date: Optional[str] = ""
+    source: str | None = "Manual Entry"
+    status: str | None = "Pending"
+    organization_name: str | None = ""
+    first_name: str | None = ""
+    last_name: str | None = ""
+    full_name: str | None = ""
+    title: str | None = ""
+    function_name: str | None = ""
+    seniority: str | None = ""
+    email: str | None = ""
+    email_status: str | None = ""
+    email_confidence: float | None = None
+    phone: str | None = ""
+    linkedin_url: str | None = ""
+    city: str | None = ""
+    state: str | None = ""
+    country: str | None = ""
+    job_start_date: str | None = ""
 
 
 # ---------------------------------------------------------------------------
@@ -122,11 +121,11 @@ class PersonCreateBody(BaseModel):
 
 @router.get("")
 async def get_people(
-    query: Optional[str] = None,
-    status: Optional[str] = None,
-    source: Optional[str] = None,
-    country: Optional[str] = None,
-    seniority: Optional[str] = None,
+    query: str | None = None,
+    status: str | None = None,
+    source: str | None = None,
+    country: str | None = None,
+    seniority: str | None = None,
     page: int = 1,
     limit: int = 20,
     current_user: dict = Depends(get_current_user),
@@ -164,10 +163,10 @@ async def get_people(
             stmt = stmt.where(and_(*filter_conditions))
         stmt = stmt.order_by(SQL_Person.created_at.desc())
 
-        results: List[SQL_Person] = []
+        results: list[SQL_Person] = []
         total = 0
-        source_options: List[str] = []
-        country_options: List[str] = []
+        source_options: list[str] = []
+        country_options: list[str] = []
 
         async for db in get_db_session():
             count_stmt = select(func.count()).select_from(SQL_Person)
@@ -254,7 +253,7 @@ async def add_person(
 # ---------------------------------------------------------------------------
 
 # Alias map: db_field -> list of accepted CSV header variants (lowercase, stripped)
-COL_ALIASES: Dict[str, list] = {
+COL_ALIASES: dict[str, list] = {
     "full_name":        ["full name", "full_name", "name"],
     "first_name":       ["first name", "first_name", "firstname"],
     "last_name":        ["last name", "last_name", "lastname", "surname"],
@@ -276,9 +275,9 @@ COL_ALIASES: Dict[str, list] = {
 }
 
 
-def _build_header_map(fieldnames) -> Dict[str, str]:
+def _build_header_map(fieldnames) -> dict[str, str]:
     """Map raw CSV header -> db field name using COL_ALIASES (case-insensitive)."""
-    mapping: Dict[str, str] = {}
+    mapping: dict[str, str] = {}
     for h in (fieldnames or []):
         lower = h.strip().lower()
         for field, aliases in COL_ALIASES.items():
@@ -288,7 +287,7 @@ def _build_header_map(fieldnames) -> Dict[str, str]:
     return mapping
 
 
-def _get_field(row: Dict[str, Any], field: str) -> str:
+def _get_field(row: dict[str, Any], field: str) -> str:
     val = row.get(field)
     return str(val).strip() if val not in (None, "") else ""
 
@@ -317,7 +316,7 @@ async def import_people_json(
     imported_count = 0
     skipped = 0
     CHUNK = 500
-    chunk: List[dict] = []
+    chunk: list[dict] = []
 
     try:
         async for db in get_db_session():
@@ -377,7 +376,7 @@ async def import_people_json(
     return {"status": "success", "count": imported_count, "skipped": skipped}
 
 
-def _row_to_person_dict(row: Dict[str, Any]) -> Optional[dict]:
+def _row_to_person_dict(row: dict[str, Any]) -> dict | None:
     """Map a normalised CSV row (keys are DB field names) to a Person insert dict."""
     full_name = _get_field(row, "full_name")
     first_name = _get_field(row, "first_name")
@@ -423,7 +422,7 @@ def _row_to_person_dict(row: Dict[str, Any]) -> Optional[dict]:
 
 
 
-async def _flush_chunk(chunk: List[dict]) -> int:
+async def _flush_chunk(chunk: list[dict]) -> int:
     if not chunk:
         return 0
     async for db in get_db_session():
@@ -464,14 +463,14 @@ async def _process_csv_stream(text_stream) -> int:
         )
 
     imported_count = 0
-    chunk: List[dict] = []
+    chunk: list[dict] = []
     CHUNK = 500
 
     for raw_row in reader:
         if not isinstance(raw_row, dict):
             continue
         # Normalise: map raw CSV headers to db field names
-        norm: Dict[str, Any] = {}
+        norm: dict[str, Any] = {}
         for raw_h, val in raw_row.items():
             db_field = header_map.get(raw_h)
             if db_field:
@@ -512,7 +511,7 @@ async def import_people_file(
         raise
     except Exception as e:
         logger.error(f"People file import failed: {e}", exc_info=True)
-        raise HTTPException(status_code=400, detail=f"File processing failed: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"File processing failed: {e!s}")
     finally:
         await file.close()
 

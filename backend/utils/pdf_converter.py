@@ -12,17 +12,16 @@ from __future__ import annotations
 
 import os
 import shutil
-import sys
 import subprocess
+import sys
 from pathlib import Path
-from typing import Union
 
 from utils.helpers import setup_logger
 
 logger = setup_logger(__name__)
 
 
-def convert_docx_to_pdf(docx_path: Union[str, Path], output_dir: Union[str, Path, None] = None) -> Path:
+def convert_docx_to_pdf(docx_path: str | Path, output_dir: str | Path | None = None) -> Path:
     """
     Converts a DOCX file to PDF.
     Returns the absolute Path of the generated PDF.

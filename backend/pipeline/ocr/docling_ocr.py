@@ -13,13 +13,15 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 _DOCLING_AVAILABLE = False
 try:
-    from docling.document_converter import DocumentConverter as _DoclingConverter # type: ignore
+    from docling.document_converter import (
+        DocumentConverter as _DoclingConverter,  # type: ignore
+    )
     _DOCLING_AVAILABLE = True
 except ImportError:
     _DoclingConverter = None
@@ -38,7 +40,7 @@ class DoclingOCR:
     _converter: Any = None  # Lazy-loaded singleton
 
     @classmethod
-    def _get_converter(cls) -> Optional[object]:
+    def _get_converter(cls) -> object | None:
         """Lazy-initialize the Docling converter (loaded once, reused)."""
         if not _DOCLING_AVAILABLE or _DoclingConverter is None:
             return None
@@ -58,7 +60,7 @@ class DoclingOCR:
         return _DOCLING_AVAILABLE and cls._get_converter() is not None
 
     @classmethod
-    def extract_text(cls, file_path: str | Path) -> Dict[str, object]:
+    def extract_text(cls, file_path: str | Path) -> dict[str, object]:
         """
         Extract text and structure from a document using Docling.
 
@@ -101,7 +103,7 @@ class DoclingOCR:
         return result
 
     @classmethod
-    def extract_text_from_bytes(cls, pdf_bytes: bytes, suffix: str = ".pdf") -> Dict[str, object]:
+    def extract_text_from_bytes(cls, pdf_bytes: bytes, suffix: str = ".pdf") -> dict[str, object]:
         """
         Extract text from raw PDF bytes by saving to a temp file.
         """

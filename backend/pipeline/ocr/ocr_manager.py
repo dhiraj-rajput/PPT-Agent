@@ -24,10 +24,8 @@ Usage:
 
 from __future__ import annotations
 
-import io
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +52,7 @@ class OCRManager:
             self.engine = engine or "auto"
             self.dpi = dpi or 300
 
-    def extract(self, file_path: Union[str, Path]) -> Dict[str, object]:
+    def extract(self, file_path: str | Path) -> dict[str, object]:
         """
         Extract text from a document file using the configured OCR engine cascade.
 
@@ -102,7 +100,7 @@ class OCRManager:
         return {"text": "", "engine": "none", "pages": 0, "success": False,
                 "error": last_error or "All OCR engines failed"}
 
-    def extract_from_bytes(self, content: bytes, filename: str = "document.pdf") -> Dict[str, object]:
+    def extract_from_bytes(self, content: bytes, filename: str = "document.pdf") -> dict[str, object]:
         """
         Extract text from raw bytes by saving to a temp file.
         """
@@ -119,7 +117,7 @@ class OCRManager:
             except Exception:
                 pass
 
-    def extract_pages(self, file_path: Union[str, Path]) -> List[str]:
+    def extract_pages(self, file_path: str | Path) -> list[str]:
         """
         Extract text as a list of strings (one per page) where possible.
         Falls back to splitting by form-feeds or newlines.
@@ -139,7 +137,7 @@ class OCRManager:
     # Internal
     # ------------------------------------------------------------------
 
-    def _get_engine_order(self, suffix: str) -> List[str]:
+    def _get_engine_order(self, suffix: str) -> list[str]:
         """Return the engine priority order based on file type.
         
         PyMuPDF is tried first for PDFs — it reads embedded digital text nearly instantly
@@ -158,7 +156,7 @@ class OCRManager:
         else:
             return ["ocrspace", "pymupdf", "docling"]
 
-    def _run_engine(self, engine: str, file_path: Path) -> Dict[str, object]:
+    def _run_engine(self, engine: str, file_path: Path) -> dict[str, object]:
         """Run a specific OCR engine on a file."""
         if engine == "ocrspace":
             return self._run_ocrspace(file_path)
@@ -172,7 +170,7 @@ class OCRManager:
             return {"text": "", "engine": engine, "pages": 0, "success": False,
                     "error": f"Unknown engine: {engine}"}
 
-    def _run_ocrspace(self, file_path: Path) -> Dict[str, object]:
+    def _run_ocrspace(self, file_path: Path) -> dict[str, object]:
         """Run OCR.space cloud API — zero local computation."""
         try:
             from pipeline.ocr.ocr_api import OCRSpaceClient
@@ -190,7 +188,7 @@ class OCRManager:
         except Exception as e:
             return {"text": "", "engine": "ocrspace", "pages": 0, "success": False, "error": str(e)}
 
-    def _run_docling(self, file_path: Path) -> Dict[str, object]:
+    def _run_docling(self, file_path: Path) -> dict[str, object]:
         """Run Docling OCR (local, optional)."""
         try:
             from pipeline.ocr.docling_ocr import DoclingOCR
@@ -201,7 +199,7 @@ class OCRManager:
     # PaddleOCR removed — it required converting every PDF page to a PNG image,
     # causing severe CPU/RAM spikes. Use OCR.space (cloud) instead.
 
-    def _run_tesseract(self, file_path: Path) -> Dict[str, object]:
+    def _run_tesseract(self, file_path: Path) -> dict[str, object]:
         """Run enhanced Tesseract OCR at 300 DPI with preprocessing."""
         result = {"text": "", "engine": "tesseract", "pages": 0, "success": False}
         try:
@@ -211,9 +209,9 @@ class OCRManager:
             return result
 
         try:
+
             import fitz
-            from PIL import Image, ImageFilter, ImageEnhance
-            import tempfile
+            from PIL import Image, ImageEnhance, ImageFilter
 
             suffix = file_path.suffix.lower()
             all_text = []
@@ -246,7 +244,7 @@ class OCRManager:
 
         return result
 
-    def _run_pymupdf(self, file_path: Path) -> Dict[str, object]:
+    def _run_pymupdf(self, file_path: Path) -> dict[str, object]:
         """Extract text using PyMuPDF (no OCR — only works for digital PDFs)."""
         result = {"text": "", "engine": "pymupdf", "pages": 0, "success": False}
         try:
@@ -281,7 +279,7 @@ class OCRManager:
 
 
 # Module-level convenience function
-_manager_singleton: Optional[OCRManager] = None
+_manager_singleton: OCRManager | None = None
 
 
 def get_ocr_manager() -> OCRManager:
@@ -292,7 +290,7 @@ def get_ocr_manager() -> OCRManager:
     return _manager_singleton
 
 
-def extract_text_from_file(file_path: Union[str, Path]) -> str:
+def extract_text_from_file(file_path: str | Path) -> str:
     """
     Convenience function: extract text from a file using the default OCR manager.
     Returns extracted text as a string, empty string on failure.

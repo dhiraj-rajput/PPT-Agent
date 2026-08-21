@@ -4,23 +4,25 @@ Downloads filing documents (PDF/images) via the Document API endpoint:
 https://document-api.company-information.service.gov.uk/document/{document_id}/content
 """
 
-import os
 import logging
+import os
+from typing import Any
+
 import requests
-from typing import Optional, Dict, Any
 from config.settings import settings
+
 from .ch_client import CompaniesHouseClient
 
 logger = logging.getLogger(__name__)
 
 
 class CompaniesHouseDocumentParser:
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str | None = None):
         self.api_key = api_key or os.environ.get("COMPANIES_HOUSE_KEY", "") or getattr(settings, "COMPANIES_HOUSE_KEY", "")
         self.doc_base_url = getattr(settings, "COMPANIES_HOUSE_DOCUMENT_API_URL", "https://document-api.company-information.service.gov.uk").rstrip("/")
         self.ch_client = CompaniesHouseClient(api_key=self.api_key)
 
-    def get_document_metadata(self, document_id: str) -> Optional[Dict[str, Any]]:
+    def get_document_metadata(self, document_id: str) -> dict[str, Any] | None:
         """Fetch metadata for a document (content_type, created_at, size)."""
         url = f"{self.doc_base_url}/document/{document_id}"
         try:
@@ -31,7 +33,7 @@ class CompaniesHouseDocumentParser:
             logger.error(f"[DocumentParser] Metadata error for doc {document_id}: {e}")
         return None
 
-    def download_document_content(self, document_id: str, output_dir: str) -> Optional[str]:
+    def download_document_content(self, document_id: str, output_dir: str) -> str | None:
         """
         Downloads document binary (PDF/image) and saves to disk, following redirects.
         Returns the local file path on success, or None on failure — callers must

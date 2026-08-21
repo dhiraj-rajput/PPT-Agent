@@ -15,16 +15,14 @@ Provides:
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
-from fastapi import Depends, HTTPException, status, Request
+from config.settings import settings
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
-
-from utils.db_client import get_db_session, get_sync_db_session, _mysql_available
-from config.settings import settings
-from sqlalchemy import select
 from models.sql_models import User
+from sqlalchemy import select
+from utils.db_client import _mysql_available, get_db_session, get_sync_db_session
 
 # ---------------------------------------------------------------------------
 # Config
@@ -48,6 +46,7 @@ def create_access_token(user_id: str) -> str:
     """Create a long-lived JWT for the authenticated session."""
     payload = {
         "sub": str(user_id),
+        "type": "access",
         "exp": datetime.now(tz=timezone.utc) + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS),
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
@@ -57,17 +56,18 @@ def create_action_token(user_id: str, purpose: str) -> str:
     """Create a short-lived JWT to bridge an OTP verification to the next step."""
     payload = {
         "sub": str(user_id),
+        "type": "action",
         "purpose": purpose,
         "exp": datetime.now(tz=timezone.utc) + timedelta(minutes=ACTION_TOKEN_EXPIRE_MINUTES),
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def verify_action_token(token: str, expected_purpose: str) -> Optional[str]:
+def verify_action_token(token: str, expected_purpose: str) -> str | None:
     """Return user_id if the action token is valid for the expected purpose, else None."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        if payload.get("purpose") != expected_purpose:
+        if payload.get("purpose") != expected_purpose or payload.get("type") != "action":
             return None
         return payload.get("sub")
     except JWTError:
@@ -88,7 +88,6 @@ def _sql_user_to_dict(u) -> dict:
         "email": u.email or "",
         "phone": u.phone or "",
         "role": u.role or "Team Member",
-        "passwordHash": u.password_hash or "",
         "isVerified": bool(u.is_verified),
         "mustChangePassword": bool(u.must_change_password),
         "createdAt": u.created_at if u.created_at else datetime.now(timezone.utc),
@@ -99,7 +98,7 @@ def _sql_user_to_dict(u) -> dict:
 
 async def get_current_user(
     request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
 ) -> dict:
     """FastAPI dependency — decode Bearer token or cookie and return the user document using MySQL."""
     exc = HTTPException(
@@ -121,7 +120,8 @@ async def get_current_user(
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: str = payload.get("sub", "")
-        if not user_id:
+        # Prevent action tokens (e.g. OTP/reset) from authenticating as access tokens
+        if not user_id or payload.get("type") == "action" or payload.get("purpose") is not None:
             raise exc
     except JWTError:
         raise exc
@@ -135,9 +135,13 @@ async def get_current_user(
                     res = await db.execute(stmt)
                     user_row = res.scalar_one_or_none()
                     if user_row:
+                        if hasattr(user_row, "is_active") and user_row.is_active is False:
+                            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is deactivated.")
                         return _sql_user_to_dict(user_row)
                 except ValueError:
                     pass
+        except HTTPException:
+            raise
         except Exception as e:
             import logging
             logging.getLogger("auth").error(f"MySQL get_current_user error: {e}")
@@ -155,7 +159,7 @@ async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
     return current_user
 
 
-async def decode_and_get_user_async(token: str) -> Optional[dict]:
+async def decode_and_get_user_async(token: str) -> dict | None:
     """Async helper to decode a JWT token and retrieve the user document. Useful for WebSockets/async contexts."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -190,7 +194,7 @@ async def decode_and_get_user_async(token: str) -> Optional[dict]:
         return None
 
 
-def decode_and_get_user(token: str) -> Optional[dict]:
+def decode_and_get_user(token: str) -> dict | None:
     """Sync helper to decode a JWT token and retrieve the user document."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])

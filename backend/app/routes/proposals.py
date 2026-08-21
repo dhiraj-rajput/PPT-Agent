@@ -8,25 +8,41 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
-import sys
 import subprocess
-import traceback
-from pathlib import Path
-from typing import Optional, Any
 from datetime import datetime
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
-from utils.db_client import get_db_session, get_sync_db_session, _mysql_available, update_task_status, get_task_status_db
-from app.routes.reports import sync_reports_with_db, _format_report_dict
-from app.core.auth import get_current_user, decode_and_get_user_async
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from models.sql_models import (
-    TaskStatus as SQL_TaskStatus,
     DraftRequest as SQL_DraftRequest,
-    Tender as SQL_Tender,
+)
+from models.sql_models import (
     Report as SQL_Report,
 )
-from sqlalchemy import select, update, insert, delete, func, or_, and_
+from models.sql_models import (
+    TaskStatus as SQL_TaskStatus,
+)
+from models.sql_models import (
+    Tender as SQL_Tender,
+)
+from sqlalchemy import select, update
+from utils.db_client import (
+    _mysql_available,
+    get_db_session,
+    get_sync_db_session,
+    get_task_status_db,
+    update_task_status,
+)
+
+from app.core.auth import decode_and_get_user_async, get_current_user
+from app.routes.reports import _format_report_dict, sync_reports_with_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/proposals", tags=["proposals"])
@@ -34,7 +50,7 @@ router = APIRouter(prefix="/proposals", tags=["proposals"])
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
-def update_proposal_task(task_key: str, progress: int, status: str, message: str, filename: Optional[str] = None, extra: Optional[dict] = None):
+def update_proposal_task(task_key: str, progress: int, status: str, message: str, filename: str | None = None, extra: dict | None = None):
     existing = get_task_status_db(task_key) or {}
     merged_extra = {
         "mode": existing.get("mode"),
@@ -110,7 +126,7 @@ async def get_active_proposal_tasks(current_user: dict = Depends(get_current_use
 from utils.helpers import get_python_executable
 
 
-def run_proposal_generation_sync(mode: str, solicitation: Optional[str] = None, winner: Optional[str] = None, loop=None):
+def run_proposal_generation_sync(mode: str, solicitation: str | None = None, winner: str | None = None, loop=None):
     """
     Synchronous runner executing pipeline subprocesses based on mode.
     Runs from a thread pool.
@@ -162,7 +178,7 @@ def run_proposal_generation_sync(mode: str, solicitation: Optional[str] = None, 
             "--winner", win_name
         ]
 
-    def update_progress(prog: int, msg: str, stat: str = "processing", file_n: Optional[str] = None):
+    def update_progress(prog: int, msg: str, stat: str = "processing", file_n: str | None = None):
         update_proposal_task(task_key, prog, stat, msg, file_n)
         if loop and loop.is_running():
             asyncio.run_coroutine_threadsafe(manager.broadcast_for_users(), loop)
@@ -293,10 +309,10 @@ def run_proposal_generation_sync(mode: str, solicitation: Optional[str] = None, 
 
     except Exception as e:
         logger.error(f"Subprocess compilation error: {e}")
-        update_progress(0, f"Pipeline failed: {str(e)}", "failed")
+        update_progress(0, f"Pipeline failed: {e!s}", "failed")
 
 
-async def run_proposal_generation_task(mode: str, solicitation: Optional[str] = None, winner: Optional[str] = None):
+async def run_proposal_generation_task(mode: str, solicitation: str | None = None, winner: str | None = None):
     """Background task wrapper."""
     loop = asyncio.get_running_loop()
     await asyncio.to_thread(run_proposal_generation_sync, mode, solicitation, winner, loop)
@@ -399,7 +415,7 @@ async def list_proposal_tasks(current_user: dict = Depends(get_current_user)):
 
 @router.get("/status")
 async def get_task_status(
-    company_name: Optional[str] = None,
+    company_name: str | None = None,
     current_user: dict = Depends(get_current_user)
 ):
     if not company_name:
@@ -414,7 +430,7 @@ async def get_task_status(
 
 
 @router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = None):
+async def websocket_endpoint(websocket: WebSocket, token: str | None = None):
     from starlette.websockets import WebSocketState
     
     if not token:
@@ -432,7 +448,7 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = None):
         user_id = str(user.get("id", ""))
     else:
         try:
-            from app.core.auth import SECRET_KEY, ALGORITHM, jwt
+            from app.core.auth import ALGORITHM, SECRET_KEY, jwt
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
             user_id = str(payload.get("sub", ""))
         except Exception:

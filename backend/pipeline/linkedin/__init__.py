@@ -11,23 +11,23 @@ Usage from other modules:
     from pipeline.linkedin import scrape_company, LinkedInCompanyData, LinkedInStorage
 """
 
-from pipeline.linkedin.scraper import scrape_company
-from pipeline.linkedin.models import (
-    LinkedInCompanyData,
-    CompanyIdentity,
-    CompanyDescription,
-    EmployeeInsights,
-    LeadershipMember,
-    CompanyPost,
-    JobPosting,
-    CompanyLocation,
-    FundingInfo,
-    RawLinkedInScrapedData,
-    BIProfile,
-)
-from pipeline.linkedin.storage import LinkedInStorage
-from pipeline.linkedin.data_cleaner import DataCleaner
 from pipeline.linkedin.bi_extractor import BIExtractor
+from pipeline.linkedin.data_cleaner import DataCleaner
+from pipeline.linkedin.models import (
+    BIProfile,
+    CompanyDescription,
+    CompanyIdentity,
+    CompanyLocation,
+    CompanyPost,
+    EmployeeInsights,
+    FundingInfo,
+    JobPosting,
+    LeadershipMember,
+    LinkedInCompanyData,
+    RawLinkedInScrapedData,
+)
+from pipeline.linkedin.scraper import scrape_company
+from pipeline.linkedin.storage import LinkedInStorage
 
 __all__ = [
     # Main entry point

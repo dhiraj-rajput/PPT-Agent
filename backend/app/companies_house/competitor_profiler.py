@@ -4,17 +4,18 @@ Generates deep UK company profiles combining officer networks, charges, PSCs, an
 """
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Any
+
 from .ch_client import CompaniesHouseClient
 
 logger = logging.getLogger(__name__)
 
 
 class CompaniesHouseCompetitorProfiler:
-    def __init__(self, ch_client: Optional[CompaniesHouseClient] = None):
+    def __init__(self, ch_client: CompaniesHouseClient | None = None):
         self.ch_client = ch_client or CompaniesHouseClient()
 
-    def build_competitor_profile(self, company_number: str) -> Dict[str, Any]:
+    def build_competitor_profile(self, company_number: str) -> dict[str, Any]:
         """Assembles 360-degree competitor intelligence profile for a UK entity."""
         profile = self.ch_client.get_company_profile(company_number)
         officers = self.ch_client.get_officers(company_number)

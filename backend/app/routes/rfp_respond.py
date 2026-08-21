@@ -6,32 +6,38 @@ RFP Auto-Respond — upload an RFP document, get back a fully-written proposal u
 
 from __future__ import annotations
 
+import ast
 import asyncio
+import json
 import logging
 import os
 import re
 import subprocess
-import sys
 import uuid
-import json
-import ast
 from pathlib import Path
-from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
-
-from app.core.auth import get_current_user
-from utils.db_client import (
-    get_db_session,
-    _mysql_available,
-    update_task_status,
-    get_task_status_db,
-    update_task_status_async,
-    get_task_status_async,
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    UploadFile,
 )
+from fastapi.responses import FileResponse
 from models.sql_models import TaskStatus as SQL_TaskStatus
 from sqlalchemy import select
+from utils.db_client import (
+    _mysql_available,
+    get_db_session,
+    get_task_status_async,
+    get_task_status_db,
+    update_task_status,
+    update_task_status_async,
+)
+
+from app.core.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/rfp-respond", tags=["rfp-respond"])
@@ -84,10 +90,12 @@ def _load_task_result(task: dict) -> dict:
 def _register_rfp_report(task_id: str, filename: str) -> None:
     """Insert or update a Report row in MySQL for a completed RFP Auto-Respond document."""
     try:
-        from utils.db_client import get_sync_db_session
-        from models.sql_models import Report as SQL_Report
-        from sqlalchemy import select, insert, update as sql_update
         from datetime import datetime
+
+        from models.sql_models import Report as SQL_Report
+        from sqlalchemy import insert, select
+        from sqlalchemy import update as sql_update
+        from utils.db_client import get_sync_db_session
 
         file_path = OUTPUT_DIR / filename
         if not file_path.exists():
@@ -140,15 +148,15 @@ def _run_pipeline_sync(
     task_id: str,
     rfp_paths: str,
     output_name: str,
-    template_path: Optional[Path],
-    wizard_config: Optional[str] = None,
+    template_path: Path | None,
+    wizard_config: str | None = None,
 ) -> None:
     """Run bidforge_cli.py as a subprocess and update progress in MySQL."""
 
     from utils.helpers import get_python_executable
     python_bin = get_python_executable()
 
-    def update(progress: int, message: str, status: str = "processing", filename: Optional[str] = None):
+    def update(progress: int, message: str, status: str = "processing", filename: str | None = None):
         update_task_status(task_id, "rfp_respond", progress, status, message, filename)
 
     cmd = [
@@ -264,14 +272,14 @@ def _load_company_context() -> str:
 
 def _run_analyze_sync(task_id: str, rfp_paths: str, solicitation: str = "") -> None:
     """Parse RFP → outline → clarifying questions; store results on the task."""
-    def update(progress: int, message: str, status: str = "processing", extra: Optional[dict] = None):
+    def update(progress: int, message: str, status: str = "processing", extra: dict | None = None):
         update_task_status(task_id, "rfp_respond_analyze", progress, status, message, None, extra=extra)
 
     try:
         update(5, "Parsing uploaded RFP (section-aware, no truncation)...")
-        from documents.bidforge.parse import parse_uploaded_rfp
-        from documents.bidforge.outline import build_outline
         from documents.bidforge.clarify import build_clarifying_questions
+        from documents.bidforge.outline import build_outline
+        from documents.bidforge.parse import parse_uploaded_rfp
 
         def _parse_progress(pct: int, msg: str) -> None:
             # Keep progress in the parse band (5–39) so the wizard stage UI
@@ -372,8 +380,8 @@ def _save_upload_file_sync(file: UploadFile, dest_path: Path, max_bytes: int = 2
 async def analyze_rfp(
     background_tasks: BackgroundTasks,
     rfp_files: list[UploadFile] = File(...),
-    template_file: Optional[UploadFile] = File(None),
-    solicitation_number: Optional[str] = Form(None),
+    template_file: UploadFile | None = File(None),
+    solicitation_number: str | None = Form(None),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -464,7 +472,7 @@ async def clarify_rfp(
     combined_answers = list(prev_answers) + list(answers)
     round_number = int(result.get("round") or 1) + 1
 
-    from documents.bidforge.clarify import build_clarifying_questions, MAX_ROUNDS
+    from documents.bidforge.clarify import MAX_ROUNDS, build_clarifying_questions
     clarify = build_clarifying_questions(
         parsed,
         company_context=company_ctx,
@@ -558,15 +566,15 @@ def _run_pipeline_with_cache(
     task_id: str,
     rfp_paths: str,
     output_name: str,
-    template_path: Optional[Path],
-    wizard_config: Optional[str] = None,
-    parsed_rfp_json_path: Optional[str] = None,
+    template_path: Path | None,
+    wizard_config: str | None = None,
+    parsed_rfp_json_path: str | None = None,
 ) -> None:
     """Like _run_pipeline_sync but passes --parsed-rfp-json to skip re-parse."""
     from utils.helpers import get_python_executable
     python_bin = get_python_executable()
 
-    def update(progress: int, message: str, status: str = "processing", filename: Optional[str] = None):
+    def update(progress: int, message: str, status: str = "processing", filename: str | None = None):
         update_task_status(task_id, "rfp_respond", progress, status, message, filename)
 
     cmd = [
@@ -634,10 +642,10 @@ def _run_pipeline_with_cache(
 @router.post("/upload")
 async def upload_rfp(
     background_tasks: BackgroundTasks,
-    rfp_files: Optional[list[UploadFile]] = File(None),
-    template_file: Optional[UploadFile] = File(None),
-    wizard_config: Optional[str] = Form(None),
-    analysis_task_id: Optional[str] = Form(None),
+    rfp_files: list[UploadFile] | None = File(None),
+    template_file: UploadFile | None = File(None),
+    wizard_config: str | None = Form(None),
+    analysis_task_id: str | None = Form(None),
     current_user: dict = Depends(get_current_user),
 ):
     """

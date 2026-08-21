@@ -34,7 +34,7 @@ import re
 import shutil
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from utils.helpers import setup_logger
 
@@ -84,13 +84,13 @@ MAX_PARALLEL_SECTIONS = 4
 
 
 def generate_final_document(
-    parsed_rfp: Dict[str, Any],
-    inventory: Dict[str, Any],
-    competitor_intel: Dict[str, Any],
-    strategy: Dict[str, Any],
+    parsed_rfp: dict[str, Any],
+    inventory: dict[str, Any],
+    competitor_intel: dict[str, Any],
+    strategy: dict[str, Any],
     output_name: str,
-    template_path: Optional[str] = None,
-    wizard_config: Optional[str | Dict[str, Any]] = None,
+    template_path: str | None = None,
+    wizard_config: str | dict[str, Any] | None = None,
 ) -> str:
     """Generate the final proposal document for the BidForge workflow."""
     out_dir = Path(__file__).resolve().parent.parent.parent / "output" / "rfp_respond"
@@ -140,13 +140,14 @@ def generate_final_document(
     # discarding the template and building a brand-new cover page.
     if template_path and Path(template_path).exists():
         try:
+            from documents.bidforge.first_page_preserver import (
+                build_document_with_preserved_first_page,
+            )
             from documents.markdown_renderer import _parse_markdown_into_sections
-            from documents.bidforge.first_page_preserver import build_document_with_preserved_first_page
 
             _, sections = _parse_markdown_into_sections(markdown_content)
             # Write to a temp path first, then replace — avoids PermissionError when
             # the UI/browser still has the previous .docx open for download/view.
-            import time
             tmp_docx = str(Path(target_docx_path).with_suffix(f".tmp.{os.getpid()}.docx"))
             docx_path = build_document_with_preserved_first_page(
                 template_path, sections, brand_config, tmp_docx,
@@ -198,7 +199,7 @@ def generate_final_document(
     return final_path
 
 
-def _company_profile_summary(template_path: Optional[str], brand_config: Dict[str, Any]) -> str:
+def _company_profile_summary(template_path: str | None, brand_config: dict[str, Any]) -> str:
     """Best-effort plain-language company profile (website, email, phone,
     leadership) extracted from the uploaded template, for use as AI context
     so generated content references real details instead of inventing them.
@@ -215,12 +216,12 @@ def _company_profile_summary(template_path: Optional[str], brand_config: Dict[st
         return ""
 
 
-def _template_sections_present(template_path: Optional[str]) -> List[str]:
+def _template_sections_present(template_path: str | None) -> list[str]:
     """Headings already present on the template (preserved front matter + body
     start markers). Used to avoid generating a second Executive Summary etc."""
     if not template_path or not Path(template_path).exists():
         return []
-    headings: List[str] = []
+    headings: list[str] = []
     try:
         from documents.template_analyzer import analyze_template
         profile = analyze_template(template_path)
@@ -229,9 +230,10 @@ def _template_sections_present(template_path: Optional[str]) -> List[str]:
         logger.debug(f"[BidForge:DocGen] template section scan: {exc}")
     try:
         from docx import Document
+
         from documents.bidforge.first_page_preserver import (
-            find_first_page_split_index,
             detect_preserved_headings,
+            find_first_page_split_index,
         )
         doc = Document(template_path)
         split = find_first_page_split_index(doc)
@@ -240,7 +242,7 @@ def _template_sections_present(template_path: Optional[str]) -> List[str]:
         logger.debug(f"[BidForge:DocGen] preserved heading scan: {exc}")
     # De-dupe preserving order
     seen = set()
-    out: List[str] = []
+    out: list[str] = []
     for h in headings:
         key = re.sub(r"\s+", " ", h.strip().lower())
         if key and key not in seen:
@@ -272,7 +274,7 @@ _PROFILE_FIELD_LABELS = [
 ]
 
 
-def _fetch_own_company_profile() -> Dict[str, Any]:
+def _fetch_own_company_profile() -> dict[str, Any]:
     """Fetches the bidder's own company profile from MongoDB
     (`own_company_profile` collection -- the same one the Proposal
     Builder / PreGenerationWizard flow already reads via
@@ -303,7 +305,7 @@ def _fetch_own_company_profile() -> Dict[str, Any]:
         return {}
 
 
-def _format_verified_company_block(profile: Dict[str, Any]) -> str:
+def _format_verified_company_block(profile: dict[str, Any]) -> str:
     """Renders the fetched company profile into an explicit, unambiguous
     context block the model is told to treat as ground truth. This directly
     replaces the previous behavior of leaving "[BIDDER TO INSERT: UEI]"-style
@@ -311,7 +313,7 @@ def _format_verified_company_block(profile: Dict[str, Any]) -> str:
     if not profile:
         return ""
 
-    lines: List[str] = []
+    lines: list[str] = []
     seen_keys = set()
     for key, label in _PROFILE_FIELD_LABELS:
         val = profile.get(key)
@@ -371,20 +373,21 @@ def _format_verified_company_block(profile: Dict[str, Any]) -> str:
 
 
 def _generate_markdown(
-    parsed_rfp: Dict[str, Any],
-    inventory: Dict[str, Any],
-    competitor_intel: Dict[str, Any],
-    strategy: Dict[str, Any],
+    parsed_rfp: dict[str, Any],
+    inventory: dict[str, Any],
+    competitor_intel: dict[str, Any],
+    strategy: dict[str, Any],
     company_name: str,
-    wizard_config: Optional[str | Dict[str, Any]],
+    wizard_config: str | dict[str, Any] | None,
     company_profile_summary: str = "",
     verified_company_block: str = "",
     preserving_first_page: bool = False,
-    template_sections_present: Optional[List[str]] = None,
+    template_sections_present: list[str] | None = None,
 ) -> str:
     from pipeline.ai.client import get_ai_client
-    from documents.prompts import SECTION_WRITER_PROMPT
+
     from documents.bidforge.outline import _dedupe_against_template
+    from documents.prompts import SECTION_WRITER_PROMPT
 
     buyer_name = _first_present(
         (parsed_rfp.get("metadata", {}) or {}).get("buyer_name"),
@@ -554,7 +557,7 @@ SECTION 3: SUMMARISE OUTPUT (Strategic Pricing Decisions):
         if isinstance(s, dict) and s.get("included") is not False and str(s.get("title") or s.get("key") or "").strip()
     ]
 
-    def _generate_one(section: Dict[str, Any]) -> str:
+    def _generate_one(section: dict[str, Any]) -> str:
         title = str(section.get("title") or section.get("key") or "").strip()
         description = str(section.get("description") or "").strip()
         key_points = section.get("key_points") or []
@@ -635,7 +638,7 @@ INSTRUCTIONS FOR THIS CALL
             section_content = _renumber_subheadings(section_content, section_number)
         return section_content
 
-    markdown_parts: List[str] = []
+    markdown_parts: list[str] = []
     if not preserving_first_page:
         title_line = f"# {company_name} — Response to {buyer_name}"
         markdown_parts.append(title_line)
@@ -645,7 +648,7 @@ INSTRUCTIONS FOR THIS CALL
         # shared context, different brief), so there is no reason to run
         # them one at a time. This is the single biggest lever on wall-clock
         # time for what was previously the longest-running pipeline step.
-        results: List[Optional[str]] = [None] * len(included_sections)
+        results: list[str | None] = [None] * len(included_sections)
         max_workers = min(MAX_PARALLEL_SECTIONS, len(included_sections))
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_index = {
@@ -665,7 +668,8 @@ INSTRUCTIONS FOR THIS CALL
             if content:
                 markdown_parts.append(content)
 
-    return "\n\n".join(markdown_parts)
+    from documents.markdown_renderer import sanitize_proposal_markdown
+    return sanitize_proposal_markdown("\n\n".join(markdown_parts))
 
 
 _SECTION_NUMBER_RE = re.compile(r"^\s*(\d+(?:\.\d+)*)")
@@ -682,8 +686,7 @@ def _extract_section_number(title: str) -> str:
         return ""
     num = match.group(1)
     # Normalize "6.0" -> "6" so subsections read "6.1" not "6.0.1".
-    if num.endswith(".0"):
-        num = num[:-2]
+    num = num.removesuffix(".0")
     return num
 
 
@@ -702,7 +705,7 @@ def _renumber_subheadings(markdown_text: str, section_number: str) -> str:
     off section_number instead.
     """
     lines = markdown_text.splitlines()
-    out_lines: List[str] = []
+    out_lines: list[str] = []
     h3_counter = 0
     h4_counter = 0
     for line in lines:
@@ -724,7 +727,7 @@ def _renumber_subheadings(markdown_text: str, section_number: str) -> str:
     return "\n".join(out_lines)
 
 
-def _wizard_instructions(wizard_config: Optional[str | Dict[str, Any]]) -> str:
+def _wizard_instructions(wizard_config: str | dict[str, Any] | None) -> str:
     """Turns the pre-generation wizard's section choices into plain-language
     guidance appended to the prompt, instead of a hard post-generation filter
     that could silently delete sections the model already wrote."""
@@ -755,7 +758,7 @@ def _wizard_instructions(wizard_config: Optional[str | Dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def _clarifying_answers_block(config: Dict[str, Any]) -> str:
+def _clarifying_answers_block(config: dict[str, Any]) -> str:
     """Pull human answers from wizard_config into the prompt context."""
     if not isinstance(config, dict):
         return ""
@@ -801,9 +804,9 @@ def _clarifying_answers_block(config: Dict[str, Any]) -> str:
 
 
 def _quality_directives_block(
-    parsed_rfp: Dict[str, Any],
+    parsed_rfp: dict[str, Any],
     company_name: str,
-    config: Dict[str, Any],
+    config: dict[str, Any],
 ) -> str:
     """Global quality rules — adapts to the actual RFP domain instead of
     hardcoding marine/offshore instructions for every proposal."""
@@ -870,6 +873,11 @@ def _quality_directives_block(
         "not support without stating the delivery model (subcontractor / consortium / JV).",
         "6. Never contradict the human-confirmed answers — they are authoritative "
         "inputs from the actual bidder.",
+        "7. NO ASCII BOX ART OR TEXT DIAGRAMS: NEVER draw box diagrams using '+---', '|', '-->', or 'v'. "
+        "Proportional fonts in PDF/Word documents break ASCII art. Instead, use clean Markdown TABLES "
+        "(with '| Header | Header |' syntax) or structured numbered step-by-step lists.",
+        "8. CLEAN TABLE CELL SYNTAX: Do not wrap table headers or entire cell values in double asterisks "
+        "like '**Parameter**' or '**Value**'. Keep table cell text clean plain text.",
     ]
 
     if has_bid_security:
@@ -932,7 +940,7 @@ def _quality_directives_block(
     return "\n".join(lines) + "\n"
 
 
-def _section_quality_brief(section: Dict[str, Any]) -> str:
+def _section_quality_brief(section: dict[str, Any]) -> str:
     """Per-section structural requirements — generic across industries.
     Detects relevant section types from the section's key/title and injects
     appropriate, domain-neutral quality rules."""
@@ -940,7 +948,7 @@ def _section_quality_brief(section: Dict[str, Any]) -> str:
     title = str(section.get("title") or "").lower()
     blob = f"{key} {title}"
 
-    rules: List[str] = []
+    rules: list[str] = []
 
     if any(x in blob for x in ("technical_qual", "past performance", "qualification", "experience", "similar works")):
         rules.append(
@@ -1008,7 +1016,7 @@ def _section_quality_brief(section: Dict[str, Any]) -> str:
 
 
 
-def _decode_wizard_config(wizard_config: Optional[str | Dict[str, Any]]) -> Dict[str, Any]:
+def _decode_wizard_config(wizard_config: str | dict[str, Any] | None) -> dict[str, Any]:
     if isinstance(wizard_config, dict):
         return wizard_config
     if not wizard_config:
@@ -1021,7 +1029,7 @@ def _decode_wizard_config(wizard_config: Optional[str | Dict[str, Any]]) -> Dict
         return {}
 
 
-def _load_brand_config(template_path: Optional[str], out_dir: Path) -> Dict[str, Any]:
+def _load_brand_config(template_path: str | None, out_dir: Path) -> dict[str, Any]:
     if template_path:
         try:
             from documents.bidforge.template_profile import extract_template_brand

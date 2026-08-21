@@ -9,16 +9,21 @@ document generation) plugs into this instead of rolling its own LLM
 calling code.
 """
 
-from pipeline.ai.client import get_ai_client, OllamaAIClient, RateLimitError, AIUnavailableError
-from pipeline.ai.mode import get_ai_mode, ai_enabled, run_with_fallback, AIMode
+from pipeline.ai.client import (
+    AIUnavailableError,
+    OllamaAIClient,
+    RateLimitError,
+    get_ai_client,
+)
+from pipeline.ai.mode import AIMode, ai_enabled, get_ai_mode, run_with_fallback
 
 __all__ = [
-    "get_ai_client",
+    "AIMode",
+    "AIUnavailableError",
     "OllamaAIClient",
     "RateLimitError",
-    "AIUnavailableError",
-    "get_ai_mode",
     "ai_enabled",
+    "get_ai_client",
+    "get_ai_mode",
     "run_with_fallback",
-    "AIMode",
 ]

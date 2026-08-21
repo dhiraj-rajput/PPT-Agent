@@ -5,9 +5,11 @@ them with Companies House corporate registry data.
 """
 
 import logging
-import requests
-from typing import List, Dict, Any, Optional
 from difflib import SequenceMatcher
+from typing import Any
+
+import requests
+
 from .ch_client import CompaniesHouseClient
 
 logger = logging.getLogger(__name__)
@@ -17,7 +19,7 @@ CONTRACTS_FINDER_OCDS_URL = "https://www.contractsfinder.service.gov.uk/Publishe
 
 
 class CompaniesHouseTendersClient:
-    def __init__(self, ch_client: Optional[CompaniesHouseClient] = None):
+    def __init__(self, ch_client: CompaniesHouseClient | None = None):
         self.ch_client = ch_client or CompaniesHouseClient()
 
     def _normalize_name(self, name: str) -> str:
@@ -26,7 +28,7 @@ class CompaniesHouseTendersClient:
             name = name.replace(suffix, "")
         return "".join(c for c in name if c.isalnum() or c.isspace()).strip()
 
-    def match_company(self, org_name: str, org_identifier: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def match_company(self, org_name: str, org_identifier: str | None = None) -> dict[str, Any] | None:
         """Matches an organization from a tender record to Companies House profile."""
         # 1. Direct match by identifier if available (Companies House numbers are 8 digits / 2 alpha + 6 digits, not GB-CFS- or GB-SRS-)
         if org_identifier and len(org_identifier) >= 6 and not org_identifier.startswith("GB-"):
@@ -63,7 +65,7 @@ class CompaniesHouseTendersClient:
 
         return None
 
-    def search_uk_tenders(self, keyword: str = "IT", limit: int = 25) -> List[Dict[str, Any]]:
+    def search_uk_tenders(self, keyword: str = "IT", limit: int = 25) -> list[dict[str, Any]]:
         """Fetch UK tender notices directly from live UK Contracts Finder OCDS API and enrich with Companies House details."""
         params = {
             "keywords": keyword or "IT",

@@ -8,7 +8,7 @@ Ported from prasanna/company-extractor and adapted for this project's structure.
 """
 
 import re
-from urllib.parse import urlparse, urljoin, parse_qsl, urlencode
+from urllib.parse import parse_qsl, urlencode, urljoin, urlparse
 
 from utils.helpers import setup_logger
 
@@ -49,8 +49,7 @@ def get_domain(url: str) -> str:
     try:
         parsed = urlparse(url)
         domain = parsed.netloc
-        if domain.startswith("www."):
-            domain = domain[4:]
+        domain = domain.removeprefix("www.")
         return domain
     except Exception:
         return ""

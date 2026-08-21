@@ -19,11 +19,11 @@ Node catalogue:
 import asyncio
 import re
 from datetime import datetime, timezone
-from typing import Optional
 from urllib.parse import urlparse
 
-from utils.helpers import is_valid_url, setup_logger
 from utils.db_client import get_collection
+from utils.helpers import is_valid_url, setup_logger
+
 from pipeline.orchestrator.state import AgentState
 
 logger = setup_logger(__name__)
@@ -498,7 +498,7 @@ def merge_results(state: AgentState) -> dict:
 # Private helpers
 # ---------------------------------------------------------------------------
 
-def _slug_from_linkedin_url(url: str) -> Optional[str]:
+def _slug_from_linkedin_url(url: str) -> str | None:
     """Extract company slug from a LinkedIn company URL."""
     try:
         parts = [p for p in urlparse(url).path.split("/") if p]
@@ -549,7 +549,6 @@ def discover_external_news(state: AgentState) -> dict:
     that run this node in parallel with run_website_agent, before the name is known).
     """
     import time
-    import json
     start_time = time.time()
     company_name = state.get("company_name")
     official_url = state.get("website_url")
@@ -569,9 +568,10 @@ def discover_external_news(state: AgentState) -> dict:
 
     logger.info(f"[discover_external_news] Searching detailed external news and financials for: '{company_name}'")
 
-    from pipeline.google_search import ExternalSearchClient
     from config.settings import settings
     from utils.db_client import get_collection
+
+    from pipeline.google_search import ExternalSearchClient
 
     search_client = ExternalSearchClient(settings)
 
@@ -652,7 +652,7 @@ def discover_external_news(state: AgentState) -> dict:
         }
         raw_record.pop('_id', None)  # Remove _id if re-used from a previous insert
         raw_collection.insert_one(raw_record)
-        logger.info(f"[discover_external_news] Saved raw search data to 'raw_external_search' collection.")
+        logger.info("[discover_external_news] Saved raw search data to 'raw_external_search' collection.")
 
         if not raw_results:
             logger.info("[discover_external_news] No news results found.")
@@ -668,8 +668,8 @@ def discover_external_news(state: AgentState) -> dict:
             return {"external_news": []}
 
         logger.info("[discover_external_news] Running structured search profiling (AI with rule-based fallback).")
-        from pipeline.ai.mode import run_with_fallback
         from pipeline.ai.client import get_ai_client
+        from pipeline.ai.mode import run_with_fallback
 
         def _ai_profiling():
             """Ask the LLM to synthesise a structured profile from raw search snippets."""
@@ -778,7 +778,7 @@ def discover_external_news(state: AgentState) -> dict:
             {"$set": structured_profile},
             upsert=True
         )
-        logger.info(f"[discover_external_news] Saved structured search data to 'structured_external_search' collection.")
+        logger.info("[discover_external_news] Saved structured search data to 'structured_external_search' collection.")
 
         # Log operation to scrape_logs
         logs_collection = get_collection("scrape_logs")
@@ -904,9 +904,9 @@ def generate_pitch_proposal(state: AgentState) -> dict:
         from pathlib import Path
         PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
         
-        from documents.rfp_response.rfp_parser import RFPParser
-        from documents.rfp_response.pitch_compiler import PitchCompiler
         from documents.rfp_response.pdf_generator import PDFGenerator
+        from documents.rfp_response.pitch_compiler import PitchCompiler
+        from documents.rfp_response.rfp_parser import RFPParser
 
         # 1. Parse RFP PDFs
         rfp_parser = RFPParser(sol_num, project_root=str(PROJECT_ROOT))

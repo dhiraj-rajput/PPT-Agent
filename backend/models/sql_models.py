@@ -21,10 +21,8 @@ Migration note:
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import (
-    BIGINT,
     JSON,
     TEXT,
     BigInteger,
@@ -38,13 +36,10 @@ from sqlalchemy import (
     Numeric,
     String,
     UniqueConstraint,
-    func,
 )
-from sqlalchemy.dialects.mysql import LONGTEXT, MEDIUMTEXT
+from sqlalchemy.dialects.mysql import LONGTEXT
 from sqlalchemy.orm import relationship
-
 from utils.mysql_client import Base
-
 
 # ---------------------------------------------------------------------------
 # Helpers

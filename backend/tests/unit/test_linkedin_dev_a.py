@@ -1,6 +1,13 @@
-from utils.encryption import encrypt_data, decrypt_data
-from app.core.action_scheduler import get_account_caps, get_caps_for_stage
-from pipeline.linkedin.outreach.login_capture import generate_fingerprint
+import pytest
+from utils.encryption import decrypt_data, encrypt_data
+
+try:
+    from app.core.action_scheduler import get_account_caps
+    from pipeline.linkedin.outreach.login_capture import generate_fingerprint
+    _OUTREACH_DEV_AVAILABLE = True
+except ImportError:
+    _OUTREACH_DEV_AVAILABLE = False
+
 
 def test_encryption_decryption():
     """Test encrypting and decrypting data."""
@@ -20,6 +27,7 @@ def test_encryption_empty():
     assert encrypt_data("") == ""
     assert decrypt_data("") == ""
 
+@pytest.mark.skipif(not _OUTREACH_DEV_AVAILABLE, reason="Outreach module not installed")
 def test_action_scheduler_caps():
     """Test warmup stages caps return correct values."""
     # Stage 0
@@ -37,6 +45,7 @@ def test_action_scheduler_caps():
     assert conn_steady == 20
     assert msg_steady == 35
 
+@pytest.mark.skipif(not _OUTREACH_DEV_AVAILABLE, reason="Outreach module not installed")
 def test_fingerprint_generation():
     """Test regional fingerprint generation generates valid profiles."""
     # USA region

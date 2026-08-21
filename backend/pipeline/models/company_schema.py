@@ -10,11 +10,8 @@ Models:
     OptimizedCompanyProfile — final unified competitor-intelligence profile produced by the compactor
 """
 
-from datetime import datetime
-from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
-
 
 # ---------------------------------------------------------------------------
 # Website Pipeline models (from compactor branch — company_schema.py)
@@ -28,17 +25,17 @@ class CompanyIntelligence(BaseModel):
     industry: str = Field(default="", description="Industry or sector of the company")
     description: str = Field(default="", description="Brief description of the company")
     headquarters: str = Field(default="", description="Corporate headquarters location")
-    locations: List[str] = Field(default_factory=list, description="All locations / offices")
-    products: List[str] = Field(default_factory=list, description="Products offered")
-    services: List[str] = Field(default_factory=list, description="Services offered")
-    industries_served: List[str] = Field(default_factory=list, description="Target industries")
-    leadership: List[str] = Field(default_factory=list, description="Key executive members")
-    technology_stack: List[str] = Field(default_factory=list, description="Technologies detected")
-    clients: List[str] = Field(default_factory=list, description="Notable clients")
-    partners: List[str] = Field(default_factory=list, description="Business partners")
-    emails: List[str] = Field(default_factory=list, description="Contact emails")
-    phone_numbers: List[str] = Field(default_factory=list, description="Contact phone numbers")
-    social_links: List[str] = Field(default_factory=list, description="Official social profiles")
+    locations: list[str] = Field(default_factory=list, description="All locations / offices")
+    products: list[str] = Field(default_factory=list, description="Products offered")
+    services: list[str] = Field(default_factory=list, description="Services offered")
+    industries_served: list[str] = Field(default_factory=list, description="Target industries")
+    leadership: list[str] = Field(default_factory=list, description="Key executive members")
+    technology_stack: list[str] = Field(default_factory=list, description="Technologies detected")
+    clients: list[str] = Field(default_factory=list, description="Notable clients")
+    partners: list[str] = Field(default_factory=list, description="Business partners")
+    emails: list[str] = Field(default_factory=list, description="Contact emails")
+    phone_numbers: list[str] = Field(default_factory=list, description="Contact phone numbers")
+    social_links: list[str] = Field(default_factory=list, description="Official social profiles")
     careers_page: str = Field(default="", description="URL of the careers page")
     blog_page: str = Field(default="", description="URL of the blog/news section")
     about_page: str = Field(default="", description="URL of the about page")
@@ -54,7 +51,7 @@ class CrawlMetadata(BaseModel):
     pages_visited: int = Field(default=0, description="Total pages successfully parsed")
     crawl_time: str = Field(default="0s", description="Total crawl duration (HH:MM:SS)")
     status: str = Field(default="pending", description="success | partial | failed")
-    visited_urls: List[str] = Field(default_factory=list, description="All visited URLs")
+    visited_urls: list[str] = Field(default_factory=list, description="All visited URLs")
 
 
 class CompanyMongoRecord(BaseModel):
@@ -92,59 +89,59 @@ class OptimizedCompanyProfile(BaseModel):
     industry: str = Field("", description="Consolidated industry categorisation")
     description: str = Field("", description="Clear, professional company description synthesising all sources")
     headquarters: str = Field("", description="Primary corporate headquarters location")
-    locations: List[str] = Field(default_factory=list, description="All other office locations or operating markets")
+    locations: list[str] = Field(default_factory=list, description="All other office locations or operating markets")
     employee_count: str = Field("", description="Estimated workforce size (e.g. from LinkedIn or Google)")
-    founded_year: Optional[int] = Field(None, description="Year the company was founded")
-    specialties: List[str] = Field(default_factory=list, description="Core business specialties or taglines")
+    founded_year: int | None = Field(None, description="Year the company was founded")
+    specialties: list[str] = Field(default_factory=list, description="Core business specialties or taglines")
 
     # --- Products & Services ---
-    products: List[str] = Field(default_factory=list, description="Key products offered (semantic names only, no fragments)")
-    services: List[str] = Field(default_factory=list, description="Key services offered (semantic names only)")
-    technology_stack: List[str] = Field(default_factory=list, description="Technologies used or offered")
+    products: list[str] = Field(default_factory=list, description="Key products offered (semantic names only, no fragments)")
+    services: list[str] = Field(default_factory=list, description="Key services offered (semantic names only)")
+    technology_stack: list[str] = Field(default_factory=list, description="Technologies used or offered")
 
     # --- Business Model & Revenue ---
     business_model: str = Field("", description="How the company makes money (e.g. SaaS, project-based, product sales)")
     pricing_model: str = Field("", description="Pricing approach (e.g. enterprise licence, subscription, per-project)")
-    financial_highlights: List[str] = Field(
+    financial_highlights: list[str] = Field(
         default_factory=list,
         description="Key financial metrics: revenue figures, growth rates, funding rounds, profitability with dates"
     )
 
     # --- People ---
-    leadership: List[str] = Field(default_factory=list, description="Consolidated executives / leadership team members")
+    leadership: list[str] = Field(default_factory=list, description="Consolidated executives / leadership team members")
 
     # --- Competitive Intelligence ---
-    competitors: List[str] = Field(
+    competitors: list[str] = Field(
         default_factory=list,
         description="Identified direct or indirect competitors with brief context (company name + why they compete)"
     )
     value_proposition: str = Field("", description="Synthesised unique selling proposition")
-    rfp_strengths: List[str] = Field(
+    rfp_strengths: list[str] = Field(
         default_factory=list,
         description="Strengths relevant to winning RFP / proposals (delivery track record, certifications, client wins)"
     )
-    rfp_weaknesses: List[str] = Field(
+    rfp_weaknesses: list[str] = Field(
         default_factory=list,
         description="Weaknesses or risks in RFP context (size, geography, known issues)"
     )
-    opportunities: List[str] = Field(default_factory=list, description="Market opportunities identified")
-    challenges: List[str] = Field(default_factory=list, description="Business challenges or risk factors")
+    opportunities: list[str] = Field(default_factory=list, description="Market opportunities identified")
+    challenges: list[str] = Field(default_factory=list, description="Business challenges or risk factors")
 
     # --- Recent News ---
-    recent_news: List[str] = Field(
+    recent_news: list[str] = Field(
         default_factory=list,
         description="Recent announcements, press releases, or news headlines (with approximate date if known)"
     )
 
     # --- Clients & Partners ---
-    clients: List[str] = Field(default_factory=list, description="Notable customers or clients")
-    partners: List[str] = Field(default_factory=list, description="Business partners or alliances")
+    clients: list[str] = Field(default_factory=list, description="Notable customers or clients")
+    partners: list[str] = Field(default_factory=list, description="Business partners or alliances")
 
     # --- Contact ---
-    emails: List[str] = Field(default_factory=list, description="Consolidated contact emails")
-    phone_numbers: List[str] = Field(default_factory=list, description="Consolidated contact phone numbers (E.164 or national format)")
-    social_links: List[str] = Field(default_factory=list, description="Links to official LinkedIn, Twitter/X, YouTube, etc.")
+    emails: list[str] = Field(default_factory=list, description="Consolidated contact emails")
+    phone_numbers: list[str] = Field(default_factory=list, description="Consolidated contact phone numbers (E.164 or national format)")
+    social_links: list[str] = Field(default_factory=list, description="Links to official LinkedIn, Twitter/X, YouTube, etc.")
 
     # --- Metadata ---
-    sources_used: List[str] = Field(default_factory=list, description="Sources combined (e.g. Website, LinkedIn, Google)")
+    sources_used: list[str] = Field(default_factory=list, description="Sources combined (e.g. Website, LinkedIn, Google)")
     last_updated: str = Field("", description="ISO 8601 UTC datetime of compilation")

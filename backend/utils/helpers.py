@@ -11,31 +11,29 @@ Includes:
   - Date/time formatting helpers
 """
 
+import json
 import logging
 import os
 import random
 import time
-import json
 import traceback
+import uuid
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 from logging.handlers import RotatingFileHandler
-from datetime import datetime, timezone
-from functools import wraps
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
 from urllib.parse import urlparse
 
+from config.settings import settings
 from tenacity import (
+    before_sleep_log,
     retry,
+    retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception_type,
-    before_sleep_log,
 )
 
-import uuid
-from config.settings import settings
-
-from datetime import datetime, timedelta
 
 class MongoSemaphore:
     def __init__(self, name="subprocess_limit", max_leases=3, timeout_seconds=300):
@@ -46,7 +44,7 @@ class MongoSemaphore:
         self.slot_name = None
 
     def __enter__(self):
-        from utils.db_client import get_sync_db_session, _mysql_available
+        from utils.db_client import _mysql_available, get_sync_db_session
         if not _mysql_available:
             return self
 
@@ -59,7 +57,7 @@ class MongoSemaphore:
             try:
                 with get_sync_db_session() as db:
                     from models.sql_models import ActiveLease as SQL_ActiveLease
-                    from sqlalchemy import delete, select, func
+                    from sqlalchemy import delete, func, select
                     # delete stale leases
                     db.execute(delete(SQL_ActiveLease).where(SQL_ActiveLease.resource.like(f"{self.name}%"), SQL_ActiveLease.expires_at < datetime.utcnow()))
                     db.commit()
@@ -88,7 +86,7 @@ class MongoSemaphore:
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.lease_id:
             try:
-                from utils.db_client import get_sync_db_session, _mysql_available
+                from utils.db_client import _mysql_available, get_sync_db_session
                 if _mysql_available and self.slot_name:
                     from models.sql_models import ActiveLease as SQL_ActiveLease
                     from sqlalchemy import delete
@@ -106,6 +104,7 @@ def get_python_executable() -> str:
     Returns the configured python interpreter path, or sys.executable as a fallback.
     """
     import sys
+
     from config.settings import settings
     return settings.PYTHON_PATH or sys.executable
 
@@ -173,7 +172,7 @@ class MongoErrorLogHandler(logging.Handler):
 def _write_error_log_doc(doc: dict) -> None:
     """Runs on a background thread — inserts one error-log document into MySQL."""
     try:
-        from utils.db_client import get_sync_db_session, _mysql_available
+        from utils.db_client import _mysql_available, get_sync_db_session
         if _mysql_available:
             from models.sql_models import ErrorLog as SQL_ErrorLog
             with get_sync_db_session() as db:

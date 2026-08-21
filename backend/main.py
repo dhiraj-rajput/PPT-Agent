@@ -24,15 +24,15 @@ import sys
 
 # Reconfigure stdout/stderr to use UTF-8 to avoid encoding errors on Windows console
 try:
-    if hasattr(sys.stdout, 'reconfigure'):
-        getattr(sys.stdout, 'reconfigure')(encoding='utf-8')
-    if hasattr(sys.stderr, 'reconfigure'):
-        getattr(sys.stderr, 'reconfigure')(encoding='utf-8')
+    if hasattr(sys.stdout, "reconfigure"):
+        getattr(sys.stdout, "reconfigure")(encoding="utf-8")
+    if hasattr(sys.stderr, "reconfigure"):
+        getattr(sys.stderr, "reconfigure")(encoding="utf-8")
 except Exception:
     pass
 
+from utils.db_client import close_connection, ensure_all_indexes
 from utils.helpers import setup_logger
-from utils.db_client import ensure_all_indexes, close_connection
 
 logger = setup_logger("main")
 

@@ -3,21 +3,30 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import logging
 import posixpath
 import re
-import time
 import socket
-import ipaddress
+import time
 from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import parse_qsl, quote, unquote, urlencode, urljoin, urlsplit, urlunsplit, urlparse
+from urllib.parse import (
+    parse_qsl,
+    quote,
+    unquote,
+    urlencode,
+    urljoin,
+    urlparse,
+    urlsplit,
+    urlunsplit,
+)
 
 import trafilatura
 from bs4 import BeautifulSoup
-from playwright.async_api import Browser, Page, Playwright, TimeoutError as PlaywrightTimeoutError
-from playwright.async_api import async_playwright
+from playwright.async_api import Browser, Page, Playwright, async_playwright
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from pydantic import BaseModel, ConfigDict, Field
 
 logger = logging.getLogger(__name__)
@@ -161,7 +170,7 @@ class PlaywrightFetcher:
         self._playwright: Playwright | None = None
         self._browser: Browser | None = None
 
-    async def __aenter__(self) -> "PlaywrightFetcher":
+    async def __aenter__(self) -> PlaywrightFetcher:
         self._playwright = await async_playwright().start()
         self._browser = await _launch_or_connect_chromium(self._playwright, headless=True)
         logger.info("playwright_started")
@@ -394,7 +403,7 @@ def _is_allowed_host(url: str, base_host: str, include_subdomains: bool) -> bool
 
 
 def _strip_www(hostname: str) -> str:
-    return hostname[4:] if hostname.startswith("www.") else hostname
+    return hostname.removeprefix("www.")
 
 
 def _score_url(url: str) -> int:
@@ -494,9 +503,8 @@ def crawl_website(
     # ------------------------------------------------------------------ #
     try:
         import asyncio
-        from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
-        from urllib.parse import urljoin as _urljoin
-        from bs4 import BeautifulSoup as _BSoup
+
+        from crawl4ai import AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig
 
         logger.info(
             f"[crawl_website] Starting crawl4ai crawl: {homepage_url} "
@@ -632,11 +640,17 @@ def _playwright_crawl_website(
     limit_timeout: float,
 ) -> dict[str, dict[str, Any]]:
     """Playwright-based synchronous website crawler (fallback when crawl4ai is unavailable)."""
-    from utils.helpers import is_valid_url
-    from pipeline.website.urls import normalize_url as p_normalize_url, is_internal_link, should_ignore_url, get_url_priority
-    from pipeline.website.parser import extract_links
     from config.settings import settings
     from playwright.sync_api import sync_playwright
+    from utils.helpers import is_valid_url
+
+    from pipeline.website.parser import extract_links
+    from pipeline.website.urls import (
+        get_url_priority,
+        is_internal_link,
+        should_ignore_url,
+    )
+    from pipeline.website.urls import normalize_url as p_normalize_url
 
     if not is_valid_url(homepage_url):
         logger.error(f"Invalid starting URL: {homepage_url}")

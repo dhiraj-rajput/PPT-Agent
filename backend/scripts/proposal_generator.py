@@ -19,19 +19,25 @@ import re
 import shutil
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 try:
     from docx import Document
     from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
     from docx.shared import Inches, Pt, RGBColor
-    from docx.oxml import OxmlElement
     _DOCX_OK = True
 except ImportError:
     Document = None  # type: ignore
+    WD_ALIGN_PARAGRAPH = None  # type: ignore
+    OxmlElement = None  # type: ignore
+    qn = None  # type: ignore
+    Inches = None  # type: ignore
+    Pt = None  # type: ignore
+    RGBColor = None  # type: ignore
     _DOCX_OK = False
 
 
@@ -72,7 +78,7 @@ def _set_cell_shading(cell, hex_color: str) -> None:
     tcPr.append(shd)
 
 
-def _accent_rgb(brand: Dict[str, Any]) -> RGBColor:
+def _accent_rgb(brand: dict[str, Any]) -> RGBColor:
     raw = str(brand.get("accent_color") or "2B6CB0").strip().lstrip("#")
     try:
         return RGBColor(int(raw[0:2], 16), int(raw[2:4], 16), int(raw[4:6], 16))
@@ -84,14 +90,14 @@ def _accent_rgb(brand: Dict[str, Any]) -> RGBColor:
 # Section writer
 # ---------------------------------------------------------------------------
 
-def add_section(doc, cfg: Dict[str, Any], section: Dict[str, Any], index: int = 1) -> None:
+def add_section(doc, cfg: dict[str, Any], section: dict[str, Any], index: int = 1) -> None:
     """Append one outline section (title + blocks) to an open Document."""
     if not _DOCX_OK:
         raise RuntimeError("python-docx is required for proposal generation")
 
     brand = cfg.get("brand") or {}
     title = (section.get("title") or f"Section {index}").strip()
-    blocks: List[Dict[str, Any]] = section.get("blocks") or []
+    blocks: list[dict[str, Any]] = section.get("blocks") or []
 
     if section.get("page_break_before"):
         doc.add_page_break()
@@ -171,18 +177,24 @@ def add_section(doc, cfg: Dict[str, Any], section: Dict[str, Any], index: int = 
                 cell = table.rows[0].cells[i]
                 cell.text = ""
                 p = cell.paragraphs[0]
-                run = p.add_run(str(h))
-                run.bold = True
+                clean_h = re.sub(r"^\*{1,2}(.*?)\*{1,2}$", r"\1", str(h).strip())
+                _add_runs_with_inline(p, clean_h)
+                for run in p.runs:
+                    run.bold = True
                 try:
                     _set_cell_shading(cell, str(brand.get("accent_color") or "2B6CB0"))
-                    run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+                    for run in p.runs:
+                        run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
                 except Exception:
                     pass
             # Data rows
             for r_idx, row in enumerate(rows):
                 for c_idx in range(cols):
                     val = row[c_idx] if c_idx < len(row) else ""
-                    table.rows[r_idx + 1].cells[c_idx].text = str(val)
+                    cell = table.rows[r_idx + 1].cells[c_idx]
+                    cell.text = ""
+                    p = cell.paragraphs[0]
+                    _add_runs_with_inline(p, str(val).strip())
             doc.add_paragraph()
 
         else:
@@ -193,14 +205,14 @@ def add_section(doc, cfg: Dict[str, Any], section: Dict[str, Any], index: int = 
                 _add_runs_with_inline(p, str(text))
 
 
-def generate(cfg: Dict[str, Any], output_docx_path: str) -> str:
+def generate(cfg: dict[str, Any], output_docx_path: str) -> str:
     """Build a full .docx from cfg {brand, proposal, sections}."""
     if not _DOCX_OK:
         raise RuntimeError("python-docx is required. pip install python-docx")
 
     brand = cfg.get("brand") or {}
     proposal = cfg.get("proposal") or {}
-    sections: List[Dict[str, Any]] = cfg.get("sections") or []
+    sections: list[dict[str, Any]] = cfg.get("sections") or []
 
     doc = Document()
 
@@ -274,7 +286,7 @@ def generate(cfg: Dict[str, Any], output_docx_path: str) -> str:
     return str(out)
 
 
-def convert_to_pdf(docx_path: str, output_dir: str) -> Optional[str]:
+def convert_to_pdf(docx_path: str, output_dir: str | None = None) -> str | None:
     """
     Best-effort DOCX → PDF.
 
@@ -285,7 +297,7 @@ def convert_to_pdf(docx_path: str, output_dir: str) -> Optional[str]:
     is unavailable (so the pipeline still has a downloadable artifact).
     """
     src = Path(docx_path)
-    out_dir = Path(output_dir)
+    out_dir = Path(output_dir) if output_dir else src.parent
     out_dir.mkdir(parents=True, exist_ok=True)
     pdf_path = out_dir / (src.stem + ".pdf")
 

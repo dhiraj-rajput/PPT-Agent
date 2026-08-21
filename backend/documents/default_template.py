@@ -14,7 +14,6 @@ import logging
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +23,7 @@ TEMPLATE_PATH = STORE_DIR / "template.docx"
 META_PATH = STORE_DIR / "meta.json"
 
 
-def set_default_template(source_path: str, original_filename: str, uploaded_by: Optional[str] = None) -> dict:
+def set_default_template(source_path: str, original_filename: str, uploaded_by: str | None = None) -> dict:
     """Copy the uploaded file into persistent storage as the new default
     template, replacing any previous one."""
     STORE_DIR.mkdir(parents=True, exist_ok=True)
@@ -40,7 +39,7 @@ def set_default_template(source_path: str, original_filename: str, uploaded_by: 
     return meta
 
 
-def get_default_template_path() -> Optional[str]:
+def get_default_template_path() -> str | None:
     """Return the path to the persisted default template, or None if none
     has been uploaded yet."""
     if TEMPLATE_PATH.exists():
@@ -48,7 +47,7 @@ def get_default_template_path() -> Optional[str]:
     return None
 
 
-def get_default_template_meta() -> Optional[dict]:
+def get_default_template_meta() -> dict | None:
     if not TEMPLATE_PATH.exists():
         return None
     meta = {}

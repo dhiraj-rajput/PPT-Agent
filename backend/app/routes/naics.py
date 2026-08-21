@@ -4,19 +4,24 @@ app/routes/naics.py
 NAICS industry classification codes endpoints — using MySQL.
 """
 
-from fastapi import APIRouter, Depends, Query, UploadFile, File, Form, HTTPException
-from typing import Optional, List
-from pydantic import BaseModel
-import json
 import csv
 import io
-import os
+import json
 import re
 from pathlib import Path
-from utils.db_client import get_db_session, get_sync_db_session, get_collection, _mysql_available
-from app.core.auth import get_current_user
+
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from models.sql_models import NaicsCode as SQL_NaicsCode
-from sqlalchemy import select, update, insert, delete, func, or_, and_
+from pydantic import BaseModel
+from sqlalchemy import and_, func, insert, or_, select, update
+from utils.db_client import (
+    _mysql_available,
+    get_collection,
+    get_db_session,
+    get_sync_db_session,
+)
+
+from app.core.auth import get_current_user
 
 _BACKEND_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -82,10 +87,10 @@ def extract_keywords(description: str) -> list[str]:
 
 @router.get("")
 async def list_naics_codes(
-    search: Optional[str] = None,
-    sector: Optional[str] = None,
-    match_company_description: Optional[bool] = False,
-    custom_description: Optional[str] = None,
+    search: str | None = None,
+    sector: str | None = None,
+    match_company_description: bool | None = False,
+    custom_description: str | None = None,
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=100),
     current_user: dict = Depends(get_current_user)
@@ -183,7 +188,7 @@ async def list_naics_codes(
 class NaicsCodeCreateBody(BaseModel):
     code: str
     title: str
-    description: Optional[str] = ""
+    description: str | None = ""
 
 
 @router.post("")

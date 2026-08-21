@@ -4,13 +4,13 @@ Provides API clients, opportunity search/enrichment, document parsing, and compe
 """
 
 from .ch_client import CompaniesHouseClient
-from .opportunities import CompaniesHouseTendersClient
-from .document_parser import CompaniesHouseDocumentParser
 from .competitor_profiler import CompaniesHouseCompetitorProfiler
+from .document_parser import CompaniesHouseDocumentParser
+from .opportunities import CompaniesHouseTendersClient
 
 __all__ = [
     "CompaniesHouseClient",
-    "CompaniesHouseTendersClient",
-    "CompaniesHouseDocumentParser",
     "CompaniesHouseCompetitorProfiler",
+    "CompaniesHouseDocumentParser",
+    "CompaniesHouseTendersClient",
 ]

@@ -6,14 +6,14 @@ Fixes: API key injection, content validation (rejects HTML error pages),
 filename sanitization, retry logic, and fallback HTML parser.
 """
 
-import logging
+import hashlib
 import os
 import re
 import time
-import hashlib
 from pathlib import Path
-from typing import Any, Dict, Optional
-from urllib.parse import urlparse, urljoin, urlencode, parse_qs, urlunparse
+from typing import Any
+from urllib.parse import parse_qs, urlencode, urljoin, urlparse, urlunparse
+
 import requests
 
 try:
@@ -55,11 +55,15 @@ def _sanitize_filename(raw: str) -> str:
 
 
 def _inject_api_key(url: str, api_key: str) -> str:
-    """Append or replace the api_key query parameter in a URL."""
+    """Append or replace the api_key query parameter only for SAM.gov URLs."""
     if not api_key:
         return url
-    from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+    from urllib.parse import urlparse
     parsed = urlparse(url)
+    # Prevent leaking the SAM.gov API key to arbitrary third-party servers
+    hostname = parsed.hostname or ""
+    if not (hostname == "sam.gov" or hostname.endswith(".sam.gov")):
+        return url
     params = parse_qs(parsed.query, keep_blank_values=True)
     params["api_key"] = [api_key]
     new_query = urlencode({k: v[0] for k, v in params.items()})
@@ -108,7 +112,7 @@ class DocumentParser:
         except Exception:
             return ""
 
-    def download_file(self, url: str) -> Optional[bytes]:
+    def download_file(self, url: str) -> bytes | None:
         """Download file content from a URL with retry and API key injection."""
         url = _resolve_url(url)
         url = _inject_api_key(url, self.api_key)
@@ -140,6 +144,7 @@ class DocumentParser:
     def extract_text_from_pdf(pdf_bytes: bytes) -> str:
         """Extract text from a PDF file using pypdf."""
         import io
+
         from pypdf import PdfReader
         try:
             reader = PdfReader(io.BytesIO(pdf_bytes))
@@ -176,7 +181,7 @@ class DocumentParser:
             logger.error(f"Failed to parse HTML: {e}")
             return ""
 
-    def parse_document(self, url: str) -> Dict[str, Any]:
+    def parse_document(self, url: str) -> dict[str, Any]:
         """Download and parse document at URL (supports PDFs, Images, Word, HTML, Text)."""
         parsed_url = urlparse(url)
         filename = _sanitize_filename(os.path.basename(parsed_url.path) or "document")
@@ -190,7 +195,7 @@ class DocumentParser:
 
         return self._parse_bytes(content_bytes, filename, url=url)
 
-    def parse_local_file(self, local_path: str, url: str = "") -> Dict[str, Any]:
+    def parse_local_file(self, local_path: str, url: str = "") -> dict[str, Any]:
         """
         Parse a document that has already been downloaded to disk.
 
@@ -218,7 +223,7 @@ class DocumentParser:
 
         return self._parse_bytes(content_bytes, filename, url=url or local_path)
 
-    def _parse_bytes(self, content_bytes: bytes, filename: str, url: str = "") -> Dict[str, Any]:
+    def _parse_bytes(self, content_bytes: bytes, filename: str, url: str = "") -> dict[str, Any]:
         """Shared parsing logic for already-downloaded document bytes."""
         result = {"url": url, "filename": filename, "content": "", "status": "failed"}
 
@@ -276,7 +281,7 @@ class DocumentParser:
 
         return result
 
-    def download_and_save_document(self, url: str, opportunity_id: str) -> Dict[str, Any]:
+    def download_and_save_document(self, url: str, opportunity_id: str) -> dict[str, Any]:
         """
         Download file from URL, save to local downloads directory,
         and return the metadata and raw binary content.
@@ -284,7 +289,7 @@ class DocumentParser:
         downloads_dir = Path("downloads") / "opportunities" / opportunity_id
         return self.download_and_save_to_path(url, str(downloads_dir))
 
-    def download_and_save_to_path(self, url: str, target_dir: str) -> Dict[str, Any]:
+    def download_and_save_to_path(self, url: str, target_dir: str) -> dict[str, Any]:
         """
         Download file from URL, save to the specified target directory.
         - Injects SAM.gov API key into the URL

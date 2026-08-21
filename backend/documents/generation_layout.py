@@ -7,11 +7,9 @@ to guide AI text generation and prevent runaway/spillover length.
 
 from __future__ import annotations
 
-from typing import Dict, Tuple
-
 WORDS_PER_PAGE = 480
 
-SECTION_WEIGHTS: Dict[str, float] = {
+SECTION_WEIGHTS: dict[str, float] = {
     "executive_summary": 1.2,
     "scope_of_work": 1.5,
     "pricing_table": 0.4,
@@ -33,7 +31,7 @@ SECTION_WEIGHTS: Dict[str, float] = {
 _TOTAL_WEIGHT = sum(SECTION_WEIGHTS.values())
 
 
-def section_word_budget(section_key: str, target_total_pages: int = 10) -> Tuple[int, int]:
+def section_word_budget(section_key: str, target_total_pages: int = 10) -> tuple[int, int]:
     """
     Returns a (min_words, max_words) range for a section.
     
@@ -56,6 +54,6 @@ def estimate_section_pages(section_key: str, word_count: int) -> float:
     return max(0.5, word_count / WORDS_PER_PAGE)
 
 
-def total_document_pages(sections: Dict[str, int]) -> float:
+def total_document_pages(sections: dict[str, int]) -> float:
     """Estimate total pages given a dict of {section_key: word_count}."""
     return sum(estimate_section_pages(k, v) for k, v in sections.items())

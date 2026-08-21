@@ -926,7 +926,7 @@ export default function ContactsDB() {
             <Building2 size={16} className="text-brand-500" />
             <h3 className="text-sm font-extrabold text-navy-900 dark:text-white">Companies Directory</h3>
           </div>
-          <CompaniesView />
+          {renderCompaniesView()}
         </Card>
       )}
 
@@ -936,7 +936,7 @@ export default function ContactsDB() {
             <Users size={16} className="text-brand-500" />
             <h3 className="text-sm font-extrabold text-navy-900 dark:text-white">People &amp; Contacts Directory</h3>
           </div>
-          <PeopleView />
+          {renderPeopleView()}
         </Card>
       )}
 
@@ -1297,9 +1297,9 @@ export default function ContactsDB() {
   );
 
   // ──────────────────────────────────────────────────────────────────────────
-  // Companies Table Sub-component
+  // Companies Table Render Function
   // ──────────────────────────────────────────────────────────────────────────
-  function CompaniesView() {
+  function renderCompaniesView() {
     const totalPages = Math.ceil(totalCompanies / LIMIT);
     return (
       <div className="space-y-4">
@@ -1463,9 +1463,9 @@ export default function ContactsDB() {
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // People Table Sub-component
+  // People Table Render Function
   // ──────────────────────────────────────────────────────────────────────────
-  function PeopleView() {
+  function renderPeopleView() {
     const totalPages = Math.ceil(totalPeople / LIMIT);
     return (
       <div className="space-y-4">

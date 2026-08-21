@@ -24,13 +24,24 @@ import hashlib
 import re
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
-from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, status, Response, File, UploadFile
-from fastapi.responses import FileResponse
 import bcrypt
+from config.settings import settings
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Response,
+    UploadFile,
+)
+from fastapi.responses import FileResponse
+from models.sql_models import OTP as SQLOTP
+from models.sql_models import LoginFailure as SQLLoginFailure
+from models.sql_models import User as SQLUser
 from pydantic import BaseModel
+from sqlalchemy import delete, func, insert, select, update
+from utils.db_client import _mysql_available, get_db_session
 
 from app.core.auth import (
     create_access_token,
@@ -38,12 +49,7 @@ from app.core.auth import (
     get_current_user,
     verify_action_token,
 )
-from app.core.mailer import send_otp_email, send_invite_email
-from utils.db_client import get_async_collection, get_db_session, _mysql_available
-from models.sql_models import User as SQLUser, OTP as SQLOTP, LoginFailure as SQLLoginFailure
-from sqlalchemy import select, insert, update, delete, func
-
-from config.settings import settings
+from app.core.mailer import send_otp_email
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -144,7 +150,7 @@ def _otp_expiry() -> datetime:
     return datetime.now(tz=timezone.utc) + timedelta(minutes=_OTP_TTL_MINUTES)
 
 
-def _to_public_user(u: Optional[dict]) -> dict:
+def _to_public_user(u: dict | None) -> dict:
     if not u:
         return {}
     uid = u.get("_id") or u.get("id")
@@ -183,8 +189,8 @@ async def _send_otp_for_user(user_id: str, email: str, purpose: str) -> None:
                 ))
                 await db.commit()
             import logging as _logging
-            _logging.getLogger("auth").info("🔑 [DEV OTP] Generated OTP for %s (%s): %s", email, purpose, otp)
-            print(f"\n🔑 [DEV OTP CODE] {email} ({purpose}): {otp}\n", flush=True)
+            if getattr(settings, "DEBUG", False):
+                _logging.getLogger("auth").debug("🔑 [DEV OTP] Generated OTP for %s (%s): %s", email, purpose, otp)
             _fire_and_forget(send_otp_email(email, otp, purpose))
             return
         except Exception as e:
@@ -700,8 +706,8 @@ def me(current_user: dict = Depends(get_current_user)):
 
 
 class UpdateProfileBody(BaseModel):
-    name: Optional[str] = None
-    phone: Optional[str] = None
+    name: str | None = None
+    phone: str | None = None
 
 
 @router.patch("/me/profile")
@@ -753,8 +759,8 @@ async def upload_avatar(
     current_user: dict = Depends(get_current_user),
 ):
     """Upload/replace the authenticated user's profile photo and assign it to their account."""
-    from pathlib import Path
     import uuid
+    from pathlib import Path
 
     content_type = (file.content_type or "").lower()
     ext = _ALLOWED_AVATAR_TYPES.get(content_type)
@@ -842,6 +848,12 @@ def serve_avatar(filename: str):
 
 
 @router.post("/logout")
-def logout():
-    # JWT is stateless; client clears the token
+def logout(response: Response):
+    """Log out the user and clear the authentication cookie."""
+    response.delete_cookie(
+        key="orbitavanya_token",
+        httponly=True,
+        secure=True,
+        samesite="lax"
+    )
     return {"ok": True}

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Upload, FileText, Loader2, CheckCircle, AlertCircle, Download, X, Zap, FileCheck, Eye } from 'lucide-react';
 import { api } from '../lib/api.jsx';
 import RfpAnalysisWizard from '../components/RfpAnalysisWizard.jsx';
@@ -197,6 +197,11 @@ export default function RFPAutoRespond() {
       alert("Failed to download file.");
     }
   };
+
+  const fetchResultBlob = useCallback(() => {
+    if (!taskState?.filename) return Promise.reject(new Error('No filename available'));
+    return api.viewRfpRespondBlob(taskState.filename);
+  }, [taskState?.filename]);
 
   /**
    * Map pipeline progress + message to the 4 top-of-page stage cards.
@@ -595,7 +600,7 @@ export default function RFPAutoRespond() {
           title={taskState.filename}
           subtitle="Generated proposal"
           filename={taskState.filename}
-          fetchBlob={() => api.viewRfpRespondBlob(taskState.filename)}
+          fetchBlob={fetchResultBlob}
           onClose={() => setPreviewingResult(false)}
         />
       )}

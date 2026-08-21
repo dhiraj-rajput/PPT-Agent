@@ -21,14 +21,14 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from docx import Document as OpenDocument
 
 logger = logging.getLogger(__name__)
 
 
-def extract_template_brand(template_path: str, output_dir: Optional[str] = None) -> Dict[str, Any]:
+def extract_template_brand(template_path: str, output_dir: str | None = None) -> dict[str, Any]:
     """Best-effort extraction of a brand profile from `template_path`.
 
     Prefers the full TemplateAnalyzer (tables, IDs, sections, contacts) and
@@ -133,7 +133,7 @@ def _largest_image(image_parts: list):
 
 
 def _extract_logo_and_cover(
-    doc, template_path: str, output_dir: Optional[str]
+    doc, template_path: str, output_dir: str | None
 ):
     """Finds the template's running-page logo and its (possibly distinct)
     cover-page graphic, and writes each out as a standalone file
@@ -198,7 +198,7 @@ def _extract_logo_and_cover(
         return None, None
 
 
-def _write_image_part(image_part, out_dir: Path, filename_stem: str) -> Optional[str]:
+def _write_image_part(image_part, out_dir: Path, filename_stem: str) -> str | None:
     if image_part is None:
         return None
     ext = (image_part.partname.ext or "png").lstrip(".")
@@ -207,7 +207,7 @@ def _write_image_part(image_part, out_dir: Path, filename_stem: str) -> Optional
     return str(out_path)
 
 
-def _extract_accent_color(doc) -> Optional[str]:
+def _extract_accent_color(doc) -> str | None:
     """Looks for an explicit, non-black/white color on a heading style or run —
     that's almost always the template's brand accent color."""
     try:
@@ -234,7 +234,7 @@ def _extract_accent_color(doc) -> Optional[str]:
     return None
 
 
-def _style_font(doc, style_names) -> Optional[str]:
+def _style_font(doc, style_names) -> str | None:
     for name in style_names:
         try:
             style = doc.styles[name]

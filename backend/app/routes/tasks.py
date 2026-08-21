@@ -7,27 +7,31 @@ Tasks CRUD — using MySQL.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime
+from typing import Any
 
+from fastapi import APIRouter, Depends, HTTPException
+from models.sql_models import (
+    Notification as SQL_Notification,
+)
+from models.sql_models import (
+    Task as SQL_Task,
+)
+from models.sql_models import (
+    User as SQLUser,
+)
 from pydantic import BaseModel
+from sqlalchemy import select, update
+from utils.db_client import _mysql_available, get_db_session
 
 from app.core.auth import get_current_user
 from app.core.mailer import send_task_assigned_email
-from utils.db_client import get_db_session, _mysql_available
-from models.sql_models import (
-    Task as SQL_Task,
-    User as SQLUser,
-    Notification as SQL_Notification,
-)
-from sqlalchemy import select, insert, update, delete
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 
-def _iso(dt: Any) -> Optional[str]:
+def _iso(dt: Any) -> str | None:
     return dt.isoformat() if dt and hasattr(dt, "isoformat") else None
 
 
@@ -113,9 +117,9 @@ async def _push_notification_async(
 
 class CreateTaskBody(BaseModel):
     title: str
-    due: Optional[str] = ""
-    priority: Optional[str] = "Medium"
-    assigneeId: Optional[str] = None
+    due: str | None = ""
+    priority: str | None = "Medium"
+    assigneeId: str | None = None
 
 
 class ReassignBody(BaseModel):
@@ -165,6 +169,7 @@ async def create_task(
         except ValueError:
             raise HTTPException(400, "Invalid assignee ID.")
 
+    task: SQL_Task | None = None
     if _mysql_available:
         try:
             async for db in get_db_session():
@@ -194,7 +199,8 @@ async def create_task(
         except Exception as e:
             raise HTTPException(500, f"Database error creating task: {e}")
 
-    await _notify_assignee(task, int(current_user["id"]))
+    if task is not None:
+        await _notify_assignee(task, int(current_user["id"]))
     
     users_map = {}
     if assignee_id is not None:
@@ -216,6 +222,7 @@ async def toggle_task(
     except ValueError:
         raise HTTPException(400, "Invalid task ID.")
 
+    updated_task: SQL_Task | None = None
     if _mysql_available:
         try:
             async for db in get_db_session():
@@ -264,6 +271,7 @@ async def reassign_task(
     except ValueError:
         raise HTTPException(400, "Invalid ID.")
 
+    updated_task: SQL_Task | None = None
     if _mysql_available:
         try:
             async for db in get_db_session():
@@ -288,7 +296,8 @@ async def reassign_task(
         except Exception as e:
             raise HTTPException(500, f"Database error: {e}")
 
-    await _notify_assignee(updated_task, int(current_user["id"]))
+    if updated_task is not None:
+        await _notify_assignee(updated_task, int(current_user["id"]))
     
     users_map = {}
     async for db in get_db_session():

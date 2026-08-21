@@ -9,8 +9,9 @@ Now includes: asset validation, font availability detection, pathlib-based paths
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +19,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # Font fallback chain for cross-OS compatibility
 # We try fonts in order; first available font on the system wins.
-FONT_FALLBACK_CHAIN: List[str] = [
+FONT_FALLBACK_CHAIN: list[str] = [
     "Fira Sans",
     "Calibri",
     "Arial",
@@ -27,10 +28,10 @@ FONT_FALLBACK_CHAIN: List[str] = [
     "DejaVu Sans",
 ]
 
-_detected_font: Optional[str] = None
+_detected_font: str | None = None
 
 
-def detect_available_font(preferred_fonts: Optional[List[str]] = None) -> str:
+def detect_available_font(preferred_fonts: list[str] | None = None) -> str:
     """
     Detect the first available font from the preferred list.
     Falls back through FONT_FALLBACK_CHAIN if none are available.
@@ -104,31 +105,43 @@ def _resolve_asset(path_str: str) -> str:
     return str(p)
 
 
-DEFAULT_BRAND: Dict[str, Any] = {
-    "company_name": "OrbitAvanya Tech LLP",
-    "company_short": "OrbitAvanya",
+# Every value below can be overridden per-deployment via environment variables
+# so this file doesn't need to be edited/redeployed to stand this platform up
+# for a different bidding company. The literals here are only the last-resort
+# defaults for a zero-config local/dev run.
+DEFAULT_BRAND: dict[str, Any] = {
+    "company_name": os.environ.get("OWN_COMPANY_NAME", "OrbitAvanya Tech LLP"),
+    "company_short": os.environ.get("OWN_COMPANY_SHORT_NAME", "OrbitAvanya"),
     "logo_path": str((PROJECT_ROOT / "assets" / "logo.png").resolve()),
     "cover_graphic_path": str((PROJECT_ROOT / "assets" / "cover_graphic.png").resolve()),
     "body_font": "Fira Sans Light",
     "heading_font": "Fira Sans SemiBold",
     "accent_color": "1F3864",
     "muted_color": "595959",
-    "address_line1": "13352 Kettle Camp Rd",
-    "address_line2": "Frisco, Texas 75035",
-    "phone": "+917021950643",
-    "website": "www.orbitavanyatech.com",
+    "address_line1": os.environ.get("OWN_COMPANY_ADDRESS_LINE1", "13352 Kettle Camp Rd"),
+    "address_line2": os.environ.get("OWN_COMPANY_ADDRESS_LINE2", "Frisco, Texas 75035"),
+    "phone": os.environ.get("OWN_COMPANY_PHONE", "+917021950643"),
+    "website": os.environ.get("OWN_COMPANY_WEBSITE", "www.orbitavanyatech.com"),
 }
 
-DEFAULT_CONFIDENTIALITY_TEXT: str = (
-    "This document contains proprietary and confidential information of OrbitAvanya Tech LLP "
-    "and the recipient organization. It is submitted for the sole purpose of evaluating a potential "
-    "business arrangement or technical contract engagement. No portion of this document may be "
-    "reproduced, stored in a retrieval system, or transmitted in any form or by any means without "
-    "prior written authorization from OrbitAvanya Tech LLP."
-)
+
+def _default_confidentiality_text(company_name: str) -> str:
+    return (
+        f"This document contains proprietary and confidential information of {company_name} "
+        "and the recipient organization. It is submitted for the sole purpose of evaluating a potential "
+        "business arrangement or technical contract engagement. No portion of this document may be "
+        "reproduced, stored in a retrieval system, or transmitted in any form or by any means without "
+        f"prior written authorization from {company_name}."
+    )
 
 
-def get_brand_config(overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
+# Kept as a module-level constant for backward compatibility with existing
+# imports, built from DEFAULT_BRAND so it tracks the configured company name
+# instead of a hardcoded one.
+DEFAULT_CONFIDENTIALITY_TEXT: str = _default_confidentiality_text(DEFAULT_BRAND["company_name"])
+
+
+def get_brand_config(overrides: dict[str, Any] | None = None) -> dict[str, Any]:
     """
     Returns a fresh copy of DEFAULT_BRAND with optional key overrides applied.
     Resolution order (lowest to highest priority):
@@ -154,18 +167,25 @@ def get_brand_config(overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
     except Exception as e:
         logger.debug(f"Could not load org-wide default template branding: {e}")
 
-    # Try fetching saved company profile from MongoDB
+    # Try fetching saved company profile from MongoDB / dynamic identity
     try:
-        from utils.db_client import get_collection
-        col = get_collection("own_company_profile")
-        db_profile = col.find_one({}, {"_id": 0})
+        from documents.company_profile import get_full_company_profile
+        db_profile = get_full_company_profile()
         if db_profile:
-            if db_profile.get("name"):
-                cfg["company_name"] = db_profile["name"]
+            name = db_profile.get("company_name") or db_profile.get("name")
+            if name:
+                cfg["company_name"] = name
+            short = db_profile.get("short_name") or db_profile.get("company_short")
+            if short:
+                cfg["company_short"] = short
             if db_profile.get("phone"):
                 cfg["phone"] = db_profile["phone"]
             if db_profile.get("email"):
                 cfg["email"] = db_profile["email"]
+            if db_profile.get("website"):
+                cfg["website"] = db_profile["website"]
+            if db_profile.get("address"):
+                cfg["address_line1"] = db_profile["address"]
             if db_profile.get("city") and db_profile.get("state"):
                 cfg["address_line2"] = f"{db_profile['city']}, {db_profile['state']}"
     except Exception as e:
@@ -194,7 +214,7 @@ def get_brand_config(overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
     return cfg
 
 
-def is_mock_solicitation(solicitation_number: Optional[str]) -> bool:
+def is_mock_solicitation(solicitation_number: str | None) -> bool:
     """Centralized check for whether a solicitation number represents a mock/test solicitation."""
     if not solicitation_number:
         return True
